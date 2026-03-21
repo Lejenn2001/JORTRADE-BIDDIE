@@ -794,25 +794,28 @@ def cmd_signal(args):
     is_alert = result.upper().startswith("ALERT")
 
     if is_alert:
-        console.print(
-            Panel(
-                Markdown(result),
-                title=f"[bold green]⚡ TRADE SIGNAL DETECTED — {now_str}[/]",
-                border_style="green",
-                padding=(1, 2),
+        console.print(Panel(
+            Markdown(result),
+            title=f"[bold green]⚡ TRADE SIGNAL DETECTED — {now_str}[/]",
+            border_style="green",
+            padding=(1, 2),
+        ))
+        if DISCORD_WEBHOOK_URL:
+            send_discord(f"⚡ JORTRADE SIGNAL — {now_str}", result, "flow")
+            console.print("[bold green]✓ Signal posted to Discord.[/]")
+        else:
+            console.print(
+                "[yellow]⚠ Signal not sent to Discord — add DISCORD_WEBHOOK_URL as a secret to enable.[/]"
             )
-        )
-        if getattr(args, "discord", False):
-            send_discord(f"⚡ TRADE SIGNAL — {now_str}", result, "flow")
     else:
-        console.print(
-            Panel(
-                "[bold yellow]NO TRADE SIGNAL[/]\n\n[dim]Conditions not fully met. Stand by.[/]",
-                title=f"[dim]Signal Check — {now_str}[/]",
-                border_style="dim",
-                padding=(1, 2),
-            )
-        )
+        console.print(Panel(
+            "[bold yellow]NO TRADE SIGNAL[/]\n\n[dim]Conditions not fully met. Stand by.[/]",
+            title=f"[dim]Signal Check — {now_str}[/]",
+            border_style="dim",
+            padding=(1, 2),
+        ))
+        if DISCORD_WEBHOOK_URL:
+            console.print("[dim]No signal — nothing posted to Discord.[/]")
 
 
 def cmd_monitor(args):
