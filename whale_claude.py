@@ -653,6 +653,108 @@ def cmd_jortrade(args):
         send_discord(title, analysis, "flow")
 
 
+def cmd_signal(args):
+    """Real-time entry signal detector — ALERT or NO TRADE SIGNAL only."""
+    console.print(Panel(
+        "[bold cyan]SIGNAL CHECK — Scanning for Trade Entry Conditions...[/]",
+        border_style="cyan",
+    ))
+
+    alerts = fetch_flow_alerts(limit=200)
+    if not alerts:
+        console.print("[red]No flow data returned.[/]")
+        return
+
+    enriched = []
+    for x in alerts:
+        prem = float(x.get("total_premium", 0) or 0)
+        ask_prem = float(x.get("total_ask_side_prem", 0) or 0)
+        vol = int(x.get("volume", 0) or 0)
+        oi = int(x.get("open_interest", 0) or 0)
+        enriched.append({
+            "ticker": x.get("ticker"),
+            "type": x.get("type"),
+            "strike": x.get("strike"),
+            "expiry": x.get("expiry"),
+            "underlying_price": x.get("underlying_price"),
+            "total_premium": prem,
+            "ask_side_prem": ask_prem,
+            "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
+            "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
+            "volume": vol,
+            "open_interest": oi,
+            "vol_oi_ratio": round(vol / max(oi, 1), 2),
+            "alert_rule": x.get("alert_rule"),
+            "has_sweep": x.get("has_sweep"),
+            "has_floor": x.get("has_floor"),
+            "trade_count": x.get("trade_count"),
+            "iv": x.get("iv_end"),
+            "next_earnings": x.get("next_earnings_date"),
+        })
+
+    enriched.sort(key=lambda x: x["total_premium"], reverse=True)
+    data_str = json.dumps(enriched, indent=2, default=str)
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    try:
+        message = anthropic_client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=1024,
+            system=(
+                "You are a real-time options flow trading assistant.\n\n"
+                "Your job is NOT to summarize flow.\n"
+                "Your job is to determine whether there is a TRADE ENTRY SIGNAL.\n\n"
+                "Only generate an alert when ALL of these conditions are met:\n"
+                "- High-conviction whale flow (confidence 7–10)\n"
+                "- Repeated sweeps or large premium directional trades\n"
+                "- Flow aligned with price trend\n"
+                "- Price breaking or holding a key level\n"
+                "- Strike close enough to matter today\n\n"
+                "If ALL conditions are met, respond in EXACTLY this format:\n\n"
+                "ALERT\n"
+                "Ticker: [TICKER]\n"
+                "Direction: Call or Put\n"
+                "Trade: [specific strike and expiration]\n"
+                "Entry: [price level to enter]\n"
+                "Invalidation: [level that kills the trade]\n"
+                "Confidence: [7–10]/10\n"
+                "Reason: [one sentence max — why this flow is a signal]\n\n"
+                "If there are multiple qualifying signals, list each one in the same format.\n\n"
+                "If conditions are NOT fully met, respond with ONLY:\n"
+                "NO TRADE SIGNAL"
+            ),
+            messages=[{"role": "user", "content": (
+                f"Live unusual options flow from Unusual Whales — ALL tickers, sorted by premium ({now_str}):\n\n"
+                f"```json\n{data_str}\n```\n\n"
+                "Is there a trade entry signal right now? Apply your criteria strictly. "
+                "Return ALERT with details or NO TRADE SIGNAL — nothing else."
+            )}],
+        )
+        result = message.content[0].text.strip()
+    except anthropic.APIError as e:
+        console.print(f"[bold red]Claude API error:[/] {e}")
+        return
+
+    is_alert = result.upper().startswith("ALERT")
+
+    if is_alert:
+        console.print(Panel(
+            Markdown(result),
+            title=f"[bold green]⚡ TRADE SIGNAL DETECTED — {now_str}[/]",
+            border_style="green",
+            padding=(1, 2),
+        ))
+        if getattr(args, "discord", False):
+            send_discord(f"⚡ TRADE SIGNAL — {now_str}", result, "flow")
+    else:
+        console.print(Panel(
+            "[bold yellow]NO TRADE SIGNAL[/]\n\n[dim]Conditions not fully met. Stand by.[/]",
+            title=f"[dim]Signal Check — {now_str}[/]",
+            border_style="dim",
+            padding=(1, 2),
+        ))
+
+
 def cmd_monitor(args):
     """Continuously run flow analysis on a schedule and post to Discord."""
     interval_mins = args.interval
@@ -745,6 +847,7 @@ Commands:
   darkpool <TICK>   Dark pool block trades for a specific ticker
   stock <TICK>      Full deep-dive: options flow + dark pool for a ticker
   jortrade          JORTRADE: Top 3 defined-risk setups from whale flow
+  signal            Entry signal check — returns ALERT or NO TRADE SIGNAL only
   monitor           Auto-run flow analysis every N minutes (set DISCORD_WEBHOOK_URL)
 
 Add --discord to any command to post the analysis to your Discord channel.
@@ -757,6 +860,8 @@ Examples:
   python whale_claude.py stock TSLA --discord
   python whale_claude.py jortrade
   python whale_claude.py jortrade --discord
+  python whale_claude.py signal
+  python whale_claude.py signal --discord
   python whale_claude.py monitor
   python whale_claude.py monitor --interval 30
         """,
@@ -784,6 +889,9 @@ Examples:
     p_jt = subparsers.add_parser("jortrade", help="Top 3 defined-risk setups from whale flow (JORTRADE framework)")
     p_jt.add_argument("--discord", action="store_true", help="Post analysis to Discord")
 
+    p_sig = subparsers.add_parser("signal", help="Entry signal check — returns ALERT or NO TRADE SIGNAL only")
+    p_sig.add_argument("--discord", action="store_true", help="Post alert to Discord if signal fires")
+
     p_mon = subparsers.add_parser("monitor", help="Auto-run flow alerts on a schedule with Discord alerts")
     p_mon.add_argument("--interval", type=int, default=60, help="Minutes between runs (default: 60)")
 
@@ -801,6 +909,7 @@ Examples:
         "darkpool": cmd_darkpool,
         "stock": cmd_stock,
         "jortrade": cmd_jortrade,
+        "signal": cmd_signal,
         "monitor": cmd_monitor,
     }
     dispatch[args.command](args)
