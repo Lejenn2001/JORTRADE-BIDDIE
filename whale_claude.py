@@ -532,24 +532,21 @@ def cmd_stock(args):
         send_discord(title, analysis, "stock", ticker=ticker)
 
 
-JORTRADE_WATCHLIST = {"SPY", "QQQ", "TSLA", "NVDA", "META", "MSFT", "AAPL", "AMZN", "AMD", "NFLX", "SPX", "SPXW"}
-
 def cmd_jortrade(args):
-    """JORTRADE: Top 3 defined-risk options setups from whale flow."""
+    """JORTRADE: High-conviction options setups from whale flow across all tickers."""
     console.print(Panel(
-        "[bold yellow]JORTRADE — Scanning Whale Flow for Best Defined-Risk Setups...[/]",
+        "[bold yellow]JORTRADE — Scanning Whale Flow for High-Conviction Setups...[/]",
         border_style="yellow",
     ))
 
     alerts = fetch_flow_alerts(limit=200)
-    filtered = [x for x in alerts if (x.get("ticker") or "").upper() in JORTRADE_WATCHLIST]
 
-    if not filtered:
-        console.print("[red]No watchlist flow found. Try again during market hours.[/]")
+    if not alerts:
+        console.print("[red]No flow data found. Try again during market hours.[/]")
         return
 
     enriched = []
-    for x in filtered:
+    for x in alerts:
         prem = float(x.get("total_premium", 0) or 0)
         ask_prem = float(x.get("total_ask_side_prem", 0) or 0)
         vol = int(x.get("volume", 0) or 0)
@@ -578,7 +575,7 @@ def cmd_jortrade(args):
     enriched.sort(key=lambda x: x["total_premium"], reverse=True)
 
     show_table(
-        "JORTRADE Watchlist Flow",
+        "JORTRADE — All Unusual Flow",
         enriched,
         [
             ("Ticker", "ticker"),
@@ -594,7 +591,7 @@ def cmd_jortrade(args):
     )
 
     data_str = json.dumps(enriched, indent=2, default=str)
-    title = "JORTRADE — Top 3 Defined-Risk Setups"
+    title = "JORTRADE — High-Conviction Setups"
 
     analysis = analyze_with_claude(
         system_prompt=(
@@ -602,7 +599,8 @@ def cmd_jortrade(args):
             "Your job is to identify ONLY HIGH-CONVICTION trade ideas from unusual whale activity.\n\n"
             "Analyze the provided whale flow and return ONLY trades with a confidence score of 7, 8, 9, or 10. "
             "Ignore all lower-confidence setups.\n\n"
-            "Focus ONLY on large-cap stocks and major indexes: SPY, QQQ, TSLA, NVDA, META, MSFT, AAPL, AMZN, AMD, NFLX, SPX.\n\n"
+            "You may recommend trades on ANY ticker in the data — not just large caps. "
+            "If a smaller or mid-cap name shows elite-quality flow (massive sweeps, huge vol/OI, stacked aggression), include it.\n\n"
             "Prioritize flow that shows strong directional intent:\n"
             "- repeated sweeps or aggressive orders at the ask\n"
             "- large premium trades\n"
@@ -616,35 +614,36 @@ def cmd_jortrade(args):
             "- very small premium trades\n"
             "- mixed bullish and bearish activity with no clear bias\n"
             "- likely hedging or volatility positioning\n"
-            "- illiquid tickers\n\n"
-            "For each qualifying setup determine whether the best trade structure is:\n"
-            "- buying calls\n"
-            "- buying puts\n"
-            "- call debit spreads\n"
-            "- put debit spreads\n"
-            "- butterflies (when appropriate on indexes or large caps)\n\n"
-            "Include BOTH 0DTE opportunities and near-term (1–14 DTE) spread opportunities when flow supports it.\n\n"
-            "Return ONLY the TOP HIGH-CONVICTION setups.\n\n"
+            "- illiquid tickers with no real follow-through potential\n\n"
+            "For each qualifying setup choose the BEST trade structure based on the flow:\n"
+            "- Buying calls outright — when flow is explosive, sweeps are massive, or 0DTE momentum matters\n"
+            "- Buying puts outright — when bearish flow is aggressive and near-term\n"
+            "- Call debit spread — when bullish but you want defined risk with a near target\n"
+            "- Put debit spread — when bearish with a defined downside target\n"
+            "- Butterfly — when flow clusters tightly at one strike suggesting a pin\n\n"
+            "Do NOT default to spreads. If the flow screams 'buy the call' or 'buy the put', say that.\n\n"
+            "Include BOTH 0DTE opportunities and near-term (1–14 DTE) opportunities when flow supports it.\n\n"
+            "Return ONLY the TOP HIGH-CONVICTION setups (as many as clear the 7/10 bar, no minimum, no maximum).\n\n"
             "For each setup provide:\n"
             "- Ticker\n"
             "- Direction: Bullish or Bearish\n"
-            "- Suggested Trade Type: Call / Put / Debit Spread / Butterfly\n"
-            "- Suggested Strike(s)\n"
-            "- Expiration (highlight if 0DTE)\n"
+            "- Suggested Trade: e.g. 'Buy the 645 Put' or '648/642 Put Debit Spread'\n"
+            "- Expiration (flag as 0DTE if applicable)\n"
             "- Why this whale flow is meaningful\n"
             "- Key price trigger level\n"
             "- Invalidation level\n"
             "- Confidence score (must be 7–10)\n\n"
-            "After listing setups, also provide:\n"
-            "- The SINGLE BEST TRADE idea for today\n"
-            "- Any large-cap names that show heavy flow but should be avoided"
+            "After listing setups provide:\n"
+            "- The SINGLE BEST TRADE for today\n"
+            "- Names with heavy flow that should be avoided and why"
         ),
         user_content=(
-            f"Here is today's live unusual options flow from Unusual Whales, filtered to large-cap watchlist names only, "
+            f"Here is today's live unusual options flow from Unusual Whales across ALL tickers, "
             f"sorted by premium size (fetched {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}):\n\n"
             f"```json\n{data_str}\n```\n\n"
             "Apply the JORTRADE high-conviction framework. Return ONLY setups scoring 7–10. "
-            "Be specific with strikes and expirations based on what the whales are actually trading. "
+            "Recommend the cleanest trade structure for each — calls, puts, or spreads — based on what the flow actually supports. "
+            "Be specific with strikes and expirations. "
             "If no setup clears the 7/10 threshold, say so explicitly rather than forcing lower-quality ideas."
         ),
         title=title,
