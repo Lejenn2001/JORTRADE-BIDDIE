@@ -532,6 +532,122 @@ def cmd_stock(args):
         send_discord(title, analysis, "stock", ticker=ticker)
 
 
+JORTRADE_WATCHLIST = {"SPY", "QQQ", "TSLA", "NVDA", "META", "MSFT", "AAPL", "AMZN", "AMD", "NFLX", "SPX", "SPXW"}
+
+def cmd_jortrade(args):
+    """JORTRADE: Top 3 defined-risk options setups from whale flow."""
+    console.print(Panel(
+        "[bold yellow]JORTRADE — Scanning Whale Flow for Best Defined-Risk Setups...[/]",
+        border_style="yellow",
+    ))
+
+    alerts = fetch_flow_alerts(limit=200)
+    filtered = [x for x in alerts if (x.get("ticker") or "").upper() in JORTRADE_WATCHLIST]
+
+    if not filtered:
+        console.print("[red]No watchlist flow found. Try again during market hours.[/]")
+        return
+
+    enriched = []
+    for x in filtered:
+        prem = float(x.get("total_premium", 0) or 0)
+        ask_prem = float(x.get("total_ask_side_prem", 0) or 0)
+        vol = int(x.get("volume", 0) or 0)
+        oi = int(x.get("open_interest", 0) or 0)
+        enriched.append({
+            "ticker": x.get("ticker"),
+            "type": x.get("type"),
+            "strike": x.get("strike"),
+            "expiry": x.get("expiry"),
+            "underlying_price": x.get("underlying_price"),
+            "total_premium": prem,
+            "ask_side_prem": ask_prem,
+            "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
+            "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
+            "volume": vol,
+            "open_interest": oi,
+            "vol_oi_ratio": round(vol / max(oi, 1), 2),
+            "alert_rule": x.get("alert_rule"),
+            "has_sweep": x.get("has_sweep"),
+            "has_floor": x.get("has_floor"),
+            "trade_count": x.get("trade_count"),
+            "iv": x.get("iv_end"),
+            "next_earnings": x.get("next_earnings_date"),
+        })
+
+    enriched.sort(key=lambda x: x["total_premium"], reverse=True)
+
+    show_table(
+        "JORTRADE Watchlist Flow",
+        enriched,
+        [
+            ("Ticker", "ticker"),
+            ("Type", "type"),
+            ("Strike", "strike"),
+            ("Expiry", "expiry"),
+            ("Premium", "total_premium"),
+            ("Ask%", "ask_aggression_pct"),
+            ("Vol/OI", "vol_oi_ratio"),
+            ("Sweep", "has_sweep"),
+            ("Rule", "alert_rule"),
+        ],
+    )
+
+    data_str = json.dumps(enriched, indent=2, default=str)
+    title = "JORTRADE — Top 3 Defined-Risk Setups"
+
+    analysis = analyze_with_claude(
+        system_prompt=(
+            "You are a professional options flow analyst for JORTRADE.\n\n"
+            "Your job is to identify the BEST defined-risk options trades for TODAY based on unusual whale activity.\n\n"
+            "Only recommend trades in large-cap names and indexes: SPY, QQQ, TSLA, NVDA, META, MSFT, AAPL, AMZN, AMD, NFLX, and SPX.\n\n"
+            "Focus on flow that looks actionable:\n"
+            "- repeated sweeps\n"
+            "- ask-side aggression\n"
+            "- large premium\n"
+            "- volume greater than open interest\n"
+            "- multiple orders at the same strike or expiration\n"
+            "- directional alignment with price action\n"
+            "- contracts near key support/resistance or breakout/breakdown levels\n\n"
+            "Ignore:\n"
+            "- lotto flow\n"
+            "- far out-of-the-money contracts unlikely to matter today\n"
+            "- low premium trades\n"
+            "- hedging-looking activity\n"
+            "- mixed unclear flow\n"
+            "- illiquid names\n\n"
+            "Only suggest defined-risk ideas such as:\n"
+            "- call debit spreads for bullish setups\n"
+            "- put debit spreads for bearish setups\n"
+            "- butterflies when appropriate on large caps or indexes\n\n"
+            "Return only the TOP 3 setups.\n\n"
+            "For each setup provide:\n"
+            "- Ticker\n"
+            "- Bullish or Bearish\n"
+            "- Best Strategy\n"
+            "- Strikes and Expiration\n"
+            "- Why This Whale Flow Stands Out\n"
+            "- Key Price Trigger\n"
+            "- Invalidation Level\n"
+            "- Confidence Score 1-10\n\n"
+            "Then provide:\n"
+            "- The #1 Best Setup for Today\n"
+            "- Any Names to Avoid"
+        ),
+        user_content=(
+            f"Here is today's live unusual options flow from Unusual Whales, filtered to large-cap watchlist names only, "
+            f"sorted by premium size (fetched {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}):\n\n"
+            f"```json\n{data_str}\n```\n\n"
+            "Apply the JORTRADE analysis framework. Give me the TOP 3 defined-risk setups plus your #1 pick and names to avoid. "
+            "Be specific with strikes and expirations based on what the whales are actually trading."
+        ),
+        title=title,
+    )
+
+    if getattr(args, "discord", False) and analysis:
+        send_discord(title, analysis, "flow")
+
+
 def cmd_monitor(args):
     """Continuously run flow analysis on a schedule and post to Discord."""
     interval_mins = args.interval
@@ -623,6 +739,7 @@ Commands:
   market            Sector ETFs, economic calendar, FDA events + briefing
   darkpool <TICK>   Dark pool block trades for a specific ticker
   stock <TICK>      Full deep-dive: options flow + dark pool for a ticker
+  jortrade          JORTRADE: Top 3 defined-risk setups from whale flow
   monitor           Auto-run flow analysis every N minutes (set DISCORD_WEBHOOK_URL)
 
 Add --discord to any command to post the analysis to your Discord channel.
@@ -633,6 +750,8 @@ Examples:
   python whale_claude.py market --discord
   python whale_claude.py darkpool NVDA --discord
   python whale_claude.py stock TSLA --discord
+  python whale_claude.py jortrade
+  python whale_claude.py jortrade --discord
   python whale_claude.py monitor
   python whale_claude.py monitor --interval 30
         """,
@@ -657,6 +776,9 @@ Examples:
     p_stock.add_argument("--limit", type=int, default=50, help="Flow alerts to scan (default: 50)")
     p_stock.add_argument("--discord", action="store_true", help="Post analysis to Discord")
 
+    p_jt = subparsers.add_parser("jortrade", help="Top 3 defined-risk setups from whale flow (JORTRADE framework)")
+    p_jt.add_argument("--discord", action="store_true", help="Post analysis to Discord")
+
     p_mon = subparsers.add_parser("monitor", help="Auto-run flow alerts on a schedule with Discord alerts")
     p_mon.add_argument("--interval", type=int, default=60, help="Minutes between runs (default: 60)")
 
@@ -673,6 +795,7 @@ Examples:
         "market": cmd_market,
         "darkpool": cmd_darkpool,
         "stock": cmd_stock,
+        "jortrade": cmd_jortrade,
         "monitor": cmd_monitor,
     }
     dispatch[args.command](args)
