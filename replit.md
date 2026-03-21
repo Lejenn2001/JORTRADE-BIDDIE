@@ -48,6 +48,32 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Python Tools
+
+### `whale_claude.py` — Unusual Whales + Claude AI Analysis
+
+A Python CLI that fetches live market data from Unusual Whales and runs AI analysis using Claude.
+
+**Required secrets:** `UNUSUAL_WHALES_API_KEY`, `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (last two auto-configured via Replit AI Integrations).
+
+**Commands:**
+```bash
+python whale_claude.py flow                  # Options flow alerts + Claude analysis
+python whale_claude.py flow --limit 100      # More alerts
+python whale_claude.py market                # Sector ETFs, economic & FDA calendar
+python whale_claude.py darkpool AAPL         # Dark pool for a specific ticker
+python whale_claude.py stock NVDA            # Full deep-dive: flow + dark pool
+```
+
+**Working Unusual Whales endpoints:**
+- `/api/option-trades/flow-alerts` — real-time options flow alerts
+- `/api/market/sector-etfs` — sector ETF volume and call/put data
+- `/api/market/economic-calendar` — upcoming economic events
+- `/api/market/fda-calendar` — FDA events and outcomes
+- `/api/darkpool/{ticker}` — dark pool block trades by ticker
+
+**Dependencies:** `anthropic`, `requests`, `rich` (Python 3.11)
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)
