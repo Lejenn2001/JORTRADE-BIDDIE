@@ -34,7 +34,9 @@ console = Console()
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 UW_API_KEY = os.environ.get("UNUSUAL_WHALES_API_KEY")
-ANTHROPIC_API_KEY = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+ANTHROPIC_API_KEY = os.environ.get(
+    "AI_INTEGRATIONS_ANTHROPIC_API_KEY"
+) or os.environ.get("ANTHROPIC_API_KEY")
 ANTHROPIC_BASE_URL = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_BASE_URL")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
@@ -58,14 +60,14 @@ claude = anthropic.Anthropic(**claude_kwargs)
 # ── Discord Helpers ───────────────────────────────────────────────────────────
 
 DISCORD_COLOR = {
-    "flow":     0xF4A700,   # gold
-    "market":   0x5865F2,   # blurple
-    "darkpool": 0x57F287,   # green
-    "stock":    0xEB459E,   # pink
-    "monitor":  0xFEE75C,   # yellow
+    "flow": 0xF4A700,  # gold
+    "market": 0x5865F2,  # blurple
+    "darkpool": 0x57F287,  # green
+    "stock": 0xEB459E,  # pink
+    "monitor": 0xFEE75C,  # yellow
 }
 
-DISCORD_MAX = 4000   # max chars in a Discord embed description
+DISCORD_MAX = 4000  # max chars in a Discord embed description
 
 
 def _chunk_text(text: str, limit: int = DISCORD_MAX) -> list[str]:
@@ -88,7 +90,9 @@ def send_discord(title: str, analysis: str, command: str, ticker: str = None) ->
     Returns True on success, False otherwise.
     """
     if not DISCORD_WEBHOOK_URL:
-        console.print("[yellow]⚠ Discord webhook not configured.[/] Set DISCORD_WEBHOOK_URL to enable alerts.")
+        console.print(
+            "[yellow]⚠ Discord webhook not configured.[/] Set DISCORD_WEBHOOK_URL to enable alerts."
+        )
         return False
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
@@ -96,23 +100,27 @@ def send_discord(title: str, analysis: str, command: str, ticker: str = None) ->
     chunks = _chunk_text(analysis)
 
     # First embed has the title and first chunk
-    embeds = [{
-        "title": f"🐋  {title}",
-        "description": chunks[0],
-        "color": color,
-        "footer": {"text": f"Unusual Whales + Claude AI  •  {timestamp}"},
-    }]
+    embeds = [
+        {
+            "title": f"🐋  {title}",
+            "description": chunks[0],
+            "color": color,
+            "footer": {"text": f"Unusual Whales + Claude AI  •  {timestamp}"},
+        }
+    ]
 
     # Extra chunks become continuation embeds (no title)
     for chunk in chunks[1:]:
-        embeds.append({
-            "description": chunk,
-            "color": color,
-        })
+        embeds.append(
+            {
+                "description": chunk,
+                "color": color,
+            }
+        )
 
     # Discord allows up to 10 embeds per message
     for i in range(0, len(embeds), 10):
-        batch = embeds[i:i + 10]
+        batch = embeds[i : i + 10]
         payload = {"embeds": batch}
         if ticker:
             payload["content"] = f"**{ticker}** analysis ready"
@@ -129,6 +137,7 @@ def send_discord(title: str, analysis: str, command: str, ticker: str = None) ->
 
 
 # ── Unusual Whales Fetch Helpers ─────────────────────────────────────────────
+
 
 def uw_get(path: str, params: dict = None) -> dict | list | None:
     url = f"{UW_BASE}{path}"
@@ -186,6 +195,7 @@ def fetch_flow_for_ticker(ticker: str, all_alerts: list) -> list:
 
 # ── Claude Analysis ───────────────────────────────────────────────────────────
 
+
 def analyze_with_claude(system_prompt: str, user_content: str, title: str) -> str:
     console.print(f"\n[bold cyan]Sending data to Claude for analysis...[/]\n")
     try:
@@ -197,12 +207,14 @@ def analyze_with_claude(system_prompt: str, user_content: str, title: str) -> st
                 messages=[{"role": "user", "content": user_content}],
             )
         response_text = message.content[0].text
-        console.print(Panel(
-            Markdown(response_text),
-            title=f"[bold magenta]{title}[/]",
-            border_style="magenta",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                Markdown(response_text),
+                title=f"[bold magenta]{title}[/]",
+                border_style="magenta",
+                padding=(1, 2),
+            )
+        )
         return response_text
     except anthropic.APIError as e:
         console.print(f"[bold red]Claude API error:[/] {e}")
@@ -211,12 +223,15 @@ def analyze_with_claude(system_prompt: str, user_content: str, title: str) -> st
 
 # ── Display Helpers ───────────────────────────────────────────────────────────
 
+
 def trunc(val, n=35):
     s = str(val) if val is not None else "—"
     return s[:n] + "…" if len(s) > n else s
 
 
-def show_table(title: str, rows: list, columns: list[tuple[str, str]], max_rows: int = 20):
+def show_table(
+    title: str, rows: list, columns: list[tuple[str, str]], max_rows: int = 20
+):
     if not rows:
         console.print(f"[yellow]No data for:[/] {title}")
         return
@@ -230,8 +245,14 @@ def show_table(title: str, rows: list, columns: list[tuple[str, str]], max_rows:
 
 # ── Commands ─────────────────────────────────────────────────────────────────
 
+
 def cmd_flow(args):
-    console.print(Panel("[bold yellow]Fetching Options Flow Alerts from Unusual Whales...[/]", border_style="yellow"))
+    console.print(
+        Panel(
+            "[bold yellow]Fetching Options Flow Alerts from Unusual Whales...[/]",
+            border_style="yellow",
+        )
+    )
     alerts = fetch_flow_alerts(limit=args.limit)
 
     if not alerts:
@@ -289,7 +310,12 @@ def cmd_flow(args):
 
 
 def cmd_market(args):
-    console.print(Panel("[bold yellow]Fetching Market Intelligence from Unusual Whales...[/]", border_style="yellow"))
+    console.print(
+        Panel(
+            "[bold yellow]Fetching Market Intelligence from Unusual Whales...[/]",
+            border_style="yellow",
+        )
+    )
 
     sectors = fetch_sector_etfs()
     econ = fetch_economic_calendar()
@@ -384,7 +410,12 @@ def cmd_market(args):
 
 def cmd_darkpool(args):
     ticker = args.ticker.upper()
-    console.print(Panel(f"[bold yellow]Fetching Dark Pool Data for [white]{ticker}[/]...[/]", border_style="yellow"))
+    console.print(
+        Panel(
+            f"[bold yellow]Fetching Dark Pool Data for [white]{ticker}[/]...[/]",
+            border_style="yellow",
+        )
+    )
 
     transactions = fetch_darkpool(ticker=ticker, limit=args.limit)
 
@@ -409,7 +440,9 @@ def cmd_darkpool(args):
 
     total_premium = sum(float(t.get("premium", 0) or 0) for t in transactions)
     total_size = sum(int(t.get("size", 0) or 0) for t in transactions)
-    avg_price = sum(float(t.get("price", 0) or 0) for t in transactions) / max(len(transactions), 1)
+    avg_price = sum(float(t.get("price", 0) or 0) for t in transactions) / max(
+        len(transactions), 1
+    )
 
     summary_stats = {
         "ticker": ticker,
@@ -454,7 +487,12 @@ def cmd_darkpool(args):
 
 def cmd_stock(args):
     ticker = args.ticker.upper()
-    console.print(Panel(f"[bold yellow]Running Deep Dive on [white]{ticker}[/]...[/]", border_style="yellow"))
+    console.print(
+        Panel(
+            f"[bold yellow]Running Deep Dive on [white]{ticker}[/]...[/]",
+            border_style="yellow",
+        )
+    )
 
     console.print("[dim]Fetching flow alerts...[/]")
     all_alerts = fetch_flow_alerts(limit=200)
@@ -488,7 +526,12 @@ def cmd_stock(args):
         show_table(
             f"{ticker} Dark Pool",
             darkpool,
-            [("Size", "size"), ("Price", "price"), ("Premium", "premium"), ("Time", "executed_at")],
+            [
+                ("Size", "size"),
+                ("Price", "price"),
+                ("Premium", "premium"),
+                ("Time", "executed_at"),
+            ],
             max_rows=10,
         )
 
@@ -534,10 +577,12 @@ def cmd_stock(args):
 
 def cmd_jortrade(args):
     """JORTRADE: High-conviction options setups from whale flow across all tickers."""
-    console.print(Panel(
-        "[bold yellow]JORTRADE — Scanning Whale Flow for High-Conviction Setups...[/]",
-        border_style="yellow",
-    ))
+    console.print(
+        Panel(
+            "[bold yellow]JORTRADE — Scanning Whale Flow for High-Conviction Setups...[/]",
+            border_style="yellow",
+        )
+    )
 
     alerts = fetch_flow_alerts(limit=200)
 
@@ -551,26 +596,28 @@ def cmd_jortrade(args):
         ask_prem = float(x.get("total_ask_side_prem", 0) or 0)
         vol = int(x.get("volume", 0) or 0)
         oi = int(x.get("open_interest", 0) or 0)
-        enriched.append({
-            "ticker": x.get("ticker"),
-            "type": x.get("type"),
-            "strike": x.get("strike"),
-            "expiry": x.get("expiry"),
-            "underlying_price": x.get("underlying_price"),
-            "total_premium": prem,
-            "ask_side_prem": ask_prem,
-            "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
-            "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
-            "volume": vol,
-            "open_interest": oi,
-            "vol_oi_ratio": round(vol / max(oi, 1), 2),
-            "alert_rule": x.get("alert_rule"),
-            "has_sweep": x.get("has_sweep"),
-            "has_floor": x.get("has_floor"),
-            "trade_count": x.get("trade_count"),
-            "iv": x.get("iv_end"),
-            "next_earnings": x.get("next_earnings_date"),
-        })
+        enriched.append(
+            {
+                "ticker": x.get("ticker"),
+                "type": x.get("type"),
+                "strike": x.get("strike"),
+                "expiry": x.get("expiry"),
+                "underlying_price": x.get("underlying_price"),
+                "total_premium": prem,
+                "ask_side_prem": ask_prem,
+                "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
+                "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
+                "volume": vol,
+                "open_interest": oi,
+                "vol_oi_ratio": round(vol / max(oi, 1), 2),
+                "alert_rule": x.get("alert_rule"),
+                "has_sweep": x.get("has_sweep"),
+                "has_floor": x.get("has_floor"),
+                "trade_count": x.get("trade_count"),
+                "iv": x.get("iv_end"),
+                "next_earnings": x.get("next_earnings_date"),
+            }
+        )
 
     enriched.sort(key=lambda x: x["total_premium"], reverse=True)
 
@@ -655,10 +702,12 @@ def cmd_jortrade(args):
 
 def cmd_signal(args):
     """Real-time entry signal detector — ALERT or NO TRADE SIGNAL only."""
-    console.print(Panel(
-        "[bold cyan]SIGNAL CHECK — Scanning for Trade Entry Conditions...[/]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]SIGNAL CHECK — Scanning for Trade Entry Conditions...[/]",
+            border_style="cyan",
+        )
+    )
 
     alerts = fetch_flow_alerts(limit=200)
     if not alerts:
@@ -671,34 +720,36 @@ def cmd_signal(args):
         ask_prem = float(x.get("total_ask_side_prem", 0) or 0)
         vol = int(x.get("volume", 0) or 0)
         oi = int(x.get("open_interest", 0) or 0)
-        enriched.append({
-            "ticker": x.get("ticker"),
-            "type": x.get("type"),
-            "strike": x.get("strike"),
-            "expiry": x.get("expiry"),
-            "underlying_price": x.get("underlying_price"),
-            "total_premium": prem,
-            "ask_side_prem": ask_prem,
-            "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
-            "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
-            "volume": vol,
-            "open_interest": oi,
-            "vol_oi_ratio": round(vol / max(oi, 1), 2),
-            "alert_rule": x.get("alert_rule"),
-            "has_sweep": x.get("has_sweep"),
-            "has_floor": x.get("has_floor"),
-            "trade_count": x.get("trade_count"),
-            "iv": x.get("iv_end"),
-            "next_earnings": x.get("next_earnings_date"),
-        })
+        enriched.append(
+            {
+                "ticker": x.get("ticker"),
+                "type": x.get("type"),
+                "strike": x.get("strike"),
+                "expiry": x.get("expiry"),
+                "underlying_price": x.get("underlying_price"),
+                "total_premium": prem,
+                "ask_side_prem": ask_prem,
+                "bid_side_prem": float(x.get("total_bid_side_prem", 0) or 0),
+                "ask_aggression_pct": round(ask_prem / max(prem, 1) * 100, 1),
+                "volume": vol,
+                "open_interest": oi,
+                "vol_oi_ratio": round(vol / max(oi, 1), 2),
+                "alert_rule": x.get("alert_rule"),
+                "has_sweep": x.get("has_sweep"),
+                "has_floor": x.get("has_floor"),
+                "trade_count": x.get("trade_count"),
+                "iv": x.get("iv_end"),
+                "next_earnings": x.get("next_earnings_date"),
+            }
+        )
 
     enriched.sort(key=lambda x: x["total_premium"], reverse=True)
     data_str = json.dumps(enriched, indent=2, default=str)
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
     try:
-        message = anthropic_client.messages.create(
-            model="claude-opus-4-5",
+        message = claude.messages.create(
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=(
                 "You are a real-time options flow trading assistant.\n\n"
@@ -723,12 +774,17 @@ def cmd_signal(args):
                 "If conditions are NOT fully met, respond with ONLY:\n"
                 "NO TRADE SIGNAL"
             ),
-            messages=[{"role": "user", "content": (
-                f"Live unusual options flow from Unusual Whales — ALL tickers, sorted by premium ({now_str}):\n\n"
-                f"```json\n{data_str}\n```\n\n"
-                "Is there a trade entry signal right now? Apply your criteria strictly. "
-                "Return ALERT with details or NO TRADE SIGNAL — nothing else."
-            )}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Live unusual options flow from Unusual Whales — ALL tickers, sorted by premium ({now_str}):\n\n"
+                        f"```json\n{data_str}\n```\n\n"
+                        "Is there a trade entry signal right now? Apply your criteria strictly. "
+                        "Return ALERT with details or NO TRADE SIGNAL — nothing else."
+                    ),
+                }
+            ],
         )
         result = message.content[0].text.strip()
     except anthropic.APIError as e:
@@ -738,21 +794,25 @@ def cmd_signal(args):
     is_alert = result.upper().startswith("ALERT")
 
     if is_alert:
-        console.print(Panel(
-            Markdown(result),
-            title=f"[bold green]⚡ TRADE SIGNAL DETECTED — {now_str}[/]",
-            border_style="green",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                Markdown(result),
+                title=f"[bold green]⚡ TRADE SIGNAL DETECTED — {now_str}[/]",
+                border_style="green",
+                padding=(1, 2),
+            )
+        )
         if getattr(args, "discord", False):
             send_discord(f"⚡ TRADE SIGNAL — {now_str}", result, "flow")
     else:
-        console.print(Panel(
-            "[bold yellow]NO TRADE SIGNAL[/]\n\n[dim]Conditions not fully met. Stand by.[/]",
-            title=f"[dim]Signal Check — {now_str}[/]",
-            border_style="dim",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold yellow]NO TRADE SIGNAL[/]\n\n[dim]Conditions not fully met. Stand by.[/]",
+                title=f"[dim]Signal Check — {now_str}[/]",
+                border_style="dim",
+                padding=(1, 2),
+            )
+        )
 
 
 def cmd_monitor(args):
@@ -766,13 +826,15 @@ def cmd_monitor(args):
             "Add your webhook URL as a secret to enable Discord alerts."
         )
 
-    console.print(Panel(
-        f"[bold green]Monitor Mode Started[/]\n"
-        f"Running options flow analysis every [bold]{interval_mins}[/] minutes.\n"
-        f"Discord alerts: [bold]{'✓ enabled' if use_discord else '✗ disabled'}[/]\n\n"
-        f"Press [bold]Ctrl+C[/] to stop.",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]Monitor Mode Started[/]\n"
+            f"Running options flow analysis every [bold]{interval_mins}[/] minutes.\n"
+            f"Discord alerts: [bold]{'✓ enabled' if use_discord else '✗ disabled'}[/]\n\n"
+            f"Press [bold]Ctrl+C[/] to stop.",
+            border_style="green",
+        )
+    )
 
     run_count = 0
     while True:
@@ -826,7 +888,9 @@ def cmd_monitor(args):
             console.print("[red]No flow data returned this cycle.[/]")
 
         next_run = datetime.utcnow().strftime
-        console.print(f"\n[dim]Next run in {interval_mins} minutes... (Ctrl+C to stop)[/]\n")
+        console.print(
+            f"\n[dim]Next run in {interval_mins} minutes... (Ctrl+C to stop)[/]\n"
+        )
         try:
             time.sleep(interval_mins * 60)
         except KeyboardInterrupt:
@@ -835,6 +899,7 @@ def cmd_monitor(args):
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -870,38 +935,69 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     p_flow = subparsers.add_parser("flow", help="Analyze unusual options flow alerts")
-    p_flow.add_argument("--limit", type=int, default=50, help="Number of alerts (default: 50)")
-    p_flow.add_argument("--discord", action="store_true", help="Post analysis to Discord")
+    p_flow.add_argument(
+        "--limit", type=int, default=50, help="Number of alerts (default: 50)"
+    )
+    p_flow.add_argument(
+        "--discord", action="store_true", help="Post analysis to Discord"
+    )
 
-    p_market = subparsers.add_parser("market", help="Market overview: sectors, economic & FDA calendar")
-    p_market.add_argument("--discord", action="store_true", help="Post analysis to Discord")
+    p_market = subparsers.add_parser(
+        "market", help="Market overview: sectors, economic & FDA calendar"
+    )
+    p_market.add_argument(
+        "--discord", action="store_true", help="Post analysis to Discord"
+    )
 
-    p_dp = subparsers.add_parser("darkpool", help="Dark pool analysis for a specific ticker")
+    p_dp = subparsers.add_parser(
+        "darkpool", help="Dark pool analysis for a specific ticker"
+    )
     p_dp.add_argument("ticker", type=str, help="Stock ticker (e.g. AAPL)")
-    p_dp.add_argument("--limit", type=int, default=40, help="Number of transactions (default: 40)")
+    p_dp.add_argument(
+        "--limit", type=int, default=40, help="Number of transactions (default: 40)"
+    )
     p_dp.add_argument("--discord", action="store_true", help="Post analysis to Discord")
 
-    p_stock = subparsers.add_parser("stock", help="Full stock deep-dive: flow + dark pool")
+    p_stock = subparsers.add_parser(
+        "stock", help="Full stock deep-dive: flow + dark pool"
+    )
     p_stock.add_argument("ticker", type=str, help="Stock ticker (e.g. NVDA)")
-    p_stock.add_argument("--limit", type=int, default=50, help="Flow alerts to scan (default: 50)")
-    p_stock.add_argument("--discord", action="store_true", help="Post analysis to Discord")
+    p_stock.add_argument(
+        "--limit", type=int, default=50, help="Flow alerts to scan (default: 50)"
+    )
+    p_stock.add_argument(
+        "--discord", action="store_true", help="Post analysis to Discord"
+    )
 
-    p_jt = subparsers.add_parser("jortrade", help="Top 3 defined-risk setups from whale flow (JORTRADE framework)")
+    p_jt = subparsers.add_parser(
+        "jortrade",
+        help="Top 3 defined-risk setups from whale flow (JORTRADE framework)",
+    )
     p_jt.add_argument("--discord", action="store_true", help="Post analysis to Discord")
 
-    p_sig = subparsers.add_parser("signal", help="Entry signal check — returns ALERT or NO TRADE SIGNAL only")
-    p_sig.add_argument("--discord", action="store_true", help="Post alert to Discord if signal fires")
+    p_sig = subparsers.add_parser(
+        "signal", help="Entry signal check — returns ALERT or NO TRADE SIGNAL only"
+    )
+    p_sig.add_argument(
+        "--discord", action="store_true", help="Post alert to Discord if signal fires"
+    )
 
-    p_mon = subparsers.add_parser("monitor", help="Auto-run flow alerts on a schedule with Discord alerts")
-    p_mon.add_argument("--interval", type=int, default=60, help="Minutes between runs (default: 60)")
+    p_mon = subparsers.add_parser(
+        "monitor", help="Auto-run flow alerts on a schedule with Discord alerts"
+    )
+    p_mon.add_argument(
+        "--interval", type=int, default=60, help="Minutes between runs (default: 60)"
+    )
 
     args = parser.parse_args()
 
-    console.print(Panel(
-        "[bold white]Unusual Whales + Claude AI[/]  [dim]Market Intelligence Tool[/]",
-        border_style="blue",
-        padding=(0, 2),
-    ))
+    console.print(
+        Panel(
+            "[bold white]Unusual Whales + Claude AI[/]  [dim]Market Intelligence Tool[/]",
+            border_style="blue",
+            padding=(0, 2),
+        )
+    )
 
     dispatch = {
         "flow": cmd_flow,
