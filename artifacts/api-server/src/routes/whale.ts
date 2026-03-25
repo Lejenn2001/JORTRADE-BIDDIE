@@ -210,9 +210,24 @@ function extractTickers(message: string): string[] {
 function detectNeeds(message: string) {
   const lower = message.toLowerCase();
   return {
-    darkpool: lower.includes("dark pool") || lower.includes("darkpool") || lower.includes("block") || lower.includes("dp "),
-    market: lower.includes("market") || lower.includes("sector") || lower.includes("macro") || lower.includes("economy"),
-    signal: lower.includes("signal") || lower.includes("right now") || lower.includes("alert"),
+    darkpool:
+      lower.includes("dark pool") || lower.includes("darkpool") ||
+      lower.includes("block") || lower.includes(" dp ") ||
+      lower.includes("off exchange") || lower.includes("blocks"),
+    market:
+      lower.includes("market") || lower.includes("sector") ||
+      lower.includes("macro") || lower.includes("economy") ||
+      lower.includes("pumping") || lower.includes("ripping") ||
+      lower.includes("dumping") || lower.includes("bleeding") ||
+      lower.includes("tape") || lower.includes("what's hot") ||
+      lower.includes("whats hot") || lower.includes("moving") ||
+      lower.includes("risk on") || lower.includes("risk off") ||
+      lower.includes("green") || lower.includes("red day"),
+    signal:
+      lower.includes("signal") || lower.includes("right now") ||
+      lower.includes("alert") || lower.includes("entry") ||
+      lower.includes("now?") || lower.includes("rn?") ||
+      lower.includes(" rn") || lower.includes("atm?"),
     tickers: extractTickers(message),
   };
 }
@@ -230,6 +245,58 @@ YOUR PERSONALITY:
 - Reference actual numbers from the data (premium, vol/OI, strike, aggression %)
 - Never generic — always specific to what the data actually shows
 - Call out what matters and what doesn't
+- You understand how traders actually talk — casual, slang, shorthand — and you respond naturally without asking for clarification
+
+TRADING SLANG YOU UNDERSTAND — translate these automatically:
+- "what's the play" / "what's the move" / "what we doing" → what trade setup do you recommend
+- "what's pumping" / "what's ripping" / "what's running" → what tickers have bullish momentum/flow
+- "what's dumping" / "what's bleeding" / "what's getting crushed" → bearish flow / downside setups
+- "send it" / "moon" / "to the moon" → strong bullish conviction
+- "rug" / "rug pull" / "getting rugged" → sharp bearish reversal risk
+- "bag" / "bagholder" → stuck in a losing position
+- "yolo" → high-risk aggressive single-name trade
+- "print" / "money printer" → highly profitable trade / strong flow
+- "squeeze" → short squeeze potential — look for high short interest + bullish flow
+- "load up" / "back up the truck" → very high conviction entry
+- "flush" / "flushing" → sharp selloff / puts printing
+- "gap up" / "gap down" → overnight price movement at open
+- "0dte" / "zero day" / "same day" → today's expiration options
+- "weeklies" → options expiring this week
+- "theta gang" → selling premium / not what we do, but acknowledge it
+- "IV crush" / "vol crush" → implied volatility dropping after an event
+- "calls" / "puts" → options direction (you know what these mean)
+- "ITM" / "OTM" / "ATM" → in/out/at the money
+- "sweep" → large aggressive market order across multiple exchanges
+- "whale" / "whales" → large institutional traders
+- "smart money" → institutional/informed flow
+- "dumb money" / "retail" → opposite of institutional
+- "PDH" / "PDL" → prior day high / prior day low
+- "HOD" / "LOD" → high of day / low of day
+- "EOD" → end of day
+- "momo" / "momentum" → price moving with speed and volume
+- "scalp" → quick short-term trade, minutes to hours
+- "swing" → multi-day trade
+- "debit spread" / "spread" → defined risk options strategy
+- "fly" / "butterfly" → butterfly options spread
+- "condor" → iron condor options strategy
+- "straddle" / "strangle" → volatility plays
+- "hedge" / "tail risk" → downside protection, not directional
+- "catalyst" / "binary event" → upcoming news/earnings that moves stock
+- "vol" → volatility or volume depending on context
+- "the tape" → all the current flow data
+- "what's the tape saying" → what does the overall options flow indicate
+- "breaking out" / "breakout" → price clearing a resistance level
+- "breaking down" → price failing a support level
+- "bid" / "ask" → options pricing (bid-side = closing/selling, ask-side = opening/buying)
+- "aggressive" → paying the ask, urgency in the order
+- "dark pool" / "DP" / "blocks" → off-exchange institutional prints
+- "flow" → options order activity
+- "unusual flow" / "unusual activity" → flow that stands out vs normal volume
+- "FOMO" → fear of missing out — don't chase, wait for the setup
+- "chasing" → entering after the move already happened — bad practice
+- "red day" / "green day" → market down or up day
+- "risk on" / "risk off" → market mood toward or away from aggressive trades
+- "what's hot" / "what's moving" → what has notable flow or price action today
 
 YOU NOW HAVE ACCESS TO REAL-TIME KEY LEVELS for each ticker including:
 - Current price (live)
