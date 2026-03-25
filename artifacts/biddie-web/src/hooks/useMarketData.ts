@@ -17,6 +17,8 @@ export interface FlowAlert {
 
 export type SignalTimeframe = "buy_now" | "short_term" | "swing";
 
+export type SignalCategory = "algorithm" | "whale";
+
 export interface MarketSignal {
   id: string;
   ticker: string;
@@ -47,6 +49,7 @@ export interface MarketSignal {
   recommendedAction?: string;
   recommendedExpiry?: string;
   recommendedStrike?: string;
+  category?: SignalCategory;
 }
 
 export interface TickerData {
@@ -235,9 +238,9 @@ const exampleSignals: MarketSignal[] = [
     confidence: 9.4,
     convictionScore: 92,
     convictionLabel: "Extreme Conviction",
-    description: "Massive call sweep activity detected on NVDA. Over $2.8M in premium on the $145 calls expiring March 27. Institutional flow is heavily skewed bullish with repeat sweeps at the ask. Volume-to-open-interest ratio is 4.2x — indicating new positioning, not hedging.",
+    description: "SR Tag + 2 Green Bars confirmed at $141.50 support. Price bounced off VWAP with increasing volume. Call sweep activity over $2.8M in premium on the $145 calls. Negative gamma zone — moves will accelerate through this level.",
     timestamp: "Fri 3:42 PM",
-    tags: ["Call Flow", "Sweep", "🔥 ACT NOW"],
+    tags: ["Call Flow", "Sweep", "✅ PRICE CONFIRMED", "⚡ NEG GAMMA", "🔥 ACT NOW"],
     strike: "$145",
     expiry: "March 27, 2026",
     premium: "$2.8M",
@@ -249,6 +252,11 @@ const exampleSignals: MarketSignal[] = [
     targetZone: "$148.00 – $152.00",
     timeframe: "buy_now",
     source: "example",
+    category: "algorithm",
+    priceConfirmed: true,
+    pricePattern: "Support Bounce + 2 Green Bars at $141.50 (higher low, higher high — confirmed)",
+    gammaZone: "negative",
+    gammaDescription: "Negative gamma zone — moves are amplified near this strike",
   },
   {
     id: "ex-2",
@@ -257,9 +265,9 @@ const exampleSignals: MarketSignal[] = [
     confidence: 9.1,
     convictionScore: 78,
     convictionLabel: "Very High Conviction",
-    description: "Aggressive put sweeps on TSLA totaling $1.9M in premium. The $250 puts expiring March 27 saw 6 consecutive sweeps at the ask within 12 minutes. Dark pool prints confirm institutional selling pressure near $260 resistance.",
+    description: "SR Tag + 2 Red Bars confirmed at $260 resistance. Price rejected from prior day high with 6 consecutive put sweeps. Positive gamma zone — expect pinning near this level before a break lower.",
     timestamp: "Fri 2:58 PM",
-    tags: ["Put Flow", "Sweep", "🔥 ACT NOW"],
+    tags: ["Put Flow", "Sweep", "✅ PRICE CONFIRMED", "🧲 POS GAMMA", "⚡ HIGH CONVICTION"],
     strike: "$250",
     expiry: "March 27, 2026",
     premium: "$1.9M",
@@ -271,6 +279,11 @@ const exampleSignals: MarketSignal[] = [
     targetZone: "$242.00 – $245.00",
     timeframe: "short_term",
     source: "example",
+    category: "algorithm",
+    priceConfirmed: true,
+    pricePattern: "SR Tag + 2 Red Bars at $260.00 (lower high, lower low — confirmed)",
+    gammaZone: "positive",
+    gammaDescription: "Positive gamma zone — expect mean-reversion and pinning",
   },
   {
     id: "ex-3",
@@ -279,20 +292,21 @@ const exampleSignals: MarketSignal[] = [
     confidence: 9.6,
     convictionScore: 85,
     convictionLabel: "Very High Conviction",
-    description: "Whale alert: single-block $3.1M call order on AAPL $215 strike. Unusual volume spike with 5.8x average call volume. Options market makers are actively hedging long delta — a strong signal of directional conviction from smart money.",
+    description: "Whale alert: single-block $3.1M call order on AAPL $215 strike. Unusual volume spike with 5.8x average call volume. Institutional smart money positioning for a multi-day move higher.",
     timestamp: "Fri 1:15 PM",
-    tags: ["Call Flow", "Block", "🔥 ACT NOW"],
+    tags: ["Call Flow", "Block", "🐋 WHALE PLAY", "🔥 ACT NOW"],
     strike: "$215",
-    expiry: "March 27, 2026",
+    expiry: "April 10, 2026",
     premium: "$3.1M",
     putCall: "call",
-    suggestedTrade: "Buy AAPL $215 Calls expiring March 27",
+    suggestedTrade: "Buy AAPL $215 Calls expiring April 10",
     entryTrigger: "Hold above $212 support with increasing bid volume",
     invalidation: "$208.00",
     keyLevel: "$213.00",
     targetZone: "$218.00 – $222.00",
-    timeframe: "buy_now",
+    timeframe: "swing",
     source: "example",
+    category: "whale",
   },
   {
     id: "ex-4",
@@ -301,9 +315,9 @@ const exampleSignals: MarketSignal[] = [
     confidence: 9.8,
     convictionScore: 88,
     convictionLabel: "Very High Conviction",
-    description: "Extreme put sweep cluster on SPY — $4.5M in $570 puts expiring March 27. 9 sweeps in under 20 minutes, all filled at the ask. Put/call ratio spiked to 2.1x. This is the highest conviction bearish flow seen this week across all indices.",
+    description: "Algorithm confirmed: price rejected R1 pivot at $573.50 with 2 consecutive red bars. Extreme put sweep cluster — $4.5M in $570 puts. 9 sweeps in under 20 minutes. Negative gamma amplifying the move lower.",
     timestamp: "Fri 12:30 PM",
-    tags: ["Put Flow", "Sweep", "🔥 ACT NOW"],
+    tags: ["Put Flow", "Sweep", "✅ PRICE CONFIRMED", "⚡ NEG GAMMA", "🔥 ACT NOW"],
     strike: "$570",
     expiry: "March 27, 2026",
     premium: "$4.5M",
@@ -315,6 +329,11 @@ const exampleSignals: MarketSignal[] = [
     targetZone: "$564.00 – $567.00",
     timeframe: "buy_now",
     source: "example",
+    category: "algorithm",
+    priceConfirmed: true,
+    pricePattern: "SR Tag + 2 Red Bars at $573.50 (lower high — likely reversal)",
+    gammaZone: "negative",
+    gammaDescription: "Negative gamma zone — price will accelerate through this level",
   },
   {
     id: "ex-5",
@@ -323,20 +342,21 @@ const exampleSignals: MarketSignal[] = [
     confidence: 9.2,
     convictionScore: 72,
     convictionLabel: "High Conviction",
-    description: "Repeat call sweeps on PLTR at the $120 strike — $1.4M total premium across 4 sweeps. Unusual whales flagged this as top-tier flow. Open interest is building rapidly and the stock is consolidating near a breakout level.",
+    description: "Whale positioning: $1.4M in repeat call sweeps on PLTR at $120 strike across 4 sweeps. Smart money building positions ahead of earnings. Open interest growing rapidly — institutional accumulation for a swing higher.",
     timestamp: "Fri 11:45 AM",
-    tags: ["Call Flow", "Sweep", "🔥 ACT NOW"],
+    tags: ["Call Flow", "Sweep", "🐋 WHALE PLAY", "⚡ HIGH CONVICTION"],
     strike: "$120",
-    expiry: "March 27, 2026",
+    expiry: "April 17, 2026",
     premium: "$1.4M",
     putCall: "call",
-    suggestedTrade: "Buy PLTR $120 Calls expiring March 27",
+    suggestedTrade: "Buy PLTR $120 Calls expiring April 17",
     entryTrigger: "Break above $118 with volume surge",
     invalidation: "$114.00",
     keyLevel: "$117.50",
     targetZone: "$123.00 – $126.00",
     timeframe: "swing",
     source: "example",
+    category: "whale",
   },
   {
     id: "ex-6",
@@ -345,20 +365,21 @@ const exampleSignals: MarketSignal[] = [
     confidence: 10.0,
     convictionScore: 95,
     convictionLabel: "Extreme Conviction",
-    description: "Highest-conviction signal of the week: $5.2M in AMD $110 put sweeps. 12 consecutive sweeps at the ask, all within a 15-minute window. Dark pool short volume hit 62% — the highest level in 30 days. Smart money is positioning aggressively bearish.",
+    description: "Whale alert: $5.2M in AMD $110 put sweeps. 12 consecutive sweeps at the ask in 15 minutes. Dark pool short volume at 62% — highest in 30 days. Massive institutional conviction for a multi-day move lower.",
     timestamp: "Fri 10:22 AM",
-    tags: ["Put Flow", "Sweep", "🔥 ACT NOW"],
+    tags: ["Put Flow", "Sweep", "🐋 WHALE PLAY", "🔥 ACT NOW"],
     strike: "$110",
-    expiry: "March 27, 2026",
+    expiry: "April 3, 2026",
     premium: "$5.2M",
     putCall: "put",
-    suggestedTrade: "Buy AMD $110 Puts expiring March 27",
+    suggestedTrade: "Buy AMD $110 Puts expiring April 3",
     entryTrigger: "Breakdown below $112 support",
     invalidation: "$116.50",
     keyLevel: "$112.00",
     targetZone: "$105.00 – $107.00",
-    timeframe: "buy_now",
+    timeframe: "swing",
     source: "example",
+    category: "whale",
   },
 ];
 
@@ -527,6 +548,13 @@ export function useMarketData() {
 
             const timeframe = classifyTimeframe({ convictionScore: hybridScore, confidence: s.confidence, expiry: s.expiry });
 
+            // Classify: Algorithm plays have price confirmation or gamma analysis;
+            // Whale plays are high-premium institutional flow (sweeps/blocks with big size)
+            const whalePremium = parseFloat(String(s.premium)) || 0;
+            const isWhalePlay = whalePremium >= 250000 && (s.has_sweep || inferredRule === 'sweep') && hybridScore >= 75;
+            const isAlgoPlay = isPriceConfirmed || gammaZone !== 'neutral' || timeframe === 'buy_now';
+            const category: SignalCategory = isWhalePlay && !isPriceConfirmed ? 'whale' : 'algorithm';
+
             return {
               id: `replit-${s.ticker}-${i}`,
               ticker: s.ticker,
@@ -556,6 +584,7 @@ export function useMarketData() {
               recommendedAction: s.recommended_action,
               recommendedExpiry: s.recommended_expiry,
               recommendedStrike: s.recommended_strike,
+              category,
             } as MarketSignal;
           });
 

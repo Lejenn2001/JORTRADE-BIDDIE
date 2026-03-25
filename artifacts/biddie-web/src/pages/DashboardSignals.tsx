@@ -2,34 +2,28 @@ import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import { useMarketData, type MarketSignal, type SignalTimeframe, computeWhaleConviction } from "@/hooks/useMarketData";
+import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, CalendarDays, Target, ShieldX, Crosshair, MapPin, Gauge } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import SignalLegend from "@/components/dashboard/SignalLegend";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 
 type FilterType = "all" | "call" | "put";
+type ViewTab = "algorithm" | "whale";
 
-const SECTION_META: Record<SignalTimeframe, { label: string; icon: React.ReactNode; description: string }> = {
+const ALGO_SECTION_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
   buy_now: {
-    label: "🔥 BUY NOW",
-    icon: <Zap className="h-4 w-4" />,
-    description: "Highest conviction — act immediately",
+    label: "🔥 ACT NOW",
+    icon: <Zap className="h-4 w-4 text-emerald-400" />,
+    description: "Price confirmed — act immediately",
   },
   short_term: {
     label: "⚡ 1–3 DAY TRADE",
-    icon: <Clock className="h-4 w-4" />,
-    description: "Strong setups with short-term expiry",
-  },
-  swing: {
-    label: "📈 SWING",
-    icon: <CalendarDays className="h-4 w-4" />,
-    description: "Longer-dated positioning plays",
+    icon: <Clock className="h-4 w-4 text-emerald-400" />,
+    description: "Algorithm-detected setups with short-term expiry",
   },
 };
 
-const SECTION_ORDER: SignalTimeframe[] = ["buy_now", "short_term", "swing"];
 
 const cardVariants = {
   hidden: { opacity: 0, y: 20, scale: 0.97 },
@@ -182,7 +176,9 @@ const DashboardSignals = () => {
   const loading = liveLoading && dbLoading;
   const signals = allSignals;
 
-  const grouped = useMemo(() => {
+  const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
+
+  const filtered = useMemo(() => {
     let list = [...signals];
 
     if (search.trim()) {
@@ -199,20 +195,22 @@ const DashboardSignals = () => {
       return dateB - dateA;
     });
 
-    const groups: Record<SignalTimeframe, MarketSignal[]> = {
-      buy_now: [],
-      short_term: [],
-      swing: [],
-    };
-
-    for (const s of list) {
-      const tf = s.timeframe || "swing";
-      groups[tf].push(s);
-    }
-
-    return groups;
+    return list;
   }, [signals, search, filterType]);
 
+  const algorithmSignals = useMemo(() => {
+    const algoOnly = filtered.filter(s => s.category !== 'whale');
+    const buyNow = algoOnly.filter(s => s.timeframe === 'buy_now');
+    const shortTerm = algoOnly.filter(s => s.timeframe === 'short_term' || s.timeframe === 'swing');
+    return { buy_now: buyNow, short_term: shortTerm };
+  }, [filtered]);
+
+  const whaleSignals = useMemo(() => {
+    return filtered.filter(s => s.category === 'whale');
+  }, [filtered]);
+
+  const algoCount = algorithmSignals.buy_now.length + algorithmSignals.short_term.length;
+  const whaleCount = whaleSignals.length;
   const totalCount = signals.filter(s => s.source !== 'example').length;
 
   return (
@@ -227,6 +225,38 @@ const DashboardSignals = () => {
             <p className="text-xs text-muted-foreground">
               Today's signal log — {totalCount} signals recorded
             </p>
+          </div>
+
+          {/* Tab Switcher */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewTab("algorithm")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewTab === "algorithm"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                  : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Zap className="h-4 w-4" />
+              Algorithm Plays
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                viewTab === "algorithm" ? "bg-emerald-500/30" : "bg-muted/50"
+              }`}>{algoCount}</span>
+            </button>
+            <button
+              onClick={() => setViewTab("whale")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewTab === "whale"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/40"
+                  : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Waves className="h-4 w-4" />
+              Whale Plays
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                viewTab === "whale" ? "bg-blue-500/30" : "bg-muted/50"
+              }`}>{whaleCount}</span>
+            </button>
           </div>
 
           {/* Filters */}
@@ -258,8 +288,6 @@ const DashboardSignals = () => {
             </div>
           </div>
 
-          <SignalLegend />
-
           {loading && signals.length === 0 && (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -268,47 +296,75 @@ const DashboardSignals = () => {
             </div>
           )}
 
-          {!loading && signals.length === 0 && (
-            <div className="glass-panel rounded-xl p-8 text-center">
-              <p className="text-muted-foreground text-sm">No signals recorded yet today. Signals will appear here as they come in during market hours.</p>
-            </div>
+          {/* Algorithm Plays Tab */}
+          {viewTab === "algorithm" && (
+            <>
+              {algoCount === 0 && !loading && (
+                <div className="glass-panel rounded-xl p-8 text-center border border-emerald-500/20">
+                  <Zap className="h-8 w-8 text-emerald-400/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No algorithm plays detected yet. Signals appear here when price action confirms at key levels during market hours.</p>
+                </div>
+              )}
+
+              {(["buy_now", "short_term"] as const).map((timeframe) => {
+                const meta = ALGO_SECTION_META[timeframe];
+                const sectionSignals = algorithmSignals[timeframe];
+                if (sectionSignals.length === 0) return null;
+
+                return (
+                  <div key={timeframe} className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      {meta.icon}
+                      <span className="font-bold text-xs sm:text-sm text-emerald-400">{meta.label}</span>
+                      <span className="text-[10px] text-muted-foreground hidden sm:inline">— {meta.description}</span>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full ml-auto">
+                        {sectionSignals.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {sectionSignals.map((signal, i) => (
+                        <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                          <SignalCard signal={signal} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
 
-          {/* Sections */}
-          {SECTION_ORDER.map((timeframe) => {
-            const meta = SECTION_META[timeframe];
-            const sectionSignals = grouped[timeframe];
-            if (sectionSignals.length === 0) return null;
-
-            return (
-              <div key={timeframe} className="space-y-3">
-                {/* Section label */}
-                <div className="flex items-center gap-2 px-1">
-                  {meta.icon}
-                  <span className="font-bold text-xs sm:text-sm text-foreground">{meta.label}</span>
-                  <span className="text-[10px] text-muted-foreground hidden sm:inline">— {meta.description}</span>
-                  <span className="text-[10px] bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded-full ml-auto">
-                    {sectionSignals.length}
-                  </span>
+          {/* Whale Plays Tab */}
+          {viewTab === "whale" && (
+            <>
+              {whaleCount === 0 && !loading && (
+                <div className="glass-panel rounded-xl p-8 text-center border border-blue-500/20">
+                  <Waves className="h-8 w-8 text-blue-400/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No whale plays detected yet. These appear when large institutional orders ($250K+ premium) are identified as swing setups.</p>
                 </div>
+              )}
 
-                {/* Signal cards */}
+              {whaleSignals.length > 0 && (
                 <div className="space-y-3">
-                  {sectionSignals.map((signal, i) => (
-                    <motion.div
-                      key={signal.id}
-                      custom={i}
-                      initial="hidden"
-                      animate="visible"
-                      variants={cardVariants}
-                    >
-                      <SignalCard signal={signal} />
-                    </motion.div>
-                  ))}
+                  <div className="flex items-center gap-2 px-1">
+                    <Waves className="h-4 w-4 text-blue-400" />
+                    <span className="font-bold text-xs sm:text-sm text-blue-400">🐋 WHALE SWINGS</span>
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">— Institutional flow — multi-day positioning plays</span>
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-auto">
+                      {whaleSignals.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {whaleSignals.map((signal, i) => (
+                      <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                        <SignalCard signal={signal} />
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              )}
+            </>
+          )}
         </main>
       </div>
     </div>
@@ -318,8 +374,13 @@ const DashboardSignals = () => {
 function SignalCard({ signal }: { signal: MarketSignal }) {
   const isCall = signal.putCall === "call" || signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
+  const isWhale = signal.category === "whale";
 
-  const glowClass = score >= 85
+  const glowClass = isWhale
+    ? score >= 85
+      ? "shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] border-blue-500/40"
+      : "shadow-[0_0_10px_-3px_rgba(59,130,246,0.25)] border-blue-500/30"
+    : score >= 85
     ? "shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)] border-primary/40"
     : score >= 70
     ? "shadow-[0_0_10px_-3px_hsl(var(--primary)/0.25)] border-primary/30"
@@ -329,17 +390,37 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-shadow ${glowClass} ${
-      isCall ? "bg-primary/5" : "bg-destructive/5"
+      isWhale ? "bg-blue-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
+      {/* Price Confirmed Banner */}
+      {signal.priceConfirmed && (
+        <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">Price Action Confirmed</span>
+          <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+          <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">ACT NOW</span>
+        </div>
+      )}
+
       <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
-        isCall ? "bg-primary/15" : "bg-destructive/15"
+        isWhale ? "bg-blue-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
       }`}>
         <div className="flex items-center gap-2">
-          <Zap className="h-3 w-3 text-accent" />
-          <span className="text-[9px] sm:text-[10px] font-bold tracking-widest text-accent uppercase">
-            JORTRADE Alert
+          {isWhale ? (
+            <Waves className="h-3 w-3 text-blue-400" />
+          ) : (
+            <Zap className="h-3 w-3 text-accent" />
+          )}
+          <span className={`text-[9px] sm:text-[10px] font-bold tracking-widest uppercase ${
+            isWhale ? "text-blue-400" : "text-accent"
+          }`}>
+            {isWhale ? "Whale Play" : "Algorithm Play"}
           </span>
-          <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
+          {signal.source === "live" ? (
+            <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
+          ) : signal.source === "example" ? (
+            <span className="text-[8px] sm:text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground uppercase tracking-wider">Example</span>
+          ) : null}
         </div>
         <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
           <Clock className="h-2.5 w-2.5" />
@@ -391,6 +472,30 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
               </div>
             </div>
           )}
+          {signal.pricePattern && (
+            <div className="flex items-start gap-2 bg-emerald-500/10 rounded-lg px-2.5 py-1.5">
+              <CheckCircle2 className="h-3 w-3 text-emerald-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-muted-foreground">Price pattern: </span>
+                <span className="text-emerald-400 font-semibold">{signal.pricePattern}</span>
+              </div>
+            </div>
+          )}
+          {signal.gammaZone && signal.gammaZone !== 'neutral' && (
+            <div className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 ${
+              signal.gammaZone === 'negative' ? 'bg-orange-500/10' : 'bg-blue-500/10'
+            }`}>
+              <Gauge className={`h-3 w-3 mt-0.5 shrink-0 ${
+                signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+              }`} />
+              <div className="min-w-0">
+                <span className="text-muted-foreground">Gamma: </span>
+                <span className={`font-semibold ${
+                  signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+                }`}>{signal.gammaDescription}</span>
+              </div>
+            </div>
+          )}
           {signal.targetZone && (
             <div className="flex items-start gap-2 bg-primary/10 rounded-lg px-2.5 py-1.5">
               <MapPin className="h-3 w-3 text-primary mt-0.5 shrink-0" />
@@ -418,7 +523,7 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
               </div>
             </div>
           )}
-          {signal.gammaLevelLabel && (
+          {signal.gammaLevelLabel && (!signal.gammaZone || signal.gammaZone === 'neutral') && (
             <div className="flex items-start gap-2 bg-accent/10 rounded-lg px-2.5 py-1.5">
               <Gauge className="h-3 w-3 text-accent mt-0.5 shrink-0" />
               <div className="min-w-0">
@@ -431,14 +536,21 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
 
         <div className="flex flex-wrap gap-1.5">
           {signal.tags.map((tag) => {
-            const isUrgent = tag.includes('ACT NOW') || tag.includes('HIGH CONVICTION');
+            const tagUpper = tag.toUpperCase();
+            const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
+            const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
+            const isGamma = tagUpper.includes('GAMMA');
+            const isWhaleTag = tagUpper.includes('WHALE');
+            let tagStyle = "bg-muted/50 text-muted-foreground";
+            if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
+            else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
+            else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
+            else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
             return (
               <span
                 key={tag}
                 className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  isUrgent
-                    ? "bg-destructive/20 text-destructive animate-pulse"
-                    : "bg-muted/50 text-muted-foreground"
+                  tagStyle
                 }`}
               >
                 {tag}

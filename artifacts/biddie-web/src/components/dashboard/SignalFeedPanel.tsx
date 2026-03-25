@@ -1,4 +1,4 @@
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
@@ -9,6 +9,9 @@ interface Props {
   signals: MarketSignal[];
   loading: boolean;
   limit?: number;
+  title?: string;
+  subtitle?: string;
+  icon?: "algorithm" | "whale";
 }
 
 const cardVariants = {
@@ -19,22 +22,36 @@ const cardVariants = {
   }),
 };
 
-const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
+const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Props) => {
   const displaySignals = limit ? signals.slice(0, limit) : signals;
+  const isWhale = icon === "whale";
+  const headerTitle = title || "Live Signal Feed";
+  const headerIcon = isWhale
+    ? <Waves className="h-4 w-4 text-blue-400" />
+    : icon === "algorithm"
+    ? <Zap className="h-4 w-4 text-emerald-400" />
+    : <Activity className="h-4 w-4 text-primary" />;
+  const accentColor = isWhale ? "text-blue-400" : icon === "algorithm" ? "text-emerald-400" : "text-primary";
+  const accentBg = isWhale ? "bg-blue-400/20" : icon === "algorithm" ? "bg-emerald-400/20" : "bg-primary/20";
+
   return (
-    <div className="glass-panel rounded-xl p-5 border-glow-blue">
-      <div className="flex items-center justify-between mb-5">
+    <div className={`glass-panel rounded-xl p-5 ${isWhale ? "border-blue-500/30 border" : icon === "algorithm" ? "border-emerald-500/30 border" : "border-glow-blue"}`}>
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm text-foreground">Live Signal Feed</span>
+          {headerIcon}
+          <span className={`font-semibold text-sm ${accentColor}`}>{headerTitle}</span>
         </div>
-        <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        <span className={`text-xs ${accentBg} ${accentColor} px-2.5 py-0.5 rounded-full flex items-center gap-1`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isWhale ? "bg-blue-400" : icon === "algorithm" ? "bg-emerald-400" : "bg-primary"} animate-pulse`} />
           {displaySignals.length} Active
         </span>
       </div>
+      {subtitle && (
+        <p className="text-[10px] text-muted-foreground mb-4 ml-6">{subtitle}</p>
+      )}
+      {!subtitle && <div className="mb-4" />}
 
-      <SignalLegend />
+      {!icon && <SignalLegend />}
 
       {loading && signals.length === 0 ? (
         <div className="space-y-3">
@@ -76,15 +93,23 @@ const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
               {/* Alert Header */}
               <div
                 className={`px-4 py-2 flex items-center justify-between ${
-                  signal.type === "bullish"
+                  signal.category === "whale"
+                    ? "bg-blue-500/15"
+                    : signal.type === "bullish"
                     ? "bg-primary/15"
                     : "bg-destructive/15"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Zap className="h-3.5 w-3.5 text-accent" />
-                  <span className="text-[10px] font-bold tracking-widest text-accent uppercase">
-                    JORTRADE Alert
+                  {signal.category === "whale" ? (
+                    <Waves className="h-3.5 w-3.5 text-blue-400" />
+                  ) : (
+                    <Zap className="h-3.5 w-3.5 text-accent" />
+                  )}
+                  <span className={`text-[10px] font-bold tracking-widest uppercase ${
+                    signal.category === "whale" ? "text-blue-400" : "text-accent"
+                  }`}>
+                    {signal.category === "whale" ? "Whale Play" : "Algorithm Play"}
                   </span>
                   {signal.source === "live" ? (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
@@ -227,8 +252,10 @@ const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
                     const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
                     const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
                     const isGamma = tagUpper.includes('GAMMA');
+                    const isWhaleTag = tagUpper.includes('WHALE');
                     let tagStyle = "bg-muted/50 text-muted-foreground";
                     if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
+                    else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
                     else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
                     else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
                     return (

@@ -7,7 +7,7 @@ import PortfolioPanel from "@/components/dashboard/PortfolioPanel";
 import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
-import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
+import { useMarketData, type MarketSignal, type SignalCategory } from "@/hooks/useMarketData";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -145,8 +145,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Dashboard only shows the latest extreme live signals from today.
-  const topSignals = useMemo(() => {
+  const allMergedSignals = useMemo(() => {
     const mergedSignals = new Map<string, MarketSignal>();
 
     for (const signal of persistedSignals) {
@@ -155,9 +154,6 @@ const Dashboard = () => {
     }
 
     for (const signal of signals) {
-      if (signal.source !== "live") continue;
-      if (getSignalScore(signal) < 90) continue;
-
       const key = `${signal.ticker}|${signal.strike}|${signal.expiry}`;
       const existing = mergedSignals.get(key);
 
@@ -169,17 +165,28 @@ const Dashboard = () => {
     }
 
     return Array.from(mergedSignals.values())
-      .filter((signal) => getSignalScore(signal) >= 90)
       .sort((a, b) => {
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : Date.now();
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : Date.now();
-
         if (timeB !== timeA) return timeB - timeA;
-
         return getSignalScore(b) - getSignalScore(a);
-      })
-      .slice(0, 3);
+      });
   }, [persistedSignals, signals]);
+
+  const algorithmPlays = useMemo(() =>
+    allMergedSignals
+      .filter(s => s.category !== 'whale')
+      .filter(s => getSignalScore(s) >= 70)
+      .slice(0, 3),
+    [allMergedSignals]
+  );
+
+  const whalePlays = useMemo(() =>
+    allMergedSignals
+      .filter(s => s.category === 'whale')
+      .slice(0, 3),
+    [allMergedSignals]
+  );
 
   const signalFeedLoading = loading || persistedLoading;
 
@@ -200,7 +207,20 @@ const Dashboard = () => {
               <AIChatPanel />
             </div>
             <div className="lg:col-span-3 grid grid-cols-1 gap-4 lg:gap-6">
-              <SignalFeedPanel signals={topSignals} loading={signalFeedLoading} />
+              <SignalFeedPanel
+                signals={algorithmPlays}
+                loading={signalFeedLoading}
+                title="Algorithm Plays"
+                subtitle="Price action confirmed + gamma analysis — intraday entries"
+                icon="algorithm"
+              />
+              <SignalFeedPanel
+                signals={whalePlays}
+                loading={signalFeedLoading}
+                title="Whale Plays"
+                subtitle="Institutional flow — swing positioning"
+                icon="whale"
+              />
               <PortfolioPanel whaleAlerts={whaleAlerts} loading={loading} limit={6} />
             </div>
           </div>
