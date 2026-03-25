@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import ReactMarkdown from "react-markdown";
 import biddieRobot from "@/assets/biddie-robot.png";
@@ -79,16 +78,19 @@ const AIChatPanel = () => {
         content: m.content,
       }));
 
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { message: instruction, history },
+      const res = await fetch('/api/whale/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: instruction, history }),
       });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
 
       const assistantMsg: Message = {
         id: `asst-${Date.now()}`,
         role: "assistant",
-        content: data?.reply || "I couldn't generate a response. Please try again.",
+        content: data?.analysis || data?.reply || "I couldn't generate a response. Please try again.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 

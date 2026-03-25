@@ -96,11 +96,13 @@ const DashboardCommunity = () => {
     try {
       // Prepend instruction for concise community chat responses
       const chatInstruction = `[COMMUNITY CHAT MODE] Keep your response SHORT — 2-3 sentences max. Only give a full detailed breakdown if you see a high-confidence alert (8+/10). For casual greetings, just be friendly and brief. For trading questions, give the #1 best play only with ticker, direction, and confidence. No long lists.\n\nUser says: ${userMessage}`;
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { message: chatInstruction, postToChat: true },
+      const res = await fetch('/api/whale/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: chatInstruction }),
       });
-      if (error) {
-        console.error("Biddie edge function error:", error);
+      if (!res.ok) {
+        console.error("Biddie API error:", res.status);
       }
     } catch (e) {
       console.error("Biddie API error:", e);

@@ -117,6 +117,21 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/biddie-web` (`@workspace/biddie-web`)
+
+Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Tailwind V3 + shadcn/ui.
+
+- **Stack**: React 19, Vite 7, Tailwind CSS 3, Framer Motion, Recharts, Supabase Auth, React Router v6
+- **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
+- **Auth**: Supabase email/password + Google/Apple OAuth. Dashboard is protected by `ProtectedRoute` component.
+- **API Integration**: 
+  - Chat: `POST /api/whale/chat` — sends to API server which calls Claude with Unusual Whales data
+  - Signals: `GET /api/whale/signals` — fetches live options flow signals from API server
+  - Replit artifact routing handles `/api` → API server (port 8080) automatically
+- **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
+- **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
+- **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
