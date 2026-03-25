@@ -33,6 +33,87 @@ async function fetchDarkpool(ticker: string, limit = 40) {
   } catch { return []; }
 }
 
+async function fetchKeyLevels(ticker: string) {
+  try {
+    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
+    const headers = { "User-Agent": "Mozilla/5.0" };
+
+    // Fetch last 2 days of daily bars for prior day OHLC
+    const daily = await axios.get(`${YF}/${ticker}`, {
+      headers, params: { interval: "1d", range: "5d" }, timeout: 10000,
+    });
+    const dailyResult = daily.data?.chart?.result?.[0];
+    const dailyQuote = dailyResult?.indicators?.quote?.[0];
+    const dailyTs = dailyResult?.timestamp ?? [];
+    const dailyLen = dailyTs.length;
+
+    const prevClose  = dailyQuote?.close?.[dailyLen - 2] ?? null;
+    const prevHigh   = dailyQuote?.high?.[dailyLen - 2] ?? null;
+    const prevLow    = dailyQuote?.low?.[dailyLen - 2] ?? null;
+    const prevOpen   = dailyQuote?.open?.[dailyLen - 2] ?? null;
+    const todayOpen  = dailyQuote?.open?.[dailyLen - 1] ?? null;
+    const todayHigh  = dailyQuote?.high?.[dailyLen - 1] ?? null;
+    const todayLow   = dailyQuote?.low?.[dailyLen - 1] ?? null;
+
+    // Fetch intraday 5-min bars for VWAP calculation
+    const intraday = await axios.get(`${YF}/${ticker}`, {
+      headers, params: { interval: "5m", range: "1d" }, timeout: 10000,
+    });
+    const intResult = intraday.data?.chart?.result?.[0];
+    const intQuote  = intResult?.indicators?.quote?.[0];
+    const intLen    = (intResult?.timestamp ?? []).length;
+
+    let vwap: number | null = null;
+    if (intQuote && intLen > 0) {
+      let cumTPV = 0, cumVol = 0;
+      for (let i = 0; i < intLen; i++) {
+        const h = intQuote.high?.[i] ?? 0;
+        const l = intQuote.low?.[i] ?? 0;
+        const c = intQuote.close?.[i] ?? 0;
+        const v = intQuote.volume?.[i] ?? 0;
+        if (h && l && c && v) {
+          cumTPV += ((h + l + c) / 3) * v;
+          cumVol += v;
+        }
+      }
+      vwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
+    }
+
+    const currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
+
+    // Pivot points from prior day
+    const pivot = prevHigh && prevLow && prevClose
+      ? Math.round(((prevHigh + prevLow + prevClose) / 3) * 100) / 100
+      : null;
+    const r1 = pivot && prevLow ? Math.round((2 * pivot - prevLow) * 100) / 100 : null;
+    const s1 = pivot && prevHigh ? Math.round((2 * pivot - prevHigh) * 100) / 100 : null;
+    const r2 = pivot && prevHigh && prevLow
+      ? Math.round((pivot + (prevHigh - prevLow)) * 100) / 100 : null;
+    const s2 = pivot && prevHigh && prevLow
+      ? Math.round((pivot - (prevHigh - prevLow)) * 100) / 100 : null;
+
+    return {
+      ticker: ticker.toUpperCase(),
+      current_price: currentPrice ? Math.round(currentPrice * 100) / 100 : null,
+      vwap,
+      today: {
+        open: todayOpen ? Math.round(todayOpen * 100) / 100 : null,
+        high: todayHigh ? Math.round(todayHigh * 100) / 100 : null,
+        low: todayLow ? Math.round(todayLow * 100) / 100 : null,
+      },
+      prior_day: {
+        open: prevOpen ? Math.round(prevOpen * 100) / 100 : null,
+        high: prevHigh ? Math.round(prevHigh * 100) / 100 : null,
+        low: prevLow ? Math.round(prevLow * 100) / 100 : null,
+        close: prevClose ? Math.round(prevClose * 100) / 100 : null,
+      },
+      pivot_points: { pivot, r1, r2, s1, s2 },
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchSectorEtfs() {
   try {
     const res = await axios.get(`${UW_BASE}/api/market/sector-etfs`, {
@@ -134,6 +215,19 @@ YOUR PERSONALITY:
 - Never generic — always specific to what the data actually shows
 - Call out what matters and what doesn't
 
+YOU NOW HAVE ACCESS TO REAL-TIME KEY LEVELS for each ticker including:
+- Current price (live)
+- VWAP (calculated from intraday 5-min bars — use this for entry/rejection triggers)
+- Today's high and low (intraday range)
+- Prior day high, low, open, close (use prior day high/low as key resistance/support)
+- Pivot points: Pivot, R1, R2, S1, S2 (calculated from prior day OHLC)
+
+ALWAYS use these levels when giving trade setups. Reference them explicitly:
+- "Price is currently below VWAP ($XXX) — a reclaim or rejection here is your trigger"
+- "Prior day high at $XXX is resistance — a break above confirms the call"
+- "S1 at $XXX is the first support level — puts pay if this breaks"
+- "R1 at $XXX is your first target on the call"
+
 WHEN ASKED FOR TRADE SETUPS OR RECOMMENDATIONS:
 Format your answer like this:
 
@@ -141,9 +235,11 @@ Format your answer like this:
 
 Buy the [SPECIFIC TRADE e.g. "SPY 645 Put" or "NVDA 900/920 Call Debit Spread"]
 Expiration: [DATE]
-Entry trigger: [specific price action to wait for]
-Invalidation: [level that kills the trade]
-Why: [2-3 sentences with actual data — premium, vol/OI, sweep status, aggression %]
+Current price: $[X] | VWAP: $[X] | Prior day high: $[X] | Prior day low: $[X]
+Entry trigger: [specific price action tied to VWAP, prior day levels, or pivot points]
+Target: [R1 or S1 from pivot points, or specific level]
+Invalidation: [level that kills the trade — use VWAP reclaim, prior day level, or pivot]
+Why: [2-3 sentences with actual data — premium, vol/OI, sweep status, aggression %, and how price relates to key levels]
 Confidence: [7–10]/10
 
 ---
@@ -197,22 +293,37 @@ router.post("/whale/chat", async (req, res) => {
   const now = new Date().toUTCString();
   const needs = detectNeeds(message);
 
-  // Fetch data in parallel based on what the question needs
-  const [flowAlerts, sectorData, econData, ...darkpoolResults] = await Promise.all([
+  const tickersToFetch = needs.tickers.slice(0, 4);
+
+  // Always fetch key levels for any tickers mentioned, plus SPY/QQQ as baseline
+  const baselineTickers = ["SPY", "QQQ"];
+  const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
+
+  const [flowAlerts, sectorData, econData, ...parallelResults] = await Promise.all([
     fetchFlowAlerts(200),
     needs.market ? fetchSectorEtfs() : Promise.resolve([]),
     needs.market ? fetchEconomicCalendar() : Promise.resolve([]),
-    ...needs.tickers.slice(0, 3).map((t) =>
-      needs.darkpool || needs.tickers.length > 0 ? fetchDarkpool(t, 30) : Promise.resolve([])
-    ),
+    // Key levels for all relevant tickers
+    ...allLevelTickers.map((t) => fetchKeyLevels(t)),
+    // Darkpool for mentioned tickers
+    ...tickersToFetch.map((t) => fetchDarkpool(t, 30)),
   ]);
+
+  const keyLevelsResults = parallelResults.slice(0, allLevelTickers.length);
+  const darkpoolResults  = parallelResults.slice(allLevelTickers.length);
 
   const enriched = enrichAlerts(flowAlerts);
 
+  // Build key levels map
+  const keyLevels: Record<string, any> = {};
+  allLevelTickers.forEach((t, i) => {
+    if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
+  });
+
   // Filter ticker-specific flow if a specific ticker was asked about
   const tickerFlow: Record<string, any[]> = {};
-  if (needs.tickers.length > 0) {
-    for (const ticker of needs.tickers) {
+  if (tickersToFetch.length > 0) {
+    for (const ticker of tickersToFetch) {
       tickerFlow[ticker] = enriched.filter((a) =>
         (a.ticker ?? "").toUpperCase() === ticker.toUpperCase()
       );
@@ -222,11 +333,12 @@ router.post("/whale/chat", async (req, res) => {
   // Build context bundle
   const context: Record<string, any> = {
     fetched_at: now,
+    key_levels: keyLevels,
     all_flow_alerts: enriched.slice(0, 80),
   };
-  if (needs.tickers.length > 0) context.ticker_specific_flow = tickerFlow;
+  if (tickersToFetch.length > 0) context.ticker_specific_flow = tickerFlow;
   if (darkpoolResults.length > 0) {
-    needs.tickers.forEach((t, i) => {
+    tickersToFetch.forEach((t, i) => {
       if (darkpoolResults[i]?.length) context[`darkpool_${t}`] = darkpoolResults[i];
     });
   }
