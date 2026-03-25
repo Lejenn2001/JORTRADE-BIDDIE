@@ -126,8 +126,15 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
 - **Auth**: Supabase email/password + Google/Apple OAuth. Dashboard is protected by `ProtectedRoute` component.
 - **API Integration**: 
   - Chat: `POST /api/whale/chat` — sends to API server which calls Claude with Unusual Whales data
-  - Signals: `GET /api/whale/signals` — fetches live options flow signals from API server
+  - Signals: `GET /api/whale/signals` — fetches live options flow signals with price action confirmation + gamma analysis
   - Replit artifact routing handles `/api` → API server (port 8080) automatically
+- **Signal Analysis Pipeline** (in `whale.ts`):
+  - `fetchRecentCandles()` — fetches 1-minute bars from Yahoo Finance for real-time price action
+  - `detectPriceActionConfirmation()` — Neo SR Tag + 2 Red/Green Bars pattern detection at key support/resistance levels
+  - Gamma zone analysis: ≤2% from strike = negative gamma (amplified moves), ≤5% = positive gamma (pinning)
+  - `generateTradeRecommendation()` — produces specific trade recs (action, entry trigger, target, invalidation)
+  - Backend hydrates AI signals with authoritative computed data (price_confirmed, gamma_zone, etc.)
+  - Frontend displays: "PRICE CONFIRMED" + "ACT NOW" banners, gamma zone badges, price pattern details on signal cards
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)

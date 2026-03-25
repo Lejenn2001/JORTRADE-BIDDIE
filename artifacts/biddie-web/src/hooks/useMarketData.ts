@@ -40,6 +40,13 @@ export interface MarketSignal {
   createdAt?: string;
   timeframe?: SignalTimeframe;
   source?: "live" | "example";
+  priceConfirmed?: boolean;
+  pricePattern?: string | null;
+  gammaZone?: "positive" | "negative" | "neutral";
+  gammaDescription?: string;
+  recommendedAction?: string;
+  recommendedExpiry?: string;
+  recommendedStrike?: string;
 }
 
 export interface TickerData {
@@ -485,8 +492,37 @@ export function useMarketData() {
               gammaLabel = `Near ${s.key_level} level`;
             }
 
+            // Remove raw backend tags before adding styled versions
+            const rawTagsToRemove = ['Price Confirmed', 'Negative Gamma', 'Positive Gamma'];
+            for (const raw of rawTagsToRemove) {
+              const idx = tags.indexOf(raw);
+              if (idx !== -1) tags.splice(idx, 1);
+            }
+
+            // Price confirmation boost
+            const isPriceConfirmed = s.price_confirmed === true;
+            if (isPriceConfirmed) {
+              hybridScore = Math.min(100, hybridScore + 10);
+              tags.push('✅ PRICE CONFIRMED');
+            }
+
+            // Gamma zone tags
+            const gammaZone = s.gamma_zone || 'neutral';
+            if (gammaZone === 'negative') {
+              tags.push('⚡ NEG GAMMA');
+            } else if (gammaZone === 'positive') {
+              tags.push('🧲 POS GAMMA');
+            }
+
+            // Re-derive label after all boosts
+            if (hybridScore >= 90) hybridLabel = "Extreme Conviction";
+            else if (hybridScore >= 75) hybridLabel = "Very High Conviction";
+            else if (hybridScore >= 60) hybridLabel = "High Conviction";
+            else if (hybridScore >= 40) hybridLabel = "Moderate Conviction";
+
             // Use scored tags
-            if (hybridScore >= 85) tags.push('🔥 ACT NOW');
+            if (isPriceConfirmed && hybridScore >= 85) tags.push('🔥 ACT NOW');
+            else if (hybridScore >= 85) tags.push('🔥 ACT NOW');
             else if (hybridScore >= 70) tags.push('⚡ HIGH CONVICTION');
 
             const timeframe = classifyTimeframe({ convictionScore: hybridScore, confidence: s.confidence, expiry: s.expiry });
@@ -498,7 +534,7 @@ export function useMarketData() {
               confidence: s.confidence,
               convictionScore: hybridScore,
               convictionLabel: hybridLabel,
-              gammaLevelLabel: gammaLabel,
+              gammaLevelLabel: gammaLabel || s.gamma_description,
               description: s.reason || `${s.option_type} flow on ${s.ticker} at $${s.strike} strike. Premium: $${formatPremium(s.premium)}.`,
               timestamp: data.timestamp || 'Live',
               tags,
@@ -506,13 +542,20 @@ export function useMarketData() {
               expiry: s.expiry,
               premium: `$${formatPremium(s.premium)}`,
               putCall: s.option_type as 'call' | 'put',
-              suggestedTrade: s.trade,
+              suggestedTrade: s.recommended_action || s.trade,
               entryTrigger: s.entry_trigger,
               invalidation: s.invalidation,
               keyLevel: s.key_level,
               targetZone: s.target,
               source: "live",
               timeframe,
+              priceConfirmed: isPriceConfirmed,
+              pricePattern: s.price_pattern || null,
+              gammaZone: gammaZone as 'positive' | 'negative' | 'neutral',
+              gammaDescription: s.gamma_description,
+              recommendedAction: s.recommended_action,
+              recommendedExpiry: s.recommended_expiry,
+              recommendedStrike: s.recommended_strike,
             } as MarketSignal;
           });
 

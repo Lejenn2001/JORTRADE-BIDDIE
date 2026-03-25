@@ -149,6 +149,188 @@ async function fetchEconomicCalendar() {
   } catch { return []; }
 }
 
+// ── Price Action Confirmation ─────────────────────────────────────────────────
+
+interface CandleBar {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  timestamp: number;
+}
+
+interface PriceConfirmation {
+  confirmed: boolean;
+  pattern: string | null;
+  rejection_level: number | null;
+  candles_checked: number;
+  gamma_zone: "positive" | "negative" | "neutral";
+  gamma_description: string;
+}
+
+async function fetchRecentCandles(ticker: string, interval = "1m", count = 10): Promise<CandleBar[]> {
+  try {
+    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
+    const res = await axios.get(`${YF}/${ticker}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      params: { interval, range: "1d" },
+      timeout: 10000,
+    });
+    const result = res.data?.chart?.result?.[0];
+    if (!result) return [];
+    const quote = result.indicators?.quote?.[0];
+    const timestamps = result.timestamp ?? [];
+    const bars: CandleBar[] = [];
+    for (let i = Math.max(0, timestamps.length - count); i < timestamps.length; i++) {
+      const o = quote?.open?.[i];
+      const h = quote?.high?.[i];
+      const l = quote?.low?.[i];
+      const c = quote?.close?.[i];
+      const v = quote?.volume?.[i];
+      if (o && h && l && c) {
+        bars.push({ open: o, high: h, low: l, close: c, volume: v ?? 0, timestamp: timestamps[i] });
+      }
+    }
+    return bars;
+  } catch { return []; }
+}
+
+function detectPriceActionConfirmation(
+  candles: CandleBar[],
+  strikePrice: number,
+  currentPrice: number | null,
+  pivotPoints: { pivot: number | null; r1: number | null; r2: number | null; s1: number | null; s2: number | null } | null,
+  priorDayHigh: number | null,
+  priorDayLow: number | null,
+  putCall: "call" | "put",
+): PriceConfirmation {
+  const result: PriceConfirmation = {
+    confirmed: false,
+    pattern: null,
+    rejection_level: null,
+    candles_checked: candles.length,
+    gamma_zone: "neutral",
+    gamma_description: "Gamma exposure not determined",
+  };
+
+  if (currentPrice && strikePrice > 0) {
+    const dist = Math.abs(currentPrice - strikePrice) / currentPrice;
+    if (dist <= 0.02) {
+      result.gamma_zone = "negative";
+      result.gamma_description = "Negative gamma zone — market makers short options here. Moves are amplified. Price can accelerate quickly through this level.";
+    } else if (dist <= 0.05) {
+      result.gamma_zone = "positive";
+      result.gamma_description = "Positive gamma zone — market makers hedging stabilizes price near this level. Expect mean-reversion and pinning action.";
+    } else {
+      result.gamma_zone = "neutral";
+      result.gamma_description = "Outside major gamma influence. Price movement driven by directional flow rather than dealer hedging.";
+    }
+  }
+
+  if (candles.length < 3) return result;
+
+  const keyLevels: number[] = [];
+  if (priorDayHigh) keyLevels.push(priorDayHigh);
+  if (priorDayLow) keyLevels.push(priorDayLow);
+  if (pivotPoints?.r1) keyLevels.push(pivotPoints.r1);
+  if (pivotPoints?.r2) keyLevels.push(pivotPoints.r2);
+  if (pivotPoints?.s1) keyLevels.push(pivotPoints.s1);
+  if (pivotPoints?.s2) keyLevels.push(pivotPoints.s2);
+  if (pivotPoints?.pivot) keyLevels.push(pivotPoints.pivot);
+  if (strikePrice > 0) keyLevels.push(strikePrice);
+
+  const recent = candles.slice(-5);
+  const tolerance = currentPrice ? currentPrice * 0.002 : 1;
+
+  for (const level of keyLevels) {
+    for (let i = 0; i < recent.length - 1; i++) {
+      const bar = recent[i];
+      const nextBar = recent[i + 1];
+
+      if (putCall === "put") {
+        const taggedResistance = bar.high >= level - tolerance && bar.high <= level + tolerance;
+        const redBar = bar.close < bar.open;
+        const nextRedBar = nextBar.close < nextBar.open;
+        const lowerHigh = nextBar.high < bar.high;
+        const lowerLow = nextBar.low < bar.low;
+
+        if (taggedResistance && redBar && nextRedBar && lowerHigh) {
+          result.confirmed = true;
+          result.rejection_level = Math.round(level * 100) / 100;
+          result.pattern = lowerLow
+            ? `SR Tag + 2 Red Bars at $${result.rejection_level} (lower high, lower low — confirmed)`
+            : `SR Tag + Red Rejection at $${result.rejection_level} (lower high — likely reversal)`;
+          break;
+        }
+      } else {
+        const taggedSupport = bar.low >= level - tolerance && bar.low <= level + tolerance;
+        const greenBar = bar.close > bar.open;
+        const nextGreenBar = nextBar.close > nextBar.open;
+        const higherLow = nextBar.low > bar.low;
+        const higherHigh = nextBar.high > bar.high;
+
+        if (taggedSupport && greenBar && nextGreenBar && higherLow) {
+          result.confirmed = true;
+          result.rejection_level = Math.round(level * 100) / 100;
+          result.pattern = higherHigh
+            ? `Support Bounce + 2 Green Bars at $${result.rejection_level} (higher low, higher high — confirmed)`
+            : `Support Tag + Green Bounce at $${result.rejection_level} (higher low — likely reversal)`;
+          break;
+        }
+      }
+    }
+    if (result.confirmed) break;
+  }
+
+  return result;
+}
+
+function generateTradeRecommendation(signal: any, keyLevelData: any, confirmation: PriceConfirmation) {
+  const strike = signal.strike;
+  const ticker = signal.ticker;
+  const optionType = signal.option_type || (signal.direction === "bullish" ? "call" : "put");
+  const currentPrice = keyLevelData?.current_price;
+  const vwap = keyLevelData?.vwap;
+  const r1 = keyLevelData?.pivot_points?.r1;
+  const r2 = keyLevelData?.pivot_points?.r2;
+  const s1 = keyLevelData?.pivot_points?.s1;
+  const s2 = keyLevelData?.pivot_points?.s2;
+  const pdh = keyLevelData?.prior_day?.high;
+  const pdl = keyLevelData?.prior_day?.low;
+
+  const expiry = signal.expiry || "nearest weekly";
+
+  let action = `Buy ${ticker} $${strike} ${optionType === "call" ? "Call" : "Put"}`;
+  let entry = signal.entry_trigger || "";
+  let target = signal.target || "";
+  let invalidation = signal.invalidation || "";
+
+  if (optionType === "put" || signal.direction === "bearish") {
+    if (!entry && vwap) entry = `Rejection below VWAP ($${vwap}) or break below $${pdl || s1 || (currentPrice ? Math.round((currentPrice * 0.99) * 100) / 100 : "N/A")}`;
+    if (!target && s1) target = `$${s1}${s2 ? ` — $${s2}` : ""}`;
+    if (!invalidation && pdh) invalidation = `$${pdh} (prior day high)`;
+    else if (!invalidation && vwap) invalidation = `$${vwap} (VWAP reclaim)`;
+  } else {
+    if (!entry && vwap) entry = `Hold above VWAP ($${vwap}) or break above $${pdh || r1 || (currentPrice ? Math.round((currentPrice * 1.01) * 100) / 100 : "N/A")}`;
+    if (!target && r1) target = `$${r1}${r2 ? ` — $${r2}` : ""}`;
+    if (!invalidation && pdl) invalidation = `$${pdl} (prior day low)`;
+    else if (!invalidation && vwap) invalidation = `$${vwap} (VWAP break)`;
+  }
+
+  return {
+    action,
+    expiry,
+    entry_trigger: entry,
+    target,
+    invalidation,
+    price_confirmed: confirmation.confirmed,
+    price_pattern: confirmation.pattern,
+    gamma_zone: confirmation.gamma_zone,
+    gamma_description: confirmation.gamma_description,
+  };
+}
+
 // ── Enrichment ─────────────────────────────────────────────────────────────────
 
 function enrichAlerts(alerts: any[]) {
@@ -631,9 +813,38 @@ router.get("/whale/signals", async (_req, res) => {
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
 
-  const dataStr = JSON.stringify({ fetched_at: now, candidates, key_levels: keyLevels }, null, 2);
+  // Fetch recent candles for price action confirmation
+  const candleResults = await Promise.all(uniqueTickers.map((t) => fetchRecentCandles(t, "1m", 10)));
+  const candleMap: Record<string, CandleBar[]> = {};
+  uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i]; });
 
-  const SIGNAL_JSON_SYSTEM = `You are a professional options flow analyst. You will be given pre-filtered high-aggression options flow and real-time key levels (VWAP, pivot points, prior day high/low).
+  // Run price action confirmation for each candidate
+  const priceConfirmations: Record<string, any> = {};
+  for (const c of candidates) {
+    const ticker = c.ticker as string;
+    const kl = keyLevels[ticker];
+    const candles = candleMap[ticker] || [];
+    const strike = parseFloat(String(c.strike)) || 0;
+    const putCall = c.type === "call" ? "call" as const : "put" as const;
+
+    const confirmation = detectPriceActionConfirmation(
+      candles,
+      strike,
+      kl?.current_price ?? null,
+      kl?.pivot_points ?? null,
+      kl?.prior_day?.high ?? null,
+      kl?.prior_day?.low ?? null,
+      putCall,
+    );
+
+    const tradeRec = generateTradeRecommendation(c, kl, confirmation);
+    const key = `${ticker}-${strike}-${c.type}`;
+    priceConfirmations[key] = { ...confirmation, trade_recommendation: tradeRec };
+  }
+
+  const dataStr = JSON.stringify({ fetched_at: now, candidates, key_levels: keyLevels, price_confirmations: priceConfirmations }, null, 2);
+
+  const SIGNAL_JSON_SYSTEM = `You are a professional options flow analyst. You will be given pre-filtered high-aggression options flow, real-time key levels (VWAP, pivot points, prior day high/low), price action confirmation data, and gamma zone analysis.
 
 Analyze each candidate and return ONLY high-conviction signals (confidence 7-10).
 
@@ -662,9 +873,16 @@ Each signal object must have exactly these fields:
   "key_level": "the single most important level to watch e.g. VWAP at $143.20",
   "target": "specific price target, use R1/R2 for calls, S1/S2 for puts",
   "invalidation": "specific price level that kills the trade, reference actual key levels",
-  "reason": "2-3 sentences: what makes this flow stand out + how price relates to key levels",
+  "reason": "2-3 sentences: what makes this flow stand out + how price relates to key levels + gamma zone context",
   "confidence": number between 7 and 10,
-  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE"]
+  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE", "Price Confirmed", "Negative Gamma", "Positive Gamma"],
+  "price_confirmed": boolean,
+  "price_pattern": "string describing the price action pattern or null",
+  "gamma_zone": "positive" or "negative" or "neutral",
+  "gamma_description": "string explaining gamma exposure at this level",
+  "recommended_action": "specific trade recommendation e.g. Buy SPY $570 Put expiring March 28",
+  "recommended_expiry": "suggested expiration based on timeframe",
+  "recommended_strike": "suggested strike price with reasoning"
 }
 
 CRITICAL RULES for accuracy:
@@ -673,7 +891,13 @@ CRITICAL RULES for accuracy:
 - invalidation MUST reference a real level from the key_levels data (prior day low for calls, prior day high for puts, or VWAP)
 - If VWAP or key levels are null (pre-market/weekend), use prior day high/low and round-number levels
 - strike must be tradeable — close enough to current price to matter (within 10% for near-term)
-- confidence 9-10: sweep + 80%+ ask aggression + 10x+ vol/OI + near ATM
+- PRICE CONFIRMATION: If price_confirmation data shows confirmed=true, ADD "Price Confirmed" to tags and boost confidence by 1 point (max 10). These are the highest conviction signals.
+- GAMMA ZONES: If gamma_zone is "negative", ADD "Negative Gamma" to tags — moves will be amplified. If "positive", ADD "Positive Gamma" — expect mean-reversion.
+- TRADE RECOMMENDATIONS: For each signal, recommend the specific option to buy:
+  - For "Act Now" signals (confidence 9-10): suggest 0-2 DTE, ATM or 1 strike OTM
+  - For short-term signals (confidence 8): suggest 3-7 DTE, ATM
+  - For swing signals (confidence 7): suggest 2-4 weeks out, slightly OTM
+- confidence 9-10: sweep + 80%+ ask aggression + 10x+ vol/OI + near ATM + (bonus: price confirmed)
 - confidence 8: sweep OR 80%+ aggression + solid premium + clear direction
 - confidence 7: good flow but one condition weaker
 - If no signals qualify, return an empty array []`;
@@ -699,6 +923,35 @@ CRITICAL RULES for accuracy:
       if (!Array.isArray(signals)) signals = [];
     } catch {
       signals = [];
+    }
+
+    // Hydrate signals with authoritative computed data (override AI-generated values)
+    for (const sig of signals) {
+      const ticker = sig.ticker as string;
+      const strike = parseFloat(String(sig.strike)) || 0;
+      const optType = sig.option_type || (sig.direction === "bullish" ? "call" : "put");
+      const key = `${ticker}-${strike}-${optType}`;
+      const computed = priceConfirmations[key];
+      if (computed) {
+        sig.price_confirmed = computed.confirmed;
+        sig.price_pattern = computed.pattern;
+        sig.gamma_zone = computed.gamma_zone;
+        sig.gamma_description = computed.gamma_description;
+        if (computed.trade_recommendation) {
+          sig.recommended_action = computed.trade_recommendation.action;
+          sig.recommended_expiry = computed.trade_recommendation.expiry;
+          sig.recommended_strike = computed.trade_recommendation.entry_trigger;
+        }
+        // Ensure tags include computed tags
+        if (!Array.isArray(sig.tags)) sig.tags = [];
+        if (computed.confirmed && !sig.tags.includes("Price Confirmed")) sig.tags.push("Price Confirmed");
+        if (computed.gamma_zone === "negative" && !sig.tags.includes("Negative Gamma")) sig.tags.push("Negative Gamma");
+        if (computed.gamma_zone === "positive" && !sig.tags.includes("Positive Gamma")) sig.tags.push("Positive Gamma");
+        // Boost confidence for price-confirmed signals
+        if (computed.confirmed && typeof sig.confidence === "number") {
+          sig.confidence = Math.min(10, sig.confidence + 1);
+        }
+      }
     }
 
     res.json({ signals, count: signals.length, timestamp: now });

@@ -1,4 +1,4 @@
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
@@ -59,6 +59,20 @@ const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
                   : "border-muted bg-muted/30"
               }`}
             >
+              {/* Price Confirmed Banner */}
+              {signal.priceConfirmed && (
+                <div className="px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
+                    Price Action Confirmed
+                  </span>
+                  <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+                  <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">
+                    ACT NOW
+                  </span>
+                </div>
+              )}
+
               {/* Alert Header */}
               <div
                 className={`px-4 py-2 flex items-center justify-between ${
@@ -137,7 +151,35 @@ const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
                     </div>
                   )}
 
-                  {signal.gammaLevelLabel && (
+                  {signal.pricePattern && (
+                    <div className="flex items-start gap-2 bg-emerald-500/10 rounded-lg px-3 py-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="text-muted-foreground">Price pattern: </span>
+                        <span className="text-emerald-400 font-semibold">{signal.pricePattern}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {signal.gammaZone && signal.gammaZone !== 'neutral' && (
+                    <div className={`flex items-start gap-2 rounded-lg px-3 py-2 ${
+                      signal.gammaZone === 'negative' ? 'bg-orange-500/10' : 'bg-blue-500/10'
+                    }`}>
+                      <Gauge className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
+                        signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+                      }`} />
+                      <div>
+                        <span className="text-muted-foreground">Gamma zone: </span>
+                        <span className={`font-semibold ${
+                          signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+                        }`}>
+                          {signal.gammaZone === 'negative' ? 'Negative' : 'Positive'} — {signal.gammaDescription}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {signal.gammaLevelLabel && (!signal.gammaZone || signal.gammaZone === 'neutral') && (
                     <div className="flex items-start gap-2 bg-accent/10 rounded-lg px-3 py-2">
                       <Gauge className="h-3.5 w-3.5 text-accent mt-0.5 shrink-0" />
                       <div>
@@ -181,15 +223,18 @@ const SignalFeedPanel = ({ signals, loading, limit }: Props) => {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5">
                   {signal.tags.map((tag) => {
-                    const isUrgent = tag.includes('ACT NOW') || tag.includes('HIGH CONVICTION');
+                    const tagUpper = tag.toUpperCase();
+                    const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
+                    const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
+                    const isGamma = tagUpper.includes('GAMMA');
+                    let tagStyle = "bg-muted/50 text-muted-foreground";
+                    if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
+                    else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
+                    else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
                     return (
                       <span
                         key={tag}
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          isUrgent
-                            ? "bg-destructive/20 text-destructive animate-pulse"
-                            : "bg-muted/50 text-muted-foreground"
-                        }`}
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tagStyle}`}
                       >
                         {tag}
                       </span>
