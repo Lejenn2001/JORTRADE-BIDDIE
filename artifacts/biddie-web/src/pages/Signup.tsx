@@ -130,7 +130,7 @@ const Signup = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
-          <img src={jortradeLogo} alt="JORTRADE" className="h-12 w-auto mx-auto mb-6" />
+          <img src={jortradeLogo} alt="JORTRADE" className="h-24 w-auto mx-auto mb-6" />
           <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4">
             Choose Your Plan
           </h1>

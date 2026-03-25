@@ -25,7 +25,7 @@ const HeroSection = () => {
         className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 md:px-8 py-4 md:py-6 gap-3 glass-panel border-b border-border/40 border-t-0 border-l-0 border-r-0"
       >
         <Link to="/" className="flex items-center gap-2">
-          <img src={jortradeLogo} alt="JORTRADE" className="h-10 w-auto" />
+          <img src={jortradeLogo} alt="JORTRADE" className="h-20 w-auto" />
         </Link>
 
         {/* Mobile: just Log In + Sign Up */}
