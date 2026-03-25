@@ -337,12 +337,14 @@ CONFIDENCE SCORING (7-10 only for recommendations):
 - 7: Good flow but one condition weaker (slightly OTM, moderate aggression, etc)
 - Below 7: Do not recommend — say so explicitly
 
-WHEN ASKED ABOUT A SPECIFIC TICKER:
-Pull that ticker's data from the flow and darkpool sections. Report:
-- What options flow exists for that ticker (calls vs puts, strikes, premium, aggression)
-- Dark pool prints if available
-- Overall bias and whether it's worth trading
-- Specific setup if conviction is high enough
+WHEN ASKED ABOUT A SPECIFIC TICKER OR POSITION:
+Pull that ticker's data from the flow and darkpool sections. Then give a COMPLETE analysis:
+- What options flow exists (calls vs puts, strikes, premium, aggression) — if none, say so and move on
+- Key levels: current price vs VWAP, pivot points, prior day high/low — USE THESE even if no flow exists
+- Gamma situation: if the strike is near ATM, explain pin risk, gamma acceleration, and where dealers hedge
+- For short-dated expiration (1-3 days): specifically address theta decay, breakeven move needed, and realistic probability
+- Overall verdict: is the trade still valid or not, and why
+NEVER ask the user for more info. Work with what you have. If the stock price isn't in the flow data, use the key levels data provided — it includes the current price.
 
 WHEN ASKED ABOUT DARK POOL:
 Report total premium, number of transactions, buy vs sell pressure (ask vs bid aggression),
@@ -362,7 +364,9 @@ ALWAYS:
 - Cite specific numbers from the data
 - Mention timestamps when relevant
 - Flag expired or irrelevant data and ignore it
-- If data is limited or market is closed, say so and explain what you can still determine`;
+- If data is limited or market is closed, say so and explain what you can still determine
+- NEVER end a response with a question. Give the full analysis and stop. The user did not ask for a conversation — they asked for a read on the trade. Deliver it and done.
+- NEVER ask "what's your P&L", "where is the stock trading", "what's your expiration" — you have the live price data and the user already told you their position. Use it.`;
 
 // ── Main Chat Endpoint ──────────────────────────────────────────────────────────
 
