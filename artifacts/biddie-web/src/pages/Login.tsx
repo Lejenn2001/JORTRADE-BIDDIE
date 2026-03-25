@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import jortradeLogo from "@/assets/jortrade-logo.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -48,6 +49,7 @@ const Login = () => {
       >
         <div className="glass-panel rounded-2xl p-8 border-glow-blue">
           <div className="text-center mb-8">
+            <img src={jortradeLogo} alt="JORTRADE" className="h-12 w-auto mx-auto mb-4" />
             <h1 className="text-3xl font-extrabold text-foreground mb-2">Welcome Back</h1>
             <p className="text-muted-foreground text-sm">Sign in to access your dashboard</p>
           </div>

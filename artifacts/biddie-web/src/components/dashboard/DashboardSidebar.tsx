@@ -15,6 +15,7 @@ import {
   PieChart,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import jortradeLogo from "@/assets/jortrade-logo.png";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -68,9 +69,7 @@ const DashboardSidebar = () => {
         </button>
 
         <Link to="/" className="flex items-center gap-2 px-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Bot className="h-5 w-5 text-primary" />
-          </div>
+          <img src={jortradeLogo} alt="JORTRADE" className="h-8 w-auto" />
           <span className="font-display text-sm font-bold text-foreground tracking-wider">JORTRADE</span>
         </Link>
 

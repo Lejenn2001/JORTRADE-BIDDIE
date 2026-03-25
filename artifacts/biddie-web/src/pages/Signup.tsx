@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Check, Zap, Crown, Star, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import jortradeLogo from "@/assets/jortrade-logo.png";
 
 const plans = [
   {
@@ -129,6 +130,7 @@ const Signup = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
+          <img src={jortradeLogo} alt="JORTRADE" className="h-12 w-auto mx-auto mb-6" />
           <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4">
             Choose Your Plan
           </h1>
