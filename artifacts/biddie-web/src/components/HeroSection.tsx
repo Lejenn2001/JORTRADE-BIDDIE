@@ -22,13 +22,8 @@ const HeroSection = () => {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 md:px-8 py-4 md:py-6 gap-3 glass-panel border-b border-border/40 border-t-0 border-l-0 border-r-0"
+        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-end px-6 md:px-8 py-4 md:py-6 gap-3 glass-panel border-b border-border/40 border-t-0 border-l-0 border-r-0"
       >
-        <Link to="/" className="flex items-center gap-2.5">
-          <img src={jortradeLogo} alt="JORTRADE" className="h-10 w-auto" />
-          <span className="font-display text-lg font-bold text-foreground tracking-widest hidden md:inline">JORTRADE</span>
-        </Link>
-
         {/* Mobile: just Log In + Sign Up */}
         <div className="flex md:hidden items-center gap-3">
           <Link to="/login">
