@@ -394,6 +394,104 @@ router.get("/whale/signal", async (_req, res) => {
   }
 });
 
+router.get("/whale/signals", async (_req, res) => {
+  const now = new Date().toUTCString();
+
+  const allAlerts = await fetchFlowAlerts(200);
+  const enriched = enrichAlerts(allAlerts);
+
+  // Pre-filter: only alerts worth scoring
+  const today = new Date().toISOString().split("T")[0];
+  const candidates = enriched.filter((a) => {
+    if (!a.ticker || !a.expiry) return false;
+    if (a.expiry < today) return false;                      // skip expired
+    if (a.total_premium < 100_000) return false;             // min $100K premium
+    if (a.ask_aggression_pct < 40) return false;             // must be ask-leaning
+    return true;
+  }).slice(0, 30);
+
+  // Get unique tickers and fetch key levels in parallel
+  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
+  const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t)));
+  const keyLevels: Record<string, any> = {};
+  uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
+
+  const dataStr = JSON.stringify({ fetched_at: now, candidates, key_levels: keyLevels }, null, 2);
+
+  const SIGNAL_JSON_SYSTEM = `You are a professional options flow analyst. You will be given pre-filtered high-aggression options flow and real-time key levels (VWAP, pivot points, prior day high/low).
+
+Analyze each candidate and return ONLY high-conviction signals (confidence 7-10).
+
+Respond with ONLY a valid JSON array. No explanation, no markdown, no code fences. Just the raw JSON array.
+
+Each signal object must have exactly these fields:
+{
+  "ticker": "string",
+  "direction": "bullish" or "bearish",
+  "option_type": "call" or "put",
+  "trade": "short human-readable trade description e.g. Buy NVDA $145 Call",
+  "strike": number,
+  "expiry": "string e.g. March 27, 2026",
+  "premium": number (in dollars),
+  "ask_aggression_pct": number,
+  "vol_oi_ratio": number,
+  "has_sweep": boolean,
+  "current_price": number or null,
+  "vwap": number or null,
+  "prior_day_high": number or null,
+  "prior_day_low": number or null,
+  "pivot": number or null,
+  "r1": number or null,
+  "s1": number or null,
+  "entry_trigger": "specific price level and condition based on VWAP/prior day levels",
+  "key_level": "the single most important level to watch e.g. VWAP at $143.20",
+  "target": "specific price target, use R1/R2 for calls, S1/S2 for puts",
+  "invalidation": "specific price level that kills the trade, reference actual key levels",
+  "reason": "2-3 sentences: what makes this flow stand out + how price relates to key levels",
+  "confidence": number between 7 and 10,
+  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE"]
+}
+
+CRITICAL RULES for accuracy:
+- entry_trigger MUST reference actual VWAP, prior day high/low, or pivot levels from the data
+- target MUST use R1/R2 for bullish or S1/S2 for bearish from pivot points
+- invalidation MUST reference a real level from the key_levels data (prior day low for calls, prior day high for puts, or VWAP)
+- If VWAP or key levels are null (pre-market/weekend), use prior day high/low and round-number levels
+- strike must be tradeable — close enough to current price to matter (within 10% for near-term)
+- confidence 9-10: sweep + 80%+ ask aggression + 10x+ vol/OI + near ATM
+- confidence 8: sweep OR 80%+ aggression + solid premium + clear direction
+- confidence 7: good flow but one condition weaker
+- If no signals qualify, return an empty array []`;
+
+  try {
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      system: SIGNAL_JSON_SYSTEM,
+      messages: [{
+        role: "user",
+        content: `Analyze this flow data and key levels. Return ONLY the JSON array of qualifying signals:\n\n${dataStr}`,
+      }],
+    });
+
+    let raw = response.content[0].type === "text" ? response.content[0].text.trim() : "[]";
+    // Strip any accidental markdown fences
+    raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
+    let signals: any[] = [];
+    try {
+      signals = JSON.parse(raw);
+      if (!Array.isArray(signals)) signals = [];
+    } catch {
+      signals = [];
+    }
+
+    res.json({ signals, count: signals.length, timestamp: now });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? "Claude API error", signals: [], count: 0 });
+  }
+});
+
 router.get("/whale/health", (_req, res) => {
   res.json({
     ok: true,
