@@ -367,7 +367,10 @@ ALWAYS:
 // ── Main Chat Endpoint ──────────────────────────────────────────────────────────
 
 router.post("/whale/chat", async (req, res) => {
-  const { message } = req.body as { message?: string };
+  const { message, history } = req.body as {
+    message?: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  };
   if (!message?.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
@@ -430,15 +433,42 @@ router.post("/whale/chat", async (req, res) => {
 
   const dataStr = JSON.stringify(context, null, 2);
 
+  // Build message history for Claude — inject live data into the final user turn only
+  const priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+  if (Array.isArray(history) && history.length > 0) {
+    // Include up to last 10 turns of real conversation for context
+    const trimmed = history.slice(-10);
+    for (const turn of trimmed) {
+      if (turn.role === "user" || turn.role === "assistant") {
+        priorMessages.push({ role: turn.role, content: String(turn.content) });
+      }
+    }
+  }
+
+  const currentUserMessage = `User message: "${message}"
+
+Live market data from Unusual Whales (${now}):
+\`\`\`json
+${dataStr}
+\`\`\`
+
+Important context rules:
+- If the user references a position or ticker from earlier in the conversation, use that context — don't ask for clarification
+- Dates in MM/DD format (like "4/24", "3/28", "6/20") are ALWAYS options expiration dates — never ask what they mean
+- Short replies like "4/24", "tomorrow", "next week" are continuations of the current topic — read the conversation history to understand what they refer to
+- Never ask "are you referring to X or Y" when the conversation history makes the intent obvious
+
+Answer using the live data above. Be specific. Reference actual numbers.`;
+
   try {
     const response = await claude.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: BIDDIE_SYSTEM,
-      messages: [{
-        role: "user",
-        content: `User question: "${message}"\n\nLive market data from Unusual Whales (${now}):\n\n\`\`\`json\n${dataStr}\n\`\`\`\n\nAnswer the user's question using this live data. Be specific. Reference actual numbers.`,
-      }],
+      messages: [
+        ...priorMessages,
+        { role: "user", content: currentUserMessage },
+      ],
     });
 
     const analysis = response.content[0].type === "text" ? response.content[0].text : "";
