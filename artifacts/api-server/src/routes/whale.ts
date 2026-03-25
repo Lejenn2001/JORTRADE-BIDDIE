@@ -79,7 +79,22 @@ async function fetchKeyLevels(ticker: string) {
       vwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
     }
 
-    const currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
+    // Pick the most current price available from Yahoo meta:
+    // During pre-market: preMarketPrice is live, regularMarketPrice is prior day close
+    // During market hours: regularMarketPrice updates continuously (15-min delayed)
+    // After hours: postMarketPrice is most current
+    const meta = intResult?.meta ?? dailyResult?.meta ?? {};
+    const preMarket  = meta.preMarketPrice   ?? null;
+    const postMarket = meta.postMarketPrice  ?? null;
+    const regMarket  = meta.regularMarketPrice ?? null;
+    const preTs  = meta.preMarketTime   ?? 0;
+    const postTs = meta.postMarketTime  ?? 0;
+    const regTs  = meta.regularMarketTime ?? 0;
+    // Use whichever has the most recent timestamp
+    let currentPrice: number | null = regMarket;
+    if (preMarket && preTs > regTs) currentPrice = preMarket;
+    if (postMarket && postTs > regTs && postTs > preTs) currentPrice = postMarket;
+    if (!currentPrice) currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
 
     // Pivot points from prior day
     const pivot = prevHigh && prevLow && prevClose
