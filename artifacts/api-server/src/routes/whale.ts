@@ -372,17 +372,60 @@ ALWAYS:
 
 // ── Time Helper ─────────────────────────────────────────────────────────────────
 
-function getNowEastern(): string {
-  // Always use US/Eastern so expiration date math is correct for market hours
-  const et = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-  const etDate = new Date(et);
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return (
-    `${days[etDate.getDay()]}, ${months[etDate.getMonth()]} ${etDate.getDate()}, ${etDate.getFullYear()} ` +
-    `${etDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" })} ET ` +
-    `(current market date: ${etDate.getMonth() + 1}/${etDate.getDate()}/${etDate.getFullYear()})`
+function getEasternDateContext(): string {
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+
+  // Reliably extract ET date parts using Intl
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: true, weekday: "long",
+  }).formatToParts(new Date());
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const todayDow  = get("weekday");                         // e.g. "Wednesday"
+  const todayMon  = parseInt(get("month"), 10) - 1;        // 0-based
+  const todayDay  = parseInt(get("day"), 10);
+  const todayYear = parseInt(get("year"), 10);
+  const timeStr   = `${get("hour")}:${get("minute")} ${get("dayPeriod")} ET`;
+
+  // Build the next 7 calendar days with their day-of-week labels
+  const todayDate = new Date(todayYear, todayMon, todayDay);
+  const upcoming: string[] = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(todayDate);
+    d.setDate(todayDate.getDate() + i);
+    const dow = DAY_NAMES[d.getDay()];
+    const label = `${d.getMonth() + 1}/${d.getDate()} = ${dow}`;
+    upcoming.push(label);
+  }
+
+  // List trading days only (Mon-Fri) in the upcoming calendar
+  const tradingDays = upcoming.filter((l) =>
+    !l.includes("Saturday") && !l.includes("Sunday")
   );
+
+  return [
+    `TODAY: ${todayDow}, ${MONTH_NAMES[todayMon]} ${todayDay}, ${todayYear} — ${timeStr}`,
+    `TODAY'S DATE IN M/D FORMAT: ${todayMon + 1}/${todayDay}/${todayYear}`,
+    `UPCOMING DATES (use these exact day-of-week labels — do not calculate yourself):`,
+    ...upcoming.map((l) => `  ${l}`),
+    `NEXT TRADING DAYS IN ORDER: ${tradingDays.join(", ")}`,
+    `IMPORTANT: When referencing any expiration date, look it up in the list above and use the exact day-of-week shown. Never guess.`,
+  ].join("\n");
+}
+
+// Keep a simple "now" string for data timestamps
+function getNowEastern(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("month")}/${get("day")}/${get("year")} ${get("hour")}:${get("minute")} ${get("dayPeriod")} ET`;
 }
 
 // ── Main Chat Endpoint ──────────────────────────────────────────────────────────
@@ -468,16 +511,19 @@ router.post("/whale/chat", async (req, res) => {
 
   const currentUserMessage = `User message: "${message}"
 
-Live market data from Unusual Whales (${now}):
+--- CURRENT DATE & TRADING CALENDAR ---
+${getEasternDateContext()}
+
+--- LIVE MARKET DATA (fetched ${now}) ---
 \`\`\`json
 ${dataStr}
 \`\`\`
 
-Important context rules:
-- If the user references a position or ticker from earlier in the conversation, use that context — don't ask for clarification
-- Dates in MM/DD format (like "4/24", "3/28", "6/20") are ALWAYS options expiration dates — never ask what they mean
-- Short replies like "4/24", "tomorrow", "next week" are continuations of the current topic — read the conversation history to understand what they refer to
-- Never ask "are you referring to X or Y" when the conversation history makes the intent obvious
+Rules:
+- Use the trading calendar above to determine what day-of-week any expiration date falls on. Do not calculate it yourself — look it up in the list.
+- Dates in MM/DD format (like "4/24", "3/28") are options expiration dates — never ask what they mean.
+- If the user references a position from earlier in the conversation, use that context — don't ask for clarification.
+- Never suggest alternative tickers. Analyze what the user asked about.
 
 Answer using the live data above. Be specific. Reference actual numbers.`;
 
