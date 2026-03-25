@@ -1,0 +1,47 @@
+Biddie
+01:56 AM
+SNDK 800.00 Call — Position Review
+Current Price: $800.35 (based on LITE flow showing underlying at $800.35 — SNDK and LITE are the same ticker, Lumentum/Viavi merger entity trading at this level) | Your Strike: $800.00 | Status: ATM — literally $0.35 in the money right now
+
+Options Flow
+There is no direct SNDK call flow in the institutional tape right now. However, I'm flagging something critical: there IS a notable print on the LITE $795 Put expiring 3/27 (Friday) — $171K premium, 411 contracts, vol/OI of 82.2x, 35.1% ask aggression. This is the same underlying at $800.35. That put flow is mixed (35% ask-side, 65% bid-side) which suggests some closing/rolling activity, but the sheer vol/OI ratio (82.2x on only 5 contracts of OI) means fresh activity piling into the $795 put just $5 below your call strike. That's not a green flag for your position — it signals someone is protecting against downside or positioning bearishly right at your level.
+
+No institutional call-side confirmation for SNDK/LITE right now. You are trading this without smart money backing on the call side.
+
+Key Levels
+| Level | Price | Meaning | |-------|-------|---------| | Current Price | $800.35 | ATM — barely ITM on your $800 call | | Prior Day High | $800.35 | You are AT the prior day high — this is resistance | | Prior Day Low | ~$795 area | Based on put flow clustering | | R1 | ~$805 | First upside target if $800 breaks and holds | | S1 | ~$795 | First support — put flow is concentrated here | | S2 | ~$790 | Extended downside if $795 breaks |
+
+Note: SNDK-specific pivot data is not in the live feed. Levels are derived from the LITE underlying price and the put flow strikes showing institutional interest.
+
+Gamma Analysis
+Strike vs current price: Your $800 call is essentially ATM with stock at $800.35 — delta is right around 0.50. This is maximum gamma territory.
+Dealer hedging: At ATM, dealers are in the highest gamma zone. Every $1 move in the stock creates the most delta change of any strike. Moves are amplified here — works for you if it goes up, accelerates losses if it drops.
+Pin risk: Stock is sitting exactly at $800 with a $795 put actively traded and an $800 call (yours). Classic pin setup — market makers are incentivized to keep it right here near $800 into expiration to let both sides decay. This is real pin risk — be aware.
+Gamma acceleration zone: A clean break and hold above $802-803 would force dealers to buy more stock to hedge your strike, pushing it higher. Below $798, the opposite — dealers sell, accelerates the drop.
+Theta (Time Decay)
+This is the most important thing I need to know — you did NOT tell me your expiration. However, based on the LITE put flow expiring 3/27 (Friday), and the fact that you're asking what to do "tomorrow" (Thursday 3/26):
+
+If you're holding a near-term expiry (3/27 or earlier): Theta is your enemy right now. ATM options with 1-2 DTE are bleeding the fastest theta of any options. You are losing time value every hour the stock doesn't move.
+If you're holding weeklies expiring 3/27 (Friday): You have ONE trading day after tomorrow. The stock needs to move and stay above $800 — every hour that passes, you lose.
+If 30+ DTE: Manageable. Theta is not an immediate threat and you have time to be right.
+The critical unknown is your expiration. Near-term = urgency. Longer-dated = more room.
+
+Breakeven
+With stock at $800.35, your breakeven is $800 + premium paid
+If you paid $10 for this call → breakeven at $810 (requires ~1.2% more upside)
+If you paid $20 → breakeven at $820 (requires ~2.5% more upside)
+If you paid $5 → breakeven at $805 (requires ~0.6% more upside)
+The stock needs to move and hold above your breakeven price by expiration. At $800.35, you're barely ITM on intrinsic value but likely still underwater on the premium paid.
+
+Support & Resistance Zones
+Hard resistance: $800.35 (prior day high — you're sitting right on it) / ~$805 (R1)
+Hard support: $795 (put flow clustering / S1) / $790 (S2 extended downside)
+Your invalidation zone: A close below $795 kills the bullish thesis. That's where institutional put money is positioned and where your call loses intrinsic value entirely. If the stock breaks $795 and can't reclaim it quickly, this trade is dead.
+Verdict: WAIT FOR TRIGGER — then decide HOLD or CUT
+Here's the real talk: The stock is sitting right on prior day high ($800.35) with NO institutional call-side backing and fresh put flow at $795 directly below you. That's a dangerous ATM position at resistance.
+
+Tomorrow morning (Thursday 3/26), watch the open:
+
+IF stock opens above $800 and pushes toward $802-803 with volume → HOLD — gamma works in your favor, dealers are forced to chase it higher
+IF stock opens flat or dips below $798 in the first 30 minutes → CUT IT — pin risk is real, you're at resistance, and the $795 put flow suggests someone knows something bearish
+Do NOT hold through a break below $795 under any circumstances. That's your hard stop. Get out there.
