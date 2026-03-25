@@ -368,6 +368,21 @@ ALWAYS:
 - NEVER end a response with a question. Give the full analysis and stop. The user did not ask for a conversation — they asked for a read on the trade. Deliver it and done.
 - NEVER ask "what's your P&L", "where is the stock trading", "what's your expiration" — you have the live price data and the user already told you their position. Use it.`;
 
+// ── Time Helper ─────────────────────────────────────────────────────────────────
+
+function getNowEastern(): string {
+  // Always use US/Eastern so expiration date math is correct for market hours
+  const et = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  const etDate = new Date(et);
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return (
+    `${days[etDate.getDay()]}, ${months[etDate.getMonth()]} ${etDate.getDate()}, ${etDate.getFullYear()} ` +
+    `${etDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" })} ET ` +
+    `(current market date: ${etDate.getMonth() + 1}/${etDate.getDate()}/${etDate.getFullYear()})`
+  );
+}
+
 // ── Main Chat Endpoint ──────────────────────────────────────────────────────────
 
 router.post("/whale/chat", async (req, res) => {
@@ -380,7 +395,7 @@ router.post("/whale/chat", async (req, res) => {
     return;
   }
 
-  const now = new Date().toUTCString();
+  const now = getNowEastern();
   const needs = detectNeeds(message);
 
   const tickersToFetch = needs.tickers.slice(0, 4);
@@ -487,7 +502,7 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
 // ── Quick Signal Check ──────────────────────────────────────────────────────────
 
 router.get("/whale/signal", async (_req, res) => {
-  const now = new Date().toUTCString();
+  const now = getNowEastern();
   const alerts = await fetchFlowAlerts(200);
   const enriched = enrichAlerts(alerts);
   const dataStr = JSON.stringify({ fetched_at: now, flow_alerts: enriched }, null, 2);
@@ -512,7 +527,7 @@ router.get("/whale/signal", async (_req, res) => {
 });
 
 router.get("/whale/signals", async (_req, res) => {
-  const now = new Date().toUTCString();
+  const now = getNowEastern();
 
   const allAlerts = await fetchFlowAlerts(200);
   const enriched = enrichAlerts(allAlerts);
