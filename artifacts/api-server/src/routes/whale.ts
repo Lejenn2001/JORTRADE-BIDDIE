@@ -793,8 +793,9 @@ CRITICAL RULES:
 4. ONLY talk about market data, flow, or tickers if the user SPECIFICALLY asks about trading, stocks, options, or the market.
 5. Keep it SHORT. Community chat = quick, casual energy. 1-3 sentences unless they ask for a detailed breakdown.
 6. Match the user's energy — if they're casual, be casual. If they ask a real trading question, give a focused answer.
-7. You ALWAYS have live flow data when market data is provided below. NEVER say "I don't have data" or tell users to check other scanners. USE the data you're given to answer.
-8. If the user asks about tomorrow's moves or what could happen, analyze the current flow data for high-conviction setups and tell them what the flow is pointing to.`;
+7. You ALWAYS have live flow data when market data is provided below. NEVER say "I don't have data" and NEVER tell users to check other sites/scanners/tools. USE the data you're given to answer.
+8. If the user asks about tomorrow's moves, premarket, news, or what could happen — analyze the current flow data for high-conviction setups and tell them what the flow is pointing to. Treat "news" or "premarket" questions as requests for flow-based analysis.
+9. NEVER refer to Benzinga, Briefing, Market Chameleon, Finviz, or any other external tool. You ARE the tool. You have the data.`;
 
 router.post("/whale/community-chat", async (req, res) => {
   const { message } = req.body as { message?: string };
@@ -810,13 +811,15 @@ router.post("/whale/community-chat", async (req, res) => {
     "move", "play", "trade", "option", "call", "put", "spread", "flow",
     "stock", "ticker", "price", "bull", "bear", "setup", "entry", "exit",
     "strike", "expir", "premium", "sweep", "whale", "volume", "tomorrow",
-    "today", "overnight", "premarket", "after hours", "gap", "breakout",
+    "today", "overnight", "premarket", "pre-market", "after hours", "gap", "breakout",
     "breakdown", "momentum", "swing", "scalp", "day trade", "earnings",
     "catalyst", "squeeze", "short", "long", "buy", "sell", "profit",
     "target", "support", "resistance", "vwap", "level", "chart",
     "signal", "alert", "unusual", "dark pool", "sector", "market",
     "cheap", "expensive", "otm", "itm", "delta", "gamma", "theta",
     "iv", "implied", "contract", "hedge", "risk", "reward",
+    "news", "headline", "open", "close", "watch", "outlook", "analysis",
+    "position", "portfolio", "holding", "profit", "loss",
   ];
   const isTradingQ = needs.tickers.length > 0 || needs.market || needs.signal || needs.darkpool || tradingWords.some(w => lower.includes(w));
 
