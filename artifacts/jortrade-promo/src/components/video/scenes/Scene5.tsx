@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import jortradeLogo from '@assets/jortrade-logo.png';
-import jtIcon from '@assets/jt-icon-nobg.png';
 
 export function Scene5() {
   return (
@@ -26,15 +25,9 @@ export function Scene5() {
         className="z-10 flex flex-col items-center"
       >
         <img 
-          src={jtIcon} 
-          alt="JT Icon" 
-          className="w-[16vw] mb-[2vw] filter drop-shadow-[0_0_40px_rgba(88,101,242,0.8)] rounded-full"
-        />
-        
-        <img 
           src={jortradeLogo} 
           alt="JORTRADE" 
-          className="h-[16vw] mb-[4vw]"
+          className="h-[30vh] mb-[4vw] drop-shadow-[0_0_40px_rgba(88,101,242,0.5)]"
         />
 
         <motion.h1 
