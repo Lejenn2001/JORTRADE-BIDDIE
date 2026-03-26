@@ -7,7 +7,33 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Circle } from "lucide-react";
+import { motion } from "framer-motion";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle } from "lucide-react";
+
+interface StatCardProps {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  color: string;
+}
+
+const StatCard = ({ icon: Icon, label, value, subtitle, color }: StatCardProps) => (
+  <motion.div
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="glass-panel rounded-xl p-5 border-border/40"
+  >
+    <div className="flex items-center gap-3 mb-3">
+      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center`}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+    <p className="text-2xl font-bold text-foreground">{value}</p>
+    {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+  </motion.div>
+);
 
 interface UserProfile {
   id: string;
@@ -35,6 +61,9 @@ const DashboardAdmin = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [chatCount, setChatCount] = useState(0);
+  const [apiUsageToday, setApiUsageToday] = useState(0);
+  const [apiUsageMinute, setApiUsageMinute] = useState(0);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -60,6 +89,30 @@ const DashboardAdmin = () => {
     const adminIds = new Set((adminRoles || []).map(r => r.user_id));
 
     setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id) })));
+
+    const chatRes = await supabase.from("chat_messages").select("id", { count: "exact", head: true });
+    if (chatRes.count !== null) setChatCount(chatRes.count);
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const minuteAgo = new Date(Date.now() - 60 * 1000);
+
+    const [dailyRes, minuteRes] = await Promise.all([
+      supabase
+        .from("api_usage_log" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("api_name", "unusual_whales")
+        .gte("created_at", todayStart.toISOString()),
+      supabase
+        .from("api_usage_log" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("api_name", "unusual_whales")
+        .gte("created_at", minuteAgo.toISOString()),
+    ]);
+
+    if (dailyRes.count !== null) setApiUsageToday(dailyRes.count);
+    if (minuteRes.count !== null) setApiUsageMinute(minuteRes.count);
+
     setLoading(false);
   };
 
@@ -196,6 +249,70 @@ const DashboardAdmin = () => {
               Export CSV
             </Button>
           </div>
+
+          {(() => {
+            const today = new Date().toISOString().split("T")[0];
+            const newToday = users.filter((m) => m.created_at.startsWith(today)).length;
+            const onlineCount = users.filter((m) => onlineUsers.has(m.id)).length;
+            const thisWeekStart = new Date();
+            thisWeekStart.setDate(thisWeekStart.getDate() - 7);
+            const newThisWeek = users.filter((m) => new Date(m.created_at) >= thisWeekStart).length;
+
+            return (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                  <StatCard icon={Users} label="Total Members" value={users.length} color="bg-primary" />
+                  <StatCard icon={Circle} label="Online Now" value={onlineCount} color="bg-emerald-500" />
+                  <StatCard icon={UserPlus} label="New Today" value={newToday} color="bg-primary" />
+                  <StatCard icon={TrendingUp} label="This Week" value={newThisWeek} subtitle="New signups" color="bg-purple-500" />
+                  <StatCard icon={MessageSquare} label="Chat Messages" value={chatCount} color="bg-amber-500" />
+                </div>
+
+                <div className="glass-panel rounded-xl p-5 border-border/40">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Anchor className="h-4 w-4 text-primary" />
+                    <h2 className="text-sm font-semibold text-foreground">Unusual Whales API Usage</h2>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-muted/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Per Minute</p>
+                      </div>
+                      <p className="text-xl font-bold text-foreground">{apiUsageMinute} <span className="text-sm font-normal text-muted-foreground">/ 120</span></p>
+                      <div className="mt-2 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${apiUsageMinute > 100 ? "bg-destructive" : apiUsageMinute > 60 ? "bg-amber-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min((apiUsageMinute / 120) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-muted/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Today</p>
+                      </div>
+                      <p className="text-xl font-bold text-foreground">{apiUsageToday.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ 15,000</span></p>
+                      <div className="mt-2 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${apiUsageToday > 12000 ? "bg-destructive" : apiUsageToday > 7500 ? "bg-amber-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min((apiUsageToday / 15000) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-muted/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Remaining Today</p>
+                      </div>
+                      <p className="text-xl font-bold text-foreground">{(15000 - apiUsageToday).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">requests left</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
