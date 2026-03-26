@@ -641,8 +641,11 @@ export function useMarketData() {
               gammaLevelLabel: gammaLabel || s.gamma_description,
               description: s.reason || `${s.option_type} flow on ${s.ticker} at $${s.strike} strike. Premium: $${formatPremium(s.premium)}.`,
               timestamp: (() => {
-                const d = new Date(data.timestamp || Date.now());
-                if (isNaN(d.getTime())) return 'Live';
+                const ts = data.timestamp || '';
+                const etMatch = ts.match(/(\d{1,2}:\d{2})\s*(AM|PM)/i);
+                if (etMatch) return `${etMatch[1]} ${etMatch[2].toUpperCase()}`;
+                const d = new Date(ts || Date.now());
+                if (isNaN(d.getTime())) return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
                 return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
               })(),
               tags,
@@ -1011,17 +1014,13 @@ function parsePremium(str: string): number {
 }
 
 function timeAgo(dateStr: string): string {
-  const now = new Date();
   const then = new Date(dateStr);
-  const diffMs = now.getTime() - then.getTime();
-  const mins = Math.floor(diffMs / 60000);
+  if (isNaN(then.getTime())) return 'Live';
 
-  if (isToday(dateStr)) {
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins} min ago`;
-    const hrs = Math.floor(mins / 60);
-    return `${hrs}h ago`;
-  }
+  const now = new Date();
+  const isToday_ = then.toDateString() === now.toDateString();
+  const time = then.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (isToday_) return time;
 
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const day = days[then.getDay()];
