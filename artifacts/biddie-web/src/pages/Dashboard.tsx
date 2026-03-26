@@ -3,7 +3,6 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import SignalFeedPanel from "@/components/dashboard/SignalFeedPanel";
 import AIChatPanel from "@/components/dashboard/AIChatPanel";
-import PortfolioPanel from "@/components/dashboard/PortfolioPanel";
 import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
@@ -77,7 +76,7 @@ const recordToDashboardSignal = (record: SignalOutcomeRow): MarketSignal => {
 };
 
 const Dashboard = () => {
-  const { signals, whaleAlerts, loading } = useMarketData();
+  const { signals, loading } = useMarketData();
   const [persistedSignals, setPersistedSignals] = useState<MarketSignal[]>([]);
   const [persistedLoading, setPersistedLoading] = useState(true);
 
@@ -199,10 +198,19 @@ const Dashboard = () => {
     [allMergedSignals]
   );
 
+  const spreadPlays = useMemo(() =>
+    sortSignals(
+      allMergedSignals
+        .filter(s => s.category === 'spread')
+    ).slice(0, 5),
+    [allMergedSignals]
+  );
+
   const dashboardFeatured = useMemo(() => [
     ...algorithmPlays.slice(0, 3),
     ...whalePlays.slice(0, 3),
-  ], [algorithmPlays, whalePlays]);
+    ...spreadPlays.slice(0, 3),
+  ], [algorithmPlays, whalePlays, spreadPlays]);
 
   useEffect(() => {
     if (dashboardFeatured.length === 0) return;
@@ -270,7 +278,14 @@ const Dashboard = () => {
                 icon="whale"
                 limit={5}
               />
-              <PortfolioPanel whaleAlerts={whaleAlerts} loading={loading} limit={6} />
+              <SignalFeedPanel
+                signals={spreadPlays}
+                loading={signalFeedLoading}
+                title="Spreads & Butterflies"
+                subtitle="Multi-leg strategies — defined risk plays"
+                icon="spread"
+                limit={5}
+              />
             </div>
           </div>
         </main>
