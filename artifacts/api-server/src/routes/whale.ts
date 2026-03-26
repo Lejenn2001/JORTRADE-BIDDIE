@@ -1134,12 +1134,14 @@ router.get("/whale/signals", async (_req, res) => {
     }
 
     confidence = Math.min(10, Math.round(confidence));
-    if (confidence < 7) return null;
+    if (confidence < 5) return null;
 
-    // Category
+    const hasMultileg = !!c.has_multileg;
     let category = "algorithm";
-    if (premium >= 100_000 && hasSweep) category = "whale";
-    if ((c.trade_type ?? "").toLowerCase().includes("spread") || (c.trade_type ?? "").toLowerCase().includes("multi")) category = "spread";
+    if (premium >= 500_000) category = "whale";
+    else if (premium >= 100_000 && hasSweep) category = "whale";
+    else if (premium >= 100_000 && aggression >= 90) category = "whale";
+    if (hasMultileg) category = "spread";
 
     // Tags
     const tags: string[] = [];
@@ -1304,7 +1306,7 @@ router.get("/whale/signals", async (_req, res) => {
     }
   }
   preScreened.sort((a, b) => b.confidence - a.confidence);
-  const topCandidates = preScreened.slice(0, 12);
+  const topCandidates = preScreened.slice(0, 15);
 
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
   let signals = topCandidates;
@@ -1345,6 +1347,7 @@ For EACH signal, return a JSON object with:
 - adjusted_confidence: 1-10 score (lower if hedge or poor setup, higher if strong directional conviction)
 - hedge_reason: if is_hedge is true, brief explanation why (e.g. "Large put on a bullish day = portfolio hedge")
 - signal_quality: "strong" | "moderate" | "weak" | "hedge"
+- recommended_category: "whale" | "algorithm" | "spread" — override the local category if needed
 
 HEDGE INDICATORS — mark as hedge if:
 - Large put buys on a strongly bullish day (SPY/QQQ up >0.5%) = portfolio protection
@@ -1360,11 +1363,18 @@ DIRECTIONAL BET INDICATORS — keep confidence high if:
 - Multiple confirming factors (sweep + aggression + price action)
 - Sector/single name flow, not just index hedging
 
+CATEGORY ASSIGNMENT:
+- "whale": Premium $500K+ OR ($100K+ with sweep/high aggression). These are institutional-size directional bets. Most big premium plays should be whale.
+- "spread": If the flow looks like part of a multi-leg strategy (e.g. you see matching calls/puts on the same ticker, or the strike/premium ratio suggests a defined-risk trade)
+- "algorithm": Smaller flow that passed scoring on technicals — price-confirmed plays with good setups
+
+IMPORTANT: Be generous with the "whale" category. If premium is $100K+ on a single-name stock with high conviction, that IS a whale play. We want the whale section populated with big institutional moves.
+
 SIGNALS:
 ${JSON.stringify(candidateSummary, null, 2)}
 
 Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
-[{"idx":0,"is_hedge":false,"adjusted_confidence":9,"hedge_reason":null,"signal_quality":"strong"},{"idx":1,"is_hedge":true,"adjusted_confidence":4,"hedge_reason":"Large SPY put on green day = portfolio hedge","signal_quality":"hedge"}]`;
+[{"idx":0,"is_hedge":false,"adjusted_confidence":9,"hedge_reason":null,"signal_quality":"strong","recommended_category":"whale"},{"idx":1,"is_hedge":true,"adjusted_confidence":4,"hedge_reason":"Large SPY put on green day = portfolio hedge","signal_quality":"hedge","recommended_category":"whale"}]`;
 
     const aiResponse = await claude.messages.create({
       model: "claude-sonnet-4-6",
@@ -1384,9 +1394,14 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
 
         const adjustedConf = Math.min(10, Math.max(1, Math.round(evaluation.adjusted_confidence)));
 
+        const aiCategory = evaluation.recommended_category;
+        const finalCategory = (aiCategory === "whale" || aiCategory === "spread" || aiCategory === "algorithm")
+          ? aiCategory : sig.category;
+
         return {
           ...sig,
           confidence: adjustedConf,
+          category: finalCategory,
           is_hedge: !!evaluation.is_hedge,
           hedge_reason: evaluation.hedge_reason || null,
           signal_quality: evaluation.signal_quality || "moderate",
