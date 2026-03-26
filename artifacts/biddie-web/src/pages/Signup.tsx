@@ -25,11 +25,11 @@ const plans = [
       "Conviction scoring on every signal",
       "DAY TRADE / SWING TRADE labels",
       "ACT NOW alerts for urgent setups",
+      "Biddie AI chat — 5 questions/day",
       "Community access",
       "5-day free trial",
     ],
     notIncluded: [
-      "Biddie AI chat",
       "AI flow analysis",
       "Performance analytics",
     ],
@@ -55,7 +55,6 @@ const plans = [
       "5-day free trial",
     ],
     notIncluded: [
-      "Unlimited AI questions",
       "Performance analytics",
     ],
     highlight: true,
