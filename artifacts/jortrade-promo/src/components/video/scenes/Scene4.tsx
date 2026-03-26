@@ -20,7 +20,7 @@ export function Scene4() {
         <motion.img 
           src={biddieLeaning} 
           alt="Biddie" 
-          className="absolute left-[-5vw] top-[2vh] w-[50vw] h-[40vh] object-contain object-left-top filter drop-shadow-[0_0_30px_rgba(88,101,242,0.6)]"
+          className="absolute right-[2vw] top-[3vh] w-[40vw] h-[30vh] object-contain object-right-top filter drop-shadow-[0_0_30px_rgba(88,101,242,0.6)]"
           initial={{ y: -50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2, duration: 1, type: "spring", bounce: 0.3 }}
