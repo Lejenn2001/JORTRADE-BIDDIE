@@ -47,7 +47,7 @@ export function usePresenceTracker() {
   }, []);
 
   useEffect(() => {
-    const channel = supabase.channel(CHANNEL_NAME);
+    const channel = supabase.channel(`${CHANNEL_NAME}-tracker-${Date.now()}`);
 
     channel
       .on("presence", { event: "sync" }, () => extractUsers(channel))
