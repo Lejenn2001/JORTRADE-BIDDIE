@@ -345,14 +345,34 @@ function generateTradeRecommendation(signal: any, keyLevelData: any, confirmatio
   let invalidation = signal.invalidation || "";
 
   if (optionType === "put" || signal.direction === "bearish") {
-    if (!entry && vwap) entry = `Rejection below VWAP ($${vwap}) or break below $${pdl || s1 || (currentPrice ? Math.round((currentPrice * 0.99) * 100) / 100 : "N/A")}`;
+    if (!entry && vwap && currentPrice) {
+      entry = currentPrice < vwap
+        ? `Trading below VWAP ($${vwap}) — confirmed`
+        : `Needs rejection at VWAP ($${vwap}) (currently above)`;
+    } else if (!entry && pdl) {
+      entry = currentPrice && currentPrice < pdl
+        ? `Broke below PDL ($${pdl}) — confirmed`
+        : `Break below PDL ($${pdl})`;
+    }
     if (!target && s1) target = `$${s1}${s2 ? ` — $${s2}` : ""}`;
-    if (!invalidation && pdh) invalidation = `$${pdh} (prior day high)`;
+    else if (!target && pdl) target = `$${pdl} (PDL)`;
+    if (!invalidation && vwap && currentPrice && currentPrice < vwap && pdh) invalidation = `$${vwap} (VWAP reclaim)`;
+    else if (!invalidation && pdh) invalidation = `$${pdh} (prior day high)`;
     else if (!invalidation && vwap) invalidation = `$${vwap} (VWAP reclaim)`;
   } else {
-    if (!entry && vwap) entry = `Hold above VWAP ($${vwap}) or break above $${pdh || r1 || (currentPrice ? Math.round((currentPrice * 1.01) * 100) / 100 : "N/A")}`;
+    if (!entry && vwap && currentPrice) {
+      entry = currentPrice > vwap
+        ? `Holding above VWAP ($${vwap}) — confirmed`
+        : `Needs to reclaim VWAP ($${vwap}) (currently below)`;
+    } else if (!entry && pdh) {
+      entry = currentPrice && currentPrice > pdh
+        ? `Broke above PDH ($${pdh}) — confirmed`
+        : `Break above PDH ($${pdh})`;
+    }
     if (!target && r1) target = `$${r1}${r2 ? ` — $${r2}` : ""}`;
-    if (!invalidation && pdl) invalidation = `$${pdl} (prior day low)`;
+    else if (!target && pdh) target = `$${pdh} (PDH)`;
+    if (!invalidation && vwap && currentPrice && currentPrice > vwap && pdl) invalidation = `$${vwap} (VWAP break)`;
+    else if (!invalidation && pdl) invalidation = `$${pdl} (prior day low)`;
     else if (!invalidation && vwap) invalidation = `$${vwap} (VWAP break)`;
   }
 
@@ -1129,16 +1149,91 @@ router.get("/whale/signals", async (_req, res) => {
     let invalidation = "";
     let keyLevel = "";
 
+    const aboveVwap = price && vwap ? price > vwap : null;
+    const abovePdh = price && pdh ? price > pdh : null;
+    const belowPdl = price && pdl ? price < pdl : null;
+    const abovePivot = price && pivot ? price > pivot : null;
+
     if (optType === "call") {
-      entryTrigger = vwap ? `Price holds above VWAP at $${vwap.toFixed(2)}` : (pdh ? `Break above PDH at $${pdh.toFixed(2)}` : `Above $${strike}`);
-      target = r1 ? `R1 at $${r1.toFixed(2)}` : (pdh ? `PDH at $${pdh.toFixed(2)}` : `$${(strike * 1.02).toFixed(2)}`);
-      invalidation = pdl ? `Below PDL at $${pdl.toFixed(2)}` : (vwap ? `Below VWAP at $${vwap.toFixed(2)}` : `Below $${(strike * 0.98).toFixed(2)}`);
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : `$${strike}`;
+      // Entry trigger — context-aware based on where price actually is
+      if (vwap && price) {
+        if (price > vwap) {
+          entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed`;
+        } else {
+          entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (currently below)`;
+        }
+      } else if (pdh) {
+        entryTrigger = price && price > pdh
+          ? `Broke above PDH at $${pdh.toFixed(2)} — confirmed`
+          : `Break above PDH at $${pdh.toFixed(2)}`;
+      } else {
+        entryTrigger = `Above $${strike}`;
+      }
+      // Target — next resistance above
+      if (abovePdh && r1 && r1 > price) {
+        target = `R1 at $${r1.toFixed(2)}`;
+      } else if (pdh && price && price < pdh) {
+        target = r1 ? `PDH at $${pdh.toFixed(2)}, then R1 at $${r1.toFixed(2)}` : `PDH at $${pdh.toFixed(2)}`;
+      } else if (r1) {
+        target = `R1 at $${r1.toFixed(2)}`;
+      } else if (pdh) {
+        target = `PDH at $${pdh.toFixed(2)}`;
+      } else {
+        target = `$${(strike * 1.02).toFixed(2)}`;
+      }
+      // Invalidation — next support below
+      if (vwap && price && price > vwap && pdl) {
+        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
+      } else if (pdl) {
+        invalidation = `Below PDL at $${pdl.toFixed(2)}`;
+      } else if (s1) {
+        invalidation = `Below S1 at $${s1.toFixed(2)}`;
+      } else if (vwap) {
+        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
+      } else {
+        invalidation = `Below $${(strike * 0.98).toFixed(2)}`;
+      }
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : `$${strike}`);
     } else {
-      entryTrigger = vwap ? `Price rejects below VWAP at $${vwap.toFixed(2)}` : (pdl ? `Break below PDL at $${pdl.toFixed(2)}` : `Below $${strike}`);
-      target = s1 ? `S1 at $${s1.toFixed(2)}` : (pdl ? `PDL at $${pdl.toFixed(2)}` : `$${(strike * 0.98).toFixed(2)}`);
-      invalidation = pdh ? `Above PDH at $${pdh.toFixed(2)}` : (vwap ? `Above VWAP at $${vwap.toFixed(2)}` : `Above $${(strike * 1.02).toFixed(2)}`);
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : `$${strike}`;
+      // PUT — Entry trigger context-aware
+      if (vwap && price) {
+        if (price < vwap) {
+          entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed`;
+        } else {
+          entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (currently above)`;
+        }
+      } else if (pdl) {
+        entryTrigger = price && price < pdl
+          ? `Broke below PDL at $${pdl.toFixed(2)} — confirmed`
+          : `Break below PDL at $${pdl.toFixed(2)}`;
+      } else {
+        entryTrigger = `Below $${strike}`;
+      }
+      // Target — next support below
+      if (belowPdl && s1 && s1 < price) {
+        target = `S1 at $${s1.toFixed(2)}`;
+      } else if (pdl && price && price > pdl) {
+        target = s1 ? `PDL at $${pdl.toFixed(2)}, then S1 at $${s1.toFixed(2)}` : `PDL at $${pdl.toFixed(2)}`;
+      } else if (s1) {
+        target = `S1 at $${s1.toFixed(2)}`;
+      } else if (pdl) {
+        target = `PDL at $${pdl.toFixed(2)}`;
+      } else {
+        target = `$${(strike * 0.98).toFixed(2)}`;
+      }
+      // Invalidation — next resistance above
+      if (vwap && price && price < vwap && pdh) {
+        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
+      } else if (pdh) {
+        invalidation = `Above PDH at $${pdh.toFixed(2)}`;
+      } else if (r1) {
+        invalidation = `Above R1 at $${r1.toFixed(2)}`;
+      } else if (vwap) {
+        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
+      } else {
+        invalidation = `Above $${(strike * 1.02).toFixed(2)}`;
+      }
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : `$${strike}`);
     }
 
     // Reason
