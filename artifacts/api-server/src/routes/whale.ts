@@ -1491,9 +1491,13 @@ function startFlowMonitor() {
         messages: [{ role: "user", content: `Drop the morning outlook. Keep it real.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify({ fetched_at: now, key_levels: keyLevels, top_flow: enriched.slice(0, 50), sector_etfs: sectorData, economic_calendar: (econData as any[]).slice(0, 10) }, null, 2)}\n\`\`\`` }],
       });
       const content = response.content[0].type === "text" ? response.content[0].text : "";
-      await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content });
-      lastBiddiePost = Date.now();
-      console.log(`[Biddie morning] Posted at ${now}`);
+      const { error: insertErr } = await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content } as any);
+      if (insertErr) {
+        console.error(`[Biddie morning] Insert failed (RLS):`, insertErr.message);
+      } else {
+        lastBiddiePost = Date.now();
+        console.log(`[Biddie morning] Posted at ${now}`);
+      }
     } catch (err) { console.error("[Biddie morning] Failed:", err); }
   }, 60000);
 
@@ -1512,7 +1516,7 @@ function startFlowMonitor() {
     if (Date.now() - lastBiddiePost < MIN_POST_GAP_MS) return;
 
     try {
-      const flowAlerts = await fetchFlowAlerts(100);
+      const flowAlerts = await fetchFlowAlerts(200);
       const enriched = enrichAlerts(flowAlerts);
 
       const newAlerts = enriched.filter((a) => {
@@ -1530,17 +1534,17 @@ function startFlowMonitor() {
       }
 
       const notable = newAlerts.filter((a) => {
-        if (a.total_premium >= 500000 && a.ask_aggression_pct >= 70) return true;
-        if (a.has_sweep && a.total_premium >= 300000 && a.vol_oi_ratio >= 5) return true;
-        if (a.vol_oi_ratio >= 10 && a.total_premium >= 200000) return true;
+        if (a.total_premium >= 200000 && a.ask_aggression_pct >= 70) return true;
+        if (a.has_sweep && a.total_premium >= 150000 && a.vol_oi_ratio >= 3) return true;
+        if (a.vol_oi_ratio >= 8 && a.total_premium >= 100000) return true;
         return false;
       });
 
       if (notable.length === 0) return;
 
       const now = getNowEastern();
-      const topFlow = notable.slice(0, 5);
-      const context = JSON.stringify({ fetched_at: now, notable_flow: topFlow, all_recent: enriched.slice(0, 30) }, null, 2);
+      const topFlow = notable.slice(0, 8);
+      const context = JSON.stringify({ fetched_at: now, notable_flow: topFlow, all_recent: enriched.slice(0, 40) }, null, 2);
 
       const response = await claude.messages.create({
         model: "claude-sonnet-4-6",
@@ -1553,9 +1557,13 @@ function startFlowMonitor() {
 
       if (content.includes("NOTHING_NOTABLE") || content.trim().length < 20) return;
 
-      await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content });
-      lastBiddiePost = Date.now();
-      console.log(`[Biddie flow alert] Posted at ${now}`);
+      const { error: insertErr } = await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content } as any);
+      if (insertErr) {
+        console.error(`[Biddie flow alert] Insert failed (RLS):`, insertErr.message);
+      } else {
+        lastBiddiePost = Date.now();
+        console.log(`[Biddie flow alert] Posted at ${now}`);
+      }
     } catch (err) { console.error("[Biddie flow monitor] Failed:", err); }
   }, 5 * 60 * 1000);
 }
