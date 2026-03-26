@@ -698,6 +698,12 @@ export function useMarketData() {
               gammaLevelLabel: gammaLabel || s.gamma_description,
               description: s.reason || `${s.option_type} flow on ${s.ticker} at $${s.strike} strike. Premium: $${formatPremium(s.premium)}.`,
               timestamp: (() => {
+                if (s.created_at) {
+                  const d = new Date(s.created_at);
+                  if (!isNaN(d.getTime())) {
+                    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' ET';
+                  }
+                }
                 const ts = data.timestamp || '';
                 const etMatch = ts.match(/(\d{1,2}:\d{2})\s*(AM|PM)/i);
                 if (etMatch) return `${etMatch[1]} ${etMatch[2].toUpperCase()}`;

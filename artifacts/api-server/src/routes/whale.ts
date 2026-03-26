@@ -413,10 +413,12 @@ function enrichAlerts(alerts: any[]) {
         vol_oi_ratio: Math.round((vol / Math.max(oi, 1)) * 100) / 100,
         alert_rule: x.alert_rule,
         has_sweep: x.has_sweep,
+        has_multileg: x.has_multileg,
         has_floor: x.has_floor,
         trade_count: x.trade_count,
         iv: x.iv_end,
         next_earnings: x.next_earnings_date,
+        created_at: x.created_at,
       };
     })
     .sort((a, b) => b.total_premium - a.total_premium);
@@ -1278,6 +1280,7 @@ router.get("/whale/signals", async (_req, res) => {
       pivot, r1, s1,
       entry_trigger: entryTrigger, key_level: keyLevel, target, invalidation,
       reason, confidence, tags,
+      created_at: c.created_at || null,
       price_confirmed: !!confirmation?.confirmed,
       price_pattern: confirmation?.pattern ?? null,
       gamma_zone: confirmation?.gamma_zone ?? "neutral",
@@ -1517,6 +1520,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
             target: spread.target,
             invalidation: spread.invalidation,
             reason: spread.reason,
+            created_at: parentSig?.created_at ?? null,
             confidence: Math.min(10, Math.max(1, spread.confidence ?? 7)),
             tags: [
               spread.strategy_type?.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) ?? "Spread",
