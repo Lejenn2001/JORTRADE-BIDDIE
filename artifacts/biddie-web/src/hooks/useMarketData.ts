@@ -476,8 +476,8 @@ function classifyTimeframe(signal: { convictionScore?: number; confidence: numbe
 
 const CACHE_KEY = 'jortrade-signals-cache';
 const HISTORY_KEY = 'jortrade-signals-history';
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes — signals update frequently during market hours
+const HISTORY_TTL = 16 * 60 * 60 * 1000; // 16 hours — clears overnight so yesterday's signals don't persist
 const MAX_HISTORY = 200;
 
 function signalUniqueKey(s: MarketSignal): string {

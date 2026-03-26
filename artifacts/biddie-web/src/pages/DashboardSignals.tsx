@@ -122,13 +122,15 @@ const DashboardSignals = () => {
       setDbLoading(true);
       try {
         const now = new Date();
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const todayET = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        todayET.setHours(0, 0, 0, 0);
+        const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
         const { data, error } = await supabase
           .from("signal_outcomes")
           .select("*")
           .eq("signal_source", "replit")
-          .gte("created_at", weekAgo.toISOString())
+          .gte("created_at", todayStart.toISOString())
           .order("created_at", { ascending: false })
           .limit(100);
 
