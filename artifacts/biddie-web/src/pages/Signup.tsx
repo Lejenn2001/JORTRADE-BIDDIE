@@ -66,11 +66,11 @@ const plans = [
     yearlyPrice: "$1,199",
     yearlySavings: "Save ~$349",
     badge: "Full Access",
-    desc: "Unlimited Biddie AI. Full dashboard. Performance tracking. Everything — no limits, no restrictions.",
+    desc: "Maximum firepower. 100 daily AI questions, full analytics, performance tracking — the complete trading arsenal.",
     icon: Crown,
     features: [
       "Everything in Active",
-      "Unlimited Biddie AI questions",
+      "Biddie AI chat — 100 questions/day",
       "Full performance analytics dashboard",
       "Signal accuracy tracking & history",
       "Advanced flow pattern detection",
