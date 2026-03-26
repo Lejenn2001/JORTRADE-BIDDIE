@@ -616,9 +616,7 @@ export function useMarketData() {
             else if (hybridScore >= 60) hybridLabel = "High Conviction";
             else if (hybridScore >= 40) hybridLabel = "Moderate Conviction";
 
-            // Use scored tags
-            if (isPriceConfirmed && hybridScore >= 85) tags.push('🔥 ACT NOW');
-            else if (hybridScore >= 85) tags.push('🔥 ACT NOW');
+            if (isPriceConfirmed && gammaZone !== 'neutral' && hybridScore >= 85) tags.push('🔥 ACT NOW');
             else if (hybridScore >= 70) tags.push('⚡ HIGH CONVICTION');
 
             const timeframe = classifyTimeframe({ convictionScore: hybridScore, confidence: s.confidence, expiry: s.expiry });
@@ -642,7 +640,11 @@ export function useMarketData() {
               convictionLabel: hybridLabel,
               gammaLevelLabel: gammaLabel || s.gamma_description,
               description: s.reason || `${s.option_type} flow on ${s.ticker} at $${s.strike} strike. Premium: $${formatPremium(s.premium)}.`,
-              timestamp: data.timestamp || 'Live',
+              timestamp: (() => {
+                const d = new Date(data.timestamp || Date.now());
+                if (isNaN(d.getTime())) return 'Live';
+                return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+              })(),
               tags,
               strike: `$${s.strike}`,
               expiry: s.expiry,
@@ -769,7 +771,7 @@ export function useMarketData() {
           });
 
           const confidence = Math.min(10, parseFloat((scoreResult.score / 10).toFixed(1)));
-          const urgencyTag = scoreResult.score >= 75 ? '🔥 ACT NOW' : scoreResult.score >= 60 ? '⚡ HIGH CONVICTION' : null;
+          const urgencyTag = scoreResult.score >= 60 ? '⚡ HIGH CONVICTION' : null;
           const tags = [
             putCall === 'call' ? 'Call Flow' : 'Put Flow',
             flowType,
@@ -786,7 +788,12 @@ export function useMarketData() {
             gammaLevelLabel: scoreResult.gammaLevelLabel,
             _totalPremium: totalPremium,
             description: `${tradeCount} ${putCall} trades detected on ${ticker} at $${strikeLabel} strike. Total premium: $${premium}. Volume/OI ratio: ${volOiRatio ? volOiRatio.toFixed(1) + 'x' : 'N/A'}. Conviction: ${scoreResult.score}/100 (${scoreResult.label}).`,
-            timestamp: alert.created_at ? timeAgo(alert.created_at) : 'just now',
+            timestamp: (() => {
+              if (!alert.created_at) return 'Live';
+              const d = new Date(alert.created_at);
+              if (isNaN(d.getTime())) return 'Live';
+              return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            })(),
             createdAt: alert.created_at || '',
             tags,
             strike: `$${strikeLabel}`,

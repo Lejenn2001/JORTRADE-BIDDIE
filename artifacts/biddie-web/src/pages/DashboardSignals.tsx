@@ -103,13 +103,11 @@ function formatTimestamp(isoStr: string): string {
   const date = new Date(isoStr);
   if (isNaN(date.getTime())) return 'Today';
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 12) return `${diffHrs}h ago`;
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  if (isToday) return time;
+  const day = date.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${day} ${time}`;
 }
 
 const DashboardSignals = () => {
