@@ -103,25 +103,23 @@ const DashboardCommunity = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage }),
       });
-      if (!res.ok) {
-        console.error("Biddie community chat error:", res.status);
-      }
-      const data = await res.json();
-      if (data.content && !data.posted) {
+      const data = await res.json().catch(() => null);
+      const replyText = data?.content || data?.analysis || "";
+      if (replyText && !data?.posted) {
         const ephemeral: ChatMessage = {
           id: `biddie-local-${Date.now()}`,
           user_id: BIDDIE_USER_ID,
           user_name: "Biddie AI",
-          content: data.content,
+          content: replyText,
           created_at: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, ephemeral]);
-        scrollToBottom();
       }
     } catch (e) {
       console.error("Biddie community chat error:", e);
     } finally {
       setBiddieThinking(false);
+      scrollToBottom();
     }
   };
 
@@ -171,10 +169,9 @@ const DashboardCommunity = () => {
       ];
       const isTradingQuestion = tradingKeywords.some(kw => lower.includes(kw));
       
-      // Only trigger once — Biddie mention OR trading question, not both
       if (hasBiddieMention || isTradingQuestion) {
         const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
-        triggerBiddie(cleanMsg);
+        setTimeout(() => triggerBiddie(cleanMsg), 300);
       }
     }
     setSending(false);
