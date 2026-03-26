@@ -41,7 +41,7 @@ const HeroSection = () => {
         {/* Desktop: full nav */}
         <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
           <a href="#features" className="hover:text-foreground cursor-pointer transition-colors">Features</a>
-          <Link to="/dashboard" className="hover:text-foreground cursor-pointer transition-colors">Dashboard</Link>
+          <a href="#workflow" className="hover:text-foreground cursor-pointer transition-colors">How It Works</a>
           <Link to="/signup" className="hover:text-foreground cursor-pointer transition-colors">Pricing</Link>
           <Link to="/contact" className="hover:text-foreground cursor-pointer transition-colors">Contact</Link>
           <Link to="/login">
@@ -88,9 +88,9 @@ const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.8 }}
           className="flex justify-center mt-10"
         >
-          <Link to="/dashboard">
+          <Link to="/signup">
             <Button variant="outline" className="rounded-full px-8 py-6 text-base font-semibold border-muted-foreground/30 hover:bg-muted/30">
-              Go to Dashboard
+              Get Started
             </Button>
           </Link>
         </motion.div>

@@ -27,8 +27,8 @@ const WhatWeDoSection = () => {
             </h2>
 
             <p className="text-muted-foreground text-base leading-relaxed mb-8">
-              Biddie watches the markets so you don't have to — surfacing the setups that matter
-              and translating them into clear, actionable guidance.
+              JORTRADE watches the markets so you don't have to — surfacing the setups that matter
+              and translating them into clear, actionable guidance with Biddie AI.
             </p>
 
             <a href="#workflow" className="inline-flex items-center gap-2 text-foreground font-semibold text-sm hover:gap-3 transition-all group">

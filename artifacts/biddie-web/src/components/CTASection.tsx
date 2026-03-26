@@ -48,12 +48,12 @@ const CTASection = () => {
         </div>
 
         <p className="text-muted-foreground mt-6 max-w-xl mx-auto text-base leading-relaxed">
-          Let Biddie do the heavy lifting — you focus on pulling the trigger at the right time.
+          Let JORTRADE do the heavy lifting — you focus on pulling the trigger at the right time.
         </p>
 
         <Link to="/signup">
           <Button className="mt-10 bg-foreground text-background hover:bg-foreground/90 rounded-full px-10 py-6 text-base font-semibold">
-            Chat with Biddie
+            Join JORTRADE
           </Button>
         </Link>
       </motion.div>
