@@ -5,6 +5,7 @@ import AIWorkflowSection from "@/components/AIWorkflowSection";
 import RealTimeGuidanceSection from "@/components/RealTimeGuidanceSection";
 import DashboardPreview from "@/components/DashboardPreview";
 import FeaturesGridSection from "@/components/FeaturesGridSection";
+import SignalBreakdownSection from "@/components/SignalBreakdownSection";
 import MentorshipSection from "@/components/MentorshipSection";
 import CTASection from "@/components/CTASection";
 import FAQSection from "@/components/FAQSection";
@@ -26,6 +27,7 @@ const Index = () => {
       <AIWorkflowSection />
       <RealTimeGuidanceSection />
       <FeaturesGridSection />
+      <SignalBreakdownSection />
       <MentorshipSection />
       <CTASection />
       <FAQSection />
