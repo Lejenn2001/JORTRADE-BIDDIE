@@ -1015,19 +1015,54 @@ router.get("/whale/signals", async (_req, res) => {
     const direction = optType === "call" ? "bullish" : "bearish";
     const price = kl?.current_price ?? parseFloat(c.underlying_price) ?? null;
 
+    // ── Hard filters: reject signals that aren't actionable ──
+
+    // Filter 1: Reject deep OTM (>15% from current price)
+    if (price && strike) {
+      const otmPct = Math.abs(strike - price) / price;
+      if (otmPct > 0.15) return null;
+    }
+
+    // Filter 2: Reject far-out expiries (>45 days) — we want near-term signals
+    const expiryDate = c.expiry;
+    if (expiryDate) {
+      try {
+        const expMs = new Date(expiryDate + "T16:00:00").getTime();
+        const nowMs = Date.now();
+        const daysToExpiry = (expMs - nowMs) / (1000 * 60 * 60 * 24);
+        if (daysToExpiry > 45) return null;
+        if (daysToExpiry < 0) return null;
+      } catch {}
+    }
+
     // Score
-    let confidence = 6;
+    let confidence = 5;
     if (hasSweep) confidence += 1;
     if (aggression >= 80) confidence += 1;
+    if (aggression >= 95) confidence += 0.5;
+    if (volOi >= 2) confidence += 0.5;
     if (volOi >= 5) confidence += 0.5;
-    if (volOi >= 10) confidence += 0.5;
-    if (premium >= 100_000) confidence += 1;
-    if (premium >= 250_000) confidence += 0.5;
+    if (premium >= 100_000) confidence += 0.5;
+    if (premium >= 500_000) confidence += 0.5;
+    if (premium >= 1_000_000) confidence += 0.5;
     if (confirmation?.confirmed) confidence += 1;
+
+    // ATM bonus / OTM penalty
     if (price && strike) {
       const diff = Math.abs(strike - price) / price;
-      if (diff < 0.03) confidence += 0.5; // near ATM
+      if (diff < 0.02) confidence += 1;
+      else if (diff < 0.05) confidence += 0.5;
+      else if (diff > 0.10) confidence -= 1;
     }
+
+    // Near-term expiry bonus
+    if (expiryDate) {
+      try {
+        const daysToExpiry = (new Date(expiryDate + "T16:00:00").getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        if (daysToExpiry <= 7) confidence += 0.5;
+      } catch {}
+    }
+
     confidence = Math.min(10, Math.round(confidence));
     if (confidence < 7) return null;
 
@@ -1042,7 +1077,6 @@ router.get("/whale/signals", async (_req, res) => {
     tags.push(optType === "call" ? "Call Flow" : "Put Flow");
     if (volOi >= 5) tags.push("High Volume");
     if (price && Math.abs(strike - price) / price < 0.03) tags.push("ATM");
-    const expiryDate = c.expiry;
     if (expiryDate === today) tags.push("0DTE");
     if (confirmation?.confirmed) tags.push("Price Confirmed");
     if (confirmation?.gamma_zone === "negative") tags.push("Negative Gamma");
