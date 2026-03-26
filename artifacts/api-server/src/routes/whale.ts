@@ -1287,7 +1287,8 @@ router.get("/whale/signals", async (_req, res) => {
     };
   }
 
-  const signals: any[] = [];
+  // Step 1: Local pre-screen to get top candidates
+  const preScreened: any[] = [];
   const seenTickers = new Set<string>();
   for (const c of candidates) {
     const ticker = c.ticker as string;
@@ -1299,11 +1300,115 @@ router.get("/whale/signals", async (_req, res) => {
     const sig = scoreSignal(c, kl, confirmation);
     if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
-      signals.push(sig);
+      preScreened.push(sig);
     }
   }
+  preScreened.sort((a, b) => b.confidence - a.confidence);
+  const topCandidates = preScreened.slice(0, 12);
 
-  signals.sort((a, b) => b.confidence - a.confidence);
+  // Step 2: Claude AI evaluation — distinguish directional bets from hedges
+  let signals = topCandidates;
+  try {
+    const claudeT0 = Date.now();
+    const candidateSummary = topCandidates.map((s, i) => ({
+      idx: i,
+      ticker: s.ticker,
+      direction: s.direction,
+      option_type: s.option_type,
+      trade: s.trade,
+      strike: s.strike,
+      expiry: s.expiry,
+      premium: s.premium,
+      ask_aggression_pct: s.ask_aggression_pct,
+      vol_oi_ratio: s.vol_oi_ratio,
+      has_sweep: s.has_sweep,
+      current_price: s.current_price,
+      vwap: s.vwap,
+      prior_day_high: s.prior_day_high,
+      prior_day_low: s.prior_day_low,
+      pivot: s.pivot,
+      r1: s.r1,
+      s1: s.s1,
+      entry_trigger: s.entry_trigger,
+      price_confirmed: s.price_confirmed,
+      price_pattern: s.price_pattern,
+      gamma_zone: s.gamma_zone,
+      local_confidence: s.confidence,
+      category: s.category,
+    }));
+
+    const aiPrompt = `You are a professional options flow analyst. Evaluate these ${topCandidates.length} pre-screened trade signals and determine which are REAL directional bets vs hedges/noise.
+
+For EACH signal, return a JSON object with:
+- idx: the signal index
+- is_hedge: true if this looks like a hedge (large institution protecting a position), false if directional
+- adjusted_confidence: 1-10 score (lower if hedge or poor setup, higher if strong directional conviction)
+- hedge_reason: if is_hedge is true, brief explanation why (e.g. "Large put on a bullish day = portfolio hedge")
+- signal_quality: "strong" | "moderate" | "weak" | "hedge"
+
+HEDGE INDICATORS — mark as hedge if:
+- Large put buys on a strongly bullish day (SPY/QQQ up >0.5%) = portfolio protection
+- Far OTM options with massive premium = tail risk hedge
+- Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend
+- Very large premium ($1M+) with far-dated expiry = institutional positioning, not a trade signal
+- Price is moving strongly AGAINST the option direction (buying calls while price dumps, buying puts while price rips)
+
+DIRECTIONAL BET INDICATORS — keep confidence high if:
+- Sweeps with high ask aggression on near-term expiry
+- Strike near ATM with price confirming the direction
+- Price holding above VWAP for calls, below VWAP for puts
+- Multiple confirming factors (sweep + aggression + price action)
+- Sector/single name flow, not just index hedging
+
+SIGNALS:
+${JSON.stringify(candidateSummary, null, 2)}
+
+Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
+[{"idx":0,"is_hedge":false,"adjusted_confidence":9,"hedge_reason":null,"signal_quality":"strong"},{"idx":1,"is_hedge":true,"adjusted_confidence":4,"hedge_reason":"Large SPY put on green day = portfolio hedge","signal_quality":"hedge"}]`;
+
+    const aiResponse = await claude.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: aiPrompt }],
+    });
+
+    const aiText = (aiResponse.content[0] as any)?.text ?? "";
+    const jsonMatch = aiText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const evaluations = JSON.parse(jsonMatch[0]);
+      const evalMap = new Map(evaluations.map((e: any) => [e.idx, e]));
+
+      signals = topCandidates.map((sig, i) => {
+        const evaluation = evalMap.get(i) as any;
+        if (!evaluation) return sig;
+
+        const adjustedConf = Math.min(10, Math.max(1, Math.round(evaluation.adjusted_confidence)));
+
+        return {
+          ...sig,
+          confidence: adjustedConf,
+          is_hedge: !!evaluation.is_hedge,
+          hedge_reason: evaluation.hedge_reason || null,
+          signal_quality: evaluation.signal_quality || "moderate",
+          reason: evaluation.is_hedge
+            ? `⚠️ LIKELY HEDGE: ${evaluation.hedge_reason}. ${sig.reason}`
+            : sig.reason,
+          tags: evaluation.is_hedge
+            ? [...sig.tags.filter((t: string) => t !== "Price Confirmed"), "⚠️ Hedge"]
+            : sig.tags,
+        };
+      });
+
+      signals = signals.filter((s) => !s.is_hedge && s.confidence >= 6);
+      signals.sort((a, b) => b.confidence - a.confidence);
+
+      console.log(`[signals] Claude evaluation done: ${Date.now() - claudeT0}ms`);
+    }
+  } catch (aiErr) {
+    console.warn(`[signals] Claude evaluation failed, using local scores:`, aiErr);
+    // Fall back to local scoring if Claude fails
+  }
+
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals`);
 
   res.json({ signals: signals.slice(0, 15), count: Math.min(signals.length, 15), timestamp: now });
