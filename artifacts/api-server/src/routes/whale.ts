@@ -1534,10 +1534,17 @@ function startFlowMonitor() {
       }
 
       const notable = newAlerts.filter((a) => {
-        if (a.total_premium >= 200000 && a.ask_aggression_pct >= 70) return true;
-        if (a.has_sweep && a.total_premium >= 150000 && a.vol_oi_ratio >= 3) return true;
-        if (a.vol_oi_ratio >= 8 && a.total_premium >= 100000) return true;
-        return false;
+        if (!a.has_sweep) return false;
+        if (a.total_premium < 250000) return false;
+        if (a.ask_aggression_pct < 85) return false;
+        if (a.vol_oi_ratio < 5) return false;
+        const price = parseFloat(a.underlying_price) || 0;
+        const strike = parseFloat(a.strike) || 0;
+        if (price > 0 && strike > 0) {
+          const moneyness = Math.abs(strike - price) / price;
+          if (moneyness > 0.05) return false;
+        }
+        return true;
       });
 
       if (notable.length === 0) return;
