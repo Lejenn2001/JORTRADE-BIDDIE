@@ -9,11 +9,11 @@ import { Scene4 } from './scenes/Scene4';
 import { Scene5 } from './scenes/Scene5';
 
 const SCENE_DURATIONS = {
-  scene1: 5500,
-  scene2: 12000,
-  scene3: 9000,
-  scene4: 9000,
-  scene5: 7000,
+  scene1: 7000,
+  scene2: 15000,
+  scene3: 12000,
+  scene4: 12000,
+  scene5: 8000,
 };
 
 export default function VideoTemplate() {
