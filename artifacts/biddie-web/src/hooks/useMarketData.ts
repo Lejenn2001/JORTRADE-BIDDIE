@@ -556,7 +556,7 @@ function mergeIntoHistory(newSignals: MarketSignal[]): MarketSignal[] {
 export function useMarketData() {
   const [signals, setSignals] = useState<MarketSignal[]>(() => {
     const cached = loadCachedSignals();
-    return cached || exampleSignals;
+    return cached || [];
   });
   const [whaleAlerts, setWhaleAlerts] = useState<FlowAlert[]>([]);
   const [marketOverview, setMarketOverview] = useState<any>(null);
@@ -731,9 +731,7 @@ export function useMarketData() {
 
           mergeIntoHistory(mapped);
 
-          const liveTickers = new Set(mapped.map(s => s.ticker));
-          const filteredExamples = exampleSignals.filter(s => !liveTickers.has(s.ticker));
-          setSignals([...mapped, ...filteredExamples]);
+          setSignals(mapped);
           saveCachedSignals(mapped);
 
           // Log Replit signals to signal_outcomes for accuracy tracking
@@ -893,13 +891,9 @@ export function useMarketData() {
 
       mergeIntoHistory(liveDeduped);
 
-      const liveTickers = new Set(liveDeduped.map(s => s.ticker));
-      const fillerSignals = exampleSignals.filter(s => !liveTickers.has(s.ticker) && (s.convictionScore !== undefined ? s.convictionScore >= 80 : s.confidence >= 8));
-      const merged = [...liveDeduped, ...fillerSignals];
-
-      if (merged.length > 0) {
-        setSignals(merged);
-        saveCachedSignals(merged);
+      if (liveDeduped.length > 0) {
+        setSignals(liveDeduped);
+        saveCachedSignals(liveDeduped);
       }
     } catch (e) {
       console.error('Failed to fetch flow alerts:', e);

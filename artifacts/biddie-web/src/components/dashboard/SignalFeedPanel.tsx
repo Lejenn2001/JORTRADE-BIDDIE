@@ -61,6 +61,11 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
             <div key={i} className="p-3 rounded-lg bg-muted/20 animate-pulse h-36" />
           ))}
         </div>
+      ) : displaySignals.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-sm text-muted-foreground">No signals detected yet</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Signals update during market hours (9:30 AM – 4 PM ET)</p>
+        </div>
       ) : (
         <div className="space-y-4">
           {displaySignals.map((signal, index) => (
