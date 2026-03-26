@@ -12,26 +12,24 @@ import jortradeLogo from "@/assets/jortrade-logo.png";
 const plans = [
   {
     id: "starter",
-    name: "Starter Trader",
+    name: "Signal Scout",
     monthlyPrice: "$49",
     yearlyPrice: "$499",
     yearlySavings: "Save ~$90",
     badge: null,
-    desc: "Real-time signals from algorithms and institutional flow, before the crowd catches on.",
+    desc: "Stay aware of institutional activity and emerging opportunities.",
     icon: Star,
+    tagline: "Best for traders who want signal visibility and market awareness.",
     features: [
       "Live Algorithm & Whale alerts",
       "Spread & Butterfly detection",
       "AI conviction scoring",
       "DAY TRADE / SWING TRADE labels",
       "ACT NOW urgency alerts",
-      "Biddie AI, 5 questions/day",
-      "JORTRADE community",
-      "5-day free trial",
     ],
     notIncluded: [
-      "Deep flow analysis",
-      "Performance tracking",
+      "Live Biddie AI access",
+      "JORTRADE chat room",
     ],
     highlight: false,
   },
@@ -42,42 +40,42 @@ const plans = [
     yearlyPrice: "$899",
     yearlySavings: "Save ~$169",
     badge: "Most Popular",
-    desc: "Get the \"why\" behind every signal, not just the \"what.\"",
+    desc: "Start trading with real confidence. Talk to Biddie LIVE and plan your trades in real time.",
     icon: Zap,
+    tagline: "Where traders move from watching signals to executing high-probability setups.",
     features: [
-      "Everything in Starter",
-      "Biddie AI, 25 questions/day",
+      "Everything in Signal Scout",
+      "Live Biddie AI, 25 questions/day",
+      "AI trade planning & entry/exit strategy",
       "Options flow breakdown",
-      "AI trade recommendations",
-      "Gamma zone & key levels",
+      "Gamma zones & key price levels",
       "Real-time market analysis",
-      "JORTRADE community",
+      "JORTRADE live chat room",
       "5-day free trial",
     ],
     notIncluded: [
-      "Performance tracking",
+      "Performance analytics",
     ],
     highlight: true,
   },
   {
     id: "pro",
-    name: "Pro Trader",
+    name: "Market Titan",
     monthlyPrice: "$129",
     yearlyPrice: "$1,199",
     yearlySavings: "Save ~$349",
     badge: "Full Access",
-    desc: "The full arsenal. 100 daily AI questions, performance analytics, signal tracking.",
+    desc: "Advanced intelligence tools for traders focused on consistency and edge.",
     icon: Crown,
+    tagline: null,
     features: [
-      "Everything in Active",
-      "Biddie AI, 100 questions/day",
-      "Performance analytics",
+      "Everything in Active Trader",
+      "Live Biddie AI, 50 questions/day",
+      "Performance analytics dashboard",
       "Signal accuracy tracking",
-      "Advanced flow patterns",
-      "Priority signal delivery",
-      "Custom alert config",
-      "JORTRADE community",
-      "5-day free trial",
+      "Advanced flow pattern detection",
+      "Priority intelligence response",
+      "Custom alert configuration",
     ],
     notIncluded: [],
     highlight: false,
@@ -214,6 +212,11 @@ const Signup = () => {
                   </li>
                 ))}
               </ul>
+              {plan.tagline && (
+                <p className="text-[11px] text-primary/80 font-medium mt-4 pt-4 border-t border-border/30 italic">
+                  {plan.tagline}
+                </p>
+              )}
             </motion.div>
           ))}
         </div>
