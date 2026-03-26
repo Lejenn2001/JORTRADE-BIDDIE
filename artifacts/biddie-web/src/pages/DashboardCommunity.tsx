@@ -140,39 +140,8 @@ const DashboardCommunity = () => {
       toast({ title: "Error sending message", description: error.message, variant: "destructive" });
     } else {
       setInput("");
-      const lower = messageText.toLowerCase();
-      const hasBiddieMention = lower.includes("biddie") || lower.includes("@biddie");
-      const tradingKeywords = [
-        "what's the play", "whats the play", "what is the play",
-        "best setup", "any plays", "what's pumping", "whats pumping",
-        "options flow", "unusual flow", "whale", "signal",
-        "calls or puts", "bull or bear", "bullish or bearish",
-        "spy", "qqq", "iwm", "nvda", "amd", "tsla", "aapl", "googl", "amzn", "meta",
-        "put spread", "call spread", "debit spread", "credit spread",
-        "what should i buy", "what should i trade", "any setups",
-        "is it bussin", "what's cooking", "whats cooking",
-        "momentum", "breakout", "breakdown", "entry", "strike",
-        "expir", "premium", "sweep", "gamma", "vwap",
-        "support", "resistance", "pivot", "target",
-        "what do you think about", "should i", "would you", "is it time",
-        "option", "contract", "price", "cheap", "expensive",
-        "buy", "sell", "long", "short", "iron condor", "butterfly",
-        "straddle", "strangle", "collar", "hedge", "roll",
-        "otm", "itm", "atm", "delta", "theta", "iv", "implied vol",
-        "what ticker", "which stock", "any ideas", "play today",
-        "good trade", "best trade", "hot stock", "earnings",
-        "how", "why", "when", "where", "can you", "tell me",
-        "profit", "loss", "risk", "reward", "setup",
-        "chart", "trend", "moving average", "rsi", "macd",
-        "dip", "rally", "gap", "volume",
-        "?",
-      ];
-      const isTradingQuestion = tradingKeywords.some(kw => lower.includes(kw));
-      
-      if (hasBiddieMention || isTradingQuestion) {
-        const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
-        setTimeout(() => triggerBiddie(cleanMsg), 300);
-      }
+      const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
+      setTimeout(() => triggerBiddie(cleanMsg), 300);
     }
     setSending(false);
   };
