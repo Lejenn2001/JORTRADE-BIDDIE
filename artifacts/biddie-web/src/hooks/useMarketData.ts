@@ -576,7 +576,8 @@ export function useMarketData() {
         const data = await res.json();
         console.log('[JORTRADE] API data:', { count: data?.count, loading: data?.loading, signalCount: data?.signals?.length });
         if (data?.loading) {
-          console.log('[JORTRADE] Server warming up, will retry...');
+          console.log('[JORTRADE] Server warming up, will retry in 5s...');
+          setTimeout(() => fetchFlowAlerts(), 5000);
           return;
         }
         const replitSignals = data?.signals || [];

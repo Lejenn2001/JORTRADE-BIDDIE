@@ -994,6 +994,7 @@ async function runSignalsPipeline() {
   const now = getNowEastern();
   const t0 = Date.now();
   console.log("[signals] starting pipeline");
+  try {
 
   const allAlerts = await fetchFlowAlerts(500);
   console.log(`[signals] fetchFlowAlerts done: ${Date.now() - t0}ms, got ${allAlerts.length} alerts`);
@@ -1566,6 +1567,11 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signalsPipelineRunning = false;
 
   return responseData;
+  } catch (err) {
+    console.error("[signals] pipeline crashed:", err);
+    signalsPipelineRunning = false;
+    return signalsCache?.data || { signals: [], count: 0, timestamp: now };
+  }
 }
 
 router.get("/whale/signals", async (_req, res) => {
@@ -1580,20 +1586,18 @@ router.get("/whale/signals", async (_req, res) => {
     return res.json({ signals: [], count: 0, timestamp: getNowEastern(), loading: true });
   }
 
+  if (signalsCache) {
+    res.json(signalsCache.data);
+    runSignalsPipeline().catch(e => console.error("[signals] background refresh failed:", e));
+    return;
+  }
+
   try {
     const data = await runSignalsPipeline();
-    if (data) {
-      res.json(data);
-    } else {
-      res.json({ signals: [], count: 0, timestamp: getNowEastern() });
-    }
+    res.json(data || { signals: [], count: 0, timestamp: getNowEastern() });
   } catch (err: any) {
     console.error("[signals] pipeline error:", err);
-    signalsPipelineRunning = false;
-    if (signalsCache) {
-      return res.json(signalsCache.data);
-    }
-    res.status(500).json({ error: "Signal pipeline failed", signals: [], count: 0 });
+    res.json({ signals: [], count: 0, timestamp: getNowEastern() });
   }
 });
 
