@@ -567,8 +567,10 @@ export function useMarketData() {
 
   const fetchFlowAlerts = useCallback(async () => {
     try {
-      // Try Replit signals API first
-      const res = await fetch(REPLIT_SIGNALS_API);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      const res = await fetch(REPLIT_SIGNALS_API, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         const replitSignals = data?.signals || [];

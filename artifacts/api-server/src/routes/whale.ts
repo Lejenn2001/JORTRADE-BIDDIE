@@ -984,7 +984,22 @@ router.get("/whale/signal", async (_req, res) => {
   }
 });
 
+let signalsCache: { data: any; timestamp: number } | null = null;
+const SIGNALS_CACHE_TTL = 90_000; // 90 seconds — pipeline takes ~30s so cache for 90s
+let signalsPipelineRunning = false;
+
 router.get("/whale/signals", async (_req, res) => {
+  // Return cached result if fresh enough
+  if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) {
+    return res.json(signalsCache.data);
+  }
+
+  // If pipeline is already running from another request, wait for it
+  if (signalsPipelineRunning && signalsCache) {
+    return res.json(signalsCache.data);
+  }
+
+  signalsPipelineRunning = true;
   const now = getNowEastern();
   const t0 = Date.now();
   console.log("[signals] starting pipeline");
@@ -1555,7 +1570,11 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signals.sort((a, b) => b.confidence - a.confidence);
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals`);
 
-  res.json({ signals: signals.slice(0, 20), count: Math.min(signals.length, 20), timestamp: now });
+  const responseData = { signals: signals.slice(0, 20), count: Math.min(signals.length, 20), timestamp: now };
+  signalsCache = { data: responseData, timestamp: Date.now() };
+  signalsPipelineRunning = false;
+
+  res.json(responseData);
 });
 
 interface PriceHistory {
