@@ -930,18 +930,18 @@ router.get("/whale/signal", async (_req, res) => {
 router.get("/whale/signals", async (_req, res) => {
   const now = getNowEastern();
 
-  const allAlerts = await fetchFlowAlerts(200);
+  const allAlerts = await fetchFlowAlerts(500);
   const enriched = enrichAlerts(allAlerts);
 
   // Pre-filter: only alerts worth scoring
   const today = new Date().toISOString().split("T")[0];
   const candidates = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
-    if (a.expiry < today) return false;                      // skip expired
-    if (a.total_premium < 100_000) return false;             // min $100K premium
-    if (a.ask_aggression_pct < 40) return false;             // must be ask-leaning
+    if (a.expiry < today) return false;
+    if (a.total_premium < 25_000) return false;
+    if (a.ask_aggression_pct < 50) return false;
     return true;
-  }).slice(0, 30);
+  }).slice(0, 40);
 
   // Extract real-time prices from UW flow data
   const uwPricesMap: Record<string, number> = {};
@@ -952,7 +952,7 @@ router.get("/whale/signals", async (_req, res) => {
   }
 
   // Get unique tickers and fetch key levels in parallel
-  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
+  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 15);
   const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null)));
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
@@ -1033,8 +1033,14 @@ Each signal object must have exactly these fields:
 
 CATEGORY RULES:
 - "algorithm": Single-leg plays detected by price action + gamma analysis. Intraday entries. These are directional bets confirmed by technical levels.
-- "whale": Large institutional single-leg flow ($250K+ premium). Sweeps, blocks, floor trades. Swing positioning.
+- "whale": Large institutional single-leg flow ($100K+ premium). Sweeps, blocks, floor trades. Swing positioning. For smaller/mid-cap tickers, whale threshold is $50K+.
 - "spread": Multi-leg strategies — debit spreads and butterflies ONLY. Look for MULTIPLE flow alerts on the SAME ticker + SAME expiry at DIFFERENT strikes that suggest a defined-risk strategy. Also identify when flow data explicitly shows spread or multi-leg activity. Provide spread_details for these.
+
+TICKER DIVERSITY:
+- DO NOT only show SPY/QQQ/mega-caps. Include ALL tickers with qualifying flow — especially mid-cap and smaller names (e.g. AAL, SNDK, BAC, F, SOFI, COIN, HOOD, etc.)
+- Smaller/mid-cap names with high aggression and unusual vol/OI ratios are often the MOST profitable signals
+- Aim for a diverse mix: 2-3 index/mega-cap + 3-5 mid-cap/smaller names when the data supports it
+- A $30K premium sweep on a $20 stock can be MORE significant than a $200K flow on SPY
 
 SPREAD/BUTTERFLY DETECTION:
 - If you see call flow at 2+ different strikes on the same ticker/expiry, consider if it's a debit spread (buy lower, sell higher for calls)
