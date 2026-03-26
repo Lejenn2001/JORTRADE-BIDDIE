@@ -852,15 +852,18 @@ ${JSON.stringify(context, null, 2)}
     });
 
     const content = response.content[0].type === "text" ? response.content[0].text : "";
+    let posted = false;
     if (content && content.trim().length > 0) {
       const { error: insertError } = await supabase
         .from("chat_messages")
         .insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content: content.trim() } as any);
       if (insertError) {
         console.error("Failed to insert Biddie community response:", insertError.message);
+      } else {
+        posted = true;
       }
     }
-    res.json({ ok: true, posted: !!content });
+    res.json({ ok: true, posted, content: content?.trim() || "" });
   } catch (err: any) {
     console.error("Community chat error:", err.message);
     res.status(500).json({ error: err.message ?? "Claude API error" });

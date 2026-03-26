@@ -106,6 +106,18 @@ const DashboardCommunity = () => {
       if (!res.ok) {
         console.error("Biddie community chat error:", res.status);
       }
+      const data = await res.json();
+      if (data.content && !data.posted) {
+        const ephemeral: ChatMessage = {
+          id: `biddie-local-${Date.now()}`,
+          user_id: BIDDIE_USER_ID,
+          user_name: "Biddie AI",
+          content: data.content,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, ephemeral]);
+        scrollToBottom();
+      }
     } catch (e) {
       console.error("Biddie community chat error:", e);
     } finally {
