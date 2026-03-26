@@ -581,8 +581,12 @@ export function useMarketData() {
           return;
         }
         const replitSignals = data?.signals || [];
+        console.log('[JORTRADE] Raw signals from API:', replitSignals.length, replitSignals.map((s: any) => s.ticker).join(','));
         if (replitSignals.length > 0) {
-          const mapped: MarketSignal[] = replitSignals.map((s: any, i: number) => {
+          const mapped: MarketSignal[] = [];
+          for (let i = 0; i < replitSignals.length; i++) {
+           try {
+            const s = replitSignals[i];
             const isBullish = s.direction === 'bullish';
             const tags = [...(s.tags || [])];
             if (s.has_sweep && !tags.includes('Sweep')) tags.push('Sweep');
@@ -697,7 +701,7 @@ export function useMarketData() {
               category = isWhalePlay && !isPriceConfirmed ? 'whale' : 'algorithm';
             }
 
-            return {
+            const signal = {
               id: `replit-${s.ticker}-${i}`,
               ticker: s.ticker,
               type: isBullish ? 'bullish' as const : 'bearish' as const,
@@ -742,7 +746,31 @@ export function useMarketData() {
               category,
               spreadDetails: s.spread_details || null,
             } as MarketSignal;
-          });
+            mapped.push(signal);
+           } catch (mapErr) {
+            const s = replitSignals[i];
+            console.error(`[JORTRADE] Signal mapping error for ${s?.ticker}:`, mapErr);
+            mapped.push({
+              id: `replit-${s?.ticker || 'unknown'}-${i}`,
+              ticker: s?.ticker || 'Unknown',
+              type: s?.direction === 'bullish' ? 'bullish' as const : 'bearish' as const,
+              confidence: s?.confidence || 5,
+              convictionScore: (s?.confidence || 5) * 10,
+              convictionLabel: 'Moderate Conviction',
+              description: s?.reason || `${s?.option_type} flow on ${s?.ticker}`,
+              timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+              tags: s?.tags || [],
+              strike: s?.strike ? `$${s.strike}` : undefined,
+              expiry: s?.expiry,
+              premium: s?.premium ? `$${s.premium.toLocaleString?.() || s.premium}` : undefined,
+              putCall: s?.option_type as 'call' | 'put',
+              suggestedTrade: s?.trade || s?.recommended_action,
+              source: 'live',
+              category: s?.category || 'algorithm',
+              spreadDetails: s?.spread_details || null,
+            } as MarketSignal);
+           }
+          }
 
           mergeIntoHistory(mapped);
 
