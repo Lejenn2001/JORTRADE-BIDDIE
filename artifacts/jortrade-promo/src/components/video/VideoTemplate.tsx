@@ -22,11 +22,14 @@ export default function VideoTemplate() {
   });
 
   return (
+    <div className="w-screen h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-dark)' }}>
     <div
-      className="w-screen h-screen overflow-hidden relative"
+      className="overflow-hidden relative"
       style={{ 
         backgroundColor: 'var(--color-bg-dark)',
-        aspectRatio: '9 / 16'
+        aspectRatio: '9 / 16',
+        height: '100vh',
+        maxWidth: '100vw',
       }}
     >
       <AnimatePresence mode="wait">
@@ -36,6 +39,7 @@ export default function VideoTemplate() {
         {currentScene === 3 && <Scene4 key="scene4" />}
         {currentScene === 4 && <Scene5 key="scene5" />}
       </AnimatePresence>
+    </div>
     </div>
   );
 }
