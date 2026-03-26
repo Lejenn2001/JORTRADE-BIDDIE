@@ -168,7 +168,9 @@ const DashboardSignals = () => {
       signalMap.set(key, s);
     }
 
-    return Array.from(signalMap.values());
+    const all = Array.from(signalMap.values());
+    const hasLive = all.some(s => s.source === 'live');
+    return hasLive ? all.filter(s => s.source !== 'example') : all;
   }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;
@@ -188,8 +190,8 @@ const DashboardSignals = () => {
     }
 
     list.sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const dateA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const dateB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
       return dateB - dateA;
     });
 

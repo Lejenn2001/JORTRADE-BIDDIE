@@ -163,10 +163,13 @@ const Dashboard = () => {
       });
     }
 
-    return Array.from(mergedSignals.values())
+    const all = Array.from(mergedSignals.values());
+    const hasLive = all.some(s => s.source === 'live');
+    const filtered = hasLive ? all.filter(s => s.source !== 'example') : all;
+    return filtered
       .sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : Date.now();
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : Date.now();
+        const timeA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         if (timeB !== timeA) return timeB - timeA;
         return getSignalScore(b) - getSignalScore(a);
       });

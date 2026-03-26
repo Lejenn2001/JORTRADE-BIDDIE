@@ -40,6 +40,7 @@ export interface MarketSignal {
   keyLevel?: string;
   targetZone?: string;
   createdAt?: string;
+  detectedAtMs?: number;
   timeframe?: SignalTimeframe;
   source?: "live" | "example";
   priceConfirmed?: boolean;
@@ -729,6 +730,7 @@ export function useMarketData() {
               targetZone: s.target,
               source: "live",
               timeframe,
+              detectedAtMs: Date.now(),
               priceConfirmed: isPriceConfirmed,
               pricePattern: s.price_pattern || null,
               gammaZone: gammaZone as 'positive' | 'negative' | 'neutral',
@@ -759,6 +761,7 @@ export function useMarketData() {
               putCall: s?.option_type as 'call' | 'put',
               suggestedTrade: s?.trade || s?.recommended_action,
               source: 'live',
+              detectedAtMs: Date.now(),
               category: s?.category || 'algorithm',
               spreadDetails: s?.spread_details || null,
             } as MarketSignal);
