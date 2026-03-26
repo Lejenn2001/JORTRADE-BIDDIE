@@ -13,6 +13,7 @@ import {
   X,
   Users,
   PieChart,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jortradeLogo from "@/assets/jortrade-logo.png";
@@ -30,7 +31,11 @@ const navItems = [
 const DashboardSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin } = useAuth();
+
+  const allNavItems = isAdmin
+    ? [...navItems, { icon: Shield, label: "Admin", path: "/dashboard/admin" }]
+    : navItems;
   const [open, setOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -73,7 +78,7 @@ const DashboardSidebar = () => {
         </Link>
 
         <nav className="flex-1 space-y-1">
-          {navItems.map((item) => {
+          {allNavItems.map((item) => {
             const isActive = location.pathname === item.path ||
               (item.path === "/dashboard" && location.pathname === "/dashboard");
             return (

@@ -17,15 +17,21 @@ const plans = [
     yearlyPrice: "$499",
     yearlySavings: "Save ~$90",
     badge: null,
-    desc: "Perfect for new traders ready to gain an edge with AI-powered market intelligence.",
+    desc: "Get the signals. See what the algorithms and whales are trading — delivered straight to your dashboard.",
     icon: Star,
     features: [
-      "30 AI searches per day",
-      "Full AI dashboard access",
-      "Real-time trade signals",
-      "AI confidence scores",
+      "Real-time Algorithm & Whale signals",
+      "Spreads & Butterfly alerts",
+      "Conviction scoring on every signal",
+      "DAY TRADE / SWING TRADE labels",
+      "ACT NOW alerts for urgent setups",
       "Community access",
       "5-day free trial",
+    ],
+    notIncluded: [
+      "Biddie AI chat",
+      "AI flow analysis",
+      "Performance analytics",
     ],
     highlight: false,
   },
@@ -36,16 +42,21 @@ const plans = [
     yearlyPrice: "$899",
     yearlySavings: "Save ~$169",
     badge: "Most Popular",
-    desc: "Built for serious traders who need deeper flow analysis and more daily insights.",
+    desc: "Ask Biddie anything. Get AI-powered analysis on any ticker, flow, or setup — plus all the signals.",
     icon: Zap,
     features: [
-      "60 AI searches per day",
-      "Full AI dashboard access",
-      "Real-time trade signals",
-      "AI confidence scores",
-      "Priority signal delivery",
+      "Everything in Starter",
+      "Biddie AI chat — 25 questions/day",
+      "AI-powered flow analysis",
+      "\"What should I trade today?\" insights",
+      "Real-time signal delivery",
+      "Gamma zone analysis",
       "Community access",
       "5-day free trial",
+    ],
+    notIncluded: [
+      "Unlimited AI questions",
+      "Performance analytics",
     ],
     highlight: true,
   },
@@ -55,19 +66,21 @@ const plans = [
     monthlyPrice: "$129",
     yearlyPrice: "$1,199",
     yearlySavings: "Save ~$349",
-    badge: "Power User",
-    desc: "Maximum firepower for heavy flow traders and group leaders who demand the best.",
+    badge: "Full Access",
+    desc: "Unlimited Biddie AI. Full dashboard. Performance tracking. Everything — no limits, no restrictions.",
     icon: Crown,
     features: [
-      "100 AI searches per day",
-      "Full AI dashboard access",
-      "Real-time trade signals",
-      "AI confidence scores",
+      "Everything in Active",
+      "Unlimited Biddie AI questions",
+      "Full performance analytics dashboard",
+      "Signal accuracy tracking & history",
+      "Advanced flow pattern detection",
       "Priority signal delivery",
-      "Advanced flow analytics",
+      "Custom alert preferences",
       "Community access",
       "5-day free trial",
     ],
+    notIncluded: [],
     highlight: false,
   },
 ];
@@ -96,7 +109,6 @@ const Signup = () => {
         emailRedirectTo: window.location.origin,
       },
     });
-    // Save selected plan and email to profile
     if (!error && signUpData?.user?.id) {
       await supabase.from("profiles").update({
         selected_plan: selectedPlan,
@@ -132,14 +144,13 @@ const Signup = () => {
         >
           <img src={jortradeLogo} alt="JORTRADE" className="h-24 w-auto mx-auto mb-6" />
           <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4">
-            Choose Your Plan
+            Choose Your Trading Edge
           </h1>
           <p className="text-muted-foreground text-base max-w-lg mx-auto">
-            Start with a 5-day free trial. No credit card required to explore.
+            Start with a 5-day free trial. Cancel anytime — no questions asked.
           </p>
         </motion.div>
 
-        {/* Billing toggle */}
         <div className="flex items-center justify-center gap-3 mb-10">
           <button
             onClick={() => setBillingCycle("monthly")}
@@ -194,6 +205,12 @@ const Signup = () => {
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                    {f}
+                  </li>
+                ))}
+                {plan.notIncluded.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground/40 line-through">
+                    <span className="h-3.5 w-3.5 shrink-0 text-center text-[10px]">—</span>
                     {f}
                   </li>
                 ))}
@@ -283,7 +300,6 @@ const Signup = () => {
           </div>
         </motion.div>
 
-        {/* Affiliate Link Button */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
