@@ -27,10 +27,6 @@ const plans = [
       "DAY TRADE / SWING TRADE labels",
       "ACT NOW urgency alerts",
     ],
-    notIncluded: [
-      "Live Biddie AI access",
-      "JORTRADE chat room",
-    ],
     highlight: false,
   },
   {
@@ -53,9 +49,6 @@ const plans = [
       "JORTRADE live chat room",
       "5-day free trial",
     ],
-    notIncluded: [
-      "Performance analytics",
-    ],
     highlight: true,
   },
   {
@@ -67,7 +60,7 @@ const plans = [
     badge: "Full Access",
     desc: "Advanced intelligence tools for traders focused on consistency and edge.",
     icon: Crown,
-    tagline: null,
+    tagline: "Built for serious traders optimizing performance.",
     features: [
       "Everything in Active",
       "Live Biddie AI, 50 questions/day",
@@ -77,7 +70,6 @@ const plans = [
       "Priority intelligence response",
       "Custom alert configuration",
     ],
-    notIncluded: [],
     highlight: false,
   },
 ];
@@ -202,12 +194,6 @@ const Signup = () => {
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                    {f}
-                  </li>
-                ))}
-                {plan.notIncluded.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground/40 line-through">
-                    <span className="h-3.5 w-3.5 shrink-0 text-center text-[10px]">—</span>
                     {f}
                   </li>
                 ))}

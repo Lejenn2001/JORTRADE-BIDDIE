@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuestionLimit } from "@/hooks/useQuestionLimit";
@@ -120,37 +120,6 @@ const AIChatPanel = () => {
     sendMessage(input);
   };
 
-  if (!hasAccess) {
-    return (
-      <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
-        <div className="flex items-center justify-between p-4 border-b border-border/40">
-          <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-sm text-foreground">Biddie AI</span>
-          </div>
-          <span className="text-xs bg-muted/50 text-muted-foreground px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <Lock className="h-3 w-3" />
-            Locked
-          </span>
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mb-4 opacity-40 grayscale" />
-          <h3 className="text-foreground font-semibold text-sm mb-2">Upgrade to chat with Biddie</h3>
-          <p className="text-xs text-muted-foreground mb-4 max-w-[220px]">
-            Signal Scout gives you alerts. Active Trader lets you talk to Biddie live and plan your trades.
-          </p>
-          <Link
-            to="/signup"
-            className="inline-flex items-center gap-1.5 text-xs font-medium bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30 transition-colors"
-          >
-            Upgrade Plan
-            <ArrowUpRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b border-border/40">
@@ -241,9 +210,9 @@ const AIChatPanel = () => {
         <div className="px-4 pb-2">
           <div className="text-center py-3 bg-muted/30 rounded-lg border border-border/40">
             <p className="text-xs text-muted-foreground mb-1">Daily limit reached ({limit} questions)</p>
-            {plan === "active" && (
+            {plan !== "pro" && (
               <Link to="/signup" className="text-[10px] text-primary hover:underline inline-flex items-center gap-1">
-                Upgrade to Pro for 50/day <ArrowUpRight className="h-2.5 w-2.5" />
+                Upgrade for more daily questions <ArrowUpRight className="h-2.5 w-2.5" />
               </Link>
             )}
             <p className="text-[10px] text-muted-foreground/60 mt-1">Resets at midnight</p>
