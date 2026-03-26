@@ -85,10 +85,14 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
                   <span className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">
                     Price Action Confirmed
                   </span>
-                  <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
-                  <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">
-                    ACT NOW
-                  </span>
+                  {signal.gammaZone && signal.gammaZone !== 'neutral' && (
+                    <>
+                      <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+                      <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">
+                        ACT NOW
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -278,7 +282,11 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
 
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5">
-                  {signal.tags.map((tag) => {
+                  {signal.tags.filter((tag) => {
+                    const upper = tag.toUpperCase();
+                    if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
+                    return true;
+                  }).map((tag) => {
                     const tagUpper = tag.toUpperCase();
                     const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
                     const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');

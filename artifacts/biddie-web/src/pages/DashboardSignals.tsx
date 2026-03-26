@@ -72,8 +72,7 @@ function dbRecordToSignal(record: any): MarketSignal {
 
   const tags: string[] = [];
   if (record.put_call) tags.push(record.put_call === 'call' ? 'Call Flow' : 'Put Flow');
-  if (convictionScore >= 85) tags.push('🔥 ACT NOW');
-  else if (convictionScore >= 70) tags.push('⚡ HIGH CONVICTION');
+  if (convictionScore >= 70) tags.push('⚡ HIGH CONVICTION');
 
   const createdAt = record.created_at || '';
   const timestamp = createdAt ? formatTimestamp(createdAt) : 'Today';
@@ -449,8 +448,12 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
           <span className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">Price Action Confirmed</span>
-          <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
-          <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">ACT NOW</span>
+          {signal.gammaZone && signal.gammaZone !== 'neutral' && (
+            <>
+              <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
+              <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">ACT NOW</span>
+            </>
+          )}
         </div>
       )}
 
@@ -613,7 +616,11 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          {signal.tags.map((tag) => {
+          {signal.tags.filter((tag) => {
+            const upper = tag.toUpperCase();
+            if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
+            return true;
+          }).map((tag) => {
             const tagUpper = tag.toUpperCase();
             const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
             const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
