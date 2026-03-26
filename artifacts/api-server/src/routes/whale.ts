@@ -52,13 +52,46 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     const dailyTs = dailyResult?.timestamp ?? [];
     const dailyLen = dailyTs.length;
 
-    const prevClose  = dailyQuote?.close?.[dailyLen - 2] ?? null;
-    const prevHigh   = dailyQuote?.high?.[dailyLen - 2] ?? null;
-    const prevLow    = dailyQuote?.low?.[dailyLen - 2] ?? null;
-    const prevOpen   = dailyQuote?.open?.[dailyLen - 2] ?? null;
-    const todayOpen  = dailyQuote?.open?.[dailyLen - 1] ?? null;
-    const todayHigh  = dailyQuote?.high?.[dailyLen - 1] ?? null;
-    const todayLow   = dailyQuote?.low?.[dailyLen - 1] ?? null;
+    // Find the last completed day (has a close) walking backward from the end
+    let prevIdx = -1;
+    let todayIdx = dailyLen - 1;
+    for (let i = dailyLen - 1; i >= 0; i--) {
+      if (dailyQuote?.close?.[i] != null) {
+        if (prevIdx === -1) {
+          // If the very last bar has a close, it could be today's final or prior day
+          // Check if there's another bar after it (meaning this is prior day)
+          if (i < dailyLen - 1) {
+            prevIdx = i;
+            todayIdx = i + 1;
+            break;
+          }
+          // Last bar has close — check if the one before also has close (yesterday)
+          if (i > 0 && dailyQuote?.close?.[i - 1] != null) {
+            prevIdx = i - 1;
+            todayIdx = i;
+            break;
+          }
+          prevIdx = i;
+          todayIdx = i;
+          break;
+        }
+      } else {
+        // This bar has no close — it's today (market open). Prior day is one before.
+        if (i > 0 && dailyQuote?.close?.[i - 1] != null) {
+          prevIdx = i - 1;
+          todayIdx = i;
+          break;
+        }
+      }
+    }
+
+    const prevClose  = prevIdx >= 0 ? (dailyQuote?.close?.[prevIdx] ?? null) : null;
+    const prevHigh   = prevIdx >= 0 ? (dailyQuote?.high?.[prevIdx] ?? null) : null;
+    const prevLow    = prevIdx >= 0 ? (dailyQuote?.low?.[prevIdx] ?? null) : null;
+    const prevOpen   = prevIdx >= 0 ? (dailyQuote?.open?.[prevIdx] ?? null) : null;
+    const todayOpen  = dailyQuote?.open?.[todayIdx] ?? null;
+    const todayHigh  = dailyQuote?.high?.[todayIdx] ?? null;
+    const todayLow   = dailyQuote?.low?.[todayIdx] ?? null;
 
     // Fetch intraday 5-min bars for VWAP calculation
     const intraday = await axios.get(`${YF}/${ticker}`, {
