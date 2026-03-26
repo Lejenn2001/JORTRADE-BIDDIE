@@ -98,27 +98,16 @@ const DashboardCommunity = () => {
     setBiddieThinking(true);
     scrollToBottom();
     try {
-      const chatInstruction = `[COMMUNITY CHAT MODE] Keep your response SHORT — 2-3 sentences max. Only give a full detailed breakdown if you see a high-confidence alert (8+/10). For casual greetings, just be friendly and brief. For trading questions, give the #1 best play only with ticker, direction, and confidence. No long lists.\n\nUser says: ${userMessage}`;
-      const res = await fetch('/api/whale/chat', {
+      const res = await fetch('/api/whale/community-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: chatInstruction }),
+        body: JSON.stringify({ message: userMessage }),
       });
       if (!res.ok) {
-        console.error("Biddie API error:", res.status);
-        return;
-      }
-      const data = await res.json();
-      const reply = data.analysis || data.reply || data.response || data.message;
-      if (reply && typeof reply === "string" && reply.trim()) {
-        await supabase.from("chat_messages").insert({
-          user_id: BIDDIE_USER_ID,
-          user_name: "Biddie AI",
-          content: reply.trim(),
-        } as any);
+        console.error("Biddie community chat error:", res.status);
       }
     } catch (e) {
-      console.error("Biddie API error:", e);
+      console.error("Biddie community chat error:", e);
     } finally {
       setBiddieThinking(false);
     }

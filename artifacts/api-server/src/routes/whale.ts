@@ -782,6 +782,91 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
   }
 });
 
+// ── Community Chat Endpoint ──────────────────────────────────────────────────────
+
+router.post("/whale/community-chat", async (req, res) => {
+  const { message } = req.body as { message?: string };
+  if (!message?.trim()) {
+    res.status(400).json({ error: "message is required" });
+    return;
+  }
+
+  const now = getNowEastern();
+  const needs = detectNeeds(message);
+  const tickersToFetch = needs.tickers.slice(0, 4);
+  const baselineTickers = ["SPY", "QQQ"];
+  const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
+
+  const [flowAlerts, sectorData] = await Promise.all([
+    fetchFlowAlerts(100),
+    needs.market ? fetchSectorEtfs() : Promise.resolve([]),
+  ]);
+
+  const enriched = enrichAlerts(flowAlerts);
+
+  const uwPrices: Record<string, number> = {};
+  for (const alert of enriched) {
+    const t = (alert.ticker ?? "").toUpperCase();
+    const p = parseFloat(alert.underlying_price);
+    if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+  }
+
+  const keyLevelsResults = await Promise.all(
+    allLevelTickers.map((t) => fetchKeyLevels(t, uwPrices[t.toUpperCase()] ?? null))
+  );
+  const keyLevels: Record<string, any> = {};
+  allLevelTickers.forEach((t, i) => { if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i]; });
+
+  const context: Record<string, any> = {
+    fetched_at: now,
+    key_levels: keyLevels,
+    all_flow_alerts: enriched.slice(0, 40),
+  };
+  if (tickersToFetch.length > 0) {
+    const tickerFlow: Record<string, any[]> = {};
+    for (const ticker of tickersToFetch) {
+      tickerFlow[ticker] = enriched.filter((a) => (a.ticker ?? "").toUpperCase() === ticker.toUpperCase());
+    }
+    context.ticker_specific_flow = tickerFlow;
+  }
+  if (sectorData.length > 0) context.sector_etfs = sectorData;
+
+  const chatInstruction = `[COMMUNITY CHAT MODE] Keep your response SHORT — 2-3 sentences max. Only give a full detailed breakdown if you see a high-confidence alert (8+/10). For casual greetings, just be friendly and brief. For trading questions, give the #1 best play only with ticker, direction, and confidence. No long lists.
+
+User says: ${message}
+
+--- CURRENT DATE & TRADING CALENDAR ---
+${getEasternDateContext()}
+
+--- LIVE MARKET DATA (fetched ${now}) ---
+\`\`\`json
+${JSON.stringify(context, null, 2)}
+\`\`\``;
+
+  try {
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 500,
+      system: BIDDIE_SYSTEM,
+      messages: [{ role: "user", content: chatInstruction }],
+    });
+
+    const content = response.content[0].type === "text" ? response.content[0].text : "";
+    if (content && content.trim().length > 0) {
+      const { error: insertError } = await supabase
+        .from("chat_messages")
+        .insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content: content.trim() } as any);
+      if (insertError) {
+        console.error("Failed to insert Biddie community response:", insertError.message);
+      }
+    }
+    res.json({ ok: true, posted: !!content });
+  } catch (err: any) {
+    console.error("Community chat error:", err.message);
+    res.status(500).json({ error: err.message ?? "Claude API error" });
+  }
+});
+
 // ── Quick Signal Check ──────────────────────────────────────────────────────────
 
 router.get("/whale/signal", async (_req, res) => {
