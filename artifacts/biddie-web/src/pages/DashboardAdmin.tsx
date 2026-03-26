@@ -19,7 +19,7 @@ interface UserProfile {
 const planConfig = {
   starter: { label: "Signal Scout", icon: Star, color: "text-blue-400" },
   active: { label: "Active Trader", icon: Zap, color: "text-amber-400" },
-  pro: { label: "Market Titan", icon: Crown, color: "text-purple-400" },
+  pro: { label: "Pro Trader", icon: Crown, color: "text-purple-400" },
 };
 
 const DashboardAdmin = () => {

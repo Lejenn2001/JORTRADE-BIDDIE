@@ -60,7 +60,7 @@ const plans = [
   },
   {
     id: "pro",
-    name: "Market Titan",
+    name: "Pro Trader",
     monthlyPrice: "$129",
     yearlyPrice: "$1,199",
     yearlySavings: "Save ~$349",
@@ -69,7 +69,7 @@ const plans = [
     icon: Crown,
     tagline: null,
     features: [
-      "Everything in Active Trader",
+      "Everything in Active",
       "Live Biddie AI, 50 questions/day",
       "Performance analytics dashboard",
       "Signal accuracy tracking",
