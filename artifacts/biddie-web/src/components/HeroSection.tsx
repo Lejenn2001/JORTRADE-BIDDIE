@@ -40,7 +40,7 @@ const HeroSection = () => {
 
         {/* Desktop: full nav */}
         <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
-          <span className="hover:text-foreground cursor-pointer transition-colors">Features</span>
+          <a href="#features" className="hover:text-foreground cursor-pointer transition-colors">Features</a>
           <Link to="/dashboard" className="hover:text-foreground cursor-pointer transition-colors">Dashboard</Link>
           <Link to="/signup" className="hover:text-foreground cursor-pointer transition-colors">Pricing</Link>
           <Link to="/contact" className="hover:text-foreground cursor-pointer transition-colors">Contact</Link>
