@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Shield, Search, UserCog, Crown, Zap, Star } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -14,6 +14,7 @@ interface UserProfile {
   full_name: string;
   selected_plan: string | null;
   created_at: string;
+  is_admin?: boolean;
 }
 
 const planConfig = {
@@ -23,11 +24,12 @@ const planConfig = {
 };
 
 const DashboardAdmin = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -36,15 +38,23 @@ const DashboardAdmin = () => {
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from("profiles")
       .select("id, email, full_name, selected_plan, created_at")
       .order("created_at", { ascending: false });
     if (error) {
       toast.error("Failed to load users");
-    } else {
-      setUsers(data || []);
+      setLoading(false);
+      return;
     }
+
+    const { data: adminRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const adminIds = new Set((adminRoles || []).map(r => r.user_id));
+
+    setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id) })));
     setLoading(false);
   };
 
@@ -60,6 +70,56 @@ const DashboardAdmin = () => {
       toast.success(`Plan updated to ${planConfig[plan as keyof typeof planConfig]?.label || plan}`);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, selected_plan: plan } : u));
     }
+    setUpdating(null);
+  };
+
+  const toggleAdmin = async (userId: string, currentlyAdmin: boolean) => {
+    setUpdating(userId);
+    if (currentlyAdmin) {
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", "admin");
+      if (error) {
+        toast.error("Failed to remove admin role");
+      } else {
+        toast.success("Admin role removed");
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: false } : u));
+      }
+    } else {
+      const { error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: userId, role: "admin" });
+      if (error) {
+        toast.error("Failed to grant admin role");
+      } else {
+        toast.success("Admin role granted");
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: true } : u));
+      }
+    }
+    setUpdating(null);
+  };
+
+  const deleteUser = async (userId: string) => {
+    setUpdating(userId);
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId);
+    if (roleError) console.error("Error deleting roles:", roleError);
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+    if (profileError) {
+      toast.error("Failed to delete user profile");
+    } else {
+      toast.success("User deleted");
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    }
+    setConfirmDelete(null);
     setUpdating(null);
   };
 
@@ -116,37 +176,44 @@ const DashboardAdmin = () => {
             <div className="text-center py-12 text-muted-foreground">Loading users...</div>
           ) : (
             <div className="space-y-2">
-              {filteredUsers.map((user) => {
-                const plan = user.selected_plan as keyof typeof planConfig;
+              {filteredUsers.map((u) => {
+                const plan = u.selected_plan as keyof typeof planConfig;
                 const config = planConfig[plan] || null;
                 const PlanIcon = config?.icon || Star;
+                const isSelf = u.id === user?.id;
 
                 return (
-                  <div key={user.id} className="glass-panel rounded-xl p-4 border-border/30 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div key={u.id} className="glass-panel rounded-xl p-4 border-border/30 flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground text-sm truncate">{user.full_name || "No name"}</p>
+                        <p className="font-semibold text-foreground text-sm truncate">{u.full_name || "No name"}</p>
                         {config && (
                           <span className={`flex items-center gap-1 text-[10px] font-bold ${config.color}`}>
                             <PlanIcon className="h-3 w-3" />
                             {config.label}
                           </span>
                         )}
+                        {u.is_admin && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
+                            <Shield className="h-3 w-3" />
+                            Admin
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{user.email || "No email"}</p>
-                      <p className="text-[10px] text-muted-foreground/60">Joined {new Date(user.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email || "No email"}</p>
+                      <p className="text-[10px] text-muted-foreground/60">Joined {new Date(u.created_at).toLocaleDateString()}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
                       {(["starter", "active", "pro"] as const).map((p) => {
                         const pc = planConfig[p];
-                        const isActive = user.selected_plan === p;
+                        const isActive = u.selected_plan === p;
                         return (
                           <Button
                             key={p}
                             size="sm"
                             variant={isActive ? "default" : "outline"}
-                            disabled={isActive || updating === user.id}
-                            onClick={() => updateUserPlan(user.id, p)}
+                            disabled={isActive || updating === u.id}
+                            onClick={() => updateUserPlan(u.id, p)}
                             className={`text-xs h-8 px-3 ${isActive ? "bg-primary" : "border-border/50"}`}
                           >
                             <pc.icon className="h-3 w-3 mr-1" />
@@ -154,6 +221,51 @@ const DashboardAdmin = () => {
                           </Button>
                         );
                       })}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updating === u.id || isSelf}
+                        onClick={() => toggleAdmin(u.id, !!u.is_admin)}
+                        className={`text-xs h-8 px-3 border-border/50 ${u.is_admin ? "text-emerald-400 hover:text-red-400" : "text-muted-foreground hover:text-emerald-400"}`}
+                        title={isSelf ? "Cannot change own admin status" : u.is_admin ? "Remove admin" : "Make admin"}
+                      >
+                        {u.is_admin ? <ShieldOff className="h-3 w-3 mr-1" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+                        {u.is_admin ? "Revoke" : "Admin"}
+                      </Button>
+
+                      {confirmDelete === u.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={updating === u.id}
+                            onClick={() => deleteUser(u.id)}
+                            className="text-xs h-8 px-3"
+                          >
+                            Confirm
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmDelete(null)}
+                            className="text-xs h-8 px-3 border-border/50"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updating === u.id || isSelf}
+                          onClick={() => setConfirmDelete(u.id)}
+                          className="text-xs h-8 px-3 border-border/50 text-muted-foreground hover:text-destructive"
+                          title={isSelf ? "Cannot delete yourself" : "Delete user"}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
