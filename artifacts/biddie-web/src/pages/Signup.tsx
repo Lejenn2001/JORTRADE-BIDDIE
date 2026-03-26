@@ -50,7 +50,7 @@ const plans = [
       "Options flow breakdown",
       "AI trade recommendations",
       "Gamma zone & key levels",
-      "Institutional flow reading",
+      "Real-time market analysis",
       "JORTRADE community",
       "5-day free trial",
     ],
