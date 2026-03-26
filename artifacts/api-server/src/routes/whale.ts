@@ -294,7 +294,7 @@ function detectPriceActionConfirmation(
 function generateTradeRecommendation(signal: any, keyLevelData: any, confirmation: PriceConfirmation) {
   const strike = signal.strike;
   const ticker = signal.ticker;
-  const optionType = signal.option_type || (signal.direction === "bullish" ? "call" : "put");
+  const optionType = signal.type || signal.option_type || (signal.direction === "bullish" ? "call" : "put");
   const currentPrice = keyLevelData?.current_price;
   const vwap = keyLevelData?.vwap;
   const r1 = keyLevelData?.pivot_points?.r1;
