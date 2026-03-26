@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -123,6 +123,26 @@ const DashboardAdmin = () => {
     setUpdating(null);
   };
 
+  const exportCSV = () => {
+    const headers = ["Name", "Email", "Plan", "Admin", "Joined"];
+    const rows = users.map(u => [
+      u.full_name || "No name",
+      u.email || "No email",
+      planConfig[u.selected_plan as keyof typeof planConfig]?.label || "None",
+      u.is_admin ? "Yes" : "No",
+      new Date(u.created_at).toLocaleDateString(),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jortrade-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Users exported");
+  };
+
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase();
     return !q || u.email?.toLowerCase().includes(q) || u.full_name?.toLowerCase().includes(q);
@@ -160,6 +180,16 @@ const DashboardAdmin = () => {
               </h1>
               <p className="text-muted-foreground text-sm mt-1">{users.length} registered users</p>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportCSV}
+              disabled={users.length === 0}
+              className="text-xs border-border/50 gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
           </div>
 
           <div className="relative max-w-md">
