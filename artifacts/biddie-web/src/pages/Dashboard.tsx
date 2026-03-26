@@ -173,22 +173,36 @@ const Dashboard = () => {
       });
   }, [persistedSignals, signals]);
 
-  const algorithmPlays = useMemo(() => {
-    const plays = allMergedSignals
-      .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
-      .filter(s => getSignalScore(s) >= 70);
-
-    plays.sort((a, b) => {
+  const sortSignals = (list: MarketSignal[]) => {
+    return [...list].sort((a, b) => {
       const aIs0DTE = a.timeframe === 'buy_now' || a.timeframe === 'short_term' ? 0 : 1;
       const bIs0DTE = b.timeframe === 'buy_now' || b.timeframe === 'short_term' ? 0 : 1;
       if (aIs0DTE !== bIs0DTE) return aIs0DTE - bIs0DTE;
       return getSignalScore(b) - getSignalScore(a);
     });
+  };
 
-    return plays.slice(0, 5);
-  }, [allMergedSignals]);
+  const algorithmPlays = useMemo(() =>
+    sortSignals(
+      allMergedSignals
+        .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
+        .filter(s => getSignalScore(s) >= 70)
+    ).slice(0, 5),
+    [allMergedSignals]
+  );
 
-  const dashboardFeatured = useMemo(() => algorithmPlays, [algorithmPlays]);
+  const whalePlays = useMemo(() =>
+    sortSignals(
+      allMergedSignals
+        .filter(s => s.category === 'whale')
+    ).slice(0, 5),
+    [allMergedSignals]
+  );
+
+  const dashboardFeatured = useMemo(() => [
+    ...algorithmPlays.slice(0, 3),
+    ...whalePlays.slice(0, 3),
+  ], [algorithmPlays, whalePlays]);
 
   useEffect(() => {
     if (dashboardFeatured.length === 0) return;
@@ -244,8 +258,17 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="Top 5 signals — 0DTE day trades first, then swing trades"
+                subtitle="Price action confirmed + gamma analysis — intraday entries"
                 icon="algorithm"
+                limit={5}
+              />
+              <SignalFeedPanel
+                signals={whalePlays}
+                loading={signalFeedLoading}
+                title="Whale Plays"
+                subtitle="Institutional flow — swing positioning"
+                icon="whale"
+                limit={5}
               />
               <PortfolioPanel whaleAlerts={whaleAlerts} loading={loading} limit={6} />
             </div>
