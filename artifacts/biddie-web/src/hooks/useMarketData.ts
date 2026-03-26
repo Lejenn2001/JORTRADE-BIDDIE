@@ -774,41 +774,6 @@ export function useMarketData() {
           setSignals(mapped);
           saveCachedSignals(mapped);
 
-          // Log Replit signals to signal_outcomes for accuracy tracking
-          try {
-            const signalsToLog = replitSignals.map((s: any) => ({
-              ticker: s.ticker,
-              signal_type: s.direction === 'bullish' ? 'bullish' : 'bearish',
-              put_call: s.option_type || null,
-              confidence: s.confidence,
-              strike: s.strike ? `$${s.strike}` : null,
-              expiry: s.expiry || null,
-              premium: s.premium ? `$${formatPremium(s.premium)}` : null,
-              target_zone: s.target || null,
-              description: s.reason || null,
-              outcome: 'pending',
-              signal_source: 'replit',
-            }));
-
-            // Check for existing signals to avoid duplicates
-            const tickers = [...new Set(signalsToLog.map((s: any) => s.ticker))];
-            const { data: existing } = await supabase
-              .from("signal_outcomes" as any)
-              .select("ticker,strike,expiry,signal_source")
-              .in("ticker", tickers)
-              .in("signal_source", ["replit", "dashboard"])
-              .eq("outcome", "pending");
-
-            const existingKeys = new Set((existing || []).map((e: any) => `${e.ticker}|${e.strike}|${e.expiry}`));
-            const fresh = signalsToLog.filter((s: any) => !existingKeys.has(`${s.ticker}|${s.strike}|${s.expiry}`));
-
-            if (fresh.length > 0) {
-              await supabase.from("signal_outcomes" as any).insert(fresh);
-            }
-          } catch (logErr) {
-            console.warn('Failed to log Replit signals for tracking:', logErr);
-          }
-
           return;
         }
       }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Target, Flame, RefreshCw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface Stats {
   total: number;
@@ -19,12 +18,9 @@ const PerformanceSnapshot = () => {
   const fetchStats = async () => {
     try {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase
-        .from("signal_outcomes")
-        .select("outcome, resolved_at")
-        .eq("signal_source", "dashboard")
-        .gte("created_at", sevenDaysAgo)
-        .order("created_at", { ascending: false });
+      const resp = await fetch('/api/whale/signals/history?limit=100');
+      const result = resp.ok ? await resp.json() : null;
+      const data = result?.signals;
 
       if (data) {
         const resolved = data.filter(d => d.outcome !== "pending" && d.outcome !== "expired");

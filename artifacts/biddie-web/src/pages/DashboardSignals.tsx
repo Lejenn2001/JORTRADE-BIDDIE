@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
-import { supabase } from "@/integrations/supabase/client";
 import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
@@ -70,11 +69,12 @@ function dbRecordToSignal(record: any): MarketSignal {
   else if (convictionScore >= 60) convictionLabel = "High Conviction";
   else if (convictionScore >= 40) convictionLabel = "Moderate Conviction";
 
+  const putCall = record.put_call || record.option_type || 'call';
   const tags: string[] = [];
-  if (record.put_call) tags.push(record.put_call === 'call' ? 'Call Flow' : 'Put Flow');
+  if (putCall) tags.push(putCall === 'call' ? 'Call Flow' : 'Put Flow');
   if (convictionScore >= 70) tags.push('⚡ HIGH CONVICTION');
 
-  const createdAt = record.created_at || '';
+  const createdAt = record.detected_at || record.created_at || '';
   const timestamp = createdAt ? formatTimestamp(createdAt) : 'Today';
 
   return {
@@ -84,18 +84,22 @@ function dbRecordToSignal(record: any): MarketSignal {
     confidence,
     convictionScore,
     convictionLabel,
-    description: record.description || `${record.put_call || ''} flow on ${record.ticker} at ${record.strike || 'N/A'} strike.`,
+    description: record.description || record.reason || `${putCall || ''} flow on ${record.ticker} at ${record.strike || 'N/A'} strike.`,
     timestamp,
     tags,
     strike: record.strike || undefined,
     expiry: record.expiry || undefined,
     premium: record.premium || undefined,
-    putCall: record.put_call as 'call' | 'put' | undefined,
-    suggestedTrade: `Buy ${record.ticker} ${record.strike || ''} ${record.put_call === 'call' ? 'Calls' : 'Puts'}${record.expiry ? ` exp ${record.expiry}` : ''}`,
-    targetZone: record.target_zone || undefined,
+    putCall: putCall as 'call' | 'put' | undefined,
+    suggestedTrade: `Buy ${record.ticker} ${record.strike || ''} ${putCall === 'call' ? 'Calls' : 'Puts'}${record.expiry ? ` exp ${record.expiry}` : ''}`,
+    targetZone: record.target_zone || record.target || undefined,
     createdAt,
     source: 'live',
     timeframe: classifyTimeframeFromRecord(record),
+    category: record.category,
+    reason: record.reason,
+    entryTrigger: record.entry_trigger,
+    invalidation: record.invalidation,
   };
 }
 
@@ -126,18 +130,12 @@ const DashboardSignals = () => {
         todayET.setHours(0, 0, 0, 0);
         const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
-        const { data, error } = await supabase
-          .from("signal_outcomes")
-          .select("*")
-          .eq("signal_source", "replit")
-          .gte("created_at", todayStart.toISOString())
-          .order("created_at", { ascending: false })
-          .limit(100);
+        const resp = await fetch('/api/whale/signals/history?limit=100');
+        if (!resp.ok) throw new Error('Failed to fetch signal history');
+        const result = await resp.json();
 
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          const mapped = data.map(dbRecordToSignal);
+        if (result.signals && result.signals.length > 0) {
+          const mapped = result.signals.map(dbRecordToSignal);
           setDbSignals(mapped);
         }
       } catch (e) {

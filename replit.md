@@ -11,7 +11,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: PostgreSQL (Replit managed, `DATABASE_URL`) + Drizzle ORM + direct `pg` Pool
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
@@ -124,7 +124,7 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
 - **Stack**: React 19, Vite 7, Tailwind CSS 3, Framer Motion, Recharts, Supabase Auth, React Router v6
 - **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
 - **Signal Categories**: 3 categories — Algorithm Plays (price action + gamma analysis), Whale Plays ($250K+ institutional flow), Spreads & Butterflies (multi-leg strategies). Dashboard shows Algorithm Plays + Whale Plays (top 5 each, sorted 0DTE first then conviction score). Signals page has 3 tabs for all categories. Each signal card labeled "DAY TRADE" (buy_now/short_term) or "SWING TRADE" (swing), plus "Live" or "Example" badge. Example signals fill tabs when no live data (META/AMZN/GOOGL for spreads, AAPL/PLTR/AMD for whale).
-- **Performance Tracking**: `PerformanceSnapshot` and `SignalAccuracyPanel` only track signals marked `signal_source='dashboard'` in Supabase — these are the top signals featured on the dashboard. Dashboard auto-marks featured signals from 'replit' to 'dashboard' source.
+- **Performance Tracking**: `PerformanceSnapshot` and `SignalAccuracyPanel` track signals from the `signal_outcomes` table in Replit PostgreSQL.
 - **Pricing Tiers**: Signal Scout ($49, 5 questions/day), Active Trader ($89, 25 questions/day), Pro Trader ($129, 50 questions/day). All tiers get Biddie AI access. Daily limits enforced via `useQuestionLimit` hook (localStorage-based, resets at midnight). JORTRADE Chat is the community chat room (separate from Biddie AI).
 - **Auth**: Supabase email/password + Google/Apple OAuth. Dashboard is protected by `ProtectedRoute` component.
 - **API Integration**: 
@@ -139,11 +139,11 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - Backend hydrates AI signals with authoritative computed data (price_confirmed, gamma_zone, etc.)
   - Frontend displays: "PRICE CONFIRMED" + "ACT NOW" banners, gamma zone badges, price pattern details on signal cards
 - **Signal Verification** (`POST /api/whale/verify-signals`):
-  - Fetches pending signals from Supabase `signal_outcomes` table
+  - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table
   - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date
   - Checks if the stock's high (bullish) or low (bearish) reached the target zone at any point since the signal was issued
   - Marks as "hit" (target reached), "missed" (expired without hitting), or "expired"
-  - Updates `outcome`, `outcome_price`, and `resolved_at` in Supabase
+  - Updates `outcome` and `resolved_at` in PostgreSQL
   - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`

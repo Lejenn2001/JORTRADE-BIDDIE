@@ -7,10 +7,6 @@ import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
-import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
-
-type SignalOutcomeRow = Tables<"signal_outcomes">;
 
 const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
   signal.convictionScore ?? Math.round(signal.confidence * 10);
@@ -35,14 +31,17 @@ const formatRelativeTimestamp = (isoString: string) => {
   });
 };
 
-const recordToDashboardSignal = (record: SignalOutcomeRow): MarketSignal => {
+const recordToDashboardSignal = (record: any): MarketSignal => {
   const confidence = Number(record.confidence) || 0;
   const convictionScore = Math.round(confidence * 10);
   const isBullish = record.signal_type === "bullish";
-  const tags = [record.put_call === "call" ? "Call Flow" : "Put Flow"];
+  const putCall = record.put_call || record.option_type || "call";
+  const tags = [putCall === "call" ? "Call Flow" : "Put Flow"];
 
   if (convictionScore >= 85) tags.push("🔥 ACT NOW");
   else if (convictionScore >= 70) tags.push("⚡ HIGH CONVICTION");
+
+  const createdAt = record.detected_at || record.created_at;
 
   return {
     id: record.id,
@@ -60,18 +59,22 @@ const recordToDashboardSignal = (record: SignalOutcomeRow): MarketSignal => {
             ? "Moderate Conviction"
             : "Low Conviction",
     description:
-      record.description ||
-      `${record.put_call === "call" ? "Call" : "Put"} flow on ${record.ticker}${record.strike ? ` at ${record.strike}` : ""}.`,
-    timestamp: formatRelativeTimestamp(record.created_at),
+      record.description || record.reason ||
+      `${putCall === "call" ? "Call" : "Put"} flow on ${record.ticker}${record.strike ? ` at ${record.strike}` : ""}.`,
+    timestamp: formatRelativeTimestamp(createdAt),
     tags,
     strike: record.strike ?? undefined,
     expiry: record.expiry ?? undefined,
     premium: record.premium ?? undefined,
-    putCall: (record.put_call as "call" | "put" | null) ?? undefined,
-    suggestedTrade: `Buy ${record.ticker}${record.strike ? ` ${record.strike}` : ""} ${record.put_call === "put" ? "Puts" : "Calls"}${record.expiry ? ` exp ${record.expiry}` : ""}`,
-    targetZone: record.target_zone ?? undefined,
-    createdAt: record.created_at,
+    putCall: (putCall as "call" | "put") ?? undefined,
+    suggestedTrade: `Buy ${record.ticker}${record.strike ? ` ${record.strike}` : ""} ${putCall === "put" ? "Puts" : "Calls"}${record.expiry ? ` exp ${record.expiry}` : ""}`,
+    targetZone: record.target_zone || record.target || undefined,
+    createdAt,
     source: "live",
+    category: record.category,
+    reason: record.reason,
+    entryTrigger: record.entry_trigger,
+    invalidation: record.invalidation,
   };
 };
 
@@ -89,17 +92,11 @@ const Dashboard = () => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         todayStart.setHours(todayStart.getHours() - 4);
 
-        const { data, error } = await supabase
-          .from("signal_outcomes")
-          .select("*")
-          .eq("signal_source", "replit")
-          .gte("created_at", todayStart.toISOString())
-          .order("created_at", { ascending: false })
-          .limit(50);
+        const resp = await fetch('/api/whale/signals/history?limit=50');
+        if (!resp.ok) throw new Error('Failed to fetch signal history');
+        const result = await resp.json();
 
-        if (error) throw error;
-
-        setPersistedSignals((data ?? []).map(recordToDashboardSignal));
+        setPersistedSignals((result.signals ?? []).map(recordToDashboardSignal));
       } catch (error) {
         console.warn("Failed to load persisted dashboard signals:", error);
         setPersistedSignals([]);
@@ -111,38 +108,6 @@ const Dashboard = () => {
     loadTodaysLiveSignals();
   }, []);
 
-  // Realtime: new inserts into signal_outcomes appear instantly
-  useEffect(() => {
-    const channel = supabase
-      .channel("dashboard-signals-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "signal_outcomes",
-          filter: "signal_source=eq.replit",
-        },
-        (payload) => {
-          const row = payload.new as SignalOutcomeRow;
-          const mapped = recordToDashboardSignal(row);
-          setPersistedSignals((prev) => {
-            // Deduplicate by ticker|strike|expiry
-            const key = `${mapped.ticker}|${mapped.strike}|${mapped.expiry}`;
-            const exists = prev.some(
-              (s) => `${s.ticker}|${s.strike}|${s.expiry}` === key
-            );
-            if (exists) return prev;
-            return [mapped, ...prev];
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   const allMergedSignals = useMemo(() => {
     const mergedSignals = new Map<string, MarketSignal>();
@@ -219,25 +184,7 @@ const Dashboard = () => {
     const markDashboardSignals = async () => {
       try {
         const tickers = dashboardFeatured.map(s => s.ticker);
-        const { data: existing } = await supabase
-          .from("signal_outcomes" as any)
-          .select("id, ticker, strike, expiry, signal_source")
-          .in("ticker", tickers)
-          .eq("signal_source", "replit")
-          .eq("outcome", "pending");
-
-        if (!existing || existing.length === 0) return;
-
-        const featuredKeys = new Set(dashboardFeatured.map(s => `${s.ticker}|${s.strike}|${s.expiry}`));
-        const toUpdate = existing.filter((e: any) => featuredKeys.has(`${e.ticker}|${e.strike}|${e.expiry}`));
-
-        if (toUpdate.length > 0) {
-          const ids = toUpdate.map((e: any) => e.id);
-          await supabase
-            .from("signal_outcomes" as any)
-            .update({ signal_source: "dashboard" })
-            .in("id", ids);
-        }
+        // Signal persistence is handled by the API server pipeline
       } catch (e) {
         console.warn("Failed to mark dashboard signals:", e);
       }

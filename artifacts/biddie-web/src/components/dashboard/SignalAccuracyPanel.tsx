@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Target, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, RefreshCw, Zap } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -69,14 +68,15 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
   const apiBase = import.meta.env.BASE_URL ?? "/";
 
   const fetchOutcomes = async () => {
-    const { data, error } = await supabase
-      .from("signal_outcomes" as any)
-      .select("*")
-      .eq("signal_source", "dashboard")
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (!error && data) setOutcomes(data as any);
+    try {
+      const resp = await fetch('/api/whale/signals/history?limit=100');
+      if (resp.ok) {
+        const result = await resp.json();
+        if (result.signals) setOutcomes(result.signals as any);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch signal outcomes:', e);
+    }
     setLoading(false);
   };
 

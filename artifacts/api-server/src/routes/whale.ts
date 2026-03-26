@@ -1,7 +1,7 @@
 import { Router } from "express";
 import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 
 const router = Router();
 
@@ -12,9 +12,16 @@ const AI_API_KEY = process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? process.e
 
 const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
 
-const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] ?? "";
-const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? "";
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const pool = new pg.Pool({ connectionString: process.env["DATABASE_URL"] });
+
+async function dbQuery(text: string, params?: any[]): Promise<any> {
+  try {
+    return await pool.query(text, params);
+  } catch (e: any) {
+    console.error("[DB] Query error:", e.message);
+    return null;
+  }
+}
 
 // ── Data Fetchers ──────────────────────────────────────────────────────────────
 
@@ -941,13 +948,14 @@ router.post("/whale/community-chat", async (req, res) => {
     const content = response.content[0].type === "text" ? response.content[0].text : "";
     let posted = false;
     if (content && content.trim().length > 0) {
-      const { error: insertError } = await supabase
-        .from("chat_messages")
-        .insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content: content.trim() } as any);
-      if (insertError) {
-        console.error("Failed to insert Biddie community response:", insertError.message);
-      } else {
+      const insertResult = await dbQuery(
+        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
+        [BIDDIE_USER_ID, "assistant", content.trim()]
+      );
+      if (insertResult) {
         posted = true;
+      } else {
+        console.error("Failed to insert Biddie community response");
       }
     }
     res.json({ ok: true, posted, content: content?.trim() || "" });
@@ -1567,6 +1575,22 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
+  for (const s of signals.slice(0, 20)) {
+    try {
+      await dbQuery(
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, detected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+         ON CONFLICT DO NOTHING`,
+        [
+          s.ticker, s.direction, "replit", s.strike, s.expiry, s.premium,
+          s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
+          s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
+          s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null
+        ]
+      );
+    } catch {}
+  }
+
   return responseData;
   } catch (err) {
     console.error("[signals] pipeline crashed:", err);
@@ -1599,6 +1623,19 @@ router.get("/whale/signals", async (_req, res) => {
   } catch (err: any) {
     console.error("[signals] pipeline error:", err);
     res.json({ signals: [], count: 0, timestamp: getNowEastern() });
+  }
+});
+
+router.get("/whale/signals/history", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query.limit)) || 50, 100);
+    const result = await dbQuery(
+      `SELECT * FROM signal_outcomes WHERE signal_source = 'replit' ORDER BY detected_at DESC LIMIT $1`,
+      [limit]
+    );
+    res.json({ signals: result?.rows || [], count: result?.rows?.length || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1686,18 +1723,16 @@ function parseTargetRange(target: string | null): { low: number | null; high: nu
 
 router.post("/whale/verify-signals", async (_req, res) => {
   try {
-    const { data: pending, error: fetchErr } = await supabase
-      .from("signal_outcomes")
-      .select("*")
-      .eq("outcome", "pending")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const pendingResult = await dbQuery(
+      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at DESC LIMIT 50`
+    );
 
-    if (fetchErr) {
+    if (!pendingResult) {
       res.status(500).json({ error: "Failed to fetch pending signals" });
       return;
     }
 
+    const pending = pendingResult.rows;
     if (!pending || pending.length === 0) {
       res.json({ verified: 0, hits: 0, misses: 0, expired: 0, remaining_pending: 0 });
       return;
@@ -1722,7 +1757,7 @@ router.post("/whale/verify-signals", async (_req, res) => {
       const history = priceMap[signal.ticker];
       if (!history) continue;
 
-      const target = parseTargetRange(signal.target_zone);
+      const target = parseTargetRange(signal.target_zone || signal.target);
       const isBullish = signal.signal_type === "bullish";
 
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
@@ -1754,16 +1789,12 @@ router.post("/whale/verify-signals", async (_req, res) => {
       }
 
       if (outcome) {
-        const { error: updateErr } = await supabase
-          .from("signal_outcomes")
-          .update({
-            outcome,
-            outcome_price: outcomePrice,
-            resolved_at: now.toISOString(),
-          })
-          .eq("id", signal.id);
+        const updateResult = await dbQuery(
+          `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`,
+          [outcome, now.toISOString(), signal.id]
+        );
 
-        if (updateErr) {
+        if (!updateResult) {
           updateErrors++;
           continue;
         }
@@ -1932,13 +1963,11 @@ function startFlowMonitor() {
     if (hour !== 8 || minute < 15 || minute > 30) return;
 
     const today = new Date().toISOString().split("T")[0];
-    const { data: existing } = await supabase
-      .from("chat_messages")
-      .select("id")
-      .eq("user_id", BIDDIE_USER_ID)
-      .gte("created_at", `${today}T00:00:00Z`)
-      .limit(1);
-    if (existing && existing.length > 0) return;
+    const existingResult = await dbQuery(
+      `SELECT id FROM chat_messages WHERE user_id = $1 AND created_at >= $2 LIMIT 1`,
+      [BIDDIE_USER_ID, `${today}T00:00:00Z`]
+    );
+    if (existingResult && existingResult.rows.length > 0) return;
 
     try {
       const [flowAlerts, sectorData, econData] = await Promise.all([
@@ -1964,9 +1993,12 @@ function startFlowMonitor() {
         messages: [{ role: "user", content: `Drop the morning outlook. Keep it real.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify({ fetched_at: now, key_levels: keyLevels, top_flow: enriched.slice(0, 50), sector_etfs: sectorData, economic_calendar: (econData as any[]).slice(0, 10) }, null, 2)}\n\`\`\`` }],
       });
       const content = response.content[0].type === "text" ? response.content[0].text : "";
-      const { error: insertErr } = await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content } as any);
-      if (insertErr) {
-        console.error(`[Biddie morning] Insert failed (RLS):`, insertErr.message);
+      const insertRes = await dbQuery(
+        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
+        [BIDDIE_USER_ID, "assistant", content]
+      );
+      if (!insertRes) {
+        console.error(`[Biddie morning] Insert failed`);
       } else {
         lastBiddiePost = Date.now();
         console.log(`[Biddie morning] Posted at ${now}`);
@@ -2037,9 +2069,12 @@ function startFlowMonitor() {
 
       if (content.includes("NOTHING_NOTABLE") || content.trim().length < 20) return;
 
-      const { error: insertErr } = await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content } as any);
-      if (insertErr) {
-        console.error(`[Biddie flow alert] Insert failed (RLS):`, insertErr.message);
+      const flowInsert = await dbQuery(
+        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
+        [BIDDIE_USER_ID, "assistant", content]
+      );
+      if (!flowInsert) {
+        console.error(`[Biddie flow alert] Insert failed`);
       } else {
         lastBiddiePost = Date.now();
         console.log(`[Biddie flow alert] Posted at ${now}`);
