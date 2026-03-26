@@ -711,18 +711,11 @@ export function useMarketData() {
               gammaLevelLabel: gammaLabel || s.gamma_description,
               description: s.reason || `${s.option_type} flow on ${s.ticker} at $${s.strike} strike. Premium: $${formatPremium(s.premium)}.`,
               timestamp: (() => {
-                if (s.created_at) {
-                  const d = new Date(s.created_at);
-                  if (!isNaN(d.getTime())) {
-                    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' ET';
-                  }
+                if (s.detected_at) {
+                  const etMatch = String(s.detected_at).match(/(\d{1,2}:\d{2})\s*(AM|PM)/i);
+                  if (etMatch) return `${etMatch[1]} ${etMatch[2].toUpperCase()} ET`;
                 }
-                const ts = data.timestamp || '';
-                const etMatch = ts.match(/(\d{1,2}:\d{2})\s*(AM|PM)/i);
-                if (etMatch) return `${etMatch[1]} ${etMatch[2].toUpperCase()}`;
-                const d = new Date(ts || Date.now());
-                if (isNaN(d.getTime())) return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' ET';
               })(),
               tags,
               strike: `$${s.strike}`,
@@ -894,12 +887,7 @@ export function useMarketData() {
             gammaLevelLabel: scoreResult.gammaLevelLabel,
             _totalPremium: totalPremium,
             description: `${tradeCount} ${putCall} trades detected on ${ticker} at $${strikeLabel} strike. Total premium: $${premium}. Volume/OI ratio: ${volOiRatio ? volOiRatio.toFixed(1) + 'x' : 'N/A'}. Conviction: ${scoreResult.score}/100 (${scoreResult.label}).`,
-            timestamp: (() => {
-              if (!alert.created_at) return 'Live';
-              const d = new Date(alert.created_at);
-              if (isNaN(d.getTime())) return 'Live';
-              return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            })(),
+            timestamp: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' }) + ' ET',
             createdAt: alert.created_at || '',
             tags,
             strike: `$${strikeLabel}`,

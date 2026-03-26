@@ -1147,9 +1147,8 @@ async function runSignalsPipeline() {
 
     const hasMultileg = !!c.has_multileg;
     let category = "algorithm";
-    if (premium >= 500_000) category = "whale";
-    else if (premium >= 100_000 && hasSweep) category = "whale";
-    else if (premium >= 100_000 && aggression >= 90) category = "whale";
+    if (premium >= 2_000_000) category = "whale";
+    else if (premium >= 1_000_000 && (hasSweep || aggression >= 90)) category = "whale";
     if (hasMultileg) category = "spread";
 
     // Tags
@@ -1288,6 +1287,7 @@ async function runSignalsPipeline() {
       entry_trigger: entryTrigger, key_level: keyLevel, target, invalidation,
       reason, confidence, tags,
       created_at: c.created_at || null,
+      detected_at: getNowEastern(),
       price_confirmed: !!confirmation?.confirmed,
       price_pattern: confirmation?.pattern ?? null,
       gamma_zone: confirmation?.gamma_zone ?? "neutral",
@@ -1374,11 +1374,11 @@ DIRECTIONAL BET INDICATORS — keep confidence high if:
 - Sector/single name flow, not just index hedging
 
 CATEGORY ASSIGNMENT:
-- "whale": Premium $500K+ OR ($100K+ with sweep/high aggression). These are institutional-size directional bets. Most big premium plays should be whale.
+- "whale": ONLY for truly massive institutional flow — premium $1M+ with sweep/high aggression, or $2M+. These are rare, eye-catching moves. Do NOT overuse this category.
 - "spread": If the flow looks like part of a multi-leg strategy (e.g. you see matching calls/puts on the same ticker, or the strike/premium ratio suggests a defined-risk trade)
-- "algorithm": Smaller flow that passed scoring on technicals — price-confirmed plays with good setups
+- "algorithm": The default category for most signals. Any play that passed our scoring filters based on technicals, price action, and flow analysis. This includes plays with $25K-$999K premium. Most signals should be "algorithm".
 
-IMPORTANT: Be generous with the "whale" category. If premium is $100K+ on a single-name stock with high conviction, that IS a whale play. We want the whale section populated with big institutional moves.
+IMPORTANT: Most signals should be categorized as "algorithm". Only use "whale" for $1M+ premium plays. We want a healthy mix of categories — do NOT put everything in whale.
 
 SIGNALS:
 ${JSON.stringify(candidateSummary, null, 2)}
@@ -1528,6 +1528,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
             invalidation: spread.invalidation,
             reason: spread.reason,
             created_at: parentSig?.created_at ?? null,
+            detected_at: getNowEastern(),
             confidence: Math.min(10, Math.max(1, spread.confidence ?? 7)),
             tags: [
               spread.strategy_type?.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) ?? "Spread",
