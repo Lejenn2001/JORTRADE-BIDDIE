@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -66,6 +66,133 @@ const formatPremium = (val: number) => {
 
 const popularTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA", "META", "AMZN", "MSFT", "AMD", "GOOGL"];
 
+const TICKER_DB: { symbol: string; name: string }[] = [
+  { symbol: "SPY", name: "SPDR S&P 500 ETF" },
+  { symbol: "QQQ", name: "Invesco Nasdaq 100 ETF" },
+  { symbol: "IWM", name: "iShares Russell 2000 ETF" },
+  { symbol: "DIA", name: "SPDR Dow Jones ETF" },
+  { symbol: "SPX", name: "S&P 500 Index" },
+  { symbol: "VIX", name: "CBOE Volatility Index" },
+  { symbol: "AAPL", name: "Apple Inc." },
+  { symbol: "MSFT", name: "Microsoft Corporation" },
+  { symbol: "NVDA", name: "NVIDIA Corporation" },
+  { symbol: "GOOGL", name: "Alphabet Inc." },
+  { symbol: "GOOG", name: "Alphabet Inc. Class C" },
+  { symbol: "META", name: "Meta Platforms Inc." },
+  { symbol: "AMZN", name: "Amazon.com Inc." },
+  { symbol: "TSLA", name: "Tesla Inc." },
+  { symbol: "AMD", name: "Advanced Micro Devices" },
+  { symbol: "AVGO", name: "Broadcom Inc." },
+  { symbol: "NFLX", name: "Netflix Inc." },
+  { symbol: "CRM", name: "Salesforce Inc." },
+  { symbol: "ORCL", name: "Oracle Corporation" },
+  { symbol: "ADBE", name: "Adobe Inc." },
+  { symbol: "INTC", name: "Intel Corporation" },
+  { symbol: "QCOM", name: "Qualcomm Inc." },
+  { symbol: "MU", name: "Micron Technology" },
+  { symbol: "ARM", name: "ARM Holdings" },
+  { symbol: "MRVL", name: "Marvell Technology" },
+  { symbol: "SMCI", name: "Super Micro Computer" },
+  { symbol: "PLTR", name: "Palantir Technologies" },
+  { symbol: "SNOW", name: "Snowflake Inc." },
+  { symbol: "COIN", name: "Coinbase Global" },
+  { symbol: "UBER", name: "Uber Technologies" },
+  { symbol: "SHOP", name: "Shopify Inc." },
+  { symbol: "SQ", name: "Block Inc." },
+  { symbol: "ROKU", name: "Roku Inc." },
+  { symbol: "JPM", name: "JPMorgan Chase & Co." },
+  { symbol: "BAC", name: "Bank of America" },
+  { symbol: "GS", name: "Goldman Sachs Group" },
+  { symbol: "MS", name: "Morgan Stanley" },
+  { symbol: "V", name: "Visa Inc." },
+  { symbol: "MA", name: "Mastercard Inc." },
+  { symbol: "PYPL", name: "PayPal Holdings" },
+  { symbol: "WFC", name: "Wells Fargo & Co." },
+  { symbol: "C", name: "Citigroup Inc." },
+  { symbol: "JNJ", name: "Johnson & Johnson" },
+  { symbol: "UNH", name: "UnitedHealth Group" },
+  { symbol: "PFE", name: "Pfizer Inc." },
+  { symbol: "ABBV", name: "AbbVie Inc." },
+  { symbol: "MRK", name: "Merck & Co." },
+  { symbol: "LLY", name: "Eli Lilly and Co." },
+  { symbol: "XOM", name: "Exxon Mobil" },
+  { symbol: "CVX", name: "Chevron Corporation" },
+  { symbol: "COP", name: "ConocoPhillips" },
+  { symbol: "HD", name: "Home Depot Inc." },
+  { symbol: "WMT", name: "Walmart Inc." },
+  { symbol: "COST", name: "Costco Wholesale" },
+  { symbol: "NKE", name: "Nike Inc." },
+  { symbol: "SBUX", name: "Starbucks Corp." },
+  { symbol: "DIS", name: "Walt Disney Co." },
+  { symbol: "BA", name: "Boeing Company" },
+  { symbol: "CAT", name: "Caterpillar Inc." },
+  { symbol: "GE", name: "General Electric" },
+  { symbol: "UPS", name: "United Parcel Service" },
+  { symbol: "HON", name: "Honeywell International" },
+  { symbol: "DE", name: "Deere & Company" },
+  { symbol: "PANW", name: "Palo Alto Networks" },
+  { symbol: "CRWD", name: "CrowdStrike Holdings" },
+  { symbol: "ZS", name: "Zscaler Inc." },
+  { symbol: "NET", name: "Cloudflare Inc." },
+  { symbol: "DDOG", name: "Datadog Inc." },
+  { symbol: "GLD", name: "SPDR Gold Shares ETF" },
+  { symbol: "SLV", name: "iShares Silver Trust" },
+  { symbol: "TLT", name: "iShares 20+ Year Treasury" },
+  { symbol: "XLF", name: "Financial Select Sector ETF" },
+  { symbol: "XLK", name: "Technology Select Sector ETF" },
+  { symbol: "XLE", name: "Energy Select Sector ETF" },
+  { symbol: "XLV", name: "Health Care Select Sector ETF" },
+  { symbol: "ARKK", name: "ARK Innovation ETF" },
+  { symbol: "SOXX", name: "iShares Semiconductor ETF" },
+  { symbol: "SMH", name: "VanEck Semiconductor ETF" },
+  { symbol: "RIVN", name: "Rivian Automotive" },
+  { symbol: "LCID", name: "Lucid Group" },
+  { symbol: "NIO", name: "NIO Inc." },
+  { symbol: "BABA", name: "Alibaba Group" },
+  { symbol: "TSM", name: "Taiwan Semiconductor" },
+  { symbol: "ASML", name: "ASML Holding" },
+  { symbol: "SOFI", name: "SoFi Technologies" },
+  { symbol: "HOOD", name: "Robinhood Markets" },
+  { symbol: "RBLX", name: "Roblox Corporation" },
+  { symbol: "SNAP", name: "Snap Inc." },
+  { symbol: "PINS", name: "Pinterest Inc." },
+  { symbol: "SPOT", name: "Spotify Technology" },
+  { symbol: "SE", name: "Sea Limited" },
+  { symbol: "MARA", name: "Marathon Digital" },
+  { symbol: "RIOT", name: "Riot Platforms" },
+  { symbol: "IREN", name: "Iris Energy" },
+  { symbol: "BE", name: "Bloom Energy" },
+  { symbol: "ENPH", name: "Enphase Energy" },
+  { symbol: "FSLR", name: "First Solar Inc." },
+  { symbol: "T", name: "AT&T Inc." },
+  { symbol: "VZ", name: "Verizon Communications" },
+  { symbol: "TMUS", name: "T-Mobile US" },
+  { symbol: "PG", name: "Procter & Gamble" },
+  { symbol: "KO", name: "Coca-Cola Company" },
+  { symbol: "PEP", name: "PepsiCo Inc." },
+  { symbol: "MCD", name: "McDonald's Corporation" },
+  { symbol: "F", name: "Ford Motor Company" },
+  { symbol: "GM", name: "General Motors" },
+  { symbol: "UAL", name: "United Airlines" },
+  { symbol: "DAL", name: "Delta Air Lines" },
+  { symbol: "AAL", name: "American Airlines" },
+  { symbol: "LUV", name: "Southwest Airlines" },
+  { symbol: "CMG", name: "Chipotle Mexican Grill" },
+  { symbol: "ABNB", name: "Airbnb Inc." },
+  { symbol: "ZM", name: "Zoom Video Communications" },
+  { symbol: "DELL", name: "Dell Technologies" },
+  { symbol: "HPE", name: "Hewlett Packard Enterprise" },
+  { symbol: "IBM", name: "International Business Machines" },
+  { symbol: "NOW", name: "ServiceNow Inc." },
+  { symbol: "WDAY", name: "Workday Inc." },
+  { symbol: "TTD", name: "The Trade Desk" },
+  { symbol: "ANET", name: "Arista Networks" },
+  { symbol: "ON", name: "ON Semiconductor" },
+  { symbol: "LRCX", name: "Lam Research" },
+  { symbol: "AMAT", name: "Applied Materials" },
+  { symbol: "KLAC", name: "KLA Corporation" },
+];
+
 const verdictColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
   BULLISH: { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/40", glow: "shadow-emerald-500/20" },
   BEARISH: { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/40", glow: "shadow-red-500/20" },
@@ -79,12 +206,38 @@ const DashboardMarket = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLFormElement>(null);
+
+  const suggestions = useMemo(() => {
+    const q = ticker.trim().toUpperCase();
+    if (!q) return [];
+    return TICKER_DB.filter(
+      t => t.symbol.startsWith(q) || t.name.toUpperCase().includes(q)
+    ).slice(0, 8);
+  }, [ticker]);
+
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [suggestions]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const analyzeCallback = useCallback(async (t: string) => {
     const clean = t.toUpperCase().replace(/[^A-Z]/g, "");
     if (!clean || clean.length > 5) return;
 
+    setShowDropdown(false);
     setLoading(true);
     setError(null);
     setResult(null);
@@ -135,14 +288,37 @@ const DashboardMarket = () => {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="relative">
+            <form onSubmit={handleSubmit} className="relative" ref={dropdownRef}>
               <div className="glass-panel rounded-2xl border-glow-purple p-1.5 flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
                   <Input
                     ref={inputRef}
                     value={ticker}
-                    onChange={e => setTicker(e.target.value.toUpperCase())}
+                    onChange={e => { setTicker(e.target.value.toUpperCase()); setShowDropdown(true); }}
+                    onFocus={() => { if (suggestions.length > 0 && ticker.length > 0) setShowDropdown(true); }}
+                    onKeyDown={e => {
+                      if (!showDropdown || suggestions.length === 0) return;
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setHighlightIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setHighlightIndex(prev => Math.max(prev - 1, 0));
+                      } else if (e.key === "Enter" && highlightIndex >= 0) {
+                        e.preventDefault();
+                        const selected = suggestions[highlightIndex];
+                        setTicker(selected.symbol);
+                        setShowDropdown(false);
+                        analyzeCallback(selected.symbol);
+                      } else if (e.key === "Escape") {
+                        setShowDropdown(false);
+                      } else if (e.key === "Tab" && suggestions.length > 0) {
+                        const idx = highlightIndex >= 0 ? highlightIndex : 0;
+                        setTicker(suggestions[idx].symbol);
+                        setShowDropdown(false);
+                      }
+                    }}
                     placeholder="Enter ticker symbol (e.g. SPY, NVDA, AAPL)"
                     className="pl-12 pr-4 h-14 text-lg font-bold bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50 uppercase"
                     maxLength={5}
@@ -168,6 +344,39 @@ const DashboardMarket = () => {
                   )}
                 </button>
               </div>
+
+              <AnimatePresence>
+                {showDropdown && suggestions.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute z-50 left-0 right-0 top-full mt-1 glass-panel rounded-xl border border-white/10 overflow-hidden shadow-2xl"
+                  >
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={s.symbol}
+                        type="button"
+                        onMouseDown={() => {
+                          setTicker(s.symbol);
+                          setShowDropdown(false);
+                          analyzeCallback(s.symbol);
+                        }}
+                        onMouseEnter={() => setHighlightIndex(i)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                          i === highlightIndex
+                            ? "bg-primary/15 text-primary"
+                            : "hover:bg-white/5 text-foreground"
+                        }`}
+                      >
+                        <span className="font-bold text-sm w-14 shrink-0">{s.symbol}</span>
+                        <span className="text-xs text-muted-foreground truncate">{s.name}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </form>
 
             <div className="flex flex-wrap gap-2">
