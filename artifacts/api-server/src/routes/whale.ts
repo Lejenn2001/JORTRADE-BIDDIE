@@ -38,7 +38,7 @@ async function fetchDarkpool(ticker: string, limit = 40) {
   } catch { return []; }
 }
 
-async function fetchKeyLevels(ticker: string) {
+async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
   try {
     const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
     const headers = { "User-Agent": "Mozilla/5.0" };
@@ -84,22 +84,22 @@ async function fetchKeyLevels(ticker: string) {
       vwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
     }
 
-    // Pick the most current price available from Yahoo meta:
-    // During pre-market: preMarketPrice is live, regularMarketPrice is prior day close
-    // During market hours: regularMarketPrice updates continuously (15-min delayed)
-    // After hours: postMarketPrice is most current
-    const meta = intResult?.meta ?? dailyResult?.meta ?? {};
-    const preMarket  = meta.preMarketPrice   ?? null;
-    const postMarket = meta.postMarketPrice  ?? null;
-    const regMarket  = meta.regularMarketPrice ?? null;
-    const preTs  = meta.preMarketTime   ?? 0;
-    const postTs = meta.postMarketTime  ?? 0;
-    const regTs  = meta.regularMarketTime ?? 0;
-    // Use whichever has the most recent timestamp
-    let currentPrice: number | null = regMarket;
-    if (preMarket && preTs > regTs) currentPrice = preMarket;
-    if (postMarket && postTs > regTs && postTs > preTs) currentPrice = postMarket;
-    if (!currentPrice) currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
+    // Use Unusual Whales real-time price if available, otherwise fall back to Yahoo
+    let currentPrice: number | null = uwPrice ? Math.round(uwPrice * 100) / 100 : null;
+    if (!currentPrice) {
+      const meta = intResult?.meta ?? dailyResult?.meta ?? {};
+      const preMarket  = meta.preMarketPrice   ?? null;
+      const postMarket = meta.postMarketPrice  ?? null;
+      const regMarket  = meta.regularMarketPrice ?? null;
+      const preTs  = meta.preMarketTime   ?? 0;
+      const postTs = meta.postMarketTime  ?? 0;
+      const regTs  = meta.regularMarketTime ?? 0;
+      currentPrice = regMarket;
+      if (preMarket && preTs > regTs) currentPrice = preMarket;
+      if (postMarket && postTs > regTs && postTs > preTs) currentPrice = postMarket;
+      if (!currentPrice) currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
+      if (currentPrice) currentPrice = Math.round(currentPrice * 100) / 100;
+    }
 
     // Pivot points from prior day
     const pivot = prevHigh && prevLow && prevClose
@@ -436,18 +436,22 @@ function detectNeeds(message: string) {
 
 // ── System Prompt ───────────────────────────────────────────────────────────────
 
-const BIDDIE_SYSTEM = `You are Biddie AI — a professional institutional options flow analyst with real-time access to live whale data from Unusual Whales.
+const BIDDIE_SYSTEM = `You are Biddie AI — a seasoned options flow analyst with real-time access to live whale data from Unusual Whales.
 
 You can answer ANY question about the market, any ticker, any options flow, dark pool activity, sector moves, upcoming catalysts, trade setups, and more.
 
 You have access to live data that has been fetched and provided to you with each question. Use it to give specific, data-backed answers.
 
 YOUR PERSONALITY:
-- Direct, confident, professional — like a seasoned desk trader
+- Seasoned but relatable and cool — you know your stuff but you're not stiff about it
+- Talk like a trader who's been in the game for years and is genuinely trying to help
+- Casual and confident, not corporate. Think "your homie who happens to be really good at reading flow"
+- Use natural language — contractions, short sentences, real talk
 - Reference actual numbers from the data (premium, vol/OI, strike, aggression %)
 - Never generic — always specific to what the data actually shows
-- Call out what matters and what doesn't
+- Call out what matters and what doesn't — don't waste people's time
 - You understand how traders actually talk — casual, slang, shorthand — and you respond naturally without asking for clarification
+- Only highlight near-term plays (0DTE to ~2 weeks out). If something has a far-out expiration, it's not urgent and you should note that
 
 TRADING SLANG YOU UNDERSTAND — translate these automatically:
 - "what's the play" / "what's the move" / "what we doing" → what trade setup do you recommend
@@ -671,20 +675,29 @@ router.post("/whale/chat", async (req, res) => {
   const baselineTickers = ["SPY", "QQQ"];
   const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
 
-  const [flowAlerts, sectorData, econData, ...parallelResults] = await Promise.all([
+  const [flowAlerts, sectorData, econData] = await Promise.all([
     fetchFlowAlerts(200),
     needs.market ? fetchSectorEtfs() : Promise.resolve([]),
     needs.market ? fetchEconomicCalendar() : Promise.resolve([]),
-    // Key levels for all relevant tickers
-    ...allLevelTickers.map((t) => fetchKeyLevels(t)),
-    // Darkpool for mentioned tickers
+  ]);
+
+  const enriched = enrichAlerts(flowAlerts);
+
+  // Extract real-time prices from UW flow data for each ticker
+  const uwPrices: Record<string, number> = {};
+  for (const alert of enriched) {
+    const t = (alert.ticker ?? "").toUpperCase();
+    const p = parseFloat(alert.underlying_price);
+    if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+  }
+
+  const parallelResults = await Promise.all([
+    ...allLevelTickers.map((t) => fetchKeyLevels(t, uwPrices[t.toUpperCase()] ?? null)),
     ...tickersToFetch.map((t) => fetchDarkpool(t, 30)),
   ]);
 
   const keyLevelsResults = parallelResults.slice(0, allLevelTickers.length);
   const darkpoolResults  = parallelResults.slice(allLevelTickers.length);
-
-  const enriched = enrichAlerts(flowAlerts);
 
   // Build key levels map
   const keyLevels: Record<string, any> = {};
@@ -812,9 +825,17 @@ router.get("/whale/signals", async (_req, res) => {
     return true;
   }).slice(0, 30);
 
+  // Extract real-time prices from UW flow data
+  const uwPricesMap: Record<string, number> = {};
+  for (const alert of enriched) {
+    const t = (alert.ticker ?? "").toUpperCase();
+    const p = parseFloat(alert.underlying_price);
+    if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
+  }
+
   // Get unique tickers and fetch key levels in parallel
   const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
-  const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t)));
+  const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null)));
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
 
@@ -1163,6 +1184,199 @@ router.post("/whale/verify-signals", async (_req, res) => {
     res.status(500).json({ error: err.message ?? "Verification failed" });
   }
 });
+
+// ── Morning Outlook ──────────────────────────────────────────────────────────
+
+const MORNING_OUTLOOK_SYSTEM = `You are Biddie AI dropping the morning outlook for the JORTRADE trading community.
+
+YOUR VIBE: You're a seasoned trader who's chill but sharp. Think "cool older brother who trades for a living." You're not trying to impress anyone — you just call it like you see it. Casual, confident, relatable. Use natural language, contractions, real talk.
+
+YOUR JOB: Give the crew a quick pre-market read. What's moving, what matters, what to watch. Keep it tight — this is a morning briefing, not an essay.
+
+FORMAT:
+Start with a casual greeting that references the day/vibe (Monday energy, midweek grind, Friday vibes, etc.)
+
+Then cover:
+1. **Market Mood** — 2-3 sentences on overnight futures, any big macro news, general direction
+2. **Big Movers** — Only the 2-3 tickers with the most notable pre-market flow or news. Include the actual numbers (premium, direction, strike if relevant)
+3. **Watch List** — 1-2 tickers that could pop off today based on the flow data. Quick "why" for each
+4. **Bottom Line** — One sentence on overall bias for the day
+
+RULES:
+- ONLY near-term plays. Nothing expiring more than 2 weeks out unless it's massive institutional flow
+- Only mention things that actually need attention RIGHT NOW
+- If the market is quiet, say so. Don't manufacture excitement
+- Keep the whole thing under 250 words
+- No sign-off, no "let's get it" — just end with the bottom line
+- Reference actual data numbers, not vibes`;
+
+router.post("/whale/morning-outlook", async (_req, res) => {
+  try {
+    const now = getNowEastern();
+    const dateContext = getEasternDateContext();
+
+    const [flowAlerts, sectorData, econData] = await Promise.all([
+      fetchFlowAlerts(200),
+      fetchSectorEtfs(),
+      fetchEconomicCalendar(),
+    ]);
+
+    const enriched = enrichAlerts(flowAlerts);
+
+    const uwPrices: Record<string, number> = {};
+    for (const alert of enriched) {
+      const t = (alert.ticker ?? "").toUpperCase();
+      const p = parseFloat(alert.underlying_price);
+      if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+    }
+
+    const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
+    const keyLevelsResults = await Promise.all(
+      keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null))
+    );
+    const keyLevels: Record<string, any> = {};
+    keyTickers.forEach((t, i) => {
+      if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
+    });
+
+    const context = {
+      fetched_at: now,
+      key_levels: keyLevels,
+      top_flow: enriched.slice(0, 50),
+      sector_etfs: sectorData,
+      economic_calendar: (econData as any[]).slice(0, 10),
+    };
+
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      system: MORNING_OUTLOOK_SYSTEM,
+      messages: [{
+        role: "user",
+        content: `Generate the morning outlook for today.
+
+--- CURRENT DATE & TRADING CALENDAR ---
+${dateContext}
+
+--- LIVE MARKET DATA (fetched ${now}) ---
+\`\`\`json
+${JSON.stringify(context, null, 2)}
+\`\`\`
+
+Drop the morning outlook. Keep it real.`,
+      }],
+    });
+
+    const outlook = response.content[0].type === "text" ? response.content[0].text : "";
+    res.json({ outlook, timestamp: now });
+  } catch (err: any) {
+    console.error("Morning outlook error:", err);
+    res.status(500).json({ error: err.message ?? "Failed to generate morning outlook" });
+  }
+});
+
+// ── Scheduled Morning Outlook Timer ──────────────────────────────────────────
+
+let morningOutlookScheduled = false;
+
+function scheduleMorningOutlook() {
+  if (morningOutlookScheduled) return;
+  morningOutlookScheduled = true;
+
+  setInterval(async () => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false, weekday: "long",
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const hour = parseInt(get("hour"), 10);
+    const minute = parseInt(get("minute"), 10);
+    const day = get("weekday");
+
+    if (["Saturday", "Sunday"].includes(day)) return;
+    if (hour !== 8 || minute < 15 || minute > 30) return;
+
+    try {
+      const BIDDIE_USER_ID = "00000000-0000-0000-0000-000000000000";
+      const today = new Date().toISOString().split("T")[0];
+      const { data: existing } = await supabase
+        .from("chat_messages")
+        .select("id")
+        .eq("user_id", BIDDIE_USER_ID)
+        .gte("created_at", `${today}T00:00:00Z`)
+        .limit(1);
+
+      if (existing && existing.length > 0) return;
+
+      const [flowAlerts, sectorData, econData] = await Promise.all([
+        fetchFlowAlerts(200),
+        fetchSectorEtfs(),
+        fetchEconomicCalendar(),
+      ]);
+
+      const enriched = enrichAlerts(flowAlerts);
+      const uwPrices: Record<string, number> = {};
+      for (const alert of enriched) {
+        const t = (alert.ticker ?? "").toUpperCase();
+        const p = parseFloat(alert.underlying_price);
+        if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+      }
+
+      const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
+      const keyLevelsResults = await Promise.all(
+        keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null))
+      );
+      const keyLevels: Record<string, any> = {};
+      keyTickers.forEach((t, i) => {
+        if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
+      });
+
+      const now = getNowEastern();
+      const dateContext = getEasternDateContext();
+      const context = {
+        fetched_at: now,
+        key_levels: keyLevels,
+        top_flow: enriched.slice(0, 50),
+        sector_etfs: sectorData,
+        economic_calendar: (econData as any[]).slice(0, 10),
+      };
+
+      const response = await claude.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1500,
+        system: MORNING_OUTLOOK_SYSTEM,
+        messages: [{
+          role: "user",
+          content: `Generate the morning outlook for today.
+
+--- CURRENT DATE & TRADING CALENDAR ---
+${dateContext}
+
+--- LIVE MARKET DATA (fetched ${now}) ---
+\`\`\`json
+${JSON.stringify(context, null, 2)}
+\`\`\`
+
+Drop the morning outlook. Keep it real.`,
+        }],
+      });
+
+      const outlook = response.content[0].type === "text" ? response.content[0].text : "";
+
+      await supabase.from("chat_messages").insert({
+        user_id: BIDDIE_USER_ID,
+        user_name: "Biddie AI",
+        content: outlook,
+      });
+
+      console.log(`[Morning Outlook] Posted at ${now}`);
+    } catch (err) {
+      console.error("[Morning Outlook] Failed:", err);
+    }
+  }, 60000);
+}
+
+scheduleMorningOutlook();
 
 router.get("/whale/health", (_req, res) => {
   res.json({
