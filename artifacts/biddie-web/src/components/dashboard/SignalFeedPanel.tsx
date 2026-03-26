@@ -1,5 +1,4 @@
 import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves } from "lucide-react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
 import SignalLegend from "./SignalLegend";
@@ -116,12 +115,15 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
                   <span className={`text-[10px] font-bold tracking-widest uppercase ${
                     signal.category === "whale" ? "text-blue-400" : signal.category === "spread" ? "text-violet-400" : "text-accent"
                   }`}>
-                    {signal.category === "whale" ? "Whale Play" : signal.category === "spread" ? "Spread Play" : "Algorithm Play"}
+                      {signal.category === "whale" ? "Whale Play" : signal.category === "spread" ? "Spread Play" : "Algorithm Play"}
                   </span>
+                  {signal.timeframe === "buy_now" || signal.timeframe === "short_term" ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+                  ) : signal.timeframe === "swing" ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+                  ) : null}
                   {signal.source === "live" ? (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
-                  ) : signal.source === "example" ? (
-                    <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground uppercase tracking-wider">Example</span>
                   ) : null}
                 </div>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -304,11 +306,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
             </motion.div>
           ))}
         </div>
-      )}
-      {limit && signals.length > limit && (
-        <Link to="/dashboard/signals" className="block mt-3 text-center text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
-          View All {signals.length} Signals →
-        </Link>
       )}
     </div>
   );

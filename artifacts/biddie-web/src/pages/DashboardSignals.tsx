@@ -153,19 +153,15 @@ const DashboardSignals = () => {
     loadTodaySignals();
   }, []);
 
-  // Merge: live signals take priority (fresher data), then fill in from DB records
   const allSignals = useMemo(() => {
     const signalMap = new Map<string, MarketSignal>();
 
-    // DB signals first (background)
     for (const s of dbSignals) {
       const key = `${s.ticker}|${s.strike}|${s.expiry}`;
       signalMap.set(key, s);
     }
 
-    // Live signals override DB (they have richer data like entry triggers, key levels)
     for (const s of liveSignals) {
-      if (s.source === 'example') continue; // skip Friday examples
       const key = `${s.ticker}|${s.strike}|${s.expiry}`;
       signalMap.set(key, s);
     }
@@ -474,10 +470,13 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
           }`}>
             {isWhale ? "Whale Play" : isSpread ? "Spread Play" : "Algorithm Play"}
           </span>
+          {signal.timeframe === "buy_now" || signal.timeframe === "short_term" ? (
+            <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+          ) : signal.timeframe === "swing" ? (
+            <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+          ) : null}
           {signal.source === "live" ? (
             <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
-          ) : signal.source === "example" ? (
-            <span className="text-[8px] sm:text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground uppercase tracking-wider">Example</span>
           ) : null}
         </div>
         <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">

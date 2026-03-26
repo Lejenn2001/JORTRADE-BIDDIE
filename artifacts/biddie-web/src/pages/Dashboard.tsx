@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import SignalFeedPanel from "@/components/dashboard/SignalFeedPanel";
@@ -7,7 +7,7 @@ import PortfolioPanel from "@/components/dashboard/PortfolioPanel";
 import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
-import { useMarketData, type MarketSignal, type SignalCategory } from "@/hooks/useMarketData";
+import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -173,36 +173,22 @@ const Dashboard = () => {
       });
   }, [persistedSignals, signals]);
 
-  const algorithmPlays = useMemo(() =>
-    allMergedSignals
+  const algorithmPlays = useMemo(() => {
+    const plays = allMergedSignals
       .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
-      .filter(s => getSignalScore(s) >= 70)
-      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
-      .slice(0, 5),
-    [allMergedSignals]
-  );
+      .filter(s => getSignalScore(s) >= 70);
 
-  const whalePlays = useMemo(() =>
-    allMergedSignals
-      .filter(s => s.category === 'whale')
-      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
-      .slice(0, 5),
-    [allMergedSignals]
-  );
+    plays.sort((a, b) => {
+      const aIs0DTE = a.timeframe === 'buy_now' || a.timeframe === 'short_term' ? 0 : 1;
+      const bIs0DTE = b.timeframe === 'buy_now' || b.timeframe === 'short_term' ? 0 : 1;
+      if (aIs0DTE !== bIs0DTE) return aIs0DTE - bIs0DTE;
+      return getSignalScore(b) - getSignalScore(a);
+    });
 
-  const spreadPlays = useMemo(() =>
-    allMergedSignals
-      .filter(s => s.category === 'spread')
-      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
-      .slice(0, 5),
-    [allMergedSignals]
-  );
+    return plays.slice(0, 5);
+  }, [allMergedSignals]);
 
-  const dashboardFeatured = useMemo(() => [
-    ...algorithmPlays.slice(0, 3),
-    ...whalePlays.slice(0, 3),
-    ...spreadPlays.slice(0, 3),
-  ], [algorithmPlays, whalePlays, spreadPlays]);
+  const dashboardFeatured = useMemo(() => algorithmPlays, [algorithmPlays]);
 
   useEffect(() => {
     if (dashboardFeatured.length === 0) return;
@@ -258,25 +244,8 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="Price action confirmed + gamma analysis — intraday entries"
+                subtitle="Top 5 signals — 0DTE day trades first, then swing trades"
                 icon="algorithm"
-                limit={3}
-              />
-              <SignalFeedPanel
-                signals={whalePlays}
-                loading={signalFeedLoading}
-                title="Whale Plays"
-                subtitle="Institutional flow — swing positioning"
-                icon="whale"
-                limit={3}
-              />
-              <SignalFeedPanel
-                signals={spreadPlays}
-                loading={signalFeedLoading}
-                title="Spreads & Butterflies"
-                subtitle="Multi-leg strategies — defined risk plays"
-                icon="spread"
-                limit={3}
               />
               <PortfolioPanel whaleAlerts={whaleAlerts} loading={loading} limit={6} />
             </div>
