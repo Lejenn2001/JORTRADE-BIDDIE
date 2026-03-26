@@ -34,14 +34,37 @@ const AIChatPanel = () => {
   const [showCreditStore, setShowCreditStore] = useState(false);
   const firstName = profile?.full_name?.split(" ")[0] || "Trader";
   const [greeting] = useState(() => greetings[Math.floor(Math.random() * greetings.length)](firstName));
-  const [messages, setMessages] = useState<Message[]>([]);
+  const userId = profile?.id || 'anon';
+  const storageKey = `biddie-chat-messages-${userId}`;
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[];
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        return parsed.filter(m => {
+          const ts = parseInt(m.id.split('-').pop() || '0', 10);
+          return ts > cutoff;
+        });
+      }
+    } catch {}
+    return [];
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (messages.length > 0) {
+      const toSave = messages.slice(-100);
+      localStorage.setItem(storageKey, JSON.stringify(toSave));
+    }
+  }, [messages, storageKey]);
+
   const clearChat = () => {
     setMessages([]);
-    localStorage.removeItem('biddie-chat-messages');
+    localStorage.removeItem(storageKey);
   };
 
   useEffect(() => {
