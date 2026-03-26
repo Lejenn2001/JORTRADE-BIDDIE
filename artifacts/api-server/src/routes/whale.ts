@@ -1424,9 +1424,134 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
     // Fall back to local scoring if Claude fails
   }
 
+  // Step 3: Generate spread ideas from the top directional signals
+  const whaleAndAlgoSignals = signals.filter((s) => s.confidence >= 7);
+  if (whaleAndAlgoSignals.length >= 2) {
+    try {
+      const spreadT0 = Date.now();
+      const spreadInput = whaleAndAlgoSignals.slice(0, 6).map((s) => ({
+        ticker: s.ticker,
+        direction: s.direction,
+        option_type: s.option_type,
+        strike: s.strike,
+        expiry: s.expiry,
+        premium: s.premium,
+        current_price: s.current_price,
+        vwap: s.vwap,
+        prior_day_high: s.prior_day_high,
+        prior_day_low: s.prior_day_low,
+        r1: s.r1,
+        s1: s.s1,
+        confidence: s.confidence,
+        entry_trigger: s.entry_trigger,
+        target: s.target,
+        invalidation: s.invalidation,
+      }));
+
+      const spreadPrompt = `You are a professional options strategist. Based on these high-conviction directional signals from institutional flow, suggest 2-3 SPREAD strategies that offer defined-risk ways to play the same thesis.
+
+DIRECTIONAL SIGNALS (these are confirmed by institutional flow):
+${JSON.stringify(spreadInput, null, 2)}
+
+For each spread, return a JSON object with:
+- ticker: the underlying ticker
+- direction: "bullish" or "bearish"
+- trade: human-readable trade description (e.g. "GOOG Bull Call Spread $280/$290 Apr 25")
+- option_type: "call" or "put" (the dominant leg)
+- strategy_type: "bull_call_spread" | "bear_put_spread" | "call_debit_spread" | "put_credit_spread" | "iron_condor" | "butterfly"
+- legs: description of the legs (e.g. "Buy $280 Call / Sell $290 Call")
+- expiry: suggested expiry date
+- max_profit: estimated max profit per contract in dollars (number)
+- max_loss: estimated max loss per contract in dollars (number)
+- risk_reward: ratio as string (e.g. "1:2.5")
+- entry_trigger: when to enter this spread
+- target: profit target
+- invalidation: when to exit for loss
+- confidence: 1-10 based on the underlying signal strength
+- reason: 1-2 sentence explanation of why this spread makes sense given the flow
+
+RULES:
+- Build spreads around the STRONGEST signals (highest confidence)
+- Use strikes near the current price and key levels (VWAP, PDH, PDL, R1, S1)
+- Keep expiries within 2-4 weeks for day/swing trades
+- Favor vertical spreads (bull call, bear put) for simplicity
+- If you see a strong directional move with high gamma, consider a butterfly for a pinning play
+- Make the risk/reward compelling (at least 1:1.5)
+
+Respond ONLY with a JSON array. No markdown, no explanation.`;
+
+      const spreadResponse = await claude.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: spreadPrompt }],
+      });
+
+      const spreadText = (spreadResponse.content[0] as any)?.text ?? "";
+      const spreadJsonMatch = spreadText.match(/\[[\s\S]*\]/);
+      if (spreadJsonMatch) {
+        const spreadIdeas = JSON.parse(spreadJsonMatch[0]);
+
+        for (const spread of spreadIdeas) {
+          const parentSig = whaleAndAlgoSignals.find((s) => s.ticker === spread.ticker);
+          signals.push({
+            ticker: spread.ticker,
+            direction: spread.direction,
+            option_type: spread.option_type,
+            category: "spread",
+            trade: spread.trade,
+            strike: parentSig?.strike ?? 0,
+            expiry: spread.expiry,
+            premium: parentSig?.premium ?? 0,
+            ask_aggression_pct: parentSig?.ask_aggression_pct ?? 0,
+            vol_oi_ratio: parentSig?.vol_oi_ratio ?? 0,
+            has_sweep: parentSig?.has_sweep ?? false,
+            current_price: parentSig?.current_price ?? null,
+            vwap: parentSig?.vwap ?? null,
+            prior_day_high: parentSig?.prior_day_high ?? null,
+            prior_day_low: parentSig?.prior_day_low ?? null,
+            pivot: parentSig?.pivot ?? null,
+            r1: parentSig?.r1 ?? null,
+            s1: parentSig?.s1 ?? null,
+            entry_trigger: spread.entry_trigger,
+            key_level: parentSig?.key_level ?? "",
+            target: spread.target,
+            invalidation: spread.invalidation,
+            reason: spread.reason,
+            confidence: Math.min(10, Math.max(1, spread.confidence ?? 7)),
+            tags: [
+              spread.strategy_type?.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) ?? "Spread",
+              "Defined Risk",
+              spread.direction === "bullish" ? "Call Flow" : "Put Flow",
+            ],
+            price_confirmed: parentSig?.price_confirmed ?? false,
+            price_pattern: parentSig?.price_pattern ?? null,
+            gamma_zone: parentSig?.gamma_zone ?? "neutral",
+            gamma_description: parentSig?.gamma_description ?? null,
+            recommended_action: spread.trade,
+            recommended_expiry: spread.expiry,
+            recommended_strike: spread.entry_trigger,
+            spread_details: {
+              type: spread.strategy_type,
+              legs: spread.legs,
+              max_profit: spread.max_profit ?? null,
+              max_loss: spread.max_loss ?? null,
+              risk_reward: spread.risk_reward ?? null,
+            },
+            is_hedge: false,
+            signal_quality: "moderate",
+          });
+        }
+        console.log(`[signals] Spread generation done: ${Date.now() - spreadT0}ms, ${spreadIdeas.length} spreads`);
+      }
+    } catch (spreadErr) {
+      console.warn(`[signals] Spread generation failed:`, spreadErr);
+    }
+  }
+
+  signals.sort((a, b) => b.confidence - a.confidence);
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals`);
 
-  res.json({ signals: signals.slice(0, 15), count: Math.min(signals.length, 15), timestamp: now });
+  res.json({ signals: signals.slice(0, 20), count: Math.min(signals.length, 20), timestamp: now });
 });
 
 interface PriceHistory {
