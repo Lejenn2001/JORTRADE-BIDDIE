@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
-import { usePresenceBroadcast } from "@/hooks/usePresence";
+import { usePresenceSetup, PresenceContext } from "@/hooks/usePresence";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  usePresenceBroadcast();
+  const onlineUsers = usePresenceSetup();
 
   useEffect(() => {
     let tag = document.querySelector('meta[name="robots"]');
@@ -30,7 +30,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <PresenceContext.Provider value={onlineUsers}>
+      {children}
+    </PresenceContext.Provider>
+  );
 };
 
 export default ProtectedRoute;

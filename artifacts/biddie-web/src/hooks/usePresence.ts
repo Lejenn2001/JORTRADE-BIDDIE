@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 const CHANNEL_NAME = "presence-room";
 
-export function usePresenceBroadcast() {
+const PresenceContext = createContext<Set<string>>(new Set());
+
+export { PresenceContext };
+
+export function usePresenceSetup() {
   const { session, profile } = useAuth();
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -14,8 +19,21 @@ export function usePresenceBroadcast() {
       config: { presence: { key: session.user.id } },
     });
 
+    const extractUsers = () => {
+      const state = channel.presenceState();
+      const ids = new Set<string>();
+      Object.values(state).forEach((presences: any) => {
+        (presences as any[]).forEach((p: any) => {
+          if (p.user_id) ids.add(p.user_id);
+        });
+      });
+      setOnlineUsers(ids);
+    };
+
     channel
-      .on("presence", { event: "sync" }, () => {})
+      .on("presence", { event: "sync" }, extractUsers)
+      .on("presence", { event: "join" }, extractUsers)
+      .on("presence", { event: "leave" }, extractUsers)
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track({
@@ -30,35 +48,10 @@ export function usePresenceBroadcast() {
       supabase.removeChannel(channel);
     };
   }, [session?.user?.id, profile?.full_name]);
+
+  return onlineUsers;
 }
 
 export function usePresenceTracker() {
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-
-  const extractUsers = useCallback((channel: any) => {
-    const state = channel.presenceState();
-    const ids = new Set<string>();
-    Object.values(state).forEach((presences: any[]) => {
-      presences.forEach((p) => {
-        if (p.user_id) ids.add(p.user_id);
-      });
-    });
-    setOnlineUsers(ids);
-  }, []);
-
-  useEffect(() => {
-    const channel = supabase.channel(`${CHANNEL_NAME}-tracker-${Date.now()}`);
-
-    channel
-      .on("presence", { event: "sync" }, () => extractUsers(channel))
-      .on("presence", { event: "join" }, () => extractUsers(channel))
-      .on("presence", { event: "leave" }, () => extractUsers(channel))
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [extractUsers]);
-
-  return onlineUsers;
+  return useContext(PresenceContext);
 }
