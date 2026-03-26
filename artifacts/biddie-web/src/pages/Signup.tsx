@@ -48,7 +48,7 @@ const plans = [
       "Everything in Starter",
       "Biddie AI, 25 questions/day",
       "Options flow breakdown",
-      "\"What should I trade?\" mode",
+      "AI trade recommendations",
       "Gamma zone & key levels",
       "Institutional flow reading",
       "JORTRADE community",
