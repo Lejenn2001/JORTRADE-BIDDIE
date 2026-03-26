@@ -784,6 +784,17 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
 
 // ── Community Chat Endpoint ──────────────────────────────────────────────────────
 
+const COMMUNITY_SYSTEM = `You are Biddie AI in the JORTRADE community chat room. You're a seasoned but relatable and cool trading buddy.
+
+CRITICAL RULES:
+1. ONLY answer what the user ACTUALLY asked. Do NOT volunteer extra info.
+2. If someone says "thanks", "appreciate it", "bet", "cool" — just give a short hype reply like "You got it fam 💪" or "Go get that bread! 🍞" or "That's what I'm here for 🤝". ONE sentence max.
+3. If someone asks a casual question (time, how are you, what's up) — answer ONLY that question in 1-2 sentences. Do NOT add trading info.
+4. ONLY talk about market data, flow, or tickers if the user SPECIFICALLY asks about trading, stocks, options, or the market.
+5. Keep it SHORT. Community chat = quick, casual energy. 1-3 sentences unless they ask for a detailed breakdown.
+6. Match the user's energy — if they're casual, be casual. If they ask a real trading question, give a focused answer.
+7. Never say "I don't have real-time data" — you DO have live data when it's provided.`;
+
 router.post("/whale/community-chat", async (req, res) => {
   const { message } = req.body as { message?: string };
   if (!message?.trim()) {
@@ -793,61 +804,58 @@ router.post("/whale/community-chat", async (req, res) => {
 
   const now = getNowEastern();
   const needs = detectNeeds(message);
-  const tickersToFetch = needs.tickers.slice(0, 4);
-  const baselineTickers = ["SPY", "QQQ"];
-  const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
+  const isTradingQ = needs.tickers.length > 0 || needs.market || needs.flow;
 
-  const [flowAlerts, sectorData] = await Promise.all([
-    fetchFlowAlerts(100),
-    needs.market ? fetchSectorEtfs() : Promise.resolve([]),
-  ]);
+  let dataStr = "";
+  if (isTradingQ) {
+    const tickersToFetch = needs.tickers.slice(0, 4);
+    const baselineTickers = ["SPY", "QQQ"];
+    const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
 
-  const enriched = enrichAlerts(flowAlerts);
+    const [flowAlerts, sectorData] = await Promise.all([
+      fetchFlowAlerts(100),
+      needs.market ? fetchSectorEtfs() : Promise.resolve([]),
+    ]);
 
-  const uwPrices: Record<string, number> = {};
-  for (const alert of enriched) {
-    const t = (alert.ticker ?? "").toUpperCase();
-    const p = parseFloat(alert.underlying_price);
-    if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
-  }
+    const enriched = enrichAlerts(flowAlerts);
 
-  const keyLevelsResults = await Promise.all(
-    allLevelTickers.map((t) => fetchKeyLevels(t, uwPrices[t.toUpperCase()] ?? null))
-  );
-  const keyLevels: Record<string, any> = {};
-  allLevelTickers.forEach((t, i) => { if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i]; });
-
-  const context: Record<string, any> = {
-    fetched_at: now,
-    key_levels: keyLevels,
-    all_flow_alerts: enriched.slice(0, 40),
-  };
-  if (tickersToFetch.length > 0) {
-    const tickerFlow: Record<string, any[]> = {};
-    for (const ticker of tickersToFetch) {
-      tickerFlow[ticker] = enriched.filter((a) => (a.ticker ?? "").toUpperCase() === ticker.toUpperCase());
+    const uwPrices: Record<string, number> = {};
+    for (const alert of enriched) {
+      const t = (alert.ticker ?? "").toUpperCase();
+      const p = parseFloat(alert.underlying_price);
+      if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
     }
-    context.ticker_specific_flow = tickerFlow;
+
+    const keyLevelsResults = await Promise.all(
+      allLevelTickers.map((t) => fetchKeyLevels(t, uwPrices[t.toUpperCase()] ?? null))
+    );
+    const keyLevels: Record<string, any> = {};
+    allLevelTickers.forEach((t, i) => { if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i]; });
+
+    const context: Record<string, any> = {
+      fetched_at: now,
+      key_levels: keyLevels,
+      all_flow_alerts: enriched.slice(0, 40),
+    };
+    if (tickersToFetch.length > 0) {
+      const tickerFlow: Record<string, any[]> = {};
+      for (const ticker of tickersToFetch) {
+        tickerFlow[ticker] = enriched.filter((a) => (a.ticker ?? "").toUpperCase() === ticker.toUpperCase());
+      }
+      context.ticker_specific_flow = tickerFlow;
+    }
+    if (sectorData.length > 0) context.sector_etfs = sectorData;
+
+    dataStr = `\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
   }
-  if (sectorData.length > 0) context.sector_etfs = sectorData;
 
-  const chatInstruction = `[COMMUNITY CHAT MODE] Keep your response SHORT — 2-3 sentences max. Only give a full detailed breakdown if you see a high-confidence alert (8+/10). For casual greetings, just be friendly and brief. For trading questions, give the #1 best play only with ticker, direction, and confidence. No long lists.
-
-User says: ${message}
-
---- CURRENT DATE & TRADING CALENDAR ---
-${getEasternDateContext()}
-
---- LIVE MARKET DATA (fetched ${now}) ---
-\`\`\`json
-${JSON.stringify(context, null, 2)}
-\`\`\``;
+  const chatInstruction = `User says: ${message}${dataStr}`;
 
   try {
     const response = await claude.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 500,
-      system: BIDDIE_SYSTEM,
+      max_tokens: 300,
+      system: COMMUNITY_SYSTEM,
       messages: [{ role: "user", content: chatInstruction }],
     });
 
