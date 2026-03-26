@@ -1275,13 +1275,87 @@ Drop the morning outlook. Keep it real.`,
   }
 });
 
-// ── Scheduled Morning Outlook Timer ──────────────────────────────────────────
+// ── Scheduled Daily Posts ──────────────────────────────────────────────────────
 
-let morningOutlookScheduled = false;
+const BIDDIE_USER_ID = "00000000-0000-0000-0000-000000000000";
 
-function scheduleMorningOutlook() {
-  if (morningOutlookScheduled) return;
-  morningOutlookScheduled = true;
+interface ScheduledPost {
+  id: string;
+  hour: number;
+  minuteStart: number;
+  minuteEnd: number;
+  prompt: string;
+  system: string;
+}
+
+const MIDDAY_SYSTEM = `You are Biddie AI checking in with the JORTRADE crew during the trading session.
+
+YOUR VIBE: Seasoned trader, chill but sharp. Casual and real. You're updating the team on what's actually happening right now.
+
+YOUR JOB: Quick midday pulse check. What's moved, what's still in play, any new flow worth watching. This is NOT a full breakdown — just the highlights.
+
+FORMAT:
+1. **How We're Looking** — 1-2 sentences on SPY/QQQ direction since open. Up, down, choppy?
+2. **Biggest Moves** — 1-2 tickers with the most action right now. Actual numbers (premium, direction)
+3. **Still Watching** — Anything from the morning that's setting up for an afternoon move
+4. **Quick Take** — One sentence, your read on the rest of the session
+
+RULES:
+- Under 200 words
+- Only near-term stuff (0DTE to 2 weeks)
+- Reference real numbers, not vibes
+- Don't repeat the morning outlook — focus on what changed`;
+
+const CLOSING_SYSTEM = `You are Biddie AI wrapping up the day for the JORTRADE crew.
+
+YOUR VIBE: Seasoned trader, chill but sharp. End of day energy — reflective but forward-looking.
+
+YOUR JOB: Quick end-of-day recap. What happened, what hit, what to watch for tomorrow. Keep it tight.
+
+FORMAT:
+1. **Today's Scorecard** — SPY/QQQ close direction, overall market vibe in 1-2 sentences
+2. **Winners & Losers** — 1-2 tickers that made the biggest moves. What the flow told us
+3. **Tomorrow's Radar** — 1-2 things to watch for next session (earnings, catalysts, key levels)
+4. **Final Word** — One sentence wrap-up
+
+RULES:
+- Under 200 words
+- Be honest about what worked and what didn't
+- Reference actual closing prices and flow data
+- Keep it real — no hype, no fluff`;
+
+const scheduledPosts: ScheduledPost[] = [
+  {
+    id: "morning",
+    hour: 8,
+    minuteStart: 15,
+    minuteEnd: 30,
+    prompt: "Drop the morning outlook. Keep it real.",
+    system: MORNING_OUTLOOK_SYSTEM,
+  },
+  {
+    id: "midday",
+    hour: 12,
+    minuteStart: 0,
+    minuteEnd: 15,
+    prompt: "Give the midday update. What's moving right now?",
+    system: MIDDAY_SYSTEM,
+  },
+  {
+    id: "closing",
+    hour: 15,
+    minuteStart: 45,
+    minuteEnd: 59,
+    prompt: "Wrap up the day. What happened and what's next?",
+    system: CLOSING_SYSTEM,
+  },
+];
+
+let dailyPostsScheduled = false;
+
+function scheduleDailyPosts() {
+  if (dailyPostsScheduled) return;
+  dailyPostsScheduled = true;
 
   setInterval(async () => {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -1294,19 +1368,22 @@ function scheduleMorningOutlook() {
     const day = get("weekday");
 
     if (["Saturday", "Sunday"].includes(day)) return;
-    if (hour !== 8 || minute < 15 || minute > 30) return;
+
+    const activePost = scheduledPosts.find(
+      (p) => p.hour === hour && minute >= p.minuteStart && minute <= p.minuteEnd
+    );
+    if (!activePost) return;
 
     try {
-      const BIDDIE_USER_ID = "00000000-0000-0000-0000-000000000000";
-      const today = new Date().toISOString().split("T")[0];
-      const { data: existing } = await supabase
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: recent } = await supabase
         .from("chat_messages")
         .select("id")
         .eq("user_id", BIDDIE_USER_ID)
-        .gte("created_at", `${today}T00:00:00Z`)
+        .gte("created_at", twoHoursAgo)
         .limit(1);
 
-      if (existing && existing.length > 0) return;
+      if (recent && recent.length > 0) return;
 
       const [flowAlerts, sectorData, econData] = await Promise.all([
         fetchFlowAlerts(200),
@@ -1344,10 +1421,10 @@ function scheduleMorningOutlook() {
       const response = await claude.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1500,
-        system: MORNING_OUTLOOK_SYSTEM,
+        system: activePost.system,
         messages: [{
           role: "user",
-          content: `Generate the morning outlook for today.
+          content: `${activePost.prompt}
 
 --- CURRENT DATE & TRADING CALENDAR ---
 ${dateContext}
@@ -1355,28 +1432,26 @@ ${dateContext}
 --- LIVE MARKET DATA (fetched ${now}) ---
 \`\`\`json
 ${JSON.stringify(context, null, 2)}
-\`\`\`
-
-Drop the morning outlook. Keep it real.`,
+\`\`\``,
         }],
       });
 
-      const outlook = response.content[0].type === "text" ? response.content[0].text : "";
+      const content = response.content[0].type === "text" ? response.content[0].text : "";
 
       await supabase.from("chat_messages").insert({
         user_id: BIDDIE_USER_ID,
         user_name: "Biddie AI",
-        content: outlook,
+        content,
       });
 
-      console.log(`[Morning Outlook] Posted at ${now}`);
+      console.log(`[Biddie ${activePost.id}] Posted at ${now}`);
     } catch (err) {
-      console.error("[Morning Outlook] Failed:", err);
+      console.error(`[Biddie ${activePost.id}] Failed:`, err);
     }
   }, 60000);
 }
 
-scheduleMorningOutlook();
+scheduleDailyPosts();
 
 router.get("/whale/health", (_req, res) => {
   res.json({
