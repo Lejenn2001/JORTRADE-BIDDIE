@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Trash2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuestionLimit } from "@/hooks/useQuestionLimit";
 import ReactMarkdown from "react-markdown";
 import biddieRobot from "@/assets/biddie-robot.png";
+import { Link } from "react-router-dom";
 
 interface Message {
   id: string;
@@ -27,6 +29,7 @@ const greetings = [
 
 const AIChatPanel = () => {
   const { profile } = useAuth();
+  const { canAsk, hasAccess, remaining, limit, increment, plan } = useQuestionLimit();
   const firstName = profile?.full_name?.split(" ")[0] || "Trader";
   const [greeting] = useState(() => greetings[Math.floor(Math.random() * greetings.length)](firstName));
   const [messages, setMessages] = useState<Message[]>([]);
@@ -45,6 +48,7 @@ const AIChatPanel = () => {
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
+    if (!canAsk) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -61,7 +65,6 @@ const AIChatPanel = () => {
     setIsLoading(true);
 
     try {
-      // Detect if user is telling Biddie about a trade they entered
       const lower = text.trim().toLowerCase();
       const isTradeEntry = /\b(i just (entered|bought|sold|opened|took)|i('m| am) (in|holding|long|short)|my position|i have a)\b/.test(lower);
       
@@ -72,7 +75,6 @@ const AIChatPanel = () => {
         instruction = `[DASHBOARD CHAT MODE] Keep your response to 3-4 sentences max. Be conversational and helpful but concise. No long breakdowns unless the user specifically asks for detail.\n\nUser says: ${text.trim()}`;
       }
 
-      // Build conversation history for context memory
       const history = updatedMessages.slice(0, -1).map(m => ({
         role: m.role,
         content: m.content,
@@ -86,6 +88,8 @@ const AIChatPanel = () => {
 
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
+
+      increment();
 
       const assistantMsg: Message = {
         id: `asst-${Date.now()}`,
@@ -116,15 +120,48 @@ const AIChatPanel = () => {
     sendMessage(input);
   };
 
+  if (!hasAccess) {
+    return (
+      <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
+        <div className="flex items-center justify-between p-4 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <Bot className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm text-foreground">Biddie AI</span>
+          </div>
+          <span className="text-xs bg-muted/50 text-muted-foreground px-2.5 py-0.5 rounded-full flex items-center gap-1">
+            <Lock className="h-3 w-3" />
+            Locked
+          </span>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mb-4 opacity-40 grayscale" />
+          <h3 className="text-foreground font-semibold text-sm mb-2">Upgrade to chat with Biddie</h3>
+          <p className="text-xs text-muted-foreground mb-4 max-w-[220px]">
+            Signal Scout gives you alerts. Active Trader lets you talk to Biddie live and plan your trades.
+          </p>
+          <Link
+            to="/signup"
+            className="inline-flex items-center gap-1.5 text-xs font-medium bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30 transition-colors"
+          >
+            Upgrade Plan
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/40">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm text-foreground">Biddie AI</span>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            {remaining}/{limit} left today
+          </span>
           <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
             Online
@@ -137,7 +174,6 @@ const AIChatPanel = () => {
         </div>
       </div>
 
-      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
           <div className="text-center py-8">
@@ -185,8 +221,7 @@ const AIChatPanel = () => {
         )}
       </div>
 
-      {/* Quick prompts */}
-      {messages.length === 0 && (
+      {messages.length === 0 && canAsk && (
         <div className="px-4 pb-2">
           <div className="flex flex-wrap gap-1.5">
             {quickPrompts.map((q) => (
@@ -202,19 +237,32 @@ const AIChatPanel = () => {
         </div>
       )}
 
-      {/* Input */}
+      {!canAsk && hasAccess && (
+        <div className="px-4 pb-2">
+          <div className="text-center py-3 bg-muted/30 rounded-lg border border-border/40">
+            <p className="text-xs text-muted-foreground mb-1">Daily limit reached ({limit} questions)</p>
+            {plan === "active" && (
+              <Link to="/signup" className="text-[10px] text-primary hover:underline inline-flex items-center gap-1">
+                Upgrade to Pro for 50/day <ArrowUpRight className="h-2.5 w-2.5" />
+              </Link>
+            )}
+            <p className="text-[10px] text-muted-foreground/60 mt-1">Resets at midnight</p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="p-3 border-t border-border/40">
         <div className="flex items-center gap-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Biddie anything..."
+            placeholder={canAsk ? "Ask Biddie anything..." : "Daily limit reached"}
             className="bg-muted/30 border-border/50 rounded-lg text-sm flex-1"
-            disabled={isLoading}
+            disabled={isLoading || !canAsk}
           />
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !input.trim() || !canAsk}
             className="bg-primary/20 text-primary rounded-lg p-2.5 hover:bg-primary/30 transition-colors shrink-0 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
