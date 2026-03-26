@@ -244,11 +244,6 @@ const DashboardAnalytics = () => {
                 <h1 className="text-xl font-bold text-foreground">Analytics</h1>
                 <p className="text-sm text-muted-foreground">Member activity and platform overview</p>
               </div>
-              <Link to="/ecosystem">
-                <Button size="sm" variant="outline" className="text-xs gap-2">
-                  <Globe className="h-3.5 w-3.5" /> Preview Ecosystem Page
-                </Button>
-              </Link>
             </div>
 
           {loading ? (

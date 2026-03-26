@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface StatCardProps {
   icon: React.ElementType;
@@ -238,16 +239,23 @@ const DashboardAdmin = () => {
               </h1>
               <p className="text-muted-foreground text-sm mt-1">{users.length} registered users</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportCSV}
-              disabled={users.length === 0}
-              className="text-xs border-border/50 gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link to="/ecosystem">
+                <Button size="sm" variant="outline" className="text-xs gap-2 border-border/50">
+                  <Globe className="h-3.5 w-3.5" /> Preview Ecosystem Page
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportCSV}
+                disabled={users.length === 0}
+                className="text-xs border-border/50 gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           {(() => {
