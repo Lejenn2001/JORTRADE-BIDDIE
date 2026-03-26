@@ -29,6 +29,7 @@ const DashboardCommunity = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [biddieThinking, setBiddieThinking] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -94,8 +95,9 @@ const DashboardCommunity = () => {
   }, [session?.user?.id, firstName]);
 
   const triggerBiddie = async (userMessage: string) => {
+    setBiddieThinking(true);
+    scrollToBottom();
     try {
-      // Prepend instruction for concise community chat responses
       const chatInstruction = `[COMMUNITY CHAT MODE] Keep your response SHORT — 2-3 sentences max. Only give a full detailed breakdown if you see a high-confidence alert (8+/10). For casual greetings, just be friendly and brief. For trading questions, give the #1 best play only with ticker, direction, and confidence. No long lists.\n\nUser says: ${userMessage}`;
       const res = await fetch('/api/whale/chat', {
         method: 'POST',
@@ -104,9 +106,21 @@ const DashboardCommunity = () => {
       });
       if (!res.ok) {
         console.error("Biddie API error:", res.status);
+        return;
+      }
+      const data = await res.json();
+      const reply = data.analysis || data.reply || data.response || data.message;
+      if (reply && typeof reply === "string" && reply.trim()) {
+        await supabase.from("chat_messages").insert({
+          user_id: BIDDIE_USER_ID,
+          user_name: "Biddie AI",
+          content: reply.trim(),
+        } as any);
       }
     } catch (e) {
       console.error("Biddie API error:", e);
+    } finally {
+      setBiddieThinking(false);
     }
   };
 
@@ -142,6 +156,17 @@ const DashboardCommunity = () => {
         "expir", "premium", "sweep", "gamma", "vwap",
         "support", "resistance", "pivot", "target",
         "what do you think about", "should i", "would you", "is it time",
+        "option", "contract", "price", "cheap", "expensive",
+        "buy", "sell", "long", "short", "iron condor", "butterfly",
+        "straddle", "strangle", "collar", "hedge", "roll",
+        "otm", "itm", "atm", "delta", "theta", "iv", "implied vol",
+        "what ticker", "which stock", "any ideas", "play today",
+        "good trade", "best trade", "hot stock", "earnings",
+        "how", "why", "when", "where", "can you", "tell me",
+        "profit", "loss", "risk", "reward", "setup",
+        "chart", "trend", "moving average", "rsi", "macd",
+        "dip", "rally", "gap", "volume",
+        "?",
       ];
       const isTradingQuestion = tradingKeywords.some(kw => lower.includes(kw));
       
@@ -293,6 +318,29 @@ const DashboardCommunity = () => {
                 );
               })}
             </AnimatePresence>
+
+            {biddieThinking && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-2.5"
+              >
+                <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-primary/20 border border-primary/40">
+                  <img src={biddieRobot} alt="Biddie" className="w-full h-full object-contain" />
+                </div>
+                <div className="bg-primary/10 border border-primary/25 rounded-2xl rounded-bl-sm px-3 py-2">
+                  <p className="text-[11px] font-semibold mb-0.5 text-primary">Biddie AI</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Biddie is analyzing</span>
+                    <span className="flex gap-0.5">
+                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Input */}
