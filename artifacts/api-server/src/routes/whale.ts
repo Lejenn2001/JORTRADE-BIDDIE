@@ -889,20 +889,20 @@ Each signal object must have exactly these fields:
   "recommended_action": "specific trade recommendation e.g. Buy SPY $570 Put expiring March 28",
   "recommended_expiry": "suggested expiration based on timeframe",
   "recommended_strike": "suggested strike price with reasoning",
-  "spread_details": "null for single-leg, or object with { type: 'debit_spread'|'butterfly'|'iron_condor', legs: 'description of legs', max_profit: number|null, max_loss: number|null, probability: number|null } for multi-leg strategies"
+  "spread_details": "null for single-leg, or object with { type: 'debit_spread'|'butterfly', legs: 'description of legs', max_profit: number|null, max_loss: number|null, probability: number|null } for multi-leg strategies"
 }
 
 CATEGORY RULES:
 - "algorithm": Single-leg plays detected by price action + gamma analysis. Intraday entries. These are directional bets confirmed by technical levels.
 - "whale": Large institutional single-leg flow ($250K+ premium). Sweeps, blocks, floor trades. Swing positioning.
-- "spread": Multi-leg strategies — debit spreads, butterflies, iron condors. Look for MULTIPLE flow alerts on the SAME ticker + SAME expiry at DIFFERENT strikes that suggest a defined-risk strategy. Also identify when flow data explicitly shows spread or multi-leg activity. Provide spread_details for these.
+- "spread": Multi-leg strategies — debit spreads and butterflies ONLY. Look for MULTIPLE flow alerts on the SAME ticker + SAME expiry at DIFFERENT strikes that suggest a defined-risk strategy. Also identify when flow data explicitly shows spread or multi-leg activity. Provide spread_details for these.
 
 SPREAD/BUTTERFLY DETECTION:
-- If you see call flow at 2+ different strikes on the same ticker/expiry, consider if it's a debit spread (buy lower, sell higher for calls) or credit spread
+- If you see call flow at 2+ different strikes on the same ticker/expiry, consider if it's a debit spread (buy lower, sell higher for calls)
 - If you see 3 strikes with the middle having 2x volume, it's likely a butterfly
-- Sweeps at adjacent strikes on the same ticker = probable spread
+- Sweeps at adjacent strikes on the same ticker = probable debit spread
 - Include estimated max profit/loss and probability when identifiable
-- Tag spreads with "Debit Spread", "Butterfly", or "Iron Condor" as appropriate
+- Tag spreads with "Debit Spread" or "Butterfly" as appropriate
 
 CRITICAL RULES for accuracy:
 - entry_trigger MUST reference actual VWAP, prior day high/low, or pivot levels from the data
@@ -915,8 +915,8 @@ CRITICAL RULES for accuracy:
 - ACT NOW FOR SPREADS: Spread/butterfly signals should ALSO get "🔥 ACT NOW" tag when gamma conditions are favorable:
   - Debit spreads in NEGATIVE gamma zone = ACT NOW (directional move will be amplified through spread strikes)
   - Butterflies in POSITIVE gamma zone = ACT NOW (pinning action benefits max profit zone)
-  - Iron condors in POSITIVE gamma zone = ACT NOW (mean-reversion keeps price in profit range)
   - When a spread gets ACT NOW, set confidence to 9+ and timeframe to "buy_now" or "short_term"
+  - Only identify DEBIT SPREADS and BUTTERFLIES as spread category signals. Do NOT generate iron condors or credit spreads.
 - TRADE RECOMMENDATIONS: For each signal, recommend the specific option to buy:
   - For "Act Now" signals (confidence 9-10): suggest 0-2 DTE, ATM or 1 strike OTM
   - For short-term signals (confidence 8): suggest 3-7 DTE, ATM
