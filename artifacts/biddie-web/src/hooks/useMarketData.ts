@@ -475,7 +475,14 @@ function classifyTimeframe(signal: { convictionScore?: number; confidence: numbe
 }
 
 const CACHE_KEY = 'jortrade-signals-cache';
+const HISTORY_KEY = 'jortrade-signals-history';
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_HISTORY = 200;
+
+function signalUniqueKey(s: MarketSignal): string {
+  return `${s.ticker}|${s.strike}|${s.expiry}|${s.putCall}`;
+}
 
 function loadCachedSignals(): MarketSignal[] | null {
   try {
@@ -494,6 +501,56 @@ function saveCachedSignals(signals: MarketSignal[]) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ signals, timestamp: Date.now() }));
   } catch {}
+}
+
+function loadSignalHistory(): MarketSignal[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const { signals, timestamps } = JSON.parse(raw);
+    if (!Array.isArray(signals)) return [];
+    const now = Date.now();
+    return signals.filter((_s: MarketSignal, i: number) => {
+      const addedAt = timestamps?.[i] ?? 0;
+      return now - addedAt < HISTORY_TTL;
+    });
+  } catch { return []; }
+}
+
+function saveSignalHistory(signals: MarketSignal[], timestamps: number[]) {
+  try {
+    const trimmed = signals.slice(0, MAX_HISTORY);
+    const trimmedTs = timestamps.slice(0, MAX_HISTORY);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify({ signals: trimmed, timestamps: trimmedTs }));
+  } catch {}
+}
+
+function mergeIntoHistory(newSignals: MarketSignal[]): MarketSignal[] {
+  const existing = loadSignalHistory();
+  const existingKeys = new Set(existing.map(signalUniqueKey));
+  const now = Date.now();
+
+  const rawHistory = localStorage.getItem(HISTORY_KEY);
+  let existingTimestamps: number[] = [];
+  try {
+    if (rawHistory) existingTimestamps = JSON.parse(rawHistory).timestamps || [];
+  } catch {}
+
+  const freshSignals: MarketSignal[] = [];
+  const freshTimestamps: number[] = [];
+  for (const s of newSignals) {
+    const key = signalUniqueKey(s);
+    if (!existingKeys.has(key)) {
+      freshSignals.push(s);
+      freshTimestamps.push(now);
+      existingKeys.add(key);
+    }
+  }
+
+  const merged = [...freshSignals, ...existing];
+  const mergedTs = [...freshTimestamps, ...existingTimestamps];
+  saveSignalHistory(merged, mergedTs);
+  return merged;
 }
 
 export function useMarketData() {
@@ -672,7 +729,8 @@ export function useMarketData() {
             } as MarketSignal;
           });
 
-          // Merge live signals (first) with examples (after), deduplicating by ticker
+          mergeIntoHistory(mapped);
+
           const liveTickers = new Set(mapped.map(s => s.ticker));
           const filteredExamples = exampleSignals.filter(s => !liveTickers.has(s.ticker));
           setSignals([...mapped, ...filteredExamples]);
@@ -832,6 +890,8 @@ export function useMarketData() {
           ...signal,
           timeframe: classifyTimeframe(signal),
         }));
+
+      mergeIntoHistory(liveDeduped);
 
       const liveTickers = new Set(liveDeduped.map(s => s.ticker));
       const fillerSignals = exampleSignals.filter(s => !liveTickers.has(s.ticker) && (s.convictionScore !== undefined ? s.convictionScore >= 80 : s.confidence >= 8));
@@ -994,7 +1054,9 @@ export function useMarketData() {
     return () => clearInterval(interval);
   }, [fetchFlowAlerts, fetchWhaleAlerts, fetchMarketOverview]);
 
-  return { signals, whaleAlerts, marketOverview, loading, error, fetchTickerData, refresh: fetchFlowAlerts };
+  const signalHistory = loadSignalHistory();
+
+  return { signals, signalHistory, whaleAlerts, marketOverview, loading, error, fetchTickerData, refresh: fetchFlowAlerts };
 }
 
 function formatPremium(value: any): string {

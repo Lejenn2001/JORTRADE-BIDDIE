@@ -111,28 +111,26 @@ function formatTimestamp(isoStr: string): string {
 }
 
 const DashboardSignals = () => {
-  const { signals: liveSignals, loading: liveLoading } = useMarketData();
+  const { signals: liveSignals, signalHistory, loading: liveLoading } = useMarketData();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
 
-  // Load today's signals from signal_outcomes table
   useEffect(() => {
-    const loadTodaySignals = async () => {
+    const loadRecentSignals = async () => {
       setDbLoading(true);
       try {
-        // Get start of today in UTC
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        todayStart.setHours(todayStart.getHours() - 4); // EST offset — capture full trading day
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
         const { data, error } = await supabase
           .from("signal_outcomes")
           .select("*")
           .eq("signal_source", "replit")
-          .gte("created_at", todayStart.toISOString())
-          .order("created_at", { ascending: false });
+          .gte("created_at", weekAgo.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(100);
 
         if (error) throw error;
 
@@ -141,17 +139,22 @@ const DashboardSignals = () => {
           setDbSignals(mapped);
         }
       } catch (e) {
-        console.warn('Failed to load today signals from DB:', e);
+        console.warn('Failed to load recent signals from DB:', e);
       } finally {
         setDbLoading(false);
       }
     };
 
-    loadTodaySignals();
+    loadRecentSignals();
   }, []);
 
   const allSignals = useMemo(() => {
     const signalMap = new Map<string, MarketSignal>();
+
+    for (const s of (signalHistory || [])) {
+      const key = `${s.ticker}|${s.strike}|${s.expiry}`;
+      signalMap.set(key, s);
+    }
 
     for (const s of dbSignals) {
       const key = `${s.ticker}|${s.strike}|${s.expiry}`;
@@ -164,7 +167,7 @@ const DashboardSignals = () => {
     }
 
     return Array.from(signalMap.values());
-  }, [liveSignals, dbSignals]);
+  }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;
   const signals = allSignals;
