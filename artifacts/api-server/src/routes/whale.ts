@@ -1109,11 +1109,28 @@ router.get("/whale/signals", async (_req, res) => {
     }
 
     // Near-term expiry bonus
+    let daysOut = 30;
     if (expiryDate) {
       try {
-        const daysToExpiry = (new Date(expiryDate + "T16:00:00").getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-        if (daysToExpiry <= 7) confidence += 0.5;
+        daysOut = (new Date(expiryDate + "T16:00:00").getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        if (daysOut <= 7) confidence += 0.5;
       } catch {}
+    }
+
+    // ── Price direction alignment — critical for "ACT NOW" accuracy ──
+    const vwapVal = kl?.vwap ?? null;
+    const priceAligned = (() => {
+      if (!price || !vwapVal) return null;
+      if (optType === "call") return price > vwapVal;
+      return price < vwapVal;
+    })();
+
+    if (priceAligned === false) {
+      // Price is going AGAINST the signal direction — this is a "watch", not "act now"
+      confidence -= 1.5;
+    } else if (priceAligned === true && confirmation?.confirmed) {
+      // Price aligned AND confirmed by candle pattern — highest conviction
+      confidence += 0.5;
     }
 
     confidence = Math.min(10, Math.round(confidence));
