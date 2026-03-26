@@ -22,4 +22,14 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  setTimeout(async () => {
+    try {
+      const res = await fetch(`http://localhost:${port}/api/whale/signals`);
+      const data = await res.json();
+      logger.info({ count: data.count }, "Cache pre-warmed on startup");
+    } catch (e) {
+      logger.warn("Cache pre-warm failed (non-critical)");
+    }
+  }, 1000);
 });

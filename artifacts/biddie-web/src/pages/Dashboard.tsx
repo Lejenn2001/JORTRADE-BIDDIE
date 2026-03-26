@@ -185,7 +185,6 @@ const Dashboard = () => {
     sortSignals(
       allMergedSignals
         .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
-        .filter(s => getSignalScore(s) >= 70)
     ).slice(0, 5),
     [allMergedSignals]
   );

@@ -571,8 +571,14 @@ export function useMarketData() {
       const timeoutId = setTimeout(() => controller.abort(), 45000);
       const res = await fetch(REPLIT_SIGNALS_API, { signal: controller.signal });
       clearTimeout(timeoutId);
+      console.log('[JORTRADE] API response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('[JORTRADE] API data:', { count: data?.count, loading: data?.loading, signalCount: data?.signals?.length });
+        if (data?.loading) {
+          console.log('[JORTRADE] Server warming up, will retry...');
+          return;
+        }
         const replitSignals = data?.signals || [];
         if (replitSignals.length > 0) {
           const mapped: MarketSignal[] = replitSignals.map((s: any, i: number) => {
@@ -739,6 +745,7 @@ export function useMarketData() {
 
           mergeIntoHistory(mapped);
 
+          console.log('[JORTRADE] Mapped signals:', mapped.length, 'categories:', mapped.map(s => `${s.ticker}:${s.category}:${s.convictionScore}`).join(', '));
           setSignals(mapped);
           saveCachedSignals(mapped);
 
@@ -780,8 +787,11 @@ export function useMarketData() {
           return;
         }
       }
-    } catch (e) {
-      console.warn('Replit signals API failed, falling back to edge function:', e);
+    } catch (e: any) {
+      console.error('[JORTRADE] API fetch failed:', e?.name, e?.message);
+      if (e?.name === 'AbortError') {
+        console.error('[JORTRADE] Request timed out after 45s — server may be warming up');
+      }
     }
 
     // Fallback to existing edge function

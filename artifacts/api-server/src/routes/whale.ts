@@ -985,20 +985,11 @@ router.get("/whale/signal", async (_req, res) => {
 });
 
 let signalsCache: { data: any; timestamp: number } | null = null;
-const SIGNALS_CACHE_TTL = 90_000; // 90 seconds — pipeline takes ~30s so cache for 90s
+const SIGNALS_CACHE_TTL = 180_000; // 3 minutes
 let signalsPipelineRunning = false;
 
-router.get("/whale/signals", async (_req, res) => {
-  // Return cached result if fresh enough
-  if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) {
-    return res.json(signalsCache.data);
-  }
-
-  // If pipeline is already running from another request, wait for it
-  if (signalsPipelineRunning && signalsCache) {
-    return res.json(signalsCache.data);
-  }
-
+async function runSignalsPipeline() {
+  if (signalsPipelineRunning) return signalsCache?.data || null;
   signalsPipelineRunning = true;
   const now = getNowEastern();
   const t0 = Date.now();
@@ -1574,7 +1565,36 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
-  res.json(responseData);
+  return responseData;
+}
+
+router.get("/whale/signals", async (_req, res) => {
+  if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) {
+    return res.json(signalsCache.data);
+  }
+
+  if (signalsPipelineRunning) {
+    if (signalsCache) {
+      return res.json(signalsCache.data);
+    }
+    return res.json({ signals: [], count: 0, timestamp: getNowEastern(), loading: true });
+  }
+
+  try {
+    const data = await runSignalsPipeline();
+    if (data) {
+      res.json(data);
+    } else {
+      res.json({ signals: [], count: 0, timestamp: getNowEastern() });
+    }
+  } catch (err: any) {
+    console.error("[signals] pipeline error:", err);
+    signalsPipelineRunning = false;
+    if (signalsCache) {
+      return res.json(signalsCache.data);
+    }
+    res.status(500).json({ error: "Signal pipeline failed", signals: [], count: 0 });
+  }
 });
 
 interface PriceHistory {
