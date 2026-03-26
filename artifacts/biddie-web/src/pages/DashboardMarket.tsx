@@ -191,6 +191,11 @@ const TICKER_DB: { symbol: string; name: string }[] = [
   { symbol: "LRCX", name: "Lam Research" },
   { symbol: "AMAT", name: "Applied Materials" },
   { symbol: "KLAC", name: "KLA Corporation" },
+  { symbol: "SNDK", name: "SanDisk Corporation" },
+  { symbol: "RDTI", name: "Roadie Therapeutics Inc." },
+  { symbol: "CRCL", name: "Circle Logistics" },
+  { symbol: "CAVA", name: "CAVA Group Inc." },
+  { symbol: "CRWV", name: "CrowdStrike Holdings (Warrants)" },
 ];
 
 const verdictColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
