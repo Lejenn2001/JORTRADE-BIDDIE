@@ -1626,6 +1626,134 @@ router.get("/whale/signals", async (_req, res) => {
   }
 });
 
+router.get("/whale/analyze/:ticker", async (req, res) => {
+  const ticker = (req.params.ticker || "").toUpperCase().replace(/[^A-Z]/g, "");
+  if (!ticker || ticker.length > 5) {
+    res.status(400).json({ error: "Invalid ticker" });
+    return;
+  }
+
+  try {
+    const t0 = Date.now();
+    console.log(`[analyze] Starting analysis for ${ticker}`);
+
+    const [flowAlerts, darkpool, keyLevels, candles] = await Promise.all([
+      fetchFlowAlerts(500),
+      fetchDarkpool(ticker, 30),
+      fetchKeyLevels(ticker),
+      fetchRecentCandles(ticker, "1m", 15),
+    ]);
+
+    const enriched = enrichAlerts(flowAlerts);
+    const tickerFlow = enriched.filter((a: any) => (a.ticker ?? "").toUpperCase() === ticker);
+    const topFlow = tickerFlow.slice(0, 20);
+
+    const priceConfirmation = keyLevels ? detectPriceActionConfirmation(
+      candles, keyLevels.current_price ?? 0, keyLevels, ticker
+    ) : null;
+
+    const darkpoolSummary = darkpool.slice(0, 10).map((d: any) => ({
+      price: d.price, size: d.size, volume: d.volume,
+      notional: d.notional_value, side: d.trade_type, date: d.tracking_timestamp,
+    }));
+
+    const totalDpVolume = darkpool.reduce((sum: number, d: any) => sum + (parseFloat(d.volume) || 0), 0);
+    const totalDpNotional = darkpool.reduce((sum: number, d: any) => sum + (parseFloat(d.notional_value) || 0), 0);
+    const avgDpPrice = darkpool.length > 0
+      ? darkpool.reduce((sum: number, d: any) => sum + (parseFloat(d.price) || 0), 0) / darkpool.length
+      : null;
+
+    const totalCallPrem = tickerFlow.filter((f: any) => f.type === "call").reduce((s: number, f: any) => s + (f.total_premium || 0), 0);
+    const totalPutPrem = tickerFlow.filter((f: any) => f.type === "put").reduce((s: number, f: any) => s + (f.total_premium || 0), 0);
+    const totalSweeps = tickerFlow.filter((f: any) => f.has_sweep).length;
+    const avgAggression = tickerFlow.length > 0
+      ? Math.round(tickerFlow.reduce((s: number, f: any) => s + (f.ask_aggression_pct || 0), 0) / tickerFlow.length)
+      : 0;
+
+    const now = getNowEastern();
+    const analysisPrompt = `You are JORTRADE's AI trade assistant. Analyze ${ticker} and provide a comprehensive market structure breakdown.
+
+RULES:
+- You are NOT a financial advisor. This is educational analysis only.
+- Be direct, confident, and actionable in your tone.
+- If there's a clear setup, call it out with specific levels.
+- If there's no play right now, say so honestly and explain what conditions to watch for.
+- Use $ signs for prices. Be precise with numbers.
+- Keep the analysis focused and structured.
+
+Respond in this exact JSON format:
+{
+  "verdict": "BULLISH" | "BEARISH" | "NEUTRAL" | "NO PLAY",
+  "verdict_summary": "One sentence on the overall setup (max 20 words)",
+  "market_structure": "2-3 sentences on the current price action and structure",
+  "flow_analysis": "2-3 sentences analyzing the options flow. What are whales doing? Call/put ratio? Sweeps?",
+  "dark_pool_analysis": "1-2 sentences on dark pool activity and what it implies",
+  "key_levels_analysis": "2-3 sentences on important support/resistance, VWAP, and pivot levels",
+  "trade_setup": {
+    "has_play": true | false,
+    "action": "Buy TICKER $STRIKE Call/Put" or null,
+    "entry": "Entry condition" or null,
+    "target": "$X.XX" or null,
+    "stop": "$X.XX" or null,
+    "timeframe": "Day Trade" | "Swing" | null,
+    "confidence": "High" | "Medium" | "Low" | null,
+    "reasoning": "Why this trade makes sense (1-2 sentences)" or null
+  },
+  "watch_for": "What catalysts or conditions to monitor going forward (1-2 sentences)"
+}`;
+
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      system: analysisPrompt,
+      messages: [{
+        role: "user",
+        content: `Analyze ${ticker} right now. Here's the live data:\n\n--- CURRENT TIME ---\n${now}\n\n--- KEY LEVELS ---\n\`\`\`json\n${JSON.stringify(keyLevels, null, 2)}\n\`\`\`\n\n--- PRICE ACTION ---\nCandles (1min): ${candles.length} bars\n${priceConfirmation ? `Pattern: ${priceConfirmation.pattern || "None"}\nGamma Zone: ${priceConfirmation.gamma_zone} — ${priceConfirmation.gamma_description}` : "No confirmation data"}\n\n--- OPTIONS FLOW (${tickerFlow.length} alerts) ---\nTotal Call Premium: $${(totalCallPrem / 1000).toFixed(0)}K\nTotal Put Premium: $${(totalPutPrem / 1000).toFixed(0)}K\nSweeps: ${totalSweeps}\nAvg Ask Aggression: ${avgAggression}%\n\`\`\`json\n${JSON.stringify(topFlow.slice(0, 10), null, 2)}\n\`\`\`\n\n--- DARK POOL (${darkpool.length} trades) ---\nTotal Volume: ${totalDpVolume.toLocaleString()}\nTotal Notional: $${(totalDpNotional / 1e6).toFixed(1)}M\nAvg Price: $${avgDpPrice?.toFixed(2) || "N/A"}\n\`\`\`json\n${JSON.stringify(darkpoolSummary.slice(0, 5), null, 2)}\n\`\`\``
+      }],
+    });
+
+    const content = response.content[0].type === "text" ? response.content[0].text : "";
+
+    let analysis: any = null;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) analysis = JSON.parse(jsonMatch[0]);
+    } catch {
+      analysis = { verdict: "ERROR", verdict_summary: "Failed to parse analysis", market_structure: content };
+    }
+
+    console.log(`[analyze] ${ticker} complete in ${Date.now() - t0}ms — verdict: ${analysis?.verdict}`);
+
+    res.json({
+      ticker,
+      timestamp: now,
+      analysis,
+      data: {
+        key_levels: keyLevels,
+        price_confirmation: priceConfirmation,
+        flow_summary: {
+          total_alerts: tickerFlow.length,
+          call_premium: totalCallPrem,
+          put_premium: totalPutPrem,
+          sweeps: totalSweeps,
+          avg_aggression: avgAggression,
+          top_flow: topFlow.slice(0, 5),
+        },
+        dark_pool: {
+          trades: darkpool.length,
+          total_volume: totalDpVolume,
+          total_notional: totalDpNotional,
+          avg_price: avgDpPrice,
+          recent: darkpoolSummary.slice(0, 5),
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error(`[analyze] ${ticker} error:`, err.message);
+    res.status(500).json({ error: "Analysis failed. Please try again." });
+  }
+});
+
 router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 100);

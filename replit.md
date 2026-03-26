@@ -138,6 +138,13 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - `generateTradeRecommendation()` — produces specific trade recs (action, entry trigger, target, invalidation)
   - Backend hydrates AI signals with authoritative computed data (price_confirmed, gamma_zone, etc.)
   - Frontend displays: "PRICE CONFIRMED" + "ACT NOW" banners, gamma zone badges, price pattern details on signal cards
+- **Ticker Analysis** (`GET /api/whale/analyze/:ticker`):
+  - Personal trade assistant — enter any ticker for a full AI-powered breakdown
+  - Fetches live options flow, dark pool data, key levels (VWAP, pivots, PDH/PDL), and 1-min candles in parallel
+  - Filters flow for the specific ticker, computes call/put premium ratios, sweep counts, aggression %
+  - Runs price action confirmation and gamma zone analysis
+  - Claude AI synthesizes everything into structured JSON: verdict, market structure, flow analysis, dark pool analysis, key levels, trade setup (entry/target/stop), and watch-for items
+  - Frontend: `/dashboard/market` — search bar with popular/recent tickers, animated loading, structured analysis cards
 - **Signal Verification** (`POST /api/whale/verify-signals`):
   - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table
   - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date
