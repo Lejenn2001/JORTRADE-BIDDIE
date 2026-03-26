@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight, Zap, Coins } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuestionLimit } from "@/hooks/useQuestionLimit";
+import { useQuestionLimit, CREDIT_PACKS } from "@/hooks/useQuestionLimit";
 import ReactMarkdown from "react-markdown";
 import biddieRobot from "@/assets/biddie-robot.png";
 import { Link } from "react-router-dom";
@@ -29,7 +30,8 @@ const greetings = [
 
 const AIChatPanel = () => {
   const { profile } = useAuth();
-  const { canAsk, hasAccess, remaining, limit, increment, plan } = useQuestionLimit();
+  const { canAsk, hasAccess, remaining, limit, increment, plan, credits, usingCredits, dailyLimitHit, addCredits } = useQuestionLimit();
+  const [showCreditStore, setShowCreditStore] = useState(false);
   const firstName = profile?.full_name?.split(" ")[0] || "Trader";
   const [greeting] = useState(() => greetings[Math.floor(Math.random() * greetings.length)](firstName));
   const [messages, setMessages] = useState<Message[]>([]);
@@ -160,7 +162,11 @@ const AIChatPanel = () => {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground">
-            {remaining}/{limit} left today
+            {usingCredits ? (
+              <span className="flex items-center gap-1"><Coins className="h-2.5 w-2.5 text-amber-400" />{credits} credits</span>
+            ) : (
+              <>{remaining}/{limit} left today{credits > 0 && <span className="text-amber-400 ml-1">+{credits}</span>}</>
+            )}
           </span>
           <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -239,15 +245,63 @@ const AIChatPanel = () => {
 
       {!canAsk && hasAccess && (
         <div className="px-4 pb-2">
-          <div className="text-center py-3 bg-muted/30 rounded-lg border border-border/40">
-            <p className="text-xs text-muted-foreground mb-1">Daily limit reached ({limit} questions)</p>
-            {plan !== "pro" && (
-              <Link to="/signup" className="text-[10px] text-primary hover:underline inline-flex items-center gap-1">
-                Upgrade for more daily questions <ArrowUpRight className="h-2.5 w-2.5" />
-              </Link>
-            )}
-            <p className="text-[10px] text-muted-foreground/60 mt-1">Resets at midnight</p>
-          </div>
+          {!showCreditStore ? (
+            <div className="text-center py-3 bg-muted/30 rounded-lg border border-border/40">
+              <p className="text-xs text-muted-foreground mb-2">Daily limit reached ({limit} questions)</p>
+              <div className="flex items-center justify-center gap-2">
+                {plan !== "pro" && (
+                  <Link
+                    to="/signup"
+                    className="text-[10px] font-medium bg-primary/20 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/30 transition-colors inline-flex items-center gap-1"
+                  >
+                    <ArrowUpRight className="h-2.5 w-2.5" /> Upgrade Plan
+                  </Link>
+                )}
+                <button
+                  onClick={() => setShowCreditStore(true)}
+                  className="text-[10px] font-medium bg-amber-500/20 text-amber-400 px-3 py-1.5 rounded-lg hover:bg-amber-500/30 transition-colors inline-flex items-center gap-1"
+                >
+                  <Coins className="h-2.5 w-2.5" /> Buy Credits
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-2">Daily questions reset at midnight</p>
+            </div>
+          ) : (
+            <div className="bg-muted/30 rounded-lg border border-amber-500/30 p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-xs font-semibold text-foreground">Question Credits</span>
+                </div>
+                <button
+                  onClick={() => setShowCreditStore(false)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Back
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-3">Credits never expire and work after your daily limit runs out.</p>
+              <div className="space-y-1.5">
+                {CREDIT_PACKS.map((pack) => (
+                  <button
+                    key={pack.id}
+                    onClick={() => {
+                      addCredits(pack.credits);
+                      setShowCreditStore(false);
+                    }}
+                    className="w-full flex items-center justify-between bg-background/50 border border-border/40 rounded-lg px-3 py-2 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Coins className="h-3 w-3 text-amber-400" />
+                      <span className="text-xs font-medium text-foreground">{pack.label}</span>
+                    </div>
+                    <span className="text-xs font-bold text-amber-400 group-hover:text-amber-300">{pack.price}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[9px] text-muted-foreground/50 mt-2 text-center">Payment coming soon — credits granted instantly for now</p>
+            </div>
+          )}
         </div>
       )}
 
