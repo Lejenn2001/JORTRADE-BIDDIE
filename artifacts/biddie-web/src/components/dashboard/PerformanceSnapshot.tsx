@@ -46,26 +46,20 @@ const PerformanceSnapshot = () => {
     }
   };
 
-  // Auto-verify on mount, then refresh stats
+  const apiBase = import.meta.env.BASE_URL ?? "/";
+
   useEffect(() => {
-    const autoVerify = async () => {
-      try {
-        await supabase.functions.invoke("verify-signals");
-      } catch (e) {
-        console.warn("Auto-verify failed:", e);
-      }
-      fetchStats();
-    };
-    autoVerify();
+    fetchStats();
   }, []);
 
   const handleVerify = async () => {
     setVerifying(true);
     try {
-      const { data, error } = await supabase.functions.invoke("verify-signals");
-      if (!error) {
+      const resp = await fetch(`${apiBase}api/whale/verify-signals`, { method: "POST" });
+      if (resp.ok) {
+        const data = await resp.json();
         console.log("Verification result:", data);
-        await fetchStats(); // Refresh stats after verification
+        await fetchStats();
       }
     } catch (e) {
       console.error("Verify error:", e);

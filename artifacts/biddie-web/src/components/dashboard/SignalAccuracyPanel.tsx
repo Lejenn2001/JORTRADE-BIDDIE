@@ -66,6 +66,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
   const [outcomes, setOutcomes] = useState<SignalOutcome[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const apiBase = import.meta.env.BASE_URL ?? "/";
 
   const fetchOutcomes = async () => {
     const { data, error } = await supabase
@@ -98,8 +99,9 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
   const verifySignals = async () => {
     setVerifying(true);
     try {
-      const { data, error } = await supabase.functions.invoke("verify-signals");
-      if (error) throw error;
+      const resp = await fetch(`${apiBase}api/whale/verify-signals`, { method: "POST" });
+      if (!resp.ok) throw new Error("Verification request failed");
+      const data = await resp.json();
       const remaining = data.remaining_pending || 0;
       toast({
         title: "Signals Verified",

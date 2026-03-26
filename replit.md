@@ -135,6 +135,13 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - `generateTradeRecommendation()` — produces specific trade recs (action, entry trigger, target, invalidation)
   - Backend hydrates AI signals with authoritative computed data (price_confirmed, gamma_zone, etc.)
   - Frontend displays: "PRICE CONFIRMED" + "ACT NOW" banners, gamma zone badges, price pattern details on signal cards
+- **Signal Verification** (`POST /api/whale/verify-signals`):
+  - Fetches pending signals from Supabase `signal_outcomes` table
+  - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date
+  - Checks if the stock's high (bullish) or low (bearish) reached the target zone at any point since the signal was issued
+  - Marks as "hit" (target reached), "missed" (expired without hitting), or "expired"
+  - Updates `outcome`, `outcome_price`, and `resolved_at` in Supabase
+  - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)

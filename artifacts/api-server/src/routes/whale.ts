@@ -1,6 +1,7 @@
 import { Router } from "express";
 import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
@@ -10,6 +11,10 @@ const AI_BASE_URL = process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"] ?? "https:
 const AI_API_KEY = process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "";
 
 const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
+
+const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] ?? "";
+const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? "";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── Data Fetchers ──────────────────────────────────────────────────────────────
 
@@ -957,6 +962,186 @@ CRITICAL RULES for accuracy:
     res.json({ signals, count: signals.length, timestamp: now });
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? "Claude API error", signals: [], count: 0 });
+  }
+});
+
+interface PriceHistory {
+  current: number;
+  highSince: number;
+  lowSince: number;
+}
+
+async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<PriceHistory | null> {
+  try {
+    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
+    const since = new Date(sinceDate);
+    const daysDiff = Math.max(1, Math.ceil((Date.now() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const range = daysDiff <= 5 ? "5d" : daysDiff <= 30 ? "1mo" : "3mo";
+
+    const res = await axios.get(`${YF}/${ticker}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      params: { interval: "1d", range },
+      timeout: 10000,
+    });
+    const result = res.data?.chart?.result?.[0];
+    if (!result) return null;
+
+    const meta = result.meta ?? {};
+    const quote = result.indicators?.quote?.[0];
+    const timestamps = result.timestamp ?? [];
+
+    const sinceTs = since.getTime() / 1000;
+    let highSince = -Infinity;
+    let lowSince = Infinity;
+    for (let i = 0; i < timestamps.length; i++) {
+      if (timestamps[i] >= sinceTs) {
+        const h = quote?.high?.[i];
+        const l = quote?.low?.[i];
+        if (h && h > highSince) highSince = h;
+        if (l && l < lowSince) lowSince = l;
+      }
+    }
+
+    const preMarket = meta.preMarketPrice ?? null;
+    const postMarket = meta.postMarketPrice ?? null;
+    const regMarket = meta.regularMarketPrice ?? null;
+    const preTs = meta.preMarketTime ?? 0;
+    const postTs = meta.postMarketTime ?? 0;
+    const regTs = meta.regularMarketTime ?? 0;
+    let current: number | null = regMarket;
+    if (preMarket && preTs > regTs) current = preMarket;
+    if (postMarket && postTs > regTs && postTs > preTs) current = postMarket;
+    if (!current) {
+      const len = timestamps.length;
+      current = quote?.close?.[len - 1] ?? null;
+    }
+    if (!current) return null;
+
+    if (highSince === -Infinity) highSince = current;
+    if (lowSince === Infinity) lowSince = current;
+
+    return {
+      current: Math.round(current * 100) / 100,
+      highSince: Math.round(highSince * 100) / 100,
+      lowSince: Math.round(lowSince * 100) / 100,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parsePrice(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const cleaned = s.replace(/[^0-9.\-]/g, "");
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function parseTargetRange(target: string | null): { low: number | null; high: number | null } {
+  if (!target) return { low: null, high: null };
+  const nums = target.match(/\d+\.?\d*/g);
+  if (!nums || nums.length === 0) return { low: null, high: null };
+  const values = nums.map(Number).filter(n => !isNaN(n) && n > 0);
+  if (values.length === 0) return { low: null, high: null };
+  if (values.length === 1) return { low: values[0], high: values[0] };
+  return { low: Math.min(...values), high: Math.max(...values) };
+}
+
+router.post("/whale/verify-signals", async (_req, res) => {
+  try {
+    const { data: pending, error: fetchErr } = await supabase
+      .from("signal_outcomes")
+      .select("*")
+      .eq("outcome", "pending")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (fetchErr) {
+      res.status(500).json({ error: "Failed to fetch pending signals" });
+      return;
+    }
+
+    if (!pending || pending.length === 0) {
+      res.json({ verified: 0, hits: 0, misses: 0, expired: 0, remaining_pending: 0 });
+      return;
+    }
+
+    const tickers = [...new Set(pending.map((s: any) => s.ticker))];
+    const priceMap: Record<string, PriceHistory> = {};
+    await Promise.all(
+      tickers.map(async (t) => {
+        const oldest = pending
+          .filter((s: any) => s.ticker === t)
+          .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
+        const history = await fetchPriceHistory(t, oldest);
+        if (history) priceMap[t] = history;
+      })
+    );
+
+    let hits = 0, misses = 0, expired = 0, updateErrors = 0;
+    const now = new Date();
+
+    for (const signal of pending) {
+      const history = priceMap[signal.ticker];
+      if (!history) continue;
+
+      const target = parseTargetRange(signal.target_zone);
+      const isBullish = signal.signal_type === "bullish";
+
+      const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
+      const isExpired = expiryDate && expiryDate < now;
+
+      let outcome: string | null = null;
+      let outcomePrice = history.current;
+
+      if (target.low && target.high) {
+        if (isBullish) {
+          if (history.highSince >= target.low) {
+            outcome = "hit";
+            outcomePrice = history.highSince;
+          } else if (isExpired) {
+            outcome = "missed";
+          }
+        } else {
+          if (history.lowSince <= target.high) {
+            outcome = "hit";
+            outcomePrice = history.lowSince;
+          } else if (isExpired) {
+            outcome = "missed";
+          }
+        }
+      }
+
+      if (!outcome && isExpired) {
+        outcome = "expired";
+      }
+
+      if (outcome) {
+        const { error: updateErr } = await supabase
+          .from("signal_outcomes")
+          .update({
+            outcome,
+            outcome_price: outcomePrice,
+            resolved_at: now.toISOString(),
+          })
+          .eq("id", signal.id);
+
+        if (updateErr) {
+          updateErrors++;
+          continue;
+        }
+
+        if (outcome === "hit") hits++;
+        else if (outcome === "missed") misses++;
+        else if (outcome === "expired") expired++;
+      }
+    }
+
+    const remaining = pending.length - hits - misses - expired - updateErrors;
+    res.json({ verified: pending.length, hits, misses, expired, remaining_pending: remaining, errors: updateErrors > 0 ? updateErrors : undefined });
+  } catch (err: any) {
+    console.error("Verify signals error:", err);
+    res.status(500).json({ error: err.message ?? "Verification failed" });
   }
 });
 

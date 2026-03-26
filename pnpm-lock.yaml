@@ -169,6 +169,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.80.0
         version: 0.80.0(zod@4.3.6)
+      '@supabase/supabase-js':
+        specifier: ^2.100.0
+        version: 2.100.0
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
