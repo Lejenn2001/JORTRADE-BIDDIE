@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /ecosystem
+Allow: /login
+Allow: /signup
+Allow: /contact
+Disallow: /dashboard
+Disallow: /dashboard/
+
+Sitemap: https://jortrade.com/sitemap.xml
