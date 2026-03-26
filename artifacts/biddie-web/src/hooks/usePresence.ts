@@ -14,14 +14,17 @@ export function usePresenceSetup() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
+    const myId = session.user.id;
+
+    setOnlineUsers(new Set([myId]));
 
     const channel = supabase.channel(CHANNEL_NAME, {
-      config: { presence: { key: session.user.id } },
+      config: { presence: { key: myId } },
     });
 
     const extractUsers = () => {
       const state = channel.presenceState();
-      const ids = new Set<string>();
+      const ids = new Set<string>([myId]);
       Object.values(state).forEach((presences: any) => {
         (presences as any[]).forEach((p: any) => {
           if (p.user_id) ids.add(p.user_id);
@@ -37,7 +40,7 @@ export function usePresenceSetup() {
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel.track({
-            user_id: session.user.id,
+            user_id: myId,
             full_name: profile?.full_name || "Unknown",
             online_at: new Date().toISOString(),
           });
