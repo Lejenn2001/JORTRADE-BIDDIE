@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useAuth } from "@/hooks/useAuth";
+import { usePresenceTracker } from "@/hooks/usePresence";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Circle } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -23,8 +24,12 @@ const planConfig = {
   pro: { label: "Pro Trader", icon: Crown, color: "text-purple-400" },
 };
 
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
 const DashboardAdmin = () => {
   const { isAdmin, user } = useAuth();
+  const onlineUsers = usePresenceTracker();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -205,104 +210,131 @@ const DashboardAdmin = () => {
           {loading ? (
             <div className="text-center py-12 text-muted-foreground">Loading users...</div>
           ) : (
-            <div className="space-y-2">
-              {filteredUsers.map((u) => {
-                const plan = u.selected_plan as keyof typeof planConfig;
-                const config = planConfig[plan] || null;
-                const PlanIcon = config?.icon || Star;
-                const isSelf = u.id === user?.id;
+            <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/30">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Name</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Email</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Plan</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Joined</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Role</th>
+                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((u) => {
+                      const plan = u.selected_plan as keyof typeof planConfig;
+                      const config = planConfig[plan] || null;
+                      const isSelf = u.id === user?.id;
+                      const isOnline = onlineUsers.has(u.id);
 
-                return (
-                  <div key={u.id} className="glass-panel rounded-xl p-4 border-border/30 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground text-sm truncate">{u.full_name || "No name"}</p>
-                        {config && (
-                          <span className={`flex items-center gap-1 text-[10px] font-bold ${config.color}`}>
-                            <PlanIcon className="h-3 w-3" />
-                            {config.label}
-                          </span>
-                        )}
-                        {u.is_admin && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400">
-                            <Shield className="h-3 w-3" />
-                            Admin
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{u.email || "No email"}</p>
-                      <p className="text-[10px] text-muted-foreground/60">Joined {new Date(u.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                      {(["starter", "active", "pro"] as const).map((p) => {
-                        const pc = planConfig[p];
-                        const isActive = u.selected_plan === p;
-                        return (
-                          <Button
-                            key={p}
-                            size="sm"
-                            variant={isActive ? "default" : "outline"}
-                            disabled={isActive || updating === u.id}
-                            onClick={() => updateUserPlan(u.id, p)}
-                            className={`text-xs h-8 px-3 ${isActive ? "bg-primary" : "border-border/50"}`}
-                          >
-                            <pc.icon className="h-3 w-3 mr-1" />
-                            {pc.label.split(" ")[0]}
-                          </Button>
-                        );
-                      })}
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={updating === u.id || isSelf}
-                        onClick={() => toggleAdmin(u.id, !!u.is_admin)}
-                        className={`text-xs h-8 px-3 border-border/50 ${u.is_admin ? "text-emerald-400 hover:text-red-400" : "text-muted-foreground hover:text-emerald-400"}`}
-                        title={isSelf ? "Cannot change own admin status" : u.is_admin ? "Remove admin" : "Make admin"}
-                      >
-                        {u.is_admin ? <ShieldOff className="h-3 w-3 mr-1" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
-                        {u.is_admin ? "Revoke" : "Admin"}
-                      </Button>
-
-                      {confirmDelete === u.id ? (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={updating === u.id}
-                            onClick={() => deleteUser(u.id)}
-                            className="text-xs h-8 px-3"
-                          >
-                            Confirm
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setConfirmDelete(null)}
-                            className="text-xs h-8 px-3 border-border/50"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={updating === u.id || isSelf}
-                          onClick={() => setConfirmDelete(u.id)}
-                          className="text-xs h-8 px-3 border-border/50 text-muted-foreground hover:text-destructive"
-                          title={isSelf ? "Cannot delete yourself" : "Delete user"}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground text-sm">No users found</div>
-              )}
+                      return (
+                        <tr key={u.id} className="border-b border-border/20 hover:bg-muted/20 transition-colors">
+                          <td className="px-5 py-3">
+                            <span className={`w-2 h-2 rounded-full inline-block ${isOnline ? "bg-emerald-400" : "bg-muted-foreground/30"}`} title={isOnline ? "Online" : "Offline"} />
+                          </td>
+                          <td className="px-5 py-3 text-foreground">
+                            {u.full_name || "No name"}
+                            {isSelf && <span className="text-xs text-muted-foreground ml-2">(you)</span>}
+                          </td>
+                          <td className="px-5 py-3 text-muted-foreground text-xs">{u.email || "—"}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-1.5">
+                              {(["starter", "active", "pro"] as const).map((p) => {
+                                const pc = planConfig[p];
+                                const isActive = u.selected_plan === p;
+                                return (
+                                  <Button
+                                    key={p}
+                                    size="sm"
+                                    variant={isActive ? "default" : "outline"}
+                                    disabled={isActive || updating === u.id}
+                                    onClick={() => updateUserPlan(u.id, p)}
+                                    className={`text-[10px] h-6 px-2 ${isActive ? "bg-primary" : "border-border/50"}`}
+                                  >
+                                    <pc.icon className="h-3 w-3 mr-1" />
+                                    {pc.label.split(" ")[0]}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-muted-foreground text-xs">{formatDate(u.created_at)}</td>
+                          <td className="px-5 py-3">
+                            {u.is_admin ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
+                                <ShieldCheck className="h-3 w-3" /> Admin
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Member</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {!isSelf && (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant={u.is_admin ? "destructive" : "outline"}
+                                  className="text-xs h-7 px-3"
+                                  disabled={updating === u.id}
+                                  onClick={() => toggleAdmin(u.id, !!u.is_admin)}
+                                >
+                                  {updating === u.id ? (
+                                    <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                  ) : u.is_admin ? (
+                                    <><ShieldOff className="h-3 w-3 mr-1" /> Revoke</>
+                                  ) : (
+                                    <><ShieldCheck className="h-3 w-3 mr-1" /> Make Admin</>
+                                  )}
+                                </Button>
+                                {confirmDelete === u.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      disabled={updating === u.id}
+                                      onClick={() => deleteUser(u.id)}
+                                      className="text-xs h-7 px-3"
+                                    >
+                                      Confirm
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setConfirmDelete(null)}
+                                      className="text-xs h-7 px-2 border-border/50"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-xs h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    disabled={updating === u.id}
+                                    onClick={() => setConfirmDelete(u.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground text-sm">No users found</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </main>
