@@ -45,7 +45,7 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
 
     // Fetch last 2 days of daily bars for prior day OHLC
     const daily = await axios.get(`${YF}/${ticker}`, {
-      headers, params: { interval: "1d", range: "5d" }, timeout: 10000,
+      headers, params: { interval: "1d", range: "5d" }, timeout: 6000,
     });
     const dailyResult = daily.data?.chart?.result?.[0];
     const dailyQuote = dailyResult?.indicators?.quote?.[0];
@@ -62,7 +62,7 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
 
     // Fetch intraday 5-min bars for VWAP calculation
     const intraday = await axios.get(`${YF}/${ticker}`, {
-      headers, params: { interval: "5m", range: "1d" }, timeout: 10000,
+      headers, params: { interval: "5m", range: "1d" }, timeout: 6000,
     });
     const intResult = intraday.data?.chart?.result?.[0];
     const intQuote  = intResult?.indicators?.quote?.[0];
@@ -931,8 +931,11 @@ router.get("/whale/signal", async (_req, res) => {
 
 router.get("/whale/signals", async (_req, res) => {
   const now = getNowEastern();
+  const t0 = Date.now();
+  console.log("[signals] starting pipeline");
 
   const allAlerts = await fetchFlowAlerts(500);
+  console.log(`[signals] fetchFlowAlerts done: ${Date.now() - t0}ms, got ${allAlerts.length} alerts`);
   const enriched = enrichAlerts(allAlerts);
 
   // Pre-filter: only alerts worth scoring
@@ -943,7 +946,7 @@ router.get("/whale/signals", async (_req, res) => {
     if (a.total_premium < 25_000) return false;
     if (a.ask_aggression_pct < 50) return false;
     return true;
-  }).slice(0, 40);
+  }).slice(0, 20);
 
   // Extract real-time prices from UW flow data
   const uwPricesMap: Record<string, number> = {};
@@ -953,16 +956,28 @@ router.get("/whale/signals", async (_req, res) => {
     if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
   }
 
-  // Get unique tickers and fetch key levels in parallel
-  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 15);
-  const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null)));
+  // Get unique tickers — limit to 10 to avoid Yahoo Finance rate limits
+  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
+
+  // Fetch key levels and candles in parallel with a global timeout
+  const dataFetchPromise = (async () => {
+    const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null).catch(() => null)));
+    const candleResults = await Promise.all(uniqueTickers.map((t) => fetchRecentCandles(t, "1m", 10).catch(() => [])));
+    return { levelResults, candleResults };
+  })();
+
+  const timeoutPromise = new Promise<{ levelResults: any[]; candleResults: any[] }>((resolve) =>
+    setTimeout(() => resolve({ levelResults: uniqueTickers.map(() => null), candleResults: uniqueTickers.map(() => []) }), 15000)
+  );
+
+  const { levelResults, candleResults } = await Promise.race([dataFetchPromise, timeoutPromise]);
+  console.log(`[signals] key levels + candles done: ${Date.now() - t0}ms`);
+
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
 
-  // Fetch recent candles for price action confirmation
-  const candleResults = await Promise.all(uniqueTickers.map((t) => fetchRecentCandles(t, "1m", 10)));
   const candleMap: Record<string, CandleBar[]> = {};
-  uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i]; });
+  uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
 
   // Run price action confirmation for each candidate
   const priceConfirmations: Record<string, any> = {};
@@ -988,147 +1003,131 @@ router.get("/whale/signals", async (_req, res) => {
     priceConfirmations[key] = { ...confirmation, trade_recommendation: tradeRec };
   }
 
-  const dataStr = JSON.stringify({ fetched_at: now, candidates, key_levels: keyLevels, price_confirmations: priceConfirmations }, null, 2);
+  // ── Local scoring — no Claude call needed ──
+  function scoreSignal(c: any, kl: any, confirmation: any): any {
+    const ticker = c.ticker as string;
+    const strike = parseFloat(String(c.strike)) || 0;
+    const premium = c.total_premium || 0;
+    const aggression = c.ask_aggression_pct || 0;
+    const volOi = c.vol_oi_ratio || 0;
+    const hasSweep = !!c.has_sweep;
+    const optType = c.type === "call" ? "call" : "put";
+    const direction = optType === "call" ? "bullish" : "bearish";
+    const price = kl?.current_price ?? parseFloat(c.underlying_price) ?? null;
 
-  const SIGNAL_JSON_SYSTEM = `You are a professional options flow analyst. You will be given pre-filtered high-aggression options flow, real-time key levels (VWAP, pivot points, prior day high/low), price action confirmation data, and gamma zone analysis.
+    // Score
+    let confidence = 6;
+    if (hasSweep) confidence += 1;
+    if (aggression >= 80) confidence += 1;
+    if (volOi >= 5) confidence += 0.5;
+    if (volOi >= 10) confidence += 0.5;
+    if (premium >= 100_000) confidence += 1;
+    if (premium >= 250_000) confidence += 0.5;
+    if (confirmation?.confirmed) confidence += 1;
+    if (price && strike) {
+      const diff = Math.abs(strike - price) / price;
+      if (diff < 0.03) confidence += 0.5; // near ATM
+    }
+    confidence = Math.min(10, Math.round(confidence));
+    if (confidence < 7) return null;
 
-Analyze each candidate and return ONLY high-conviction signals (confidence 7-10).
+    // Category
+    let category = "algorithm";
+    if (premium >= 100_000 && hasSweep) category = "whale";
+    if ((c.trade_type ?? "").toLowerCase().includes("spread") || (c.trade_type ?? "").toLowerCase().includes("multi")) category = "spread";
 
-Respond with ONLY a valid JSON array. No explanation, no markdown, no code fences. Just the raw JSON array.
+    // Tags
+    const tags: string[] = [];
+    if (hasSweep) tags.push("Sweep");
+    tags.push(optType === "call" ? "Call Flow" : "Put Flow");
+    if (volOi >= 5) tags.push("High Volume");
+    if (price && Math.abs(strike - price) / price < 0.03) tags.push("ATM");
+    const expiryDate = c.expiry;
+    if (expiryDate === today) tags.push("0DTE");
+    if (confirmation?.confirmed) tags.push("Price Confirmed");
+    if (confirmation?.gamma_zone === "negative") tags.push("Negative Gamma");
+    if (confirmation?.gamma_zone === "positive") tags.push("Positive Gamma");
 
-Each signal object must have exactly these fields:
-{
-  "ticker": "string",
-  "direction": "bullish" or "bearish",
-  "option_type": "call" or "put",
-  "category": "algorithm" or "whale" or "spread",
-  "trade": "short human-readable trade description e.g. Buy NVDA $145 Call",
-  "strike": number,
-  "expiry": "string e.g. March 27, 2026",
-  "premium": number (in dollars),
-  "ask_aggression_pct": number,
-  "vol_oi_ratio": number,
-  "has_sweep": boolean,
-  "current_price": number or null,
-  "vwap": number or null,
-  "prior_day_high": number or null,
-  "prior_day_low": number or null,
-  "pivot": number or null,
-  "r1": number or null,
-  "s1": number or null,
-  "entry_trigger": "specific price level and condition based on VWAP/prior day levels",
-  "key_level": "the single most important level to watch e.g. VWAP at $143.20",
-  "target": "specific price target, use R1/R2 for calls, S1/S2 for puts",
-  "invalidation": "specific price level that kills the trade, reference actual key levels",
-  "reason": "2-3 sentences: what makes this flow stand out + how price relates to key levels + gamma zone context",
-  "confidence": number between 7 and 10,
-  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE", "Price Confirmed", "Negative Gamma", "Positive Gamma", "Debit Spread", "Butterfly", "Iron Condor"],
-  "price_confirmed": boolean,
-  "price_pattern": "string describing the price action pattern or null",
-  "gamma_zone": "positive" or "negative" or "neutral",
-  "gamma_description": "string explaining gamma exposure at this level",
-  "recommended_action": "specific trade recommendation e.g. Buy SPY $570 Put expiring March 28",
-  "recommended_expiry": "suggested expiration based on timeframe",
-  "recommended_strike": "suggested strike price with reasoning",
-  "spread_details": "null for single-leg, or object with { type: 'debit_spread'|'butterfly', legs: 'description of legs', max_profit: number|null, max_loss: number|null, probability: number|null } for multi-leg strategies"
-}
+    // Key levels
+    const vwap = kl?.vwap ?? null;
+    const pdh = kl?.prior_day?.high ?? null;
+    const pdl = kl?.prior_day?.low ?? null;
+    const pivot = kl?.pivot_points?.pivot ?? null;
+    const r1 = kl?.pivot_points?.r1 ?? null;
+    const s1 = kl?.pivot_points?.s1 ?? null;
 
-CATEGORY RULES:
-- "algorithm": Single-leg plays detected by price action + gamma analysis. Intraday entries. These are directional bets confirmed by technical levels.
-- "whale": Large institutional single-leg flow ($100K+ premium). Sweeps, blocks, floor trades. Swing positioning. For smaller/mid-cap tickers, whale threshold is $50K+.
-- "spread": Multi-leg strategies — debit spreads and butterflies ONLY. Look for MULTIPLE flow alerts on the SAME ticker + SAME expiry at DIFFERENT strikes that suggest a defined-risk strategy. Also identify when flow data explicitly shows spread or multi-leg activity. Provide spread_details for these.
+    // Entry/target/invalidation
+    let entryTrigger = "";
+    let target = "";
+    let invalidation = "";
+    let keyLevel = "";
 
-TICKER DIVERSITY:
-- DO NOT only show SPY/QQQ/mega-caps. Include ALL tickers with qualifying flow — especially mid-cap and smaller names (e.g. AAL, SNDK, BAC, F, SOFI, COIN, HOOD, etc.)
-- Smaller/mid-cap names with high aggression and unusual vol/OI ratios are often the MOST profitable signals
-- Aim for a diverse mix: 2-3 index/mega-cap + 3-5 mid-cap/smaller names when the data supports it
-- A $30K premium sweep on a $20 stock can be MORE significant than a $200K flow on SPY
-
-SPREAD/BUTTERFLY DETECTION:
-- If you see call flow at 2+ different strikes on the same ticker/expiry, consider if it's a debit spread (buy lower, sell higher for calls)
-- If you see 3 strikes with the middle having 2x volume, it's likely a butterfly
-- Sweeps at adjacent strikes on the same ticker = probable debit spread
-- Include estimated max profit/loss and probability when identifiable
-- Tag spreads with "Debit Spread" or "Butterfly" as appropriate
-
-CRITICAL RULES for accuracy:
-- entry_trigger MUST reference actual VWAP, prior day high/low, or pivot levels from the data
-- target MUST use R1/R2 for bullish or S1/S2 for bearish from pivot points
-- invalidation MUST reference a real level from the key_levels data (prior day low for calls, prior day high for puts, or VWAP)
-- If VWAP or key levels are null (pre-market/weekend), use prior day high/low and round-number levels
-- strike must be tradeable — close enough to current price to matter (within 10% for near-term)
-- PRICE CONFIRMATION: If price_confirmation data shows confirmed=true, ADD "Price Confirmed" to tags and boost confidence by 1 point (max 10). These are the highest conviction signals.
-- GAMMA ZONES: If gamma_zone is "negative", ADD "Negative Gamma" to tags — moves will be amplified. If "positive", ADD "Positive Gamma" — expect mean-reversion.
-- ACT NOW FOR SPREADS: Spread/butterfly signals should ALSO get "🔥 ACT NOW" tag when gamma conditions are favorable:
-  - Debit spreads in NEGATIVE gamma zone = ACT NOW (directional move will be amplified through spread strikes)
-  - Butterflies in POSITIVE gamma zone = ACT NOW (pinning action benefits max profit zone)
-  - When a spread gets ACT NOW, set confidence to 9+ and timeframe to "buy_now" or "short_term"
-  - Only identify DEBIT SPREADS and BUTTERFLIES as spread category signals. Do NOT generate iron condors or credit spreads.
-- TRADE RECOMMENDATIONS: For each signal, recommend the specific option to buy:
-  - For "Act Now" signals (confidence 9-10): suggest 0-2 DTE, ATM or 1 strike OTM
-  - For short-term signals (confidence 8): suggest 3-7 DTE, ATM
-  - For swing signals (confidence 7): suggest 2-4 weeks out, slightly OTM
-- confidence 9-10: sweep + 80%+ ask aggression + 10x+ vol/OI + near ATM + (bonus: price confirmed)
-- confidence 8: sweep OR 80%+ aggression + solid premium + clear direction
-- confidence 7: good flow but one condition weaker
-- If no signals qualify, return an empty array []`;
-
-  try {
-    const response = await claude.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: SIGNAL_JSON_SYSTEM,
-      messages: [{
-        role: "user",
-        content: `Analyze this flow data and key levels. Return ONLY the JSON array of qualifying signals:\n\n${dataStr}`,
-      }],
-    });
-
-    let raw = response.content[0].type === "text" ? response.content[0].text.trim() : "[]";
-    // Strip any accidental markdown fences
-    raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
-    let signals: any[] = [];
-    try {
-      signals = JSON.parse(raw);
-      if (!Array.isArray(signals)) signals = [];
-    } catch {
-      signals = [];
+    if (optType === "call") {
+      entryTrigger = vwap ? `Price holds above VWAP at $${vwap.toFixed(2)}` : (pdh ? `Break above PDH at $${pdh.toFixed(2)}` : `Above $${strike}`);
+      target = r1 ? `R1 at $${r1.toFixed(2)}` : (pdh ? `PDH at $${pdh.toFixed(2)}` : `$${(strike * 1.02).toFixed(2)}`);
+      invalidation = pdl ? `Below PDL at $${pdl.toFixed(2)}` : (vwap ? `Below VWAP at $${vwap.toFixed(2)}` : `Below $${(strike * 0.98).toFixed(2)}`);
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : `$${strike}`;
+    } else {
+      entryTrigger = vwap ? `Price rejects below VWAP at $${vwap.toFixed(2)}` : (pdl ? `Break below PDL at $${pdl.toFixed(2)}` : `Below $${strike}`);
+      target = s1 ? `S1 at $${s1.toFixed(2)}` : (pdl ? `PDL at $${pdl.toFixed(2)}` : `$${(strike * 0.98).toFixed(2)}`);
+      invalidation = pdh ? `Above PDH at $${pdh.toFixed(2)}` : (vwap ? `Above VWAP at $${vwap.toFixed(2)}` : `Above $${(strike * 1.02).toFixed(2)}`);
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : `$${strike}`;
     }
 
-    // Hydrate signals with authoritative computed data (override AI-generated values)
-    for (const sig of signals) {
-      const ticker = sig.ticker as string;
-      const strike = parseFloat(String(sig.strike)) || 0;
-      const optType = sig.option_type || (sig.direction === "bullish" ? "call" : "put");
-      const key = `${ticker}-${strike}-${optType}`;
-      const computed = priceConfirmations[key];
-      if (computed) {
-        sig.price_confirmed = computed.confirmed;
-        sig.price_pattern = computed.pattern;
-        sig.gamma_zone = computed.gamma_zone;
-        sig.gamma_description = computed.gamma_description;
-        if (computed.trade_recommendation) {
-          sig.recommended_action = computed.trade_recommendation.action;
-          sig.recommended_expiry = computed.trade_recommendation.expiry;
-          sig.recommended_strike = computed.trade_recommendation.entry_trigger;
-        }
-        // Ensure tags include computed tags
-        if (!Array.isArray(sig.tags)) sig.tags = [];
-        if (computed.confirmed && !sig.tags.includes("Price Confirmed")) sig.tags.push("Price Confirmed");
-        if (computed.gamma_zone === "negative" && !sig.tags.includes("Negative Gamma")) sig.tags.push("Negative Gamma");
-        if (computed.gamma_zone === "positive" && !sig.tags.includes("Positive Gamma")) sig.tags.push("Positive Gamma");
-        // Boost confidence for price-confirmed signals
-        if (computed.confirmed && typeof sig.confidence === "number") {
-          sig.confidence = Math.min(10, sig.confidence + 1);
-        }
-      }
-    }
+    // Reason
+    const premStr = premium >= 1_000_000 ? `$${(premium / 1_000_000).toFixed(1)}M` : `$${(premium / 1000).toFixed(0)}K`;
+    let reason = `${premStr} premium ${hasSweep ? "sweep" : "flow"} at $${strike} ${optType}s with ${aggression.toFixed(0)}% ask aggression.`;
+    if (vwap && price) reason += ` Price at $${price.toFixed(2)} ${price > vwap ? "above" : "below"} VWAP ($${vwap.toFixed(2)}).`;
+    if (confirmation?.gamma_zone === "negative") reason += " Negative gamma zone — moves will be amplified.";
+    if (confirmation?.confirmed) reason += ` Price action confirmed: ${confirmation.pattern}.`;
 
-    res.json({ signals, count: signals.length, timestamp: now });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message ?? "Claude API error", signals: [], count: 0 });
+    const expiryFormatted = (() => {
+      try {
+        const d = new Date(expiryDate + "T12:00:00");
+        return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      } catch { return expiryDate; }
+    })();
+
+    return {
+      ticker, direction, option_type: optType, category,
+      trade: `Buy ${ticker} $${strike} ${optType === "call" ? "Call" : "Put"}`,
+      strike, expiry: expiryFormatted, premium,
+      ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
+      current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
+      pivot, r1, s1,
+      entry_trigger: entryTrigger, key_level: keyLevel, target, invalidation,
+      reason, confidence, tags,
+      price_confirmed: !!confirmation?.confirmed,
+      price_pattern: confirmation?.pattern ?? null,
+      gamma_zone: confirmation?.gamma_zone ?? "neutral",
+      gamma_description: confirmation?.gamma_description ?? null,
+      recommended_action: confirmation?.trade_recommendation?.action ?? `Buy ${ticker} $${strike} ${optType === "call" ? "Call" : "Put"}`,
+      recommended_expiry: confirmation?.trade_recommendation?.expiry ?? expiryFormatted,
+      recommended_strike: confirmation?.trade_recommendation?.entry_trigger ?? entryTrigger,
+      spread_details: null,
+    };
   }
+
+  const signals: any[] = [];
+  const seenTickers = new Set<string>();
+  for (const c of candidates) {
+    const ticker = c.ticker as string;
+    const strike = parseFloat(String(c.strike)) || 0;
+    const optType = c.type === "call" ? "call" : "put";
+    const key = `${ticker}-${strike}-${optType}`;
+    const kl = keyLevels[ticker];
+    const confirmation = priceConfirmations[key];
+    const sig = scoreSignal(c, kl, confirmation);
+    if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
+      seenTickers.add(`${ticker}-${optType}`);
+      signals.push(sig);
+    }
+  }
+
+  signals.sort((a, b) => b.confidence - a.confidence);
+  console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals`);
+
+  res.json({ signals: signals.slice(0, 15), count: Math.min(signals.length, 15), timestamp: now });
 });
 
 interface PriceHistory {
