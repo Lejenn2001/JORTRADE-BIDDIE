@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Trash2, Bot } from "lucide-react";
+import { Send, Trash2, Bot, Lock, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import biddieRobot from "@/assets/biddie-robot.png";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -185,13 +186,32 @@ const DashboardCommunity = () => {
       <DashboardSidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
+        {profile?.selected_plan === "starter" ? (
+          <main className="flex-1 flex items-center justify-center p-6 bg-mesh">
+            <div className="glass-panel rounded-xl border-glow-purple p-8 text-center max-w-sm">
+              <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mx-auto mb-4 opacity-40 grayscale" />
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-foreground font-semibold text-sm">Chat Room Locked</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                The JORTRADE chat room is available for Active Trader and above. Upgrade to connect with other traders and get live community insights.
+              </p>
+              <Link
+                to="/signup"
+                className="inline-flex items-center gap-1.5 text-xs font-medium bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30 transition-colors"
+              >
+                Upgrade Plan
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </main>
+        ) : (
         <main className="flex-1 flex flex-col overflow-hidden p-1.5 sm:p-2 lg:p-3 bg-mesh">
-          {/* Compact Header — hidden on very small screens */}
           <div className="mb-1.5 sm:mb-2 shrink-0 hidden sm:block">
             <ChatRoomHeader onlineCount={onlineCount} firstName={firstName} />
           </div>
 
-          {/* Messages — full height like Teams/Zoom */}
           <div
             ref={scrollRef}
             className="flex-1 glass-panel rounded-xl border-glow-purple px-2.5 sm:px-4 py-2 sm:py-3 overflow-y-auto space-y-2 mb-1.5 sm:mb-2 min-h-0"
@@ -296,6 +316,7 @@ const DashboardCommunity = () => {
             </Button>
           </div>
         </main>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useAuth, UserPlan } from "@/hooks/useAuth";
 
 const LIMITS: Record<string, number> = {
-  starter: 5,
+  starter: 0,
   active: 25,
   pro: 50,
 };
@@ -52,8 +52,8 @@ export function useQuestionLimit() {
   }, [user, getCount]);
 
   const remaining = Math.max(0, limit - used);
-  const canAsk = plan !== null && remaining > 0;
-  const hasAccess = plan !== null;
+  const canAsk = plan !== "starter" && plan !== null && remaining > 0;
+  const hasAccess = plan !== "starter" && plan !== null;
 
   return { used, remaining, limit, canAsk, hasAccess, increment, plan };
 }
