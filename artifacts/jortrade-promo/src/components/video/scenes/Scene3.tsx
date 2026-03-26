@@ -18,7 +18,7 @@ export function Scene3() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-bg-dark to-bg-dark pointer-events-none" />
       
       <motion.div 
-        className="text-[3.5vw] font-display font-bold mb-[4vh] text-white z-10 tracking-tight text-center"
+        className="text-[6vw] font-display font-bold mb-[4vh] text-white z-10 tracking-tight text-center"
         initial={{ y: -30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
