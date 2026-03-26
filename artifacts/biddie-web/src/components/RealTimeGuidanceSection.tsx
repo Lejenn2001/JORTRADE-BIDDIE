@@ -14,10 +14,10 @@ const RealTimeGuidanceSection = () => {
               transition={{ duration: 0.7 }}
             >
               <h2 className="text-4xl md:text-5xl font-extrabold text-foreground leading-[1.1] mb-4">
-                JORTRADE in Action
+                Biddie in Action
               </h2>
               <p className="text-muted-foreground text-base leading-relaxed max-w-md">
-                See how JORTRADE spots opportunities and Biddie AI walks you through them — before you even ask.
+                See how Biddie spots opportunities and walks you through them — before you even ask.
               </p>
             </motion.div>
 

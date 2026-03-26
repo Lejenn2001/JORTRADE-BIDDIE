@@ -29,7 +29,7 @@ const MentorshipSection = () => {
           </h2>
 
           <p className="text-muted-foreground text-base leading-relaxed mb-8 max-w-lg mx-auto">
-            JORTRADE handles the data and Biddie handles the AI — but sometimes you need a real mentor in your corner.
+            Biddie handles the data — but sometimes you need a real mentor in your corner.
             Get direct access to experienced traders who'll help you level up faster.
           </p>
 

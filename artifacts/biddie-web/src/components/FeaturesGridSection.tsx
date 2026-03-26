@@ -10,8 +10,8 @@ const features = [
     desc: "Every setup gets a score so you instantly know which ideas deserve your attention.",
   },
   {
-    title: "Biddie AI Chat",
-    desc: "Ask JORTRADE's built-in AI assistant about any ticker, setup, or strategy — and get a clear answer.",
+    title: "Ask Biddie Anything",
+    desc: "Chat with your AI assistant about any ticker, setup, or strategy — and get a clear answer.",
   },
   {
     title: "Execution Alerts",
@@ -43,7 +43,7 @@ const FeaturesGridSection = () => {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-foreground leading-[1.1] max-w-3xl mx-auto">
-            The JORTRADE Trading Ecosystem
+            Everything Biddie Brings to Your Trading
           </h2>
           <p className="text-muted-foreground mt-5 max-w-2xl mx-auto text-base leading-relaxed">
             One platform. Six capabilities. Zero guesswork.

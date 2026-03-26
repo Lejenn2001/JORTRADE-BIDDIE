@@ -1,12 +1,11 @@
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
 
 const steps = [
   {
     num: "1",
     title: "Market Scan",
-    desc: "JORTRADE continuously monitors price action, volume shifts, and liquidity activity to surface what's worth watching.",
+    desc: "Biddie continuously monitors price action, volume shifts, and liquidity activity to surface what's worth watching.",
   },
   {
     num: "2",
@@ -37,17 +36,17 @@ const AIWorkflowSection = () => {
             </span>
 
             <h2 className="text-4xl md:text-5xl font-extrabold text-foreground leading-[1.1] mb-6">
-              How JORTRADE Works
+              How Biddie Works For You
             </h2>
 
             <p className="text-muted-foreground text-base leading-relaxed mb-8 max-w-lg">
-              Three steps between you and smarter trades. JORTRADE handles the analysis — you make the call.
+              Three steps between you and smarter trades. Biddie handles the analysis — you make the call.
             </p>
 
-            <Link to="/signup" className="inline-flex items-center gap-2 text-foreground font-semibold text-sm hover:gap-3 transition-all group">
-              Get Started
+            <a href="#" className="inline-flex items-center gap-2 text-foreground font-semibold text-sm hover:gap-3 transition-all group">
+              Join Early Access
               <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            </a>
           </motion.div>
 
           {/* Right column - steps */}
