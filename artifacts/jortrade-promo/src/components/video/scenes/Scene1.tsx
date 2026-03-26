@@ -29,7 +29,7 @@ export function Scene1() {
         <div className="absolute bottom-1/4 right-1/4 w-[60vw] h-[60vw] bg-secondary/20 rounded-full blur-[100px] opacity-50 mix-blend-screen" />
       </div>
 
-      <motion.div variants={itemVariants} className="relative z-10 mb-[6vh]">
+      <motion.div variants={itemVariants} className="relative z-10 mb-[4vh]">
         <img 
           src={jortradeLogo} 
           alt="JORTRADE Logo" 
@@ -39,7 +39,7 @@ export function Scene1() {
 
       <motion.h1 
         variants={itemVariants}
-        className="text-[7vw] font-display font-bold text-center text-text-primary max-w-[85vw] tracking-tight leading-tight z-10"
+        className="text-[4.5vw] font-display font-bold text-center text-text-primary max-w-[85vw] tracking-tight leading-tight z-10"
       >
         Trade With <span className="text-primary">Confidence</span><br />
         Using Your AI Assistant

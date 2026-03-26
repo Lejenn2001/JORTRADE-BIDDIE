@@ -18,7 +18,7 @@ export function Scene3() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-bg-dark to-bg-dark pointer-events-none" />
       
       <motion.div 
-        className="text-[6vw] font-display font-bold mb-[5vh] text-white z-10 tracking-tight text-center"
+        className="text-[3.5vw] font-display font-bold mb-[4vh] text-white z-10 tracking-tight text-center"
         initial={{ y: -30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
@@ -26,42 +26,42 @@ export function Scene3() {
         Real-Time <span className="text-primary">Actionable</span> Signals
       </motion.div>
 
-      <div className="flex flex-col gap-[3vh] z-10 w-full">
+      <div className="flex flex-col gap-[2vh] z-10 w-full">
         {signals.map((sig, i) => (
           <motion.div
             key={sig.ticker}
-            className="w-full bg-bg-muted/80 border border-white/10 rounded-xl p-[5vw] bg-glass flex flex-col relative overflow-hidden"
+            className="w-full bg-bg-muted/80 border border-white/10 rounded-xl p-[3vw] bg-glass flex flex-col relative overflow-hidden"
             initial={{ opacity: 0, x: 80, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             transition={{ delay: 0.5 + i * 0.3, type: "spring", damping: 20 }}
           >
-            <div className={`absolute top-0 left-0 w-full h-[0.8vw] ${sig.bg.replace('/20', '')}`} />
+            <div className={`absolute top-0 left-0 w-full h-[0.5vw] ${sig.bg.replace('/20', '')}`} />
             
-            <div className="flex justify-between items-center mb-[2vw]">
-              <h3 className="text-[7vw] font-bold font-mono text-white tracking-tight">{sig.ticker}</h3>
+            <div className="flex justify-between items-center mb-[1.5vw]">
+              <h3 className="text-[4vw] font-bold font-mono text-white tracking-tight">{sig.ticker}</h3>
               <motion.span 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 1 + i * 0.3, type: "spring" }}
-                className={`px-[2.5vw] py-[1vw] text-[2.5vw] font-bold rounded-md border border-current ${sig.color} ${sig.bg} uppercase tracking-wider`}
+                className={`px-[1.5vw] py-[0.6vw] text-[1.2vw] font-bold rounded-md border border-current ${sig.color} ${sig.bg} uppercase tracking-wider`}
               >
                 {sig.tag}
               </motion.span>
             </div>
             
-            <div className="flex items-end gap-[2vw] mb-[3vw]">
-              <div className="text-[10vw] font-bold text-white leading-none tracking-tighter">{sig.score}%</div>
-              <div className="text-[3vw] text-text-muted mb-[1vw] font-medium">Win Rate</div>
+            <div className="flex items-end gap-[1.5vw] mb-[2vw]">
+              <div className="text-[5vw] font-bold text-white leading-none tracking-tighter">{sig.score}%</div>
+              <div className="text-[1.5vw] text-text-muted mb-[0.5vw] font-medium">Win Rate</div>
             </div>
 
-            <div className="grid grid-cols-2 gap-[3vw] border-t border-white/10 pt-[3vw]">
+            <div className="grid grid-cols-2 gap-[2vw] border-t border-white/10 pt-[2vw]">
               <div>
-                <div className="text-[2.5vw] text-text-muted font-medium mb-[0.5vw]">Entry {sig.type}</div>
-                <div className="text-[4vw] font-mono text-white font-bold">${sig.price}</div>
+                <div className="text-[1.2vw] text-text-muted font-medium mb-[0.3vw]">Entry {sig.type}</div>
+                <div className="text-[2vw] font-mono text-white font-bold">${sig.price}</div>
               </div>
               <div>
-                <div className="text-[2.5vw] text-text-muted font-medium mb-[0.5vw]">Target</div>
-                <div className="text-[4vw] font-mono text-success font-bold">${sig.target}</div>
+                <div className="text-[1.2vw] text-text-muted font-medium mb-[0.3vw]">Target</div>
+                <div className="text-[2vw] font-mono text-success font-bold">${sig.target}</div>
               </div>
             </div>
           </motion.div>

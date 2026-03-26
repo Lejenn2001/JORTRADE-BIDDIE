@@ -27,11 +27,11 @@ export function Scene5() {
         <img 
           src={jortradeLogo} 
           alt="JORTRADE" 
-          className="h-[30vh] mb-[5vh] drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]"
+          className="h-[35vh] mb-[4vh] drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]"
         />
 
         <motion.h1 
-          className="text-[7vw] font-display font-bold text-white mb-[4vh] tracking-tight leading-tight text-center"
+          className="text-[4.5vw] font-display font-bold text-white mb-[3vh] tracking-tight leading-tight text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 0.8 }}
@@ -41,7 +41,7 @@ export function Scene5() {
         </motion.h1>
 
         <motion.div
-          className="text-[5vw] font-mono text-text-primary border border-white/20 px-[8vw] py-[2.5vw] rounded-full bg-glass backdrop-blur-lg shadow-[0_0_20px_rgba(88,101,242,0.2)]"
+          className="text-[2.5vw] font-mono text-text-primary border border-white/20 px-[5vw] py-[1.5vw] rounded-full bg-glass backdrop-blur-lg shadow-[0_0_20px_rgba(88,101,242,0.2)]"
           initial={{ opacity: 0, y: 20, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ delay: 2.2, type: "spring", stiffness: 300, damping: 20 }}
