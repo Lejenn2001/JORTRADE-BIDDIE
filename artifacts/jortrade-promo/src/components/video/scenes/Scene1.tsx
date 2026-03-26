@@ -25,21 +25,21 @@ export function Scene1() {
       exit="exit"
     >
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-[40vw] h-[40vw] bg-primary/20 rounded-full blur-[100px] opacity-50 mix-blend-screen" />
-        <div className="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] bg-secondary/20 rounded-full blur-[100px] opacity-50 mix-blend-screen" />
+        <div className="absolute top-1/4 left-1/4 w-[60vw] h-[60vw] bg-primary/20 rounded-full blur-[100px] opacity-50 mix-blend-screen" />
+        <div className="absolute bottom-1/4 right-1/4 w-[60vw] h-[60vw] bg-secondary/20 rounded-full blur-[100px] opacity-50 mix-blend-screen" />
       </div>
 
-      <motion.div variants={itemVariants} className="relative z-10 mb-[4vw]">
+      <motion.div variants={itemVariants} className="relative z-10 mb-[6vh]">
         <img 
           src={jortradeLogo} 
           alt="JORTRADE Logo" 
-          className="h-[55vh] object-contain drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]" 
+          className="h-[35vh] object-contain drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]" 
         />
       </motion.div>
 
       <motion.h1 
         variants={itemVariants}
-        className="text-[4vw] font-display font-bold text-center text-text-primary max-w-[80vw] tracking-tight leading-tight z-10"
+        className="text-[7vw] font-display font-bold text-center text-text-primary max-w-[85vw] tracking-tight leading-tight z-10"
       >
         Trade With <span className="text-primary">Confidence</span><br />
         Using Your AI Assistant

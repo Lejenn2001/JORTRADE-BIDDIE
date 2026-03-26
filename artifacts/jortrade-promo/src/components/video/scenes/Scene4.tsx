@@ -11,7 +11,7 @@ const messages = [
 export function Scene4() {
   return (
     <motion.div
-      className="absolute inset-0 flex items-center justify-center bg-bg-dark overflow-hidden"
+      className="absolute inset-0 flex flex-col items-center justify-end bg-bg-dark overflow-hidden px-[4vw] pb-[8vh]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -20,27 +20,27 @@ export function Scene4() {
         <motion.img 
           src={biddieLeaning} 
           alt="Biddie" 
-          className="absolute left-0 bottom-0 w-[45vw] h-[90vh] object-contain object-left-bottom filter drop-shadow-[0_0_30px_rgba(88,101,242,0.6)]"
-          initial={{ y: 100, opacity: 0 }}
+          className="absolute left-[-5vw] top-[2vh] w-[55vw] h-[45vh] object-contain object-left-top filter drop-shadow-[0_0_30px_rgba(88,101,242,0.6)]"
+          initial={{ y: -50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2, duration: 1, type: "spring", bounce: 0.3 }}
         />
       </div>
 
-      <div className="w-[50vw] ml-[25vw] flex flex-col gap-[1.5vw] z-10 relative">
-        <motion.h2 
-          className="text-[3vw] font-display font-bold text-white mb-[2vw] tracking-tight"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          Live Community & <span className="text-primary">Alerts</span>
-        </motion.h2>
+      <motion.h2 
+        className="text-[6vw] font-display font-bold text-white mb-[3vh] tracking-tight text-center z-10"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        Live Community & <span className="text-primary">Alerts</span>
+      </motion.h2>
 
+      <div className="w-full flex flex-col gap-[2.5vh] z-10">
         {messages.map((msg, i) => (
           <motion.div
             key={i}
-            className={`p-[1.5vw] rounded-xl border relative overflow-hidden bg-glass backdrop-blur-md ${msg.isAlert ? 'border-primary/50 shadow-[0_0_30px_rgba(88,101,242,0.3)]' : 'border-white/5'}`}
+            className={`p-[4vw] rounded-xl border relative overflow-hidden bg-glass backdrop-blur-md ${msg.isAlert ? 'border-primary/50 shadow-[0_0_30px_rgba(88,101,242,0.3)]' : 'border-white/5'}`}
             initial={{ opacity: 0, x: 50, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             transition={{ delay: 0.8 + i * 0.6, type: "spring", stiffness: 200, damping: 20 }}
@@ -48,18 +48,18 @@ export function Scene4() {
             {msg.isAlert && (
               <div className="absolute inset-0 bg-primary/10 animate-pulse pointer-events-none" />
             )}
-            <div className="flex items-center gap-[1vw] mb-[0.8vw] relative z-10">
-              <span className={`font-bold text-[1.2vw] ${msg.isAlert ? 'text-primary' : 'text-text-secondary'}`}>
+            <div className="flex items-center gap-[2vw] mb-[1.5vw] relative z-10">
+              <span className={`font-bold text-[3.5vw] ${msg.isAlert ? 'text-primary' : 'text-text-secondary'}`}>
                 {msg.user}
               </span>
-              <span className="text-[0.9vw] text-text-muted">{msg.time}</span>
+              <span className="text-[2.5vw] text-text-muted">{msg.time}</span>
               {msg.isAlert && (
-                <span className="ml-auto px-[0.8vw] py-[0.3vw] bg-error/20 text-error text-[0.8vw] rounded-md font-bold uppercase tracking-wider border border-error/30">
+                <span className="ml-auto px-[2vw] py-[0.8vw] bg-error/20 text-error text-[2.2vw] rounded-md font-bold uppercase tracking-wider border border-error/30">
                   AI Alert
                 </span>
               )}
             </div>
-            <p className={`text-[1.3vw] font-body ${msg.isAlert ? 'text-white font-medium' : 'text-text-primary/80'} leading-relaxed relative z-10`}>
+            <p className={`text-[3.2vw] font-body ${msg.isAlert ? 'text-white font-medium' : 'text-text-primary/80'} leading-relaxed relative z-10`}>
               {msg.text}
             </p>
           </motion.div>

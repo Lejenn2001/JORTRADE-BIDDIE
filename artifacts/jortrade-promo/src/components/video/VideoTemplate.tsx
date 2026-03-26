@@ -26,7 +26,7 @@ export default function VideoTemplate() {
       className="w-screen h-screen overflow-hidden relative"
       style={{ 
         backgroundColor: 'var(--color-bg-dark)',
-        aspectRatio: '16 / 9'
+        aspectRatio: '9 / 16'
       }}
     >
       <AnimatePresence mode="wait">
