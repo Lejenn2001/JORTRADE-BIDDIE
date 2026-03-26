@@ -1275,88 +1275,52 @@ Drop the morning outlook. Keep it real.`,
   }
 });
 
-// ── Scheduled Daily Posts ──────────────────────────────────────────────────────
+// ── Biddie Flow Monitor — posts whenever he sees something worth saying ───────
 
 const BIDDIE_USER_ID = "00000000-0000-0000-0000-000000000000";
 
-interface ScheduledPost {
-  id: string;
-  hour: number;
-  minuteStart: number;
-  minuteEnd: number;
-  prompt: string;
-  system: string;
-}
+const seenAlertIds = new Set<string>();
+let lastBiddiePost = 0;
+const MIN_POST_GAP_MS = 20 * 60 * 1000;
+let flowMonitorStarted = false;
 
-const MIDDAY_SYSTEM = `You are Biddie AI checking in with the JORTRADE crew during the trading session.
+const FLOW_WATCH_SYSTEM = `You are Biddie AI — a seasoned options flow analyst watching the tape for the JORTRADE trading community.
 
-YOUR VIBE: Seasoned trader, chill but sharp. Casual and real. You're updating the team on what's actually happening right now.
+You've been scanning the flow and just spotted something worth calling out. Your job is to decide IF this is actually worth posting about, and if so, drop a quick take.
 
-YOUR JOB: Quick midday pulse check. What's moved, what's still in play, any new flow worth watching. This is NOT a full breakdown — just the highlights.
+YOUR VIBE: Seasoned trader, chill but sharp. You don't spam the chat — when you speak up, people listen because you only talk when it matters. Casual, confident, real talk.
 
-FORMAT:
-1. **How We're Looking** — 1-2 sentences on SPY/QQQ direction since open. Up, down, choppy?
-2. **Biggest Moves** — 1-2 tickers with the most action right now. Actual numbers (premium, direction)
-3. **Still Watching** — Anything from the morning that's setting up for an afternoon move
-4. **Quick Take** — One sentence, your read on the rest of the session
+WHEN TO POST (must meet at least ONE):
+- Massive single premium ($500K+) sweep or block on a liquid name
+- Multiple sweeps stacking on the same ticker/direction in a short window (repeat hits)
+- Flow that contradicts the current trend (bearish flow on a green day, bullish on a red day)
+- Pre-market/after-hours flow that signals a big move at open
+- A ticker suddenly lighting up with unusual volume (10x+ vol/OI)
+- Something you already called out earlier is now confirming or invalidating
 
-RULES:
-- Under 200 words
-- Only near-term stuff (0DTE to 2 weeks)
-- Reference real numbers, not vibes
-- Don't repeat the morning outlook — focus on what changed`;
+WHEN NOT TO POST:
+- Normal flow on normal tickers with normal volume — that's just the market being the market
+- Far-out expirations with modest premium — no urgency
+- Flow that's clearly hedging (bid-side, protective puts on long positions)
+- Anything you're not confident about — silence is better than noise
 
-const CLOSING_SYSTEM = `You are Biddie AI wrapping up the day for the JORTRADE crew.
-
-YOUR VIBE: Seasoned trader, chill but sharp. End of day energy — reflective but forward-looking.
-
-YOUR JOB: Quick end-of-day recap. What happened, what hit, what to watch for tomorrow. Keep it tight.
-
-FORMAT:
-1. **Today's Scorecard** — SPY/QQQ close direction, overall market vibe in 1-2 sentences
-2. **Winners & Losers** — 1-2 tickers that made the biggest moves. What the flow told us
-3. **Tomorrow's Radar** — 1-2 things to watch for next session (earnings, catalysts, key levels)
-4. **Final Word** — One sentence wrap-up
+FORMAT (keep it SHORT — 2-4 sentences max):
+- What you're seeing (ticker, direction, premium, strike, expiry)
+- Why it matters (unusual size, sweep pattern, against the trend, etc.)
+- One actionable takeaway (watch for X, this confirms Y, be careful of Z)
 
 RULES:
-- Under 200 words
-- Be honest about what worked and what didn't
-- Reference actual closing prices and flow data
-- Keep it real — no hype, no fluff`;
+- Under 100 words. This is a quick heads-up, not an essay
+- Only near-term plays (0DTE to ~2 weeks)
+- Reference actual numbers — premium, vol/OI, aggression %
+- Don't repeat yourself — each post should be new information
+- If nothing is worth posting about, respond with exactly: NOTHING_NOTABLE`;
 
-const scheduledPosts: ScheduledPost[] = [
-  {
-    id: "morning",
-    hour: 8,
-    minuteStart: 15,
-    minuteEnd: 30,
-    prompt: "Drop the morning outlook. Keep it real.",
-    system: MORNING_OUTLOOK_SYSTEM,
-  },
-  {
-    id: "midday",
-    hour: 12,
-    minuteStart: 0,
-    minuteEnd: 15,
-    prompt: "Give the midday update. What's moving right now?",
-    system: MIDDAY_SYSTEM,
-  },
-  {
-    id: "closing",
-    hour: 15,
-    minuteStart: 45,
-    minuteEnd: 59,
-    prompt: "Wrap up the day. What happened and what's next?",
-    system: CLOSING_SYSTEM,
-  },
-];
+function startFlowMonitor() {
+  if (flowMonitorStarted) return;
+  flowMonitorStarted = true;
 
-let dailyPostsScheduled = false;
-
-function scheduleDailyPosts() {
-  if (dailyPostsScheduled) return;
-  dailyPostsScheduled = true;
-
+  // Morning outlook at ~8:20 ET
   setInterval(async () => {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/New_York",
@@ -1368,90 +1332,111 @@ function scheduleDailyPosts() {
     const day = get("weekday");
 
     if (["Saturday", "Sunday"].includes(day)) return;
+    if (hour !== 8 || minute < 15 || minute > 30) return;
 
-    const activePost = scheduledPosts.find(
-      (p) => p.hour === hour && minute >= p.minuteStart && minute <= p.minuteEnd
-    );
-    if (!activePost) return;
+    const today = new Date().toISOString().split("T")[0];
+    const { data: existing } = await supabase
+      .from("chat_messages")
+      .select("id")
+      .eq("user_id", BIDDIE_USER_ID)
+      .gte("created_at", `${today}T00:00:00Z`)
+      .limit(1);
+    if (existing && existing.length > 0) return;
 
     try {
-      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      const { data: recent } = await supabase
-        .from("chat_messages")
-        .select("id")
-        .eq("user_id", BIDDIE_USER_ID)
-        .gte("created_at", twoHoursAgo)
-        .limit(1);
-
-      if (recent && recent.length > 0) return;
-
       const [flowAlerts, sectorData, econData] = await Promise.all([
-        fetchFlowAlerts(200),
-        fetchSectorEtfs(),
-        fetchEconomicCalendar(),
+        fetchFlowAlerts(200), fetchSectorEtfs(), fetchEconomicCalendar(),
       ]);
-
       const enriched = enrichAlerts(flowAlerts);
       const uwPrices: Record<string, number> = {};
-      for (const alert of enriched) {
-        const t = (alert.ticker ?? "").toUpperCase();
-        const p = parseFloat(alert.underlying_price);
+      for (const a of enriched) {
+        const t = (a.ticker ?? "").toUpperCase();
+        const p = parseFloat(a.underlying_price);
         if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
       }
-
       const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
-      const keyLevelsResults = await Promise.all(
-        keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null))
-      );
+      const kl = await Promise.all(keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null)));
       const keyLevels: Record<string, any> = {};
-      keyTickers.forEach((t, i) => {
-        if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
-      });
+      keyTickers.forEach((t, i) => { if (kl[i]) keyLevels[t] = kl[i]; });
 
       const now = getNowEastern();
-      const dateContext = getEasternDateContext();
-      const context = {
-        fetched_at: now,
-        key_levels: keyLevels,
-        top_flow: enriched.slice(0, 50),
-        sector_etfs: sectorData,
-        economic_calendar: (econData as any[]).slice(0, 10),
-      };
-
       const response = await claude.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1500,
-        system: activePost.system,
-        messages: [{
-          role: "user",
-          content: `${activePost.prompt}
+        system: MORNING_OUTLOOK_SYSTEM,
+        messages: [{ role: "user", content: `Drop the morning outlook. Keep it real.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify({ fetched_at: now, key_levels: keyLevels, top_flow: enriched.slice(0, 50), sector_etfs: sectorData, economic_calendar: (econData as any[]).slice(0, 10) }, null, 2)}\n\`\`\`` }],
+      });
+      const content = response.content[0].type === "text" ? response.content[0].text : "";
+      await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content });
+      lastBiddiePost = Date.now();
+      console.log(`[Biddie morning] Posted at ${now}`);
+    } catch (err) { console.error("[Biddie morning] Failed:", err); }
+  }, 60000);
 
---- CURRENT DATE & TRADING CALENDAR ---
-${dateContext}
+  // Flow scanner — runs every 5 minutes during market hours, posts when something's worth saying
+  setInterval(async () => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit", minute: "2-digit", hour12: false, weekday: "long",
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const hour = parseInt(get("hour"), 10);
+    const day = get("weekday");
 
---- LIVE MARKET DATA (fetched ${now}) ---
-\`\`\`json
-${JSON.stringify(context, null, 2)}
-\`\`\``,
-        }],
+    if (["Saturday", "Sunday"].includes(day)) return;
+    if (hour < 9 || hour > 16) return;
+    if (Date.now() - lastBiddiePost < MIN_POST_GAP_MS) return;
+
+    try {
+      const flowAlerts = await fetchFlowAlerts(100);
+      const enriched = enrichAlerts(flowAlerts);
+
+      const newAlerts = enriched.filter((a) => {
+        const id = a.rule_id || `${a.ticker}-${a.strike}-${a.type}-${a.expiry}`;
+        if (seenAlertIds.has(id)) return false;
+        seenAlertIds.add(id);
+        return true;
+      });
+
+      if (seenAlertIds.size > 5000) {
+        const arr = [...seenAlertIds];
+        arr.splice(0, arr.length - 2000);
+        seenAlertIds.clear();
+        arr.forEach((id) => seenAlertIds.add(id));
+      }
+
+      const notable = newAlerts.filter((a) => {
+        if (a.total_premium >= 500000 && a.ask_aggression_pct >= 70) return true;
+        if (a.has_sweep && a.total_premium >= 300000 && a.vol_oi_ratio >= 5) return true;
+        if (a.vol_oi_ratio >= 10 && a.total_premium >= 200000) return true;
+        return false;
+      });
+
+      if (notable.length === 0) return;
+
+      const now = getNowEastern();
+      const topFlow = notable.slice(0, 5);
+      const context = JSON.stringify({ fetched_at: now, notable_flow: topFlow, all_recent: enriched.slice(0, 30) }, null, 2);
+
+      const response = await claude.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 500,
+        system: FLOW_WATCH_SYSTEM,
+        messages: [{ role: "user", content: `New flow just came in. Is this worth calling out?\n\n--- CURRENT TIME ---\n${now}\n\n--- NOTABLE FLOW ---\n\`\`\`json\n${context}\n\`\`\`\n\nIf it's worth posting about, drop a quick take. If not, respond with exactly: NOTHING_NOTABLE` }],
       });
 
       const content = response.content[0].type === "text" ? response.content[0].text : "";
 
-      await supabase.from("chat_messages").insert({
-        user_id: BIDDIE_USER_ID,
-        user_name: "Biddie AI",
-        content,
-      });
+      if (content.includes("NOTHING_NOTABLE") || content.trim().length < 20) return;
 
-      console.log(`[Biddie ${activePost.id}] Posted at ${now}`);
-    } catch (err) {
-      console.error(`[Biddie ${activePost.id}] Failed:`, err);
-    }
-  }, 60000);
+      await supabase.from("chat_messages").insert({ user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content });
+      lastBiddiePost = Date.now();
+      console.log(`[Biddie flow alert] Posted at ${now}`);
+    } catch (err) { console.error("[Biddie flow monitor] Failed:", err); }
+  }, 5 * 60 * 1000);
 }
 
-scheduleDailyPosts();
+startFlowMonitor();
 
 router.get("/whale/health", (_req, res) => {
   res.json({
