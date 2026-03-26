@@ -2,14 +2,14 @@ import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
+import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 
 type FilterType = "all" | "call" | "put";
-type ViewTab = "algorithm" | "whale";
+type ViewTab = "algorithm" | "whale" | "spread";
 
 const ALGO_SECTION_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
   buy_now: {
@@ -199,7 +199,7 @@ const DashboardSignals = () => {
   }, [signals, search, filterType]);
 
   const algorithmSignals = useMemo(() => {
-    const algoOnly = filtered.filter(s => s.category !== 'whale');
+    const algoOnly = filtered.filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'));
     const buyNow = algoOnly.filter(s => s.timeframe === 'buy_now');
     const shortTerm = algoOnly.filter(s => s.timeframe === 'short_term' || s.timeframe === 'swing');
     return { buy_now: buyNow, short_term: shortTerm };
@@ -209,8 +209,13 @@ const DashboardSignals = () => {
     return filtered.filter(s => s.category === 'whale');
   }, [filtered]);
 
+  const spreadSignals = useMemo(() => {
+    return filtered.filter(s => s.category === 'spread');
+  }, [filtered]);
+
   const algoCount = algorithmSignals.buy_now.length + algorithmSignals.short_term.length;
   const whaleCount = whaleSignals.length;
+  const spreadCount = spreadSignals.length;
   const totalCount = signals.filter(s => s.source !== 'example').length;
 
   return (
@@ -252,10 +257,24 @@ const DashboardSignals = () => {
               }`}
             >
               <Waves className="h-4 w-4" />
-              Whale Plays
+              Whale Activity
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                 viewTab === "whale" ? "bg-blue-500/30" : "bg-muted/50"
               }`}>{whaleCount}</span>
+            </button>
+            <button
+              onClick={() => setViewTab("spread")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewTab === "spread"
+                  ? "bg-violet-500/20 text-violet-400 border border-violet-500/40"
+                  : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Target className="h-4 w-4" />
+              Spreads & Butterflies
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                viewTab === "spread" ? "bg-violet-500/30" : "bg-muted/50"
+              }`}>{spreadCount}</span>
             </button>
           </div>
 
@@ -365,6 +384,38 @@ const DashboardSignals = () => {
               )}
             </>
           )}
+
+          {/* Spreads & Butterflies Tab */}
+          {viewTab === "spread" && (
+            <>
+              {spreadCount === 0 && !loading && (
+                <div className="glass-panel rounded-xl p-8 text-center border border-violet-500/20">
+                  <Target className="h-8 w-8 text-violet-400/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No spread or butterfly plays detected yet. These appear when multi-leg strategies (debit spreads, butterflies, iron condors) are identified from flow data.</p>
+                </div>
+              )}
+
+              {spreadSignals.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Target className="h-4 w-4 text-violet-400" />
+                    <span className="font-bold text-xs sm:text-sm text-violet-400">SPREADS & BUTTERFLIES</span>
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">— Defined risk multi-leg strategies</span>
+                    <span className="text-[10px] bg-violet-500/20 text-violet-400 px-1.5 py-0.5 rounded-full ml-auto">
+                      {spreadSignals.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {spreadSignals.map((signal, i) => (
+                      <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                        <SignalCard signal={signal} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </main>
       </div>
     </div>
@@ -375,11 +426,16 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
   const isCall = signal.putCall === "call" || signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
+  const isSpread = signal.category === "spread";
 
   const glowClass = isWhale
     ? score >= 85
       ? "shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] border-blue-500/40"
       : "shadow-[0_0_10px_-3px_rgba(59,130,246,0.25)] border-blue-500/30"
+    : isSpread
+    ? score >= 85
+      ? "shadow-[0_0_15px_-3px_rgba(139,92,246,0.4)] border-violet-500/40"
+      : "shadow-[0_0_10px_-3px_rgba(139,92,246,0.25)] border-violet-500/30"
     : score >= 85
     ? "shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)] border-primary/40"
     : score >= 70
@@ -390,7 +446,7 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-shadow ${glowClass} ${
-      isWhale ? "bg-blue-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+      isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
@@ -403,18 +459,20 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
       )}
 
       <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
-        isWhale ? "bg-blue-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
+        isWhale ? "bg-blue-500/15" : isSpread ? "bg-violet-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
       }`}>
         <div className="flex items-center gap-2">
           {isWhale ? (
             <Waves className="h-3 w-3 text-blue-400" />
+          ) : isSpread ? (
+            <Target className="h-3 w-3 text-violet-400" />
           ) : (
             <Zap className="h-3 w-3 text-accent" />
           )}
           <span className={`text-[9px] sm:text-[10px] font-bold tracking-widest uppercase ${
-            isWhale ? "text-blue-400" : "text-accent"
+            isWhale ? "text-blue-400" : isSpread ? "text-violet-400" : "text-accent"
           }`}>
-            {isWhale ? "Whale Play" : "Algorithm Play"}
+            {isWhale ? "Whale Play" : isSpread ? "Spread Play" : "Algorithm Play"}
           </span>
           {signal.source === "live" ? (
             <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
@@ -478,6 +536,25 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
               <div className="min-w-0">
                 <span className="text-muted-foreground">Price pattern: </span>
                 <span className="text-emerald-400 font-semibold">{signal.pricePattern}</span>
+              </div>
+            </div>
+          )}
+          {signal.spreadDetails && (
+            <div className="flex items-start gap-2 bg-violet-500/10 rounded-lg px-2.5 py-1.5">
+              <Target className="h-3 w-3 text-violet-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-muted-foreground">Strategy: </span>
+                <span className="text-violet-400 font-semibold">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                {signal.spreadDetails.legs && (
+                  <span className="text-muted-foreground text-[10px] block mt-0.5">{signal.spreadDetails.legs}</span>
+                )}
+                {(signal.spreadDetails.max_profit || signal.spreadDetails.max_loss) && (
+                  <span className="text-[10px] text-muted-foreground block mt-0.5">
+                    {signal.spreadDetails.max_profit != null && `Max Profit: $${signal.spreadDetails.max_profit}`}
+                    {signal.spreadDetails.max_profit != null && signal.spreadDetails.max_loss != null && ' | '}
+                    {signal.spreadDetails.max_loss != null && `Max Loss: $${signal.spreadDetails.max_loss}`}
+                  </span>
+                )}
               </div>
             </div>
           )}

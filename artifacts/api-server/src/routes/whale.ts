@@ -860,6 +860,7 @@ Each signal object must have exactly these fields:
   "ticker": "string",
   "direction": "bullish" or "bearish",
   "option_type": "call" or "put",
+  "category": "algorithm" or "whale" or "spread",
   "trade": "short human-readable trade description e.g. Buy NVDA $145 Call",
   "strike": number,
   "expiry": "string e.g. March 27, 2026",
@@ -880,15 +881,28 @@ Each signal object must have exactly these fields:
   "invalidation": "specific price level that kills the trade, reference actual key levels",
   "reason": "2-3 sentences: what makes this flow stand out + how price relates to key levels + gamma zone context",
   "confidence": number between 7 and 10,
-  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE", "Price Confirmed", "Negative Gamma", "Positive Gamma"],
+  "tags": array of strings from: ["Sweep", "Call Flow", "Put Flow", "High Volume", "ATM", "Repeat Hits", "Floor Trade", "0DTE", "Price Confirmed", "Negative Gamma", "Positive Gamma", "Debit Spread", "Butterfly", "Iron Condor"],
   "price_confirmed": boolean,
   "price_pattern": "string describing the price action pattern or null",
   "gamma_zone": "positive" or "negative" or "neutral",
   "gamma_description": "string explaining gamma exposure at this level",
   "recommended_action": "specific trade recommendation e.g. Buy SPY $570 Put expiring March 28",
   "recommended_expiry": "suggested expiration based on timeframe",
-  "recommended_strike": "suggested strike price with reasoning"
+  "recommended_strike": "suggested strike price with reasoning",
+  "spread_details": "null for single-leg, or object with { type: 'debit_spread'|'butterfly'|'iron_condor', legs: 'description of legs', max_profit: number|null, max_loss: number|null, probability: number|null } for multi-leg strategies"
 }
+
+CATEGORY RULES:
+- "algorithm": Single-leg plays detected by price action + gamma analysis. Intraday entries. These are directional bets confirmed by technical levels.
+- "whale": Large institutional single-leg flow ($250K+ premium). Sweeps, blocks, floor trades. Swing positioning.
+- "spread": Multi-leg strategies — debit spreads, butterflies, iron condors. Look for MULTIPLE flow alerts on the SAME ticker + SAME expiry at DIFFERENT strikes that suggest a defined-risk strategy. Also identify when flow data explicitly shows spread or multi-leg activity. Provide spread_details for these.
+
+SPREAD/BUTTERFLY DETECTION:
+- If you see call flow at 2+ different strikes on the same ticker/expiry, consider if it's a debit spread (buy lower, sell higher for calls) or credit spread
+- If you see 3 strikes with the middle having 2x volume, it's likely a butterfly
+- Sweeps at adjacent strikes on the same ticker = probable spread
+- Include estimated max profit/loss and probability when identifiable
+- Tag spreads with "Debit Spread", "Butterfly", or "Iron Condor" as appropriate
 
 CRITICAL RULES for accuracy:
 - entry_trigger MUST reference actual VWAP, prior day high/low, or pivot levels from the data

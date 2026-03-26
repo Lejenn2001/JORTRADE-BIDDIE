@@ -175,18 +175,65 @@ const Dashboard = () => {
 
   const algorithmPlays = useMemo(() =>
     allMergedSignals
-      .filter(s => s.category !== 'whale')
+      .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
       .filter(s => getSignalScore(s) >= 70)
-      .slice(0, 3),
+      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
+      .slice(0, 5),
     [allMergedSignals]
   );
 
   const whalePlays = useMemo(() =>
     allMergedSignals
       .filter(s => s.category === 'whale')
-      .slice(0, 3),
+      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
+      .slice(0, 5),
     [allMergedSignals]
   );
+
+  const spreadPlays = useMemo(() =>
+    allMergedSignals
+      .filter(s => s.category === 'spread')
+      .sort((a, b) => getSignalScore(b) - getSignalScore(a))
+      .slice(0, 5),
+    [allMergedSignals]
+  );
+
+  const dashboardFeatured = useMemo(() => [
+    ...algorithmPlays.slice(0, 3),
+    ...whalePlays.slice(0, 3),
+    ...spreadPlays.slice(0, 3),
+  ], [algorithmPlays, whalePlays, spreadPlays]);
+
+  useEffect(() => {
+    if (dashboardFeatured.length === 0) return;
+    const markDashboardSignals = async () => {
+      try {
+        const tickers = dashboardFeatured.map(s => s.ticker);
+        const { data: existing } = await supabase
+          .from("signal_outcomes" as any)
+          .select("id, ticker, strike, expiry, signal_source")
+          .in("ticker", tickers)
+          .eq("signal_source", "replit")
+          .eq("outcome", "pending");
+
+        if (!existing || existing.length === 0) return;
+
+        const featuredKeys = new Set(dashboardFeatured.map(s => `${s.ticker}|${s.strike}|${s.expiry}`));
+        const toUpdate = existing.filter((e: any) => featuredKeys.has(`${e.ticker}|${e.strike}|${e.expiry}`));
+
+        if (toUpdate.length > 0) {
+          const ids = toUpdate.map((e: any) => e.id);
+          await supabase
+            .from("signal_outcomes" as any)
+            .update({ signal_source: "dashboard" })
+            .in("id", ids);
+        }
+      } catch (e) {
+        console.warn("Failed to mark dashboard signals:", e);
+      }
+    };
+    markDashboardSignals();
+  }, [dashboardFeatured]);
 
   const signalFeedLoading = loading || persistedLoading;
 
@@ -213,6 +260,7 @@ const Dashboard = () => {
                 title="Algorithm Plays"
                 subtitle="Price action confirmed + gamma analysis — intraday entries"
                 icon="algorithm"
+                limit={3}
               />
               <SignalFeedPanel
                 signals={whalePlays}
@@ -220,6 +268,15 @@ const Dashboard = () => {
                 title="Whale Plays"
                 subtitle="Institutional flow — swing positioning"
                 icon="whale"
+                limit={3}
+              />
+              <SignalFeedPanel
+                signals={spreadPlays}
+                loading={signalFeedLoading}
+                title="Spreads & Butterflies"
+                subtitle="Multi-leg strategies — defined risk plays"
+                icon="spread"
+                limit={3}
               />
               <PortfolioPanel whaleAlerts={whaleAlerts} loading={loading} limit={6} />
             </div>

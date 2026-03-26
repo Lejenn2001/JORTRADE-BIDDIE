@@ -22,6 +22,7 @@ const PerformanceSnapshot = () => {
       const { data } = await supabase
         .from("signal_outcomes")
         .select("outcome, resolved_at")
+        .eq("signal_source", "dashboard")
         .gte("created_at", sevenDaysAgo)
         .order("created_at", { ascending: false });
 

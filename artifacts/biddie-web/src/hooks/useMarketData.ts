@@ -17,7 +17,7 @@ export interface FlowAlert {
 
 export type SignalTimeframe = "buy_now" | "short_term" | "swing";
 
-export type SignalCategory = "algorithm" | "whale";
+export type SignalCategory = "algorithm" | "whale" | "spread";
 
 export interface MarketSignal {
   id: string;
@@ -50,6 +50,13 @@ export interface MarketSignal {
   recommendedExpiry?: string;
   recommendedStrike?: string;
   category?: SignalCategory;
+  spreadDetails?: {
+    type: string;
+    legs: string;
+    max_profit: number | null;
+    max_loss: number | null;
+    probability: number | null;
+  } | null;
 }
 
 export interface TickerData {
@@ -548,12 +555,15 @@ export function useMarketData() {
 
             const timeframe = classifyTimeframe({ convictionScore: hybridScore, confidence: s.confidence, expiry: s.expiry });
 
-            // Classify: Algorithm plays have price confirmation or gamma analysis;
-            // Whale plays are high-premium institutional flow (sweeps/blocks with big size)
-            const whalePremium = parseFloat(String(s.premium)) || 0;
-            const isWhalePlay = whalePremium >= 250000 && (s.has_sweep || inferredRule === 'sweep') && hybridScore >= 75;
-            const isAlgoPlay = isPriceConfirmed || gammaZone !== 'neutral' || timeframe === 'buy_now';
-            const category: SignalCategory = isWhalePlay && !isPriceConfirmed ? 'whale' : 'algorithm';
+            // Use API-provided category if available, otherwise classify locally
+            let category: SignalCategory;
+            if (s.category === 'spread' || s.category === 'whale' || s.category === 'algorithm') {
+              category = s.category;
+            } else {
+              const whalePremium = parseFloat(String(s.premium)) || 0;
+              const isWhalePlay = whalePremium >= 250000 && (s.has_sweep || inferredRule === 'sweep') && hybridScore >= 75;
+              category = isWhalePlay && !isPriceConfirmed ? 'whale' : 'algorithm';
+            }
 
             return {
               id: `replit-${s.ticker}-${i}`,
@@ -585,6 +595,7 @@ export function useMarketData() {
               recommendedExpiry: s.recommended_expiry,
               recommendedStrike: s.recommended_strike,
               category,
+              spreadDetails: s.spread_details || null,
             } as MarketSignal;
           });
 
@@ -616,7 +627,7 @@ export function useMarketData() {
               .from("signal_outcomes" as any)
               .select("ticker,strike,expiry,signal_source")
               .in("ticker", tickers)
-              .eq("signal_source", "replit")
+              .in("signal_source", ["replit", "dashboard"])
               .eq("outcome", "pending");
 
             const existingKeys = new Set((existing || []).map((e: any) => `${e.ticker}|${e.strike}|${e.expiry}`));

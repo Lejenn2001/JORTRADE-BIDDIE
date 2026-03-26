@@ -123,6 +123,8 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
 
 - **Stack**: React 19, Vite 7, Tailwind CSS 3, Framer Motion, Recharts, Supabase Auth, React Router v6
 - **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
+- **Signal Categories**: 3 categories — Algorithm Plays (price action + gamma analysis), Whale Plays ($250K+ institutional flow), Spreads & Butterflies (multi-leg strategies). Dashboard shows top 3 per category (max 5/day each, sorted by conviction score). Signals page has 3 tabs for full views.
+- **Performance Tracking**: `PerformanceSnapshot` and `SignalAccuracyPanel` only track signals marked `signal_source='dashboard'` in Supabase — these are the top signals featured on the dashboard. Dashboard auto-marks featured signals from 'replit' to 'dashboard' source.
 - **Auth**: Supabase email/password + Google/Apple OAuth. Dashboard is protected by `ProtectedRoute` component.
 - **API Integration**: 
   - Chat: `POST /api/whale/chat` — sends to API server which calls Claude with Unusual Whales data
