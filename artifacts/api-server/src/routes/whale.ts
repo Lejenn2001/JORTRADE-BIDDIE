@@ -912,6 +912,11 @@ CRITICAL RULES for accuracy:
 - strike must be tradeable — close enough to current price to matter (within 10% for near-term)
 - PRICE CONFIRMATION: If price_confirmation data shows confirmed=true, ADD "Price Confirmed" to tags and boost confidence by 1 point (max 10). These are the highest conviction signals.
 - GAMMA ZONES: If gamma_zone is "negative", ADD "Negative Gamma" to tags — moves will be amplified. If "positive", ADD "Positive Gamma" — expect mean-reversion.
+- ACT NOW FOR SPREADS: Spread/butterfly signals should ALSO get "🔥 ACT NOW" tag when gamma conditions are favorable:
+  - Debit spreads in NEGATIVE gamma zone = ACT NOW (directional move will be amplified through spread strikes)
+  - Butterflies in POSITIVE gamma zone = ACT NOW (pinning action benefits max profit zone)
+  - Iron condors in POSITIVE gamma zone = ACT NOW (mean-reversion keeps price in profit range)
+  - When a spread gets ACT NOW, set confidence to 9+ and timeframe to "buy_now" or "short_term"
 - TRADE RECOMMENDATIONS: For each signal, recommend the specific option to buy:
   - For "Act Now" signals (confidence 9-10): suggest 0-2 DTE, ATM or 1 strike OTM
   - For short-term signals (confidence 8): suggest 3-7 DTE, ATM
