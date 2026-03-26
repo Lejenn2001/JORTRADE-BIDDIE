@@ -27,7 +27,7 @@ export function Scene5() {
         <img 
           src={jortradeLogo} 
           alt="JORTRADE" 
-          className="h-[30vh] mb-[4vw] drop-shadow-[0_0_40px_rgba(88,101,242,0.5)]"
+          className="h-[50vh] mb-[3vw] drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]"
         />
 
         <motion.h1 

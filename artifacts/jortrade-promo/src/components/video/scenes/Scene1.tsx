@@ -33,7 +33,7 @@ export function Scene1() {
         <img 
           src={jortradeLogo} 
           alt="JORTRADE Logo" 
-          className="h-[45vh] object-contain drop-shadow-[0_0_50px_rgba(88,101,242,0.6)]" 
+          className="h-[55vh] object-contain drop-shadow-[0_0_60px_rgba(88,101,242,0.6)]" 
         />
       </motion.div>
 
