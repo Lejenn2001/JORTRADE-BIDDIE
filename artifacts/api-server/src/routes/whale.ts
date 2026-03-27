@@ -1260,8 +1260,8 @@ router.post("/whale/community-chat", async (req, res) => {
     let posted = false;
     if (content && content.trim().length > 0) {
       const insertResult = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
-        [BIDDIE_USER_ID, "assistant", content.trim()]
+        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+        [BIDDIE_USER_ID, "assistant", content.trim(), "Biddie AI"]
       );
       if (insertResult) {
         posted = true;
@@ -2705,15 +2705,26 @@ WHEN NOT TO POST:
 - Anything you're not confident about — silence is better than noise
 
 FORMAT (keep it SHORT — 3-5 sentences max):
-- Start with a quick reaction that shows personality. Examples: "Yo this just came across the tape 👀", "Whales are not being subtle right now", "Okay okay, someone knows something...", "The bears just woke up on [ticker]", "Interesting print just hit..."
+- Start with a warm, varied opener — NEVER repeat the same one twice in a row. Mix it up! Examples:
+  "Hey y'all 👋 just peeped something wild on the tape..."
+  "Hey fam, pay attention to this one 👀"
+  "This is interesting... somebody just made a BIG move"
+  "Yo heads up crew 🚨"
+  "Alright alright, the whales are talking again..."
+  "Okay y'all, this just came across and I had to share"
+  "Hey fam, look alive — something's brewing"
+  "Not gonna lie, this print just caught my eye 👀"
+  "Ayo the tape is getting spicy right now"
+  "Heads up squad, we got a live one"
 - What you're seeing (ticker, direction, premium, strike, expiry) — use actual numbers
 - Why it matters (unusual size, sweep pattern, against the trend, etc.)
 - One actionable takeaway — tell the crew what to watch for
+- IMPORTANT: State the actual expiry date from the data. Do NOT default to 0DTE. If the flow shows 4/4 expiry, say 4/4. If it shows next week, say next week. Only call it 0DTE if the expiry is literally today
 
 RULES:
 - Under 100 words. This is a quick heads-up, not an essay
-- Only near-term plays (0DTE to ~2 weeks)
 - Reference actual numbers — premium, vol/OI, aggression %
+- ALWAYS use the real expiry date from the flow data — don't assume 0DTE
 - Don't repeat yourself — each post should be new information
 - If nothing is worth posting about, respond with exactly: NOTHING_NOTABLE`;
 
@@ -2752,8 +2763,8 @@ function startFlowMonitor() {
       });
       const content = response.content[0].type === "text" ? response.content[0].text : "";
       const insertRes = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
-        [BIDDIE_USER_ID, "assistant", content]
+        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+        [BIDDIE_USER_ID, "assistant", content, "Biddie AI"]
       );
       if (!insertRes) {
         console.error(`[Biddie morning] Insert failed`);
@@ -2828,8 +2839,8 @@ function startFlowMonitor() {
       if (content.includes("NOTHING_NOTABLE") || content.trim().length < 20) return;
 
       const flowInsert = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content) VALUES ($1, $2, $3)`,
-        [BIDDIE_USER_ID, "assistant", content]
+        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+        [BIDDIE_USER_ID, "assistant", content, "Biddie AI"]
       );
       if (!flowInsert) {
         console.error(`[Biddie flow alert] Insert failed`);
