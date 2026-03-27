@@ -569,21 +569,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
-            {isWinner && (
-              <span className="inline-flex items-center -rotate-12 border-2 border-emerald-400 rounded-full px-2 py-0.5 ml-1">
-                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-emerald-400 leading-none">Winner</span>
-              </span>
-            )}
-            {isLoser && (
-              <span className="inline-flex items-center -rotate-6 border-2 border-red-400 rounded-full px-2 py-0.5 ml-1">
-                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-red-400 leading-none">Missed</span>
-              </span>
-            )}
-            {isPending && (
-              <span className="inline-flex items-center border border-yellow-400/60 rounded-full px-2 py-0.5 ml-1">
-                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-yellow-400/70 leading-none">Pending</span>
-              </span>
-            )}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
@@ -592,7 +577,28 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
           {signal.description}
         </p>
 
-        <div className="grid grid-cols-1 gap-1.5 text-[11px] sm:text-xs">
+        <div className="relative grid grid-cols-1 gap-1.5 text-[11px] sm:text-xs">
+          {isWinner && (
+            <div className="absolute -right-1 -top-1 z-10 -rotate-12">
+              <span className="inline-flex items-center justify-center border-[2.5px] border-emerald-400 rounded-full px-3 py-1 bg-emerald-400/10 backdrop-blur-sm shadow-lg shadow-emerald-500/20">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 leading-none">Winner</span>
+              </span>
+            </div>
+          )}
+          {isLoser && (
+            <div className="absolute -right-1 -top-1 z-10 rotate-6">
+              <span className="inline-flex items-center justify-center border-[2.5px] border-red-400 rounded-full px-3 py-1 bg-red-400/10 backdrop-blur-sm">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-red-400 leading-none">Missed</span>
+              </span>
+            </div>
+          )}
+          {isPending && (
+            <div className="absolute -right-1 -top-1 z-10 -rotate-3">
+              <span className="inline-flex items-center justify-center border-[1.5px] border-yellow-400/50 rounded-full px-2.5 py-0.5 bg-yellow-400/5">
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.15em] text-yellow-400/60 leading-none">Pending</span>
+              </span>
+            </div>
+          )}
           {signal.suggestedTrade && (
             <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
               <Target className="h-3 w-3 text-primary mt-0.5 shrink-0" />
