@@ -95,7 +95,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     putCall: putCall as 'call' | 'put' | undefined,
     suggestedTrade: record.category === 'spread' && record.spread_details?.legs
       ? `${record.ticker} ${record.spread_details.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Spread'} — ${record.spread_details.legs}`
-      : `Buy ${record.ticker} $${record.strike || ''} ${putCall === 'call' ? 'Call' : 'Put'}`,
+      : `Buy ${record.ticker} $${record.strike || ''} ${putCall === 'call' ? 'Call' : 'Put'}${record.expiry ? ` (${record.expiry})` : ''}`,
     targetZone: record.target_zone || record.target || undefined,
     createdAt,
     source: 'live',
