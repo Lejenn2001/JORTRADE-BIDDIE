@@ -43,6 +43,10 @@ interface SqueezeResult {
   supportLevel: number | null;
   score: number;
   reason: string;
+  targetPrice: number | null;
+  proximityPct: number | null;
+  imminenceLabel: string | null;
+  imminenceScore: number;
 }
 
 async function fetchDailyCandles(ticker: string, days: number = 60): Promise<CandleData[]> {
@@ -339,6 +343,56 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
 
   if (score < 25) return null;
 
+  const distToResistance = consolidation.resistanceLevel > 0
+    ? ((consolidation.resistanceLevel - quote.price) / quote.price) * 100 : 99;
+  const distToSupport = consolidation.supportLevel > 0
+    ? ((quote.price - consolidation.supportLevel) / quote.price) * 100 : 99;
+  const closerDist = Math.min(Math.abs(distToResistance), Math.abs(distToSupport));
+  const closerDir = Math.abs(distToResistance) <= Math.abs(distToSupport) ? "bullish" : "bearish";
+
+  let targetPrice: number | null = null;
+  if (breakout.breakoutTriggered) {
+    targetPrice = breakout.breakoutDirection === "bullish"
+      ? Math.round((consolidation.resistanceLevel + atr) * 100) / 100
+      : Math.round((consolidation.supportLevel - atr) * 100) / 100;
+  } else if (closerDir === "bullish" && consolidation.resistanceLevel > 0) {
+    targetPrice = Math.round((consolidation.resistanceLevel + atr) * 100) / 100;
+  } else if (consolidation.supportLevel > 0) {
+    targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
+  }
+
+  let imminenceScore = 0;
+  if (closerDist <= 0.2) imminenceScore += 40;
+  else if (closerDist <= 0.5) imminenceScore += 30;
+  else if (closerDist <= 1.0) imminenceScore += 20;
+  else if (closerDist <= 1.5) imminenceScore += 10;
+
+  if (squeeze.squeezeActive) {
+    imminenceScore += Math.min(squeeze.squeezeLength * 4, 25);
+  } else if (squeeze.bbWidth > 0 && squeeze.kcWidth > 0 && squeeze.bbWidth / squeeze.kcWidth < 1.1) {
+    imminenceScore += 15;
+  }
+
+  if (volumeRatio >= 2.0) imminenceScore += 20;
+  else if (volumeRatio >= 1.5) imminenceScore += 15;
+  else if (volumeRatio >= 1.2) imminenceScore += 5;
+
+  if (consolidation.consolidationDays >= 5) imminenceScore += 15;
+  else if (consolidation.consolidationDays >= 3) imminenceScore += 10;
+
+  let imminenceLabel: string | null = null;
+  if (breakout.breakoutTriggered) {
+    imminenceLabel = "BREAKOUT ACTIVE";
+  } else if (imminenceScore >= 80) {
+    imminenceLabel = "BREAKOUT IMMINENT";
+  } else if (imminenceScore >= 60) {
+    imminenceLabel = "LIKELY WITHIN 15 MIN";
+  } else if (imminenceScore >= 45) {
+    imminenceLabel = "LIKELY WITHIN 1 HOUR";
+  } else if (imminenceScore >= 30) {
+    imminenceLabel = "BUILDING PRESSURE";
+  }
+
   return {
     ticker,
     squeezeActive: squeeze.squeezeActive,
@@ -359,6 +413,10 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     supportLevel: consolidation.supportLevel,
     score,
     reason: reasons.join(". "),
+    targetPrice,
+    proximityPct: Math.round(closerDist * 100) / 100,
+    imminenceLabel,
+    imminenceScore,
   };
 }
 
@@ -421,6 +479,7 @@ interface BreakoutAlert {
   supportLevel: number;
   suggestedStrike: number;
   suggestedTrade: string;
+  targetPrice: number;
   score: number;
   squeezeLength: number;
   triggeredAt: string;
@@ -447,6 +506,9 @@ function generateBreakoutAlert(ticker: string, livePrice: number, setup: Squeeze
 
   const strike = roundToStrike(direction === "bullish" ? setup.resistanceLevel! : setup.supportLevel!);
   const tradeType = direction === "bullish" ? "CALL" : "PUT";
+  const target = direction === "bullish"
+    ? Math.round((setup.resistanceLevel! + setup.atr) * 100) / 100
+    : Math.round((setup.supportLevel! - setup.atr) * 100) / 100;
 
   const alert: BreakoutAlert = {
     id: `bo-${ticker}-${direction}-${now}`,
@@ -457,6 +519,7 @@ function generateBreakoutAlert(ticker: string, livePrice: number, setup: Squeeze
     supportLevel: setup.supportLevel!,
     suggestedStrike: strike,
     suggestedTrade: `${ticker} $${strike} ${tradeType}`,
+    targetPrice: target,
     score: setup.score,
     squeezeLength: setup.squeezeLength,
     triggeredAt: new Date().toISOString(),
@@ -506,9 +569,9 @@ function syncBreakoutSubscriptions() {
 
 setupBreakoutMonitor();
 
-router.get("/breakout/alerts", async (_req, res) => {
+router.get("/breakout/alerts", (_req, res) => {
   if (cachedResults.length === 0 && Date.now() - lastScanTime > SCAN_INTERVAL) {
-    try { await runFullScan(); syncBreakoutSubscriptions(); } catch {}
+    runFullScan().then(() => syncBreakoutSubscriptions()).catch(() => {});
   }
   const now = Date.now();
   const active = breakoutAlerts.filter(a => a.expiresAt > now);

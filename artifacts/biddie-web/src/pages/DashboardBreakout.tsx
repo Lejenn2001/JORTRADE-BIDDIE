@@ -25,6 +25,11 @@ interface BreakoutSetup {
   reason: string;
   bbWidth: number;
   kcWidth: number;
+  atr: number;
+  targetPrice: number | null;
+  proximityPct: number | null;
+  imminenceLabel: string | null;
+  imminenceScore: number;
 }
 
 interface ScanResult {
@@ -43,6 +48,7 @@ interface BreakoutAlertData {
   supportLevel: number;
   suggestedStrike: number;
   suggestedTrade: string;
+  targetPrice: number;
   score: number;
   squeezeLength: number;
   triggeredAt: string;
@@ -218,6 +224,12 @@ const DashboardBreakout = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
+                        {alert.targetPrice && (
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Target</p>
+                            <p className="text-lg font-black text-primary">${alert.targetPrice.toFixed(2)}</p>
+                          </div>
+                        )}
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground">Score</p>
                           <p className={`text-lg font-black ${scoreColor(alert.score)}`}>{alert.score}</p>
@@ -340,7 +352,7 @@ const DashboardBreakout = () => {
                               <span className={`text-lg font-black ${scoreColor(setup.score)}`}>{setup.score}</span>
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-lg font-extrabold text-foreground">{setup.ticker}</span>
                                 {setup.breakoutTriggered && (
                                   <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -354,8 +366,29 @@ const DashboardBreakout = () => {
                                     SQUEEZE
                                   </span>
                                 )}
+                                {setup.imminenceLabel && (
+                                  <span className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                    setup.imminenceLabel === "BREAKOUT IMMINENT" || setup.imminenceLabel === "BREAKOUT ACTIVE"
+                                      ? "bg-red-500/20 text-red-400 border-red-500/40 animate-pulse"
+                                      : setup.imminenceLabel === "LIKELY WITHIN 15 MIN"
+                                        ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                                        : setup.imminenceLabel === "LIKELY WITHIN 1 HOUR"
+                                          ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                          : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                  }`}>
+                                    <Radio className="h-2.5 w-2.5" />
+                                    {setup.imminenceLabel}
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-xs text-muted-foreground truncate max-w-md">{setup.reason}</p>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="truncate max-w-md">{setup.reason}</span>
+                                {setup.targetPrice && (
+                                  <span className="shrink-0 font-semibold text-primary">
+                                    Target: ${setup.targetPrice.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -410,7 +443,7 @@ const DashboardBreakout = () => {
                                   />
                                 </div>
 
-                                <div className="mt-3 grid grid-cols-2 gap-3">
+                                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
                                   <div className="glass-panel rounded-xl p-3 border border-white/[0.04]">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Resistance</span>
@@ -431,6 +464,18 @@ const DashboardBreakout = () => {
                                       {((setup.currentPrice - setup.supportLevel) / setup.currentPrice * 100).toFixed(1)}% below
                                     </p>
                                   </div>
+                                  {setup.targetPrice && (
+                                    <div className="glass-panel rounded-xl p-3 border border-primary/20 bg-primary/5">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Target</span>
+                                        <Target className="h-3 w-3 text-primary" />
+                                      </div>
+                                      <p className="text-sm font-bold text-primary">${setup.targetPrice.toFixed(2)}</p>
+                                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                                        {setup.proximityPct !== null ? `${setup.proximityPct.toFixed(1)}% to breakout` : ""}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {setup.bbWidth > 0 && setup.kcWidth > 0 && (

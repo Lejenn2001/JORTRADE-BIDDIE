@@ -1,188 +1,84 @@
-# Workspace
+# Replit Project Summary
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+This project is a pnpm workspace monorepo built with TypeScript, focusing on financial market analysis and trading tools. It includes an Express API server, a React-based web application for trading signals and analytics, and a Python CLI for AI-driven market data analysis. The primary goal is to provide users with advanced tools for options flow analysis, dark pool data, signal generation, and performance tracking, leveraging AI for deeper insights.
 
-## Stack
+The project aims to empower traders with real-time market intelligence, AI-generated trade recommendations, and a comprehensive platform to track and analyze their trading performance.
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL (Replit managed, `DATABASE_URL`) + Drizzle ORM + direct `pg` Pool
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+## User Preferences
 
-## Structure
+- I prefer simple language.
+- I like iterative development.
+- Ask before making major changes.
+- I want detailed explanations.
+- Do not make changes to the folder `Z`.
+- Do not make changes to the file `Y`.
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
-```
+## System Architecture
 
-## TypeScript & Composite Projects
+The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js (v24). Each package is a composite TypeScript project, ensuring proper type-checking across the monorepo.
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+**Core Technologies:**
+- **Monorepo Tool:** pnpm workspaces
+- **API Framework:** Express 5
+- **Database:** PostgreSQL (Replit managed) with Drizzle ORM and `pg` Pool
+- **Validation:** Zod (`zod/v4`) with `drizzle-zod`
+- **API Codegen:** Orval (from OpenAPI spec)
+- **Build Tool:** esbuild (for CJS bundles)
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+**Monorepo Structure:**
+- `artifacts/`: Contains deployable applications like `api-server` and `biddie-web`.
+- `lib/`: Houses shared libraries such as `api-spec`, `api-client-react`, `api-zod`, and `db`.
+- `scripts/`: Holds utility scripts for various tasks.
 
-## Root Scripts
+**API Server (`@workspace/api-server`):**
+- An Express 5 server handling API requests.
+- Uses `@workspace/api-zod` for request/response validation and `@workspace/db` for persistence.
+- Routes are organized under `src/routes/`.
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+**Database Layer (`@workspace/db`):**
+- Manages PostgreSQL interactions using Drizzle ORM.
+- Defines database schema models and provides a Drizzle client instance.
+- Utilizes `drizzle-kit` for migrations.
 
-## Python Tools
+**Frontend (`@workspace/biddie-web`):**
+- A React application built with Vite, Tailwind CSS 3, Framer Motion, and shadcn/ui.
+- Features include:
+    - User authentication via Supabase (email/password, Google/Apple OAuth).
+    - Dashboard with tabs for Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Community, and Settings.
+    - Displays various signal categories (Algorithm Plays, Whale Plays, Spreads & Butterflies) with real-time data.
+    - Performance tracking for signals and user trades.
+    - AI-powered ticker analysis, integrating options flow, dark pool, and key levels.
+    - Breakout scanner with Bollinger Band/Keltner Channel squeeze detection and real-time alerts.
+    - Analytics dashboard for overall AI signal performance and personal trading stats.
+- **UI/UX:** Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, and Inter + Orbitron fonts.
 
-### `whale_claude.py` — Unusual Whales + Claude AI Analysis
+**Utility Scripts (`@workspace/scripts`):**
+- A package for various standalone TypeScript scripts, capable of importing other workspace packages.
 
-A Python CLI that fetches live market data from Unusual Whales and runs AI analysis using Claude.
+**Python Tools (`whale_claude.py`):**
+- A CLI tool for fetching live market data from Unusual Whales and performing AI analysis using Anthropic's Claude.
+- Supports commands for options flow, market data, dark pool analysis, and full stock deep-dives.
 
-**Required secrets:** `UNUSUAL_WHALES_API_KEY`, `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (last two auto-configured via Replit AI Integrations).
+## External Dependencies
 
-**Commands:**
-```bash
-python whale_claude.py flow                  # Options flow alerts + Claude analysis
-python whale_claude.py flow --limit 100      # More alerts
-python whale_claude.py market                # Sector ETFs, economic & FDA calendar
-python whale_claude.py darkpool AAPL         # Dark pool for a specific ticker
-python whale_claude.py stock NVDA            # Full deep-dive: flow + dark pool
-```
+- **Database:** PostgreSQL (Replit managed)
+- **AI Integrations:**
+    - Anthropic (for Claude AI via `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY`)
+- **Market Data:**
+    - Unusual Whales API (`UNUSUAL_WHALES_API_KEY`)
+    - Yahoo Finance (for historical OHLC data)
+    - Finnhub (for real-time market data via WebSocket)
+- **Authentication:** Supabase (for `biddie-web` via `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`)
+- **Python Libraries:** `anthropic`, `requests`, `rich`
+- **TypeScript Libraries:** `express`, `pg`, `drizzle-orm`, `zod`, `drizzle-zod`, `@tanstack/react-query`
 
-**Working Unusual Whales endpoints:**
-- `/api/option-trades/flow-alerts` — real-time options flow alerts
-- `/api/market/sector-etfs` — sector ETF volume and call/put data
-- `/api/market/economic-calendar` — upcoming economic events
-- `/api/market/fda-calendar` — FDA events and outcomes
-- `/api/darkpool/{ticker}` — dark pool block trades by ticker
+## Breakout Scanner Features
 
-**Dependencies:** `anthropic`, `requests`, `rich` (Python 3.11)
-
-## Packages
-
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `artifacts/biddie-web` (`@workspace/biddie-web`)
-
-Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Tailwind V3 + shadcn/ui.
-
-- **Stack**: React 19, Vite 7, Tailwind CSS 3, Framer Motion, Recharts, Supabase Auth, React Router v6
-- **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
-- **Signal Categories**: 3 categories — Algorithm Plays (price action + gamma analysis), Whale Plays ($250K+ institutional flow), Spreads & Butterflies (multi-leg strategies). Dashboard shows Algorithm Plays + Whale Plays (top 5 each, sorted 0DTE first then conviction score). Signals page has 3 tabs for all categories. Each signal card labeled "DAY TRADE" (buy_now/short_term) or "SWING TRADE" (swing), plus "Live" or "Example" badge. Example signals fill tabs when no live data (META/AMZN/GOOGL for spreads, AAPL/PLTR/AMD for whale).
-- **Performance Tracking**: `PerformanceSnapshot` and `SignalAccuracyPanel` track signals from the `signal_outcomes` table in Replit PostgreSQL.
-- **Pricing Tiers**: Signal Scout ($49, 5 questions/day), Active Trader ($89, 25 questions/day), Pro Trader ($129, 50 questions/day). All tiers get Biddie AI access. Daily limits enforced via `useQuestionLimit` hook (localStorage-based, resets at midnight). JORTRADE Chat is the community chat room (separate from Biddie AI).
-- **Auth**: Supabase email/password + Google/Apple OAuth. Dashboard is protected by `ProtectedRoute` component.
-- **API Integration**: 
-  - Chat: `POST /api/whale/chat` — sends to API server which calls Claude with Unusual Whales data
-  - Signals: `GET /api/whale/signals` — fetches live options flow signals with price action confirmation + gamma analysis
-  - Replit artifact routing handles `/api` → API server (port 8080) automatically
-- **Signal Analysis Pipeline** (in `whale.ts`):
-  - `fetchRecentCandles()` — fetches 1-minute bars from Yahoo Finance for real-time price action
-  - `detectPriceActionConfirmation()` — Neo SR Tag + 2 Red/Green Bars pattern detection at key support/resistance levels
-  - Gamma zone analysis: ≤2% from strike = negative gamma (amplified moves), ≤5% = positive gamma (pinning)
-  - `generateTradeRecommendation()` — produces specific trade recs (action, entry trigger, target, invalidation)
-  - Backend hydrates AI signals with authoritative computed data (price_confirmed, gamma_zone, etc.)
-  - Frontend displays: "PRICE CONFIRMED" + "ACT NOW" banners, gamma zone badges, price pattern details on signal cards
-- **Ticker Analysis** (`GET /api/whale/analyze/:ticker`):
-  - Personal trade assistant — enter any ticker for a full AI-powered breakdown
-  - Fetches live options flow, dark pool data, key levels (VWAP, pivots, PDH/PDL), and 1-min candles in parallel
-  - Filters flow for the specific ticker, computes call/put premium ratios, sweep counts, aggression %
-  - Runs price action confirmation and gamma zone analysis
-  - Claude AI synthesizes everything into structured JSON: verdict, market structure, flow analysis, dark pool analysis, key levels, trade setup (entry/target/stop), and watch-for items
-  - Frontend: `/dashboard/market` — search bar with popular/recent tickers, animated loading, structured analysis cards
-- **User Trades** (`POST/GET/DELETE /api/whale/trades`):
-  - Users click "I Took This Trade" on signal cards to track which signals they followed
-  - `POST /api/whale/trades` — save a taken trade (linked to signal_id + user_id)
-  - `GET /api/whale/trades?userId=X` — fetch user's taken trades (joined with signal_outcomes for outcome data)
-  - `DELETE /api/whale/trades/:signalId?userId=X` — remove a taken trade
-  - `GET /api/whale/trades/stats?userId=X` — computed stats: win rate, streak, by-ticker, by-category, weekly
-  - Database: `user_trades` table in PostgreSQL
-- **Analytics Dashboard** (`/dashboard/analytics`):
-  - Overview tab: AI win rate, personal win rate, trades taken, win streak, top tickers, category breakdown
-  - My Trades tab: personal stats, recent trades list with WIN/LOSS/PENDING badges, ticker breakdown
-  - AI Signals tab: overall signal performance, win rate rings by category, top performing tickers
-  - No longer admin-only — accessible to all users as a Pro feature
-- **Signal Verification** (`POST /api/whale/verify-signals`):
-  - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table (oldest first, 100 per batch)
-  - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date
-  - Checks if the stock's high (bullish) or low (bearish) reached the target zone at any point since the signal was issued
-  - Marks as "hit" (target reached), "missed" (expired without hitting), or "expired"
-  - Updates `outcome` and `resolved_at` in PostgreSQL + syncs `user_trades.signal_outcome` for any user who took the trade
-  - **Auto-verification with Finnhub WebSocket**: Uses real-time trade data during market hours (every 5 min), falls back to Yahoo Finance polling after hours (every 30 min)
-  - **PriceMonitor** (`src/lib/priceMonitor.ts`): Finnhub WebSocket client with auto-reconnect (exponential backoff up to 30s), heartbeat ping, per-ticker high/low/volume tracking. Auto-subscribes to tickers with pending signals.
-  - **`GET /api/whale/prices/realtime`**: Returns live price data for all subscribed tickers (price, high, low, volume, trades, age) plus connection status and market hours flag
-  - **Admin Panel**: Analytics page "Admin" tab (visible only to admin users) with "Verify Now" button + full signal outcomes table with ticker/direction/category/strike/target/outcome columns
-  - **Admin Role System**: `user_roles` PostgreSQL table, `GET /api/whale/admin/check?userId=X`, `POST /api/whale/admin/grant` (requires `adminSecret`)
-  - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button
-- **Breakout Scanner** (`/dashboard/breakout`):
-  - Bollinger Band / Keltner Channel squeeze detection across 40-ticker watchlist
-  - Consolidation pattern detection (multi-day tight ranges)
-  - Volume spike filtering and breakout trigger logic
-  - Backend: `GET /api/breakout/scan` (full scan, 5-min cache), `GET /api/breakout/scan/:ticker` (single), `GET /api/breakout/watchlist`
-  - Uses Yahoo Finance daily candles (60 days) + Finnhub quotes (with candle fallback if Finnhub unavailable)
-  - Score 25+ threshold; scoring: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
-  - Frontend: expandable cards with detail view (squeeze/consolidation/volume/breakout metrics, resistance/support, BB/KC band width visualization)
-  - **Auto Breakout Alerts**: Real-time price monitoring via Finnhub WebSocket. After scan, all setup tickers are subscribed. When price breaks above resistance or below support, generates instant trade alert (e.g., "AMZN $213 CALL"). Endpoint: `GET /api/breakout/alerts`. 15-min cooldown per ticker/direction, 4-hour alert TTL, max 50 alerts. Strike rounding: $5 increments for $500+, $1 for $100+, $0.50 for $20+
-  - **How It Works**: Collapsible panel with score breakdown, metric explanations (squeeze length, BB/KC width, volume ratio, consolidation days, resistance/support, BB/KC ratio), and auto-alert explanation
-- **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
-- **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
-- **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- **Breakout Scanner** (`/dashboard/breakout`): BB/KC squeeze detection + consolidation patterns across 40 tickers
+- **Auto Breakout Alerts**: Real-time WebSocket price monitoring. When price breaks resistance/support, generates instant trade alert (e.g., "AMZN $213 CALL") with target price. Endpoint: `GET /api/breakout/alerts` (non-blocking). 15-min cooldown, 4-hour TTL, max 50 alerts
+- **Breakout Imminence Predictor**: `imminenceScore` (0-100) with labels: "BREAKOUT ACTIVE", "BREAKOUT IMMINENT" (>=80), "LIKELY WITHIN 15 MIN" (>=60), "LIKELY WITHIN 1 HOUR" (>=45), "BUILDING PRESSURE" (>=30). Based on proximity to breakout level, squeeze pressure, volume momentum, consolidation tightness
+- **Target Prices**: resistance/support + 1 ATR. Displayed on setup cards, expanded detail, and alert cards
+- **Score Breakdown**: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
+- **Endpoints**: `GET /api/breakout/scan` (5-min cache), `GET /api/breakout/scan/:ticker`, `GET /api/breakout/alerts`, `GET /api/breakout/watchlist`
