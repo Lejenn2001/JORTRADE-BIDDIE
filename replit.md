@@ -177,6 +177,8 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - Uses Yahoo Finance daily candles (60 days) + Finnhub quotes (with candle fallback if Finnhub unavailable)
   - Score 25+ threshold; scoring: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
   - Frontend: expandable cards with detail view (squeeze/consolidation/volume/breakout metrics, resistance/support, BB/KC band width visualization)
+  - **Auto Breakout Alerts**: Real-time price monitoring via Finnhub WebSocket. After scan, all setup tickers are subscribed. When price breaks above resistance or below support, generates instant trade alert (e.g., "AMZN $213 CALL"). Endpoint: `GET /api/breakout/alerts`. 15-min cooldown per ticker/direction, 4-hour alert TTL, max 50 alerts. Strike rounding: $5 increments for $500+, $1 for $100+, $0.50 for $20+
+  - **How It Works**: Collapsible panel with score breakdown, metric explanations (squeeze length, BB/KC width, volume ratio, consolidation days, resistance/support, BB/KC ratio), and auto-alert explanation
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)

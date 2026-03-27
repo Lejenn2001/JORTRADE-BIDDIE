@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import {
   Zap, TrendingUp, TrendingDown, Activity, Target, Loader2,
   RefreshCw, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle,
-  ChevronRight, BarChart3, Crosshair, Minus
+  ChevronRight, BarChart3, Crosshair, Minus, Bell, Radio,
+  Info, ChevronDown
 } from "lucide-react";
 
 interface BreakoutSetup {
@@ -33,6 +34,30 @@ interface ScanResult {
   tickersScanned: number;
 }
 
+interface BreakoutAlertData {
+  id: string;
+  ticker: string;
+  direction: "bullish" | "bearish";
+  breakoutPrice: number;
+  resistanceLevel: number;
+  supportLevel: number;
+  suggestedStrike: number;
+  suggestedTrade: string;
+  score: number;
+  squeezeLength: number;
+  triggeredAt: string;
+}
+
+interface AlertsResponse {
+  count: number;
+  alerts: BreakoutAlertData[];
+  monitoring: {
+    subscribedTickers: number;
+    setupsWatched: number;
+    wsConnected: boolean;
+  };
+}
+
 const scoreColor = (score: number) => {
   if (score >= 60) return "text-emerald-400";
   if (score >= 40) return "text-yellow-400";
@@ -53,6 +78,10 @@ const DashboardBreakout = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastScan, setLastScan] = useState<Date | null>(null);
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<BreakoutAlertData[]>([]);
+  const [monitoring, setMonitoring] = useState<AlertsResponse["monitoring"] | null>(null);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const alertPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runScan = useCallback(async () => {
     setLoading(true);
@@ -70,9 +99,24 @@ const DashboardBreakout = () => {
     }
   }, []);
 
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/breakout/alerts");
+      if (!resp.ok) return;
+      const data: AlertsResponse = await resp.json();
+      setAlerts(data.alerts);
+      setMonitoring(data.monitoring);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     runScan();
-  }, [runScan]);
+    fetchAlerts();
+    alertPollRef.current = setInterval(fetchAlerts, 15000);
+    return () => {
+      if (alertPollRef.current) clearInterval(alertPollRef.current);
+    };
+  }, [runScan, fetchAlerts]);
 
   const timeSinceStr = lastScan
     ? `${Math.floor((Date.now() - lastScan.getTime()) / 60000)}m ago`
@@ -107,7 +151,7 @@ const DashboardBreakout = () => {
             </div>
 
             {lastScan && (
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
                   Last scan: {timeSinceStr}
@@ -120,6 +164,76 @@ const DashboardBreakout = () => {
                     <span className="font-semibold text-primary">{result.count} setups found</span>
                   </>
                 )}
+                {monitoring && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="flex items-center gap-1.5">
+                      <Radio className={`h-3 w-3 ${monitoring.wsConnected ? "text-emerald-400 animate-pulse" : "text-zinc-500"}`} />
+                      {monitoring.wsConnected ? `Monitoring ${monitoring.subscribedTickers} tickers live` : "Live monitor offline"}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {alerts.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-yellow-400" />
+                  <h2 className="text-sm font-bold text-foreground">Live Breakout Alerts</h2>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 font-bold">
+                    {alerts.length}
+                  </span>
+                </div>
+                {alerts.map((alert) => (
+                  <motion.div
+                    key={alert.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`rounded-2xl border p-4 ${
+                      alert.direction === "bullish"
+                        ? "bg-emerald-500/10 border-emerald-500/30"
+                        : "bg-red-500/10 border-red-500/30"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center border ${
+                          alert.direction === "bullish"
+                            ? "bg-emerald-500/20 border-emerald-500/40"
+                            : "bg-red-500/20 border-red-500/40"
+                        }`}>
+                          {alert.direction === "bullish"
+                            ? <ArrowUpRight className="h-6 w-6 text-emerald-400" />
+                            : <ArrowDownRight className="h-6 w-6 text-red-400" />
+                          }
+                        </div>
+                        <div>
+                          <p className="text-xl font-black text-foreground tracking-tight">
+                            {alert.suggestedTrade}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Broke {alert.direction === "bullish" ? "above" : "below"} ${alert.direction === "bullish" ? alert.resistanceLevel.toFixed(2) : alert.supportLevel.toFixed(2)} at ${alert.breakoutPrice.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Score</p>
+                          <p className={`text-lg font-black ${scoreColor(alert.score)}`}>{alert.score}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Triggered</p>
+                          <p className="text-xs font-semibold text-foreground">
+                            {new Date(alert.triggeredAt).toLocaleTimeString("en-US", {
+                              hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York"
+                            })} ET
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
 
@@ -357,34 +471,109 @@ const DashboardBreakout = () => {
               )}
             </AnimatePresence>
 
-            <div className="glass-panel rounded-2xl p-5 border border-white/[0.04]">
-              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                How It Works
-              </h3>
-              <div className="grid sm:grid-cols-3 gap-4 text-xs text-muted-foreground">
-                <div className="space-y-1.5">
-                  <p className="font-semibold text-foreground text-[11px]">Squeeze Detection</p>
-                  <p>
-                    When Bollinger Bands (2 StdDev) contract inside Keltner Channels (1.5 ATR),
-                    volatility is compressing. This "squeeze" precedes explosive moves in either direction.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <p className="font-semibold text-foreground text-[11px]">Consolidation</p>
-                  <p>
-                    Identifies multi-day tight ranges where price action narrows into a smaller channel.
-                    Combined with declining volume, this builds energy for a directional break.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <p className="font-semibold text-foreground text-[11px]">Breakout Trigger</p>
-                  <p>
-                    When price closes above resistance or below support on elevated volume,
-                    a breakout is triggered. Higher scores = more confluence across indicators.
-                  </p>
-                </div>
-              </div>
+            <div className="glass-panel rounded-2xl border border-white/[0.04] overflow-hidden">
+              <button
+                onClick={() => setShowHowItWorks(!showHowItWorks)}
+                className="w-full p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+              >
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Info className="h-4 w-4 text-primary" />
+                  How It Works &amp; What the Numbers Mean
+                </h3>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showHowItWorks ? "rotate-180" : ""}`} />
+              </button>
+
+              <AnimatePresence>
+                {showHowItWorks && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 pb-5 space-y-5">
+                      <div className="grid sm:grid-cols-3 gap-4 text-xs text-muted-foreground">
+                        <div className="space-y-1.5">
+                          <p className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
+                            <Activity className="h-3.5 w-3.5 text-yellow-400" />
+                            Squeeze Detection
+                          </p>
+                          <p>
+                            When Bollinger Bands (2 StdDev) contract inside Keltner Channels (1.5 ATR),
+                            volatility is compressing. This "squeeze" precedes explosive moves in either direction.
+                            The longer the squeeze, the bigger the expected move.
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
+                            <BarChart3 className="h-3.5 w-3.5 text-purple-400" />
+                            Consolidation
+                          </p>
+                          <p>
+                            Identifies multi-day tight ranges where price trades within a narrow channel
+                            (under 3% range). Combined with declining volume, this builds energy for a
+                            directional break. More days = stronger setup.
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <p className="font-semibold text-foreground text-[11px] flex items-center gap-1.5">
+                            <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                            Auto Breakout Alerts
+                          </p>
+                          <p>
+                            When the scanner finds setups, it subscribes those tickers to our real-time
+                            price feed. If price breaks above resistance or below support, you get an
+                            instant trade alert with the direction (CALL or PUT) and nearest strike.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/[0.06] pt-4">
+                        <p className="font-semibold text-foreground text-[11px] mb-3">Score Breakdown (0–100)</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-yellow-400 font-bold w-12">25-40</span>
+                            <span className="text-muted-foreground">Squeeze active (more bars = more points)</span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-orange-400 font-bold w-12">15</span>
+                            <span className="text-muted-foreground">Near-squeeze (BB/KC ratio under 1.2)</span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-purple-400 font-bold w-12">15-25</span>
+                            <span className="text-muted-foreground">Consolidation (3+ days tight range)</span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-blue-400 font-bold w-12">10-20</span>
+                            <span className="text-muted-foreground">Volume spike (1.3x–2x+ avg)</span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-emerald-400 font-bold w-12">+30</span>
+                            <span className="text-muted-foreground">Breakout triggered (above/below key level)</span>
+                          </div>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02]">
+                            <span className="text-zinc-400 font-bold w-12">+10</span>
+                            <span className="text-muted-foreground">Tight range (under 3% high-to-low)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/[0.06] pt-4">
+                        <p className="font-semibold text-foreground text-[11px] mb-3">Card Details Explained</p>
+                        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[11px] text-muted-foreground">
+                          <p><span className="text-foreground font-semibold">Squeeze Length</span> — How many consecutive days BBs have been inside KCs. Longer = bigger expected move.</p>
+                          <p><span className="text-foreground font-semibold">BB Width / KC Width</span> — Bollinger Band and Keltner Channel widths. When BB &lt; KC, that's a squeeze.</p>
+                          <p><span className="text-foreground font-semibold">Volume Ratio</span> — Today's volume vs. 20-day avg. Above 1.5x is notable, 2x+ is a spike.</p>
+                          <p><span className="text-foreground font-semibold">Consolidation Days</span> — How many days price has stayed in a tight range.</p>
+                          <p><span className="text-foreground font-semibold">Resistance / Support</span> — Upper and lower boundaries the price is trading between.</p>
+                          <p><span className="text-foreground font-semibold">BB/KC Ratio</span> — Below 1.0 = squeeze active. 1.0–1.2 = near squeeze. Above 1.2 = normal.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
           </div>

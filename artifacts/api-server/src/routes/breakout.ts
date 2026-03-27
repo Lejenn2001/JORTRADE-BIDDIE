@@ -1,5 +1,6 @@
 import { Router } from "express";
 import axios from "axios";
+import { priceMonitor } from "../lib/priceMonitor";
 
 const router = Router();
 
@@ -394,21 +395,6 @@ async function runFullScan(): Promise<SqueezeResult[]> {
   return results;
 }
 
-router.get("/breakout/scan", async (_req, res) => {
-  try {
-    const results = await runFullScan();
-    res.json({
-      count: results.length,
-      lastScan: new Date(lastScanTime).toISOString(),
-      tickersScanned: WATCHLIST.length,
-      setups: results,
-    });
-  } catch (err: any) {
-    console.error("[breakout] Scan error:", err.message);
-    res.status(500).json({ error: "Scan failed" });
-  }
-});
-
 router.get("/breakout/scan/:ticker", async (req, res) => {
   try {
     const result = await scanTicker(req.params.ticker.toUpperCase());
@@ -424,6 +410,133 @@ router.get("/breakout/scan/:ticker", async (req, res) => {
 
 router.get("/breakout/watchlist", (_req, res) => {
   res.json({ watchlist: WATCHLIST });
+});
+
+interface BreakoutAlert {
+  id: string;
+  ticker: string;
+  direction: "bullish" | "bearish";
+  breakoutPrice: number;
+  resistanceLevel: number;
+  supportLevel: number;
+  suggestedStrike: number;
+  suggestedTrade: string;
+  score: number;
+  squeezeLength: number;
+  triggeredAt: string;
+  expiresAt: number;
+}
+
+const breakoutAlerts: BreakoutAlert[] = [];
+const MAX_ALERTS = 50;
+const ALERT_TTL = 4 * 60 * 60 * 1000;
+const alertCooldowns = new Map<string, number>();
+const COOLDOWN_MS = 15 * 60 * 1000;
+
+function roundToStrike(price: number): number {
+  if (price >= 500) return Math.round(price / 5) * 5;
+  if (price >= 100) return Math.round(price);
+  if (price >= 20) return Math.round(price * 2) / 2;
+  return Math.round(price);
+}
+
+function generateBreakoutAlert(ticker: string, livePrice: number, setup: SqueezeResult, direction: "bullish" | "bearish") {
+  const now = Date.now();
+  const lastAlert = alertCooldowns.get(`${ticker}-${direction}`);
+  if (lastAlert && now - lastAlert < COOLDOWN_MS) return;
+
+  const strike = roundToStrike(direction === "bullish" ? setup.resistanceLevel! : setup.supportLevel!);
+  const tradeType = direction === "bullish" ? "CALL" : "PUT";
+
+  const alert: BreakoutAlert = {
+    id: `bo-${ticker}-${direction}-${now}`,
+    ticker,
+    direction,
+    breakoutPrice: Math.round(livePrice * 100) / 100,
+    resistanceLevel: setup.resistanceLevel!,
+    supportLevel: setup.supportLevel!,
+    suggestedStrike: strike,
+    suggestedTrade: `${ticker} $${strike} ${tradeType}`,
+    score: setup.score,
+    squeezeLength: setup.squeezeLength,
+    triggeredAt: new Date().toISOString(),
+    expiresAt: now + ALERT_TTL,
+  };
+
+  breakoutAlerts.unshift(alert);
+  if (breakoutAlerts.length > MAX_ALERTS) breakoutAlerts.length = MAX_ALERTS;
+  alertCooldowns.set(`${ticker}-${direction}`, now);
+
+  console.log(`[breakout-alert] ${alert.suggestedTrade} @ $${alert.breakoutPrice} (score ${alert.score})`);
+}
+
+function setupBreakoutMonitor() {
+  priceMonitor.onPrice((ticker, data) => {
+    if (cachedResults.length === 0) return;
+
+    const setup = cachedResults.find(s => s.ticker === ticker);
+    if (!setup || !setup.resistanceLevel || !setup.supportLevel) return;
+    if (setup.score < 40) return;
+
+    const price = data.price;
+    const resistanceBuffer = setup.resistanceLevel * 1.002;
+    const supportBuffer = setup.supportLevel * 0.998;
+
+    if (price >= resistanceBuffer && setup.currentPrice < setup.resistanceLevel) {
+      generateBreakoutAlert(ticker, price, setup, "bullish");
+    }
+
+    if (price <= supportBuffer && setup.currentPrice > setup.supportLevel) {
+      generateBreakoutAlert(ticker, price, setup, "bearish");
+    }
+  });
+
+  console.log("[breakout-alert] Real-time breakout monitor active");
+}
+
+const BASE_TICKERS = new Set(["GLD", "QQQ", "SPXW", "SPY"]);
+
+function syncBreakoutSubscriptions() {
+  if (cachedResults.length === 0) return;
+  const setupTickers = cachedResults.map(s => s.ticker);
+  const allNeeded = [...new Set([...setupTickers, ...BASE_TICKERS])];
+  priceMonitor.updateSubscriptions(allNeeded);
+  console.log(`[breakout-alert] Synced subscriptions: ${allNeeded.length} tickers`);
+}
+
+setupBreakoutMonitor();
+
+router.get("/breakout/alerts", async (_req, res) => {
+  if (cachedResults.length === 0 && Date.now() - lastScanTime > SCAN_INTERVAL) {
+    try { await runFullScan(); syncBreakoutSubscriptions(); } catch {}
+  }
+  const now = Date.now();
+  const active = breakoutAlerts.filter(a => a.expiresAt > now);
+  res.json({
+    count: active.length,
+    alerts: active,
+    monitoring: {
+      subscribedTickers: priceMonitor.getSubscribedTickers().length,
+      setupsWatched: cachedResults.length,
+      wsConnected: priceMonitor.isConnected(),
+    },
+  });
+});
+
+router.get("/breakout/scan", async (_req, res) => {
+  try {
+    const results = await runFullScan();
+    syncBreakoutSubscriptions();
+    res.json({
+      count: results.length,
+      lastScan: new Date(lastScanTime).toISOString(),
+      tickersScanned: WATCHLIST.length,
+      setups: results,
+    });
+  } catch (err: any) {
+    console.error("[breakout] Scan error:", err.message);
+    res.status(500).json({ error: "Scan failed" });
+  }
 });
 
 export default router;
