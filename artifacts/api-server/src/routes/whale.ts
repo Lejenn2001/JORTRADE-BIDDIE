@@ -1394,33 +1394,32 @@ For EACH signal, return a JSON object with:
 - signal_quality: "strong" | "moderate" | "weak" | "hedge"
 - recommended_category: "whale" | "algorithm" | "spread"
 
-MARKET STRUCTURE FIRST — always check the trend before trusting the flow:
-- If intraday_trend is "falling" and option_type is "call" → HIGH SKEPTICISM. This is likely a hedge, bottom-fish, or institutional roll. Score 4 or lower unless there is extreme conviction evidence.
-- If intraday_trend is "rising" and option_type is "put" → HIGH SKEPTICISM. Same logic — could be protection.
-- If current_price is well below VWAP for calls → the buyer is fighting the trend. Lower confidence.
-- If current_price is well above VWAP for puts → same.
-- If intraday_change_pct is worse than -1.5% and direction is "bullish" → mark as hedge unless overwhelming evidence otherwise.
-- If intraday_change_pct is better than +1.5% and direction is "bearish" → mark as hedge unless overwhelming evidence otherwise.
+MARKET STRUCTURE ANALYSIS — use trend data to assess signal quality:
 
-FLOW-TREND ALIGNMENT — the best trades:
-- Calls on a stock trending UP intraday with price above VWAP = strong
-- Puts on a stock trending DOWN intraday with price below VWAP = strong
-- Sweeps with high aggression IN THE DIRECTION of the trend = highest conviction
-- Multiple confirming factors: sweep + aggression + trend + VWAP alignment
+TREND-ALIGNED SIGNALS (highest conviction):
+- Calls on a stock trending UP with price above VWAP = strong setup
+- Puts on a stock trending DOWN with price below VWAP = strong setup
+- Sweeps with high aggression IN the direction of the trend = highest conviction
+- Multiple confirming factors: sweep + aggression + trend + VWAP = score 8-10
+
+COUNTER-TREND SIGNALS (not automatically bad — but need extra scrutiny):
+- Calls on a falling stock CAN be a valid reversal play if the stock is near a strong support/gamma level. Keep confidence moderate (5-7) and note it as a counter-trend/reversal setup.
+- Puts on a rising stock CAN be valid if near resistance. Same treatment.
+- If counter-trend with NO nearby support/resistance level visible → lower confidence to 4-5.
+- If counter-trend with intraday_change_pct worse than -3% (calls) or better than +3% (puts) → very likely a hedge. Score 3-4 or mark as hedge.
 
 HEDGE INDICATORS — mark as hedge if:
-- Large put buys on a strongly bullish day = portfolio protection
-- Large call buys on a stock that's dumping = likely hedge, averaging down, or contrarian bet
+- Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend with large premium
 - Far OTM options with massive premium = tail risk hedge
-- Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend
-- Very large premium ($1M+) with far-dated expiry = institutional positioning
+- Very large premium ($1M+) with far-dated expiry on a counter-trend day = institutional positioning, not a trade signal
+- No key level or technical reason to justify the counter-trend flow
 
 CATEGORY ASSIGNMENT:
 - "whale": ONLY for $1M+ premium with sweep/high aggression, or $2M+. Rare.
 - "spread": Multi-leg strategies
 - "algorithm": Default for most signals ($25K-$999K premium)
 
-IMPORTANT: Be HONEST about direction. If the chart says the stock is falling, don't recommend calls just because someone bought them. Institutions buy calls on falling stocks as hedges ALL THE TIME. Our users trust these signals — do not recommend buying calls into a dump.
+IMPORTANT: Always keep the option type true to the actual flow. If someone bought calls, the signal is a call. If they bought puts, it's a put. Do NOT flip the direction. Instead, adjust your confidence score and note if it's a counter-trend reversal play vs a trend-following trade.
 
 SIGNALS:
 ${JSON.stringify(candidateSummary, null, 2)}
