@@ -50,6 +50,7 @@ interface BreakoutSetup {
   proximityPct: number | null;
   imminenceLabel: string | null;
   imminenceScore: number;
+  scannedAt?: string;
   thesis?: BreakoutThesis;
 }
 
@@ -635,6 +636,12 @@ const DashboardBreakout = () => {
                                   }`}>
                                     <Radio className="h-2.5 w-2.5" />
                                     {setup.imminenceLabel}
+                                  </span>
+                                )}
+                                {setup.scannedAt && (
+                                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60 ml-auto">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {new Date(setup.scannedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                                   </span>
                                 )}
                               </div>

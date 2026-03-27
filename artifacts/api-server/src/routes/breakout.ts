@@ -168,6 +168,7 @@ interface SqueezeResult {
   imminenceLabel: string | null;
   imminenceScore: number;
   contract: ContractRec | null;
+  scannedAt: string;
   thesis: {
     direction: "bullish" | "bearish" | "neutral";
     confidence: number;
@@ -742,6 +743,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     imminenceLabel,
     imminenceScore,
     contract,
+    scannedAt: new Date().toISOString(),
     thesis: {
       direction: thesisDirection,
       confidence: thesisConfidence,
