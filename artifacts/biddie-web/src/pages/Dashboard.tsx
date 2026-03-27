@@ -181,8 +181,7 @@ const Dashboard = () => {
     }
 
     const all = Array.from(mergedSignals.values());
-    const hasLive = all.some(s => s.source === 'live');
-    const filtered = hasLive ? all.filter(s => s.source !== 'example') : all;
+    const filtered = all;
     return filtered
       .sort((a, b) => {
         const timeA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
