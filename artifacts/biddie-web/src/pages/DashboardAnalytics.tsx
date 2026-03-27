@@ -617,8 +617,33 @@ function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
     const pending = allSignals.filter(s => !s.outcome || s.outcome === "pending").length;
     const resolved = hits + misses;
     const winRate = resolved > 0 ? Math.round((hits / resolved) * 100) : 0;
-    return { total, hits, misses, expired, pending, winRate };
+    return { total, hits, misses, expired, pending, resolved, winRate };
   }, [allSignals]);
+
+  const tickerStats = useMemo(() => {
+    const map: Record<string, { hits: number; total: number }> = {};
+    allSignals.forEach(s => {
+      if (s.outcome !== "hit" && s.outcome !== "missed") return;
+      if (!map[s.ticker]) map[s.ticker] = { hits: 0, total: 0 };
+      map[s.ticker].total++;
+      if (s.outcome === "hit") map[s.ticker].hits++;
+    });
+    return Object.entries(map).sort((a, b) => b[1].total - a[1].total);
+  }, [allSignals]);
+
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { hits: number; total: number }> = {};
+    allSignals.forEach(s => {
+      if (s.outcome !== "hit" && s.outcome !== "missed") return;
+      const cat = s.category || "algorithm";
+      if (!map[cat]) map[cat] = { hits: 0, total: 0 };
+      map[cat].total++;
+      if (s.outcome === "hit") map[cat].hits++;
+    });
+    return map;
+  }, [allSignals]);
+
+  const winRateAngle = (summary.winRate / 100) * 360;
 
   return (
     <div className="space-y-6">
@@ -626,7 +651,7 @@ function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-yellow-400" />
-            <h3 className="text-sm font-bold text-foreground">Signal Verification</h3>
+            <h3 className="text-sm font-bold text-foreground">Signal Verification Control</h3>
           </div>
           <button
             onClick={onVerify}
@@ -647,13 +672,96 @@ function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard label="Total Signals" value={summary.total} icon={<Zap className="h-5 w-5 text-primary" />} color="border-primary/20" />
-        <StatCard label="Win Rate" value={`${summary.winRate}%`} icon={<Target className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
-        <StatCard label="Hits" value={summary.hits} icon={<CheckCircle2 className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
-        <StatCard label="Misses" value={summary.misses} icon={<XCircle className="h-5 w-5 text-red-400" />} color="border-red-500/20" />
-        <StatCard label="Pending" value={summary.pending} icon={<Clock className="h-5 w-5 text-yellow-400" />} color="border-yellow-500/20" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="glass-panel rounded-xl p-5 border border-white/10 flex flex-col items-center justify-center">
+          <div className="relative w-28 h-28 mb-3">
+            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" className="text-muted/20" strokeWidth="8" />
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor"
+                className={summary.winRate >= 60 ? "text-emerald-400" : summary.winRate >= 40 ? "text-yellow-400" : "text-red-400"}
+                strokeWidth="8" strokeLinecap="round"
+                strokeDasharray={`${(winRateAngle / 360) * 264} 264`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-2xl font-bold ${summary.winRate >= 60 ? "text-emerald-400" : summary.winRate >= 40 ? "text-yellow-400" : "text-red-400"}`}>
+                {summary.winRate}%
+              </span>
+              <span className="text-[9px] text-muted-foreground">Win Rate</span>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">{summary.resolved} resolved of {summary.total} total</div>
+        </div>
+
+        <div className="glass-panel rounded-xl p-5 border border-white/10">
+          <h4 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
+            <Activity className="h-3.5 w-3.5 text-primary" /> By Category
+          </h4>
+          <div className="space-y-3">
+            {Object.entries(categoryStats).map(([cat, stats]) => {
+              const rate = Math.round((stats.hits / stats.total) * 100);
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-semibold capitalize ${
+                      cat === "whale" ? "text-blue-400" : cat === "spread" ? "text-violet-400" : "text-primary"
+                    }`}>{cat}</span>
+                    <span className="text-xs text-muted-foreground">{stats.hits}/{stats.total} ({rate}%)</span>
+                  </div>
+                  <div className="h-2 bg-muted/20 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${rate >= 60 ? "bg-emerald-400" : rate >= 40 ? "bg-yellow-400" : "bg-red-400"}`}
+                      style={{ width: `${rate}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {Object.keys(categoryStats).length === 0 && (
+              <p className="text-xs text-muted-foreground">No resolved signals yet</p>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-panel rounded-xl p-5 border border-white/10 grid grid-cols-2 gap-3">
+          <div className="text-center p-3 bg-muted/10 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-400">{summary.hits}</div>
+            <div className="text-[10px] text-muted-foreground">Hits</div>
+          </div>
+          <div className="text-center p-3 bg-muted/10 rounded-lg">
+            <div className="text-2xl font-bold text-red-400">{summary.misses}</div>
+            <div className="text-[10px] text-muted-foreground">Misses</div>
+          </div>
+          <div className="text-center p-3 bg-muted/10 rounded-lg">
+            <div className="text-2xl font-bold text-zinc-400">{summary.expired}</div>
+            <div className="text-[10px] text-muted-foreground">Expired</div>
+          </div>
+          <div className="text-center p-3 bg-muted/10 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-400">{summary.pending}</div>
+            <div className="text-[10px] text-muted-foreground">Pending</div>
+          </div>
+        </div>
       </div>
+
+      {tickerStats.length > 0 && (
+        <div className="glass-panel rounded-xl p-5 border border-white/10">
+          <h4 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
+            <Target className="h-3.5 w-3.5 text-emerald-400" /> Accuracy by Ticker
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {tickerStats.map(([ticker, stats]) => {
+              const rate = Math.round((stats.hits / stats.total) * 100);
+              return (
+                <span key={ticker} className="inline-flex items-center gap-1.5 text-xs bg-muted/20 px-2.5 py-1.5 rounded-lg">
+                  <span className="font-bold text-foreground">{ticker}</span>
+                  <span className={`font-semibold ${rate >= 50 ? "text-emerald-400" : "text-red-400"}`}>{rate}%</span>
+                  <span className="text-muted-foreground">({stats.hits}/{stats.total})</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="glass-panel rounded-xl p-5 border border-white/10">
         <h3 className="text-sm font-bold text-foreground mb-3">All Signals ({allSignals.length})</h3>
@@ -661,18 +769,29 @@ function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-muted-foreground">
+                <th className="text-left py-2 px-2 font-semibold">Outcome</th>
                 <th className="text-left py-2 px-2 font-semibold">Ticker</th>
                 <th className="text-left py-2 px-2 font-semibold">Direction</th>
                 <th className="text-left py-2 px-2 font-semibold">Category</th>
                 <th className="text-left py-2 px-2 font-semibold">Strike</th>
                 <th className="text-left py-2 px-2 font-semibold">Target</th>
                 <th className="text-left py-2 px-2 font-semibold">Detected</th>
-                <th className="text-left py-2 px-2 font-semibold">Outcome</th>
+                <th className="text-left py-2 px-2 font-semibold">Resolved</th>
               </tr>
             </thead>
             <tbody>
               {allSignals.map(s => (
                 <tr key={s.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-2 px-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      s.outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
+                      : s.outcome === "missed" ? "bg-red-500/20 text-red-400"
+                      : s.outcome === "expired" ? "bg-zinc-500/20 text-zinc-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                    }`}>
+                      {s.outcome === "hit" ? "HIT" : s.outcome === "missed" ? "MISSED" : s.outcome === "expired" ? "EXPIRED" : "PENDING"}
+                    </span>
+                  </td>
                   <td className="py-2 px-2 font-bold text-foreground">{s.ticker}</td>
                   <td className="py-2 px-2">
                     <span className={`flex items-center gap-1 ${s.signal_type === "bullish" ? "text-emerald-400" : "text-red-400"}`}>
@@ -692,15 +811,8 @@ function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
                   <td className="py-2 px-2 text-muted-foreground">
                     {s.detected_at ? new Date(s.detected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : "—"}
                   </td>
-                  <td className="py-2 px-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      s.outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
-                      : s.outcome === "missed" ? "bg-red-500/20 text-red-400"
-                      : s.outcome === "expired" ? "bg-zinc-500/20 text-zinc-400"
-                      : "bg-yellow-500/20 text-yellow-400"
-                    }`}>
-                      {s.outcome === "hit" ? "HIT" : s.outcome === "missed" ? "MISSED" : s.outcome === "expired" ? "EXPIRED" : "PENDING"}
-                    </span>
+                  <td className="py-2 px-2 text-muted-foreground">
+                    {s.resolved_at ? new Date(s.resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : "—"}
                   </td>
                 </tr>
               ))}
