@@ -57,6 +57,9 @@ async function fetchPolygonSnapshot(ticker: string): Promise<{ price: number; pr
 
 const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
 
+const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] || "";
+const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
+
 const pool = new pg.Pool({ connectionString: process.env["DATABASE_URL"] });
 
 async function dbQuery(text: string, params?: any[]): Promise<any> {
@@ -66,6 +69,31 @@ async function dbQuery(text: string, params?: any[]): Promise<any> {
     console.error("[DB] Query error:", e.message);
     return null;
   }
+}
+
+async function isAdminUser(userId: string): Promise<boolean> {
+  const localCheck = await dbQuery(
+    `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1`,
+    [userId]
+  );
+  if (localCheck?.rows?.length) return true;
+
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    try {
+      const resp = await axios.get(
+        `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&role=eq.admin&limit=1`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, timeout: 5000 }
+      );
+      if (resp.data?.length > 0) {
+        await dbQuery(
+          `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT (user_id, role) DO NOTHING`,
+          [userId]
+        );
+        return true;
+      }
+    } catch {}
+  }
+  return false;
 }
 
 // ── Data Fetchers ──────────────────────────────────────────────────────────────
@@ -3210,11 +3238,7 @@ router.get("/whale/admin/check", async (req, res) => {
   try {
     const userId = req.query.userId as string;
     if (!userId) return res.json({ isAdmin: false });
-    const result = await dbQuery(
-      `SELECT role FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1`,
-      [userId]
-    );
-    res.json({ isAdmin: !!(result && result.rows.length > 0) });
+    res.json({ isAdmin: await isAdminUser(userId) });
   } catch {
     res.json({ isAdmin: false });
   }
@@ -3241,11 +3265,7 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
     if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
-    const adminCheck = await dbQuery(
-      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin'`,
-      [adminUserId]
-    );
-    if (!adminCheck?.rows?.length) return res.status(403).json({ error: "Not an admin" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
 
     const { userId, plan } = req.body;
     if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
@@ -3262,11 +3282,7 @@ router.post("/whale/admin/toggle-admin", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
     if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
-    const adminCheck = await dbQuery(
-      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin'`,
-      [adminUserId]
-    );
-    if (!adminCheck?.rows?.length) return res.status(403).json({ error: "Not an admin" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
 
     const { userId, makeAdmin } = req.body;
     if (!userId) return res.status(400).json({ error: "userId required" });
