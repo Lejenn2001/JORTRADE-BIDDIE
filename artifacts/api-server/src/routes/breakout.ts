@@ -41,11 +41,13 @@ async function fetchRecentFlow(): Promise<any[]> {
 }
 
 function analyzeFlowBias(ticker: string, allFlow: any[]): FlowBias {
+  const now = new Date();
   const tickerFlow = allFlow.filter((f: any) => (f.ticker ?? "").toUpperCase() === ticker.toUpperCase());
 
   let callPrem = 0, putPrem = 0, callVol = 0, putVol = 0;
   let callSweepPrem = 0, putSweepPrem = 0;
   let callAggPrem = 0, putAggPrem = 0;
+  let nearTermCount = 0;
 
   for (const f of tickerFlow) {
     const prem = parseFloat(f.total_premium ?? 0) || 0;
@@ -54,14 +56,31 @@ function analyzeFlowBias(ticker: string, allFlow: any[]): FlowBias {
     const type = (f.type ?? "").toLowerCase();
     const isSweep = f.has_sweep === true || f.has_sweep === "true";
 
+    let weight = 1.0;
+    const expiryRaw = f.expiry || f.expires || f.expiration_date || "";
+    if (expiryRaw) {
+      const expDate = new Date(expiryRaw);
+      if (!isNaN(expDate.getTime())) {
+        const daysOut = Math.max(0, (expDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+        if (daysOut <= 1) { weight = 1.5; nearTermCount++; }
+        else if (daysOut <= 7) { weight = 1.0; nearTermCount++; }
+        else if (daysOut <= 14) { weight = 0.5; }
+        else if (daysOut <= 30) { weight = 0.2; }
+        else { weight = 0.05; }
+      }
+    }
+
+    const wPrem = prem * weight;
+    const wVol = Math.round(vol * weight);
+
     if (type === "call") {
-      callPrem += prem; callVol += vol;
-      if (isSweep) callSweepPrem += prem;
-      if (prem > 0 && askPrem / prem > 0.6) callAggPrem += prem;
+      callPrem += wPrem; callVol += wVol;
+      if (isSweep) callSweepPrem += wPrem;
+      if (prem > 0 && askPrem / prem > 0.6) callAggPrem += wPrem;
     } else if (type === "put") {
-      putPrem += prem; putVol += vol;
-      if (isSweep) putSweepPrem += prem;
-      if (prem > 0 && askPrem / prem > 0.6) putAggPrem += prem;
+      putPrem += wPrem; putVol += wVol;
+      if (isSweep) putSweepPrem += wPrem;
+      if (prem > 0 && askPrem / prem > 0.6) putAggPrem += wPrem;
     }
   }
 
@@ -104,7 +123,8 @@ function analyzeFlowBias(ticker: string, allFlow: any[]): FlowBias {
 
   const callPremFmt = (callPrem / 1e6).toFixed(1);
   const putPremFmt = (putPrem / 1e6).toFixed(1);
-  const details = `${tickerFlow.length} flows: $${callPremFmt}M calls vs $${putPremFmt}M puts (${ratio.toFixed(1)}x)${sweepBias !== "neutral" ? `, sweeps ${sweepBias}` : ""}`;
+  const nearTermLabel = nearTermCount > 0 ? `, ${nearTermCount} near-term` : "";
+  const details = `${tickerFlow.length} flows: $${callPremFmt}M calls vs $${putPremFmt}M puts (${ratio.toFixed(1)}x)${sweepBias !== "neutral" ? `, sweeps ${sweepBias}` : ""}${nearTermLabel}`;
 
   return { direction, callPremium: callPrem, putPremium: putPrem, callVolume: callVol, putVolume: putVol, ratio: Math.round(ratio * 100) / 100, sweepBias, conviction, details };
 }
