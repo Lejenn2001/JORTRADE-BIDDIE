@@ -212,7 +212,7 @@ const Dashboard = () => {
   const algorithmPlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'))
+        .filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && getSignalScore(s) >= 90)
     ).slice(0, 5),
     [allMergedSignals]
   );
@@ -220,7 +220,7 @@ const Dashboard = () => {
   const whalePlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => s.category === 'whale')
+        .filter(s => s.category === 'whale' && getSignalScore(s) >= 90)
     ).slice(0, 5),
     [allMergedSignals]
   );
@@ -228,7 +228,7 @@ const Dashboard = () => {
   const spreadPlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => s.category === 'spread')
+        .filter(s => s.category === 'spread' && getSignalScore(s) >= 90)
     ).slice(0, 5),
     [allMergedSignals]
   );
