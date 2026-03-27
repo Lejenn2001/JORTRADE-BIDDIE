@@ -46,7 +46,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - A React application built with Vite, Tailwind CSS 3, Framer Motion, and shadcn/ui.
 - Features include:
     - User authentication via Supabase (email/password, Google/Apple OAuth).
-    - Dashboard with tabs for Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Community, and Settings.
+    - Dashboard with tabs for Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Trump Feed, Community, and Settings.
     - Displays various signal categories (Algorithm Plays, Whale Plays, Spreads & Butterflies) with real-time data.
     - Performance tracking for signals and user trades.
     - AI-powered ticker analysis, integrating options flow, dark pool, and key levels.
@@ -88,3 +88,11 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Polygon.io Live Price Injection**: Signal pipeline checks Polygon real-time prices first (if < 2min stale), then Unusual Whales price, then Yahoo Finance as final fallback. Signal candidate tickers are temporarily subscribed to Polygon WebSocket before evaluation. Polygon snapshot polling fallback (every 30s) when WebSocket is silent. WebSocket uses `wss://socket.polygon.io/stocks` with `T.TICKER` (trades) + `Q.TICKER` (quotes) subscriptions
 - **Pre-Market Data**: `fetchPremarketSnapshot()` uses Polygon.io snapshot API (`/v2/snapshot/locale/us/markets/stocks/tickers`) with bid/ask/dayVolume for 18 key tickers. `GET /api/whale/premarket` returns live pre-market prices, gap %, bid/ask, and biggest movers (2-min cache). Morning outlook runs at 7:00 AM ET with enriched pre-market context including gap summary and hot flow tickers
 - **BASE_TICKERS**: GLD, QQQ, SPY, IWM (always monitored via Polygon WebSocket)
+
+## Trump Feed
+
+- **Trump Truth Social Monitor** (`/dashboard/trump`): Polls CNN's public Truth Social archive (`ix.cnn.io/data/truth-social/truth_archive.json`) every 5 minutes
+- Shows last 24 hours of posts with engagement stats (likes, replies, reboosts)
+- Strips HTML, sanitizes URLs (https only), caches up to 50 posts in memory
+- Frontend auto-refreshes every 60 seconds, manual refresh button available
+- Endpoint: `GET /api/whale/trump-posts`

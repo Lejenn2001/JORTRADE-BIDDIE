@@ -15,6 +15,7 @@ import {
   PieChart,
   Shield,
   Crosshair,
+  Megaphone,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jortradeLogo from "@/assets/jortrade-logo.png";
@@ -27,6 +28,7 @@ const navItems = [
   { icon: Wallet, label: "P&L Calendar", path: "/dashboard/pnl" },
   { icon: PieChart, label: "Analytics", path: "/dashboard/analytics" },
   { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
+  { icon: Megaphone, label: "Trump Feed", path: "/dashboard/trump" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
 ];
 

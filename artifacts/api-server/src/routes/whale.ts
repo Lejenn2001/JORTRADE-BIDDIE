@@ -3203,4 +3203,92 @@ router.get("/whale/health", (_req, res) => {
   });
 });
 
+// ── Trump Truth Social Monitor ──────────────────────────────────────────────────
+
+interface TrumpPost {
+  id: string;
+  created_at: string;
+  content: string;
+  url: string;
+  media: string[];
+  replies_count: number;
+  reblogs_count: number;
+  favourites_count: number;
+}
+
+const CNN_TRUMP_FEED = "https://ix.cnn.io/data/truth-social/truth_archive.json";
+const TRUMP_POLL_INTERVAL = 5 * 60 * 1000;
+let trumpPosts: TrumpPost[] = [];
+let trumpLastFetch = 0;
+let trumpLastSeenId = "";
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
+function sanitizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "https:" || u.protocol === "http:") return url;
+  } catch {}
+  return "";
+}
+
+async function fetchTrumpPosts(): Promise<void> {
+  try {
+    const { data } = await axios.get<TrumpPost[]>(CNN_TRUMP_FEED, { timeout: 15000 });
+    if (!Array.isArray(data)) return;
+    if (data.length === 0) {
+      trumpPosts = [];
+      trumpLastFetch = Date.now();
+      console.log("[trump-monitor] Upstream returned empty feed");
+      return;
+    }
+
+    const sorted = data
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const recent = sorted.filter(p => new Date(p.created_at).getTime() > cutoff);
+
+    const newCount = trumpLastSeenId
+      ? recent.filter(p => p.id > trumpLastSeenId).length
+      : 0;
+
+    trumpPosts = recent.slice(0, 50).map(p => ({
+      ...p,
+      content: stripHtml(p.content),
+      url: sanitizeUrl(p.url),
+      media: (p.media || []).map(sanitizeUrl).filter(Boolean),
+    }));
+    trumpLastSeenId = sorted[0]?.id ?? trumpLastSeenId;
+    trumpLastFetch = Date.now();
+
+    console.log(`[trump-monitor] Fetched ${recent.length} posts (last 24h), ${newCount} new`);
+  } catch (err: any) {
+    console.error(`[trump-monitor] Fetch error: ${err.message}`);
+  }
+}
+
+fetchTrumpPosts();
+setInterval(fetchTrumpPosts, TRUMP_POLL_INTERVAL);
+
+router.get("/whale/trump-posts", (_req, res) => {
+  res.json({
+    posts: trumpPosts,
+    lastFetch: trumpLastFetch ? new Date(trumpLastFetch).toISOString() : null,
+    count: trumpPosts.length,
+  });
+});
+
 export default router;
