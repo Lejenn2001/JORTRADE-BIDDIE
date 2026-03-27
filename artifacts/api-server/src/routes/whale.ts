@@ -1756,12 +1756,24 @@ Respond in this exact JSON format:
 
 router.get("/whale/signals/history", async (req, res) => {
   try {
-    const limit = Math.min(parseInt(String(req.query.limit)) || 50, 100);
+    const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
       `SELECT * FROM signal_outcomes WHERE signal_source = 'replit' ORDER BY detected_at DESC LIMIT $1`,
       [limit]
     );
-    res.json({ signals: result?.rows || [], count: result?.rows?.length || 0 });
+    const countResult = await dbQuery(
+      `SELECT
+        COUNT(*) FILTER (WHERE outcome = 'pending' OR outcome IS NULL) AS pending_count,
+        COUNT(*) AS total_count
+       FROM signal_outcomes WHERE signal_source = 'replit'`
+    );
+    const counts = countResult?.rows?.[0] || {};
+    res.json({
+      signals: result?.rows || [],
+      count: result?.rows?.length || 0,
+      totalPending: parseInt(counts.pending_count) || 0,
+      totalSignals: parseInt(counts.total_count) || 0,
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

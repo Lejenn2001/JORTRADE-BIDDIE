@@ -17,23 +17,23 @@ const PerformanceSnapshot = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await fetch('/api/whale/signals/history?limit=100');
+        const resp = await fetch('/api/whale/signals/history?limit=500');
         const result = resp.ok ? await resp.json() : null;
         const data = result?.signals;
 
         if (data) {
-          const resolved = data.filter((d: any) => d.outcome !== "pending" && d.outcome !== "expired");
           const wins = data.filter((d: any) => d.outcome === "win" || d.outcome === "hit").length;
           const losses = data.filter((d: any) => d.outcome === "loss" || d.outcome === "missed").length;
-          const pending = data.filter((d: any) => d.outcome === "pending").length;
+          const pending = result.totalPending ?? data.filter((d: any) => !d.outcome || d.outcome === "pending").length;
 
           let streak = 0;
           for (const d of data) {
             if (d.outcome === "win" || d.outcome === "hit") streak++;
-            else if (d.outcome !== "pending" && d.outcome !== "expired") break;
+            else if (d.outcome !== "pending" && d.outcome !== "expired" && d.outcome !== null && d.outcome !== undefined) break;
           }
 
-          setStats({ total: resolved.length, wins, losses, pending, streak });
+          const resolved = wins + losses;
+          setStats({ total: resolved, wins, losses, pending, streak });
         }
       } catch (e) {
         console.error("Performance fetch error:", e);
@@ -60,7 +60,7 @@ const PerformanceSnapshot = () => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-semibold text-foreground">This Week's Performance</span>
+          <span className="text-xs font-semibold text-foreground">AI Signal Performance</span>
         </div>
         {stats.streak >= 3 && (
           <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400">
