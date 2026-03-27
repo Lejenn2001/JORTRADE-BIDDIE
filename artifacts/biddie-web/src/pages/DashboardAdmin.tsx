@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import { Link } from "react-router-dom";
 
 interface StatCardProps {
@@ -322,6 +323,8 @@ const DashboardAdmin = () => {
               </>
             );
           })()}
+
+          <AdminSignalInsights />
 
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
