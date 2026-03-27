@@ -404,35 +404,56 @@ function detectBreakout(candles: CandleData[], resistanceLevel: number, supportL
 
 let currentFlowData: any[] | null = null;
 
-const directionLock = new Map<string, { direction: "bullish" | "bearish"; score: number; lockedAt: number }>();
-const DIRECTION_LOCK_THRESHOLD = 25;
-const DIRECTION_FLIP_THRESHOLD = 35;
-const DIRECTION_LOCK_TTL = 30 * 60 * 1000;
+const directionLock = new Map<string, { direction: "bullish" | "bearish"; score: number; lockedAt: number; consecutiveAgree: number; consecutiveDisagree: number }>();
+const DIRECTION_LOCK_THRESHOLD = 20;
+const DIRECTION_LOCK_TTL = 15 * 60 * 1000;
 
-function resolveStableDirection(ticker: string, thesisScore: number): "bullish" | "bearish" | "neutral" {
+function resolveStableDirection(
+  ticker: string,
+  thesisScore: number,
+  momentum: "bullish" | "bearish" | "neutral",
+  breakoutDir: string,
+): "bullish" | "bearish" | "neutral" {
   const absScore = Math.abs(thesisScore);
+  const scoreDir = thesisScore > 0 ? "bullish" : thesisScore < 0 ? "bearish" : "neutral";
   const now = Date.now();
   const lock = directionLock.get(ticker);
 
   if (lock && now - lock.lockedAt < DIRECTION_LOCK_TTL) {
-    const sameDir = (lock.direction === "bullish" && thesisScore > 0) || (lock.direction === "bearish" && thesisScore < 0);
-    if (sameDir) {
+    const agrees = scoreDir === lock.direction;
+
+    if (agrees) {
       lock.score = absScore;
       lock.lockedAt = now;
+      lock.consecutiveAgree++;
+      lock.consecutiveDisagree = 0;
       return lock.direction;
     }
-    if (absScore >= DIRECTION_FLIP_THRESHOLD) {
-      const newDir = thesisScore > 0 ? "bullish" : "bearish";
-      directionLock.set(ticker, { direction: newDir, score: absScore, lockedAt: now });
+
+    lock.consecutiveAgree = 0;
+    lock.consecutiveDisagree++;
+
+    const momentumContraLock = (lock.direction === "bullish" && momentum === "bearish") ||
+                                (lock.direction === "bearish" && momentum === "bullish");
+
+    if (absScore >= DIRECTION_LOCK_THRESHOLD && momentumContraLock) {
+      const newDir = scoreDir as "bullish" | "bearish";
+      directionLock.set(ticker, { direction: newDir, score: absScore, lockedAt: now, consecutiveAgree: 1, consecutiveDisagree: 0 });
       return newDir;
     }
+
+    if (lock.consecutiveDisagree >= 3 && absScore >= 15) {
+      const newDir = scoreDir as "bullish" | "bearish";
+      directionLock.set(ticker, { direction: newDir, score: absScore, lockedAt: now, consecutiveAgree: 1, consecutiveDisagree: 0 });
+      return newDir;
+    }
+
     return lock.direction;
   }
 
-  if (absScore >= DIRECTION_LOCK_THRESHOLD) {
-    const dir = thesisScore > 0 ? "bullish" : "bearish";
-    directionLock.set(ticker, { direction: dir, score: absScore, lockedAt: now });
-    return dir;
+  if (absScore >= DIRECTION_LOCK_THRESHOLD && scoreDir !== "neutral") {
+    directionLock.set(ticker, { direction: scoreDir as "bullish" | "bearish", score: absScore, lockedAt: now, consecutiveAgree: 1, consecutiveDisagree: 0 });
+    return scoreDir as "bullish" | "bearish";
   }
 
   return "neutral";
@@ -681,7 +702,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
 
   const thesisDirection = breakout.breakoutTriggered
     ? breakout.breakoutDirection as "bullish" | "bearish" | "neutral"
-    : resolveStableDirection(ticker, thesisScore);
+    : resolveStableDirection(ticker, thesisScore, momentum, breakout.breakoutDirection);
   const absThesis = Math.abs(thesisScore);
   const thesisConfidence = Math.min(absThesis, 100);
 
