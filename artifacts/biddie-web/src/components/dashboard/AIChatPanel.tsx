@@ -108,7 +108,7 @@ const AIChatPanel = () => {
       const res = await fetch('/api/whale/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: instruction, history }),
+        body: JSON.stringify({ message: instruction, history, userName: firstName }),
       });
 
       if (!res.ok) throw new Error(`API error: ${res.status}`);
