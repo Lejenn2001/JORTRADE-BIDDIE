@@ -12,7 +12,7 @@ interface PriceData {
   trades: number;
 }
 
-type PriceCallback = (ticker: string, data: PriceData) => void;
+type PriceCallback = (ticker: string, data: PriceData, tradeVolume?: number) => void;
 
 class PriceMonitor {
   private ws: WebSocket | null = null;
@@ -76,7 +76,7 @@ class PriceMonitor {
               if (price < data.low) data.low = price;
 
               for (const cb of this.callbacks) {
-                try { cb(ticker, data); } catch {}
+                try { cb(ticker, data, volume); } catch {}
               }
             }
           } else if (msg.type === "ping") {

@@ -484,6 +484,11 @@ interface BreakoutAlert {
   squeezeLength: number;
   triggeredAt: string;
   expiresAt: number;
+  volumeConfirmation: {
+    sessionVolumeRatio: number;
+    burstVolumeRatio: number;
+    institutionalConfirmed: boolean;
+  };
 }
 
 const breakoutAlerts: BreakoutAlert[] = [];
@@ -492,6 +497,88 @@ const ALERT_TTL = 4 * 60 * 60 * 1000;
 const alertCooldowns = new Map<string, number>();
 const COOLDOWN_MS = 15 * 60 * 1000;
 
+interface VolumeBucket {
+  timestamp: number;
+  volume: number;
+}
+
+const volumeBuckets = new Map<string, VolumeBucket[]>();
+const BUCKET_SIZE_MS = 5_000;
+const RECENT_WINDOW_MS = 60_000;
+const HISTORY_WINDOW_MS = 10 * 60_000;
+
+function trackVolumeBurst(ticker: string, tradeVolume: number) {
+  const now = Date.now();
+  const bucketTime = Math.floor(now / BUCKET_SIZE_MS) * BUCKET_SIZE_MS;
+
+  let buckets = volumeBuckets.get(ticker);
+  if (!buckets) {
+    buckets = [];
+    volumeBuckets.set(ticker, buckets);
+  }
+
+  const lastBucket = buckets.length > 0 ? buckets[buckets.length - 1] : null;
+  if (lastBucket && lastBucket.timestamp === bucketTime) {
+    lastBucket.volume += tradeVolume;
+  } else {
+    buckets.push({ timestamp: bucketTime, volume: tradeVolume });
+  }
+
+  const cutoff = now - HISTORY_WINDOW_MS;
+  while (buckets.length > 0 && buckets[0].timestamp < cutoff) {
+    buckets.shift();
+  }
+}
+
+function getVolumeBurstRatio(ticker: string): number {
+  const buckets = volumeBuckets.get(ticker);
+  if (!buckets || buckets.length < 3) return 0;
+
+  const now = Date.now();
+  const recentCutoff = now - RECENT_WINDOW_MS;
+  const olderCutoff = now - HISTORY_WINDOW_MS;
+
+  let recentVol = 0;
+  let olderVol = 0;
+  let olderBucketCount = 0;
+  let recentBucketCount = 0;
+
+  for (const b of buckets) {
+    if (b.timestamp >= recentCutoff) {
+      recentVol += b.volume;
+      recentBucketCount++;
+    } else if (b.timestamp >= olderCutoff) {
+      olderVol += b.volume;
+      olderBucketCount++;
+    }
+  }
+
+  if (olderBucketCount === 0 || olderVol === 0) return 0;
+
+  const olderAvgPerMinute = olderVol / (olderBucketCount * BUCKET_SIZE_MS / 60_000);
+  const recentPerMinute = recentVol / (RECENT_WINDOW_MS / 60_000);
+
+  if (olderAvgPerMinute === 0) return 0;
+  return recentPerMinute / olderAvgPerMinute;
+}
+
+function getSessionVolumeRatio(ticker: string, setup: SqueezeResult): number {
+  const priceData = priceMonitor.getPrice(ticker);
+  if (!priceData || setup.volume20dAvg === 0) return 0;
+
+  const now = new Date();
+  const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const minutesSinceOpen = (eastern.getHours() - 9) * 60 + (eastern.getMinutes() - 30);
+
+  if (minutesSinceOpen <= 0 || minutesSinceOpen > 390) return 0;
+
+  const expectedVolumeFraction = minutesSinceOpen / 390;
+  const expectedVolumeNow = setup.volume20dAvg * expectedVolumeFraction;
+
+  if (expectedVolumeNow === 0) return 0;
+  return priceData.volume / expectedVolumeNow;
+}
+
 function roundToStrike(price: number): number {
   if (price >= 500) return Math.round(price / 5) * 5;
   if (price >= 100) return Math.round(price);
@@ -499,7 +586,7 @@ function roundToStrike(price: number): number {
   return Math.round(price);
 }
 
-function generateBreakoutAlert(ticker: string, livePrice: number, setup: SqueezeResult, direction: "bullish" | "bearish") {
+function generateBreakoutAlert(ticker: string, livePrice: number, setup: SqueezeResult, direction: "bullish" | "bearish", volConfirmation: { sessionVolumeRatio: number; burstVolumeRatio: number; institutionalConfirmed: boolean }) {
   const now = Date.now();
   const lastAlert = alertCooldowns.get(`${ticker}-${direction}`);
   if (lastAlert && now - lastAlert < COOLDOWN_MS) return;
@@ -524,18 +611,22 @@ function generateBreakoutAlert(ticker: string, livePrice: number, setup: Squeeze
     squeezeLength: setup.squeezeLength,
     triggeredAt: new Date().toISOString(),
     expiresAt: now + ALERT_TTL,
+    volumeConfirmation: volConfirmation,
   };
 
   breakoutAlerts.unshift(alert);
   if (breakoutAlerts.length > MAX_ALERTS) breakoutAlerts.length = MAX_ALERTS;
   alertCooldowns.set(`${ticker}-${direction}`, now);
 
-  console.log(`[breakout-alert] ${alert.suggestedTrade} @ $${alert.breakoutPrice} (score ${alert.score})`);
+  const instLabel = volConfirmation.institutionalConfirmed ? "INSTITUTIONAL" : "RETAIL";
+  console.log(`[breakout-alert] ${alert.suggestedTrade} @ $${alert.breakoutPrice} | Session Vol: ${volConfirmation.sessionVolumeRatio.toFixed(1)}x | Burst: ${volConfirmation.burstVolumeRatio.toFixed(1)}x | ${instLabel}`);
 }
 
 function setupBreakoutMonitor() {
-  priceMonitor.onPrice((ticker, data) => {
+  priceMonitor.onPrice((ticker, data, tradeVolume) => {
     if (cachedResults.length === 0) return;
+
+    trackVolumeBurst(ticker, tradeVolume || 0);
 
     const setup = cachedResults.find(s => s.ticker === ticker);
     if (!setup || !setup.resistanceLevel || !setup.supportLevel) return;
@@ -545,16 +636,33 @@ function setupBreakoutMonitor() {
     const resistanceBuffer = setup.resistanceLevel * 1.002;
     const supportBuffer = setup.supportLevel * 0.998;
 
-    if (price >= resistanceBuffer && setup.currentPrice < setup.resistanceLevel) {
-      generateBreakoutAlert(ticker, price, setup, "bullish");
+    const priceBreakingUp = price >= resistanceBuffer && setup.currentPrice < setup.resistanceLevel;
+    const priceBreakingDown = price <= supportBuffer && setup.currentPrice > setup.supportLevel;
+
+    if (!priceBreakingUp && !priceBreakingDown) return;
+
+    const sessionVolumeRatio = getSessionVolumeRatio(ticker, setup);
+    const burstVolumeRatio = getVolumeBurstRatio(ticker);
+    const institutionalConfirmed = sessionVolumeRatio >= 1.5 && burstVolumeRatio >= 3.0;
+
+    if (sessionVolumeRatio < 1.5) {
+      return;
     }
 
-    if (price <= supportBuffer && setup.currentPrice > setup.supportLevel) {
-      generateBreakoutAlert(ticker, price, setup, "bearish");
+    if (burstVolumeRatio < 3.0) {
+      return;
     }
+
+    const direction: "bullish" | "bearish" = priceBreakingUp ? "bullish" : "bearish";
+
+    generateBreakoutAlert(ticker, price, setup, direction, {
+      sessionVolumeRatio: Math.round(sessionVolumeRatio * 100) / 100,
+      burstVolumeRatio: Math.round(burstVolumeRatio * 100) / 100,
+      institutionalConfirmed,
+    });
   });
 
-  console.log("[breakout-alert] Real-time breakout monitor active");
+  console.log("[breakout-alert] Real-time breakout monitor active (volume-confirmed only)");
 }
 
 const BASE_TICKERS = new Set(["GLD", "QQQ", "SPXW", "SPY"]);

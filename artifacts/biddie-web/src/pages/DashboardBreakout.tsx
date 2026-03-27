@@ -52,6 +52,11 @@ interface BreakoutAlertData {
   score: number;
   squeezeLength: number;
   triggeredAt: string;
+  volumeConfirmation?: {
+    sessionVolumeRatio: number;
+    burstVolumeRatio: number;
+    institutionalConfirmed: boolean;
+  };
 }
 
 interface AlertsResponse {
@@ -215,11 +220,23 @@ const DashboardBreakout = () => {
                           }
                         </div>
                         <div>
-                          <p className="text-xl font-black text-foreground tracking-tight">
-                            {alert.suggestedTrade}
-                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xl font-black text-foreground tracking-tight">
+                              {alert.suggestedTrade}
+                            </p>
+                            {alert.volumeConfirmation?.institutionalConfirmed && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/40">
+                                INSTITUTIONAL
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             Broke {alert.direction === "bullish" ? "above" : "below"} ${alert.direction === "bullish" ? alert.resistanceLevel.toFixed(2) : alert.supportLevel.toFixed(2)} at ${alert.breakoutPrice.toFixed(2)}
+                            {alert.volumeConfirmation && (
+                              <span className="ml-2 text-primary font-semibold">
+                                Vol: {alert.volumeConfirmation.sessionVolumeRatio.toFixed(1)}x avg | Burst: {alert.volumeConfirmation.burstVolumeRatio.toFixed(1)}x
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -568,9 +585,14 @@ const DashboardBreakout = () => {
                           </p>
                           <p>
                             When the scanner finds setups, it subscribes those tickers to our real-time
-                            price feed. If price breaks above resistance or below support, you get an
-                            instant trade alert with the direction (CALL or PUT) and nearest strike.
+                            price feed. If price breaks above resistance or below support <span className="text-foreground font-semibold">with volume confirmation</span>,
+                            you get an instant trade alert. Alerts only fire when:
                           </p>
+                          <ul className="list-disc list-inside mt-1 space-y-0.5 text-muted-foreground">
+                            <li><span className="text-foreground font-semibold">Session Volume ≥ 1.5x</span> the 20-day average (adjusted for time of day) — confirms real participation</li>
+                            <li><span className="text-foreground font-semibold">Burst Volume ≥ 3x</span> the recent average — the last 60 seconds must show 3x+ activity vs the prior 10 minutes, confirming smart money entered</li>
+                            <li>When both conditions are met, the alert is tagged <span className="text-purple-400 font-semibold">INSTITUTIONAL</span></li>
+                          </ul>
                         </div>
                       </div>
 
