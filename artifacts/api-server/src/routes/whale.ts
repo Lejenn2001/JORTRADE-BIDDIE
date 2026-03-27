@@ -2475,6 +2475,8 @@ router.post("/whale/verify-signals", async (_req, res) => {
       let outcomePrice = history.current;
       const refPrice = signalPrice || entryPrice || 0;
 
+      const MIN_MOVE_PCT = 0.005;
+
       if (target.low && target.high && refPrice > 0) {
         const targetMakesDirectionalSense = isBullish
           ? target.low > refPrice * 0.999
@@ -2493,6 +2495,24 @@ router.post("/whale/verify-signals", async (_req, res) => {
               outcomePrice = history.lowSince;
             }
           }
+        } else if (refPrice > 0) {
+          if (isBullish && history.highSince >= refPrice * (1 + MIN_MOVE_PCT)) {
+            outcome = "hit";
+            outcomePrice = history.highSince;
+          } else if (!isBullish && history.lowSince <= refPrice * (1 - MIN_MOVE_PCT)) {
+            outcome = "hit";
+            outcomePrice = history.lowSince;
+          }
+        }
+      }
+
+      if (!outcome && !target.low && !target.high && refPrice > 0) {
+        if (isBullish && history.highSince >= refPrice * (1 + MIN_MOVE_PCT)) {
+          outcome = "hit";
+          outcomePrice = history.highSince;
+        } else if (!isBullish && history.lowSince <= refPrice * (1 - MIN_MOVE_PCT)) {
+          outcome = "hit";
+          outcomePrice = history.lowSince;
         }
       }
 
@@ -3074,6 +3094,8 @@ async function realtimeVerifySignals() {
       let outcome: string | null = null;
       const refPrice2 = signalPrice || entryPrice || 0;
 
+      const MIN_MOVE_PCT2 = 0.005;
+
       if (target_val.low && target_val.high && refPrice2 > 0) {
         const targetMakesDirectionalSense = isBullish
           ? target_val.low > refPrice2 * 0.999
@@ -3086,7 +3108,15 @@ async function realtimeVerifySignals() {
             const notAlreadyPastTarget = !signalPrice || signalPrice >= target_val.high * 0.97;
             if (notAlreadyPastTarget && history.lowSince <= target_val.high) outcome = "hit";
           }
+        } else if (refPrice2 > 0) {
+          if (isBullish && history.highSince >= refPrice2 * (1 + MIN_MOVE_PCT2)) outcome = "hit";
+          else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_MOVE_PCT2)) outcome = "hit";
         }
+      }
+
+      if (!outcome && !target_val.low && !target_val.high && refPrice2 > 0) {
+        if (isBullish && history.highSince >= refPrice2 * (1 + MIN_MOVE_PCT2)) outcome = "hit";
+        else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_MOVE_PCT2)) outcome = "hit";
       }
 
       if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
