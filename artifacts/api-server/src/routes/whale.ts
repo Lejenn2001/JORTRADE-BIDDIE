@@ -1330,63 +1330,97 @@ async function runSignalsPipeline() {
   let signals = topCandidates;
   try {
     const claudeT0 = Date.now();
-    const candidateSummary = topCandidates.map((s, i) => ({
-      idx: i,
-      ticker: s.ticker,
-      direction: s.direction,
-      option_type: s.option_type,
-      trade: s.trade,
-      strike: s.strike,
-      expiry: s.expiry,
-      premium: s.premium,
-      ask_aggression_pct: s.ask_aggression_pct,
-      vol_oi_ratio: s.vol_oi_ratio,
-      has_sweep: s.has_sweep,
-      current_price: s.current_price,
-      vwap: s.vwap,
-      prior_day_high: s.prior_day_high,
-      prior_day_low: s.prior_day_low,
-      pivot: s.pivot,
-      r1: s.r1,
-      s1: s.s1,
-      entry_trigger: s.entry_trigger,
-      price_confirmed: s.price_confirmed,
-      price_pattern: s.price_pattern,
-      gamma_zone: s.gamma_zone,
-      local_confidence: s.confidence,
-      category: s.category,
-    }));
+    const candidateSummary = topCandidates.map((s, i) => {
+      const candles = candleMap[s.ticker] || [];
+      let intraday_trend = "unknown";
+      let intraday_change_pct = 0;
+      let trend_description = "";
+      if (candles.length >= 3 && s.current_price) {
+        const openPrice = candles[0]?.open;
+        const recentCandles = candles.slice(-5);
+        const midCandles = candles.slice(Math.floor(candles.length / 2), Math.floor(candles.length / 2) + 3);
+        const recentAvg = recentCandles.reduce((sum, c) => sum + (c.close || 0), 0) / recentCandles.length;
+        const midAvg = midCandles.reduce((sum, c) => sum + (c.close || 0), 0) / midCandles.length;
+        if (openPrice) {
+          intraday_change_pct = Math.round(((s.current_price - openPrice) / openPrice) * 10000) / 100;
+        }
+        if (recentAvg < midAvg * 0.995) intraday_trend = "falling";
+        else if (recentAvg > midAvg * 1.005) intraday_trend = "rising";
+        else intraday_trend = "sideways";
+        const dayHigh = Math.max(...candles.map(c => c.high || 0));
+        const dayLow = Math.min(...candles.filter(c => c.low && c.low > 0).map(c => c.low));
+        trend_description = `Open: $${openPrice?.toFixed(2)}, High: $${dayHigh.toFixed(2)}, Low: $${dayLow.toFixed(2)}, Current: $${s.current_price.toFixed(2)}, Change: ${intraday_change_pct > 0 ? '+' : ''}${intraday_change_pct}%, Trend: ${intraday_trend}`;
+      }
+      return {
+        idx: i,
+        ticker: s.ticker,
+        direction: s.direction,
+        option_type: s.option_type,
+        trade: s.trade,
+        strike: s.strike,
+        expiry: s.expiry,
+        premium: s.premium,
+        ask_aggression_pct: s.ask_aggression_pct,
+        vol_oi_ratio: s.vol_oi_ratio,
+        has_sweep: s.has_sweep,
+        current_price: s.current_price,
+        vwap: s.vwap,
+        prior_day_high: s.prior_day_high,
+        prior_day_low: s.prior_day_low,
+        pivot: s.pivot,
+        r1: s.r1,
+        s1: s.s1,
+        entry_trigger: s.entry_trigger,
+        price_confirmed: s.price_confirmed,
+        price_pattern: s.price_pattern,
+        gamma_zone: s.gamma_zone,
+        local_confidence: s.confidence,
+        category: s.category,
+        intraday_trend,
+        intraday_change_pct,
+        trend_description,
+      };
+    });
 
-    const aiPrompt = `You are a professional options flow analyst. Evaluate these ${topCandidates.length} pre-screened trade signals and determine which are REAL directional bets vs hedges/noise.
+    const aiPrompt = `You are a professional options flow analyst and CHART READER. Evaluate these ${topCandidates.length} pre-screened trade signals. Your job is to determine which are REAL actionable directional bets vs hedges/noise/counter-trend traps.
+
+CRITICAL: Each signal includes "trend_description" and "intraday_trend" showing exactly what the stock is doing RIGHT NOW. You MUST use this data. If a stock is dumping -3% intraday and someone is buying calls, that is almost certainly NOT a trade you want to recommend as bullish. The flow could be a hedge, a trap, or a contrarian bet that retail shouldn't follow.
 
 For EACH signal, return a JSON object with:
 - idx: the signal index
-- is_hedge: true if this looks like a hedge (large institution protecting a position), false if directional
-- adjusted_confidence: 1-10 score (lower if hedge or poor setup, higher if strong directional conviction)
-- hedge_reason: if is_hedge is true, brief explanation why (e.g. "Large put on a bullish day = portfolio hedge")
+- is_hedge: true if this looks like a hedge, counter-trend trap, or otherwise NOT a clean directional setup
+- adjusted_confidence: 1-10 score (LOWER if against the trend, higher only if flow AND price action AGREE)
+- hedge_reason: brief explanation if is_hedge is true
 - signal_quality: "strong" | "moderate" | "weak" | "hedge"
-- recommended_category: "whale" | "algorithm" | "spread" — override the local category if needed
+- recommended_category: "whale" | "algorithm" | "spread"
+
+MARKET STRUCTURE FIRST — always check the trend before trusting the flow:
+- If intraday_trend is "falling" and option_type is "call" → HIGH SKEPTICISM. This is likely a hedge, bottom-fish, or institutional roll. Score 4 or lower unless there is extreme conviction evidence.
+- If intraday_trend is "rising" and option_type is "put" → HIGH SKEPTICISM. Same logic — could be protection.
+- If current_price is well below VWAP for calls → the buyer is fighting the trend. Lower confidence.
+- If current_price is well above VWAP for puts → same.
+- If intraday_change_pct is worse than -1.5% and direction is "bullish" → mark as hedge unless overwhelming evidence otherwise.
+- If intraday_change_pct is better than +1.5% and direction is "bearish" → mark as hedge unless overwhelming evidence otherwise.
+
+FLOW-TREND ALIGNMENT — the best trades:
+- Calls on a stock trending UP intraday with price above VWAP = strong
+- Puts on a stock trending DOWN intraday with price below VWAP = strong
+- Sweeps with high aggression IN THE DIRECTION of the trend = highest conviction
+- Multiple confirming factors: sweep + aggression + trend + VWAP alignment
 
 HEDGE INDICATORS — mark as hedge if:
-- Large put buys on a strongly bullish day (SPY/QQQ up >0.5%) = portfolio protection
+- Large put buys on a strongly bullish day = portfolio protection
+- Large call buys on a stock that's dumping = likely hedge, averaging down, or contrarian bet
 - Far OTM options with massive premium = tail risk hedge
 - Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend
-- Very large premium ($1M+) with far-dated expiry = institutional positioning, not a trade signal
-- Price is moving strongly AGAINST the option direction (buying calls while price dumps, buying puts while price rips)
-
-DIRECTIONAL BET INDICATORS — keep confidence high if:
-- Sweeps with high ask aggression on near-term expiry
-- Strike near ATM with price confirming the direction
-- Price holding above VWAP for calls, below VWAP for puts
-- Multiple confirming factors (sweep + aggression + price action)
-- Sector/single name flow, not just index hedging
+- Very large premium ($1M+) with far-dated expiry = institutional positioning
 
 CATEGORY ASSIGNMENT:
-- "whale": ONLY for truly massive institutional flow — premium $1M+ with sweep/high aggression, or $2M+. These are rare, eye-catching moves. Do NOT overuse this category.
-- "spread": If the flow looks like part of a multi-leg strategy (e.g. you see matching calls/puts on the same ticker, or the strike/premium ratio suggests a defined-risk trade)
-- "algorithm": The default category for most signals. Any play that passed our scoring filters based on technicals, price action, and flow analysis. This includes plays with $25K-$999K premium. Most signals should be "algorithm".
+- "whale": ONLY for $1M+ premium with sweep/high aggression, or $2M+. Rare.
+- "spread": Multi-leg strategies
+- "algorithm": Default for most signals ($25K-$999K premium)
 
-IMPORTANT: Most signals should be categorized as "algorithm". Only use "whale" for $1M+ premium plays. We want a healthy mix of categories — do NOT put everything in whale.
+IMPORTANT: Be HONEST about direction. If the chart says the stock is falling, don't recommend calls just because someone bought them. Institutions buy calls on falling stocks as hedges ALL THE TIME. Our users trust these signals — do not recommend buying calls into a dump.
 
 SIGNALS:
 ${JSON.stringify(candidateSummary, null, 2)}
