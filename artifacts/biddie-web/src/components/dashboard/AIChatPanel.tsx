@@ -41,12 +41,7 @@ const AIChatPanel = () => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
-        const parsed = JSON.parse(saved) as Message[];
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-        return parsed.filter(m => {
-          const ts = parseInt(m.id.split('-').pop() || '0', 10);
-          return ts > cutoff;
-        });
+        return JSON.parse(saved) as Message[];
       }
     } catch {}
     return [];
@@ -57,7 +52,7 @@ const AIChatPanel = () => {
 
   useEffect(() => {
     if (messages.length > 0) {
-      const toSave = messages.slice(-100);
+      const toSave = messages.slice(-500);
       localStorage.setItem(storageKey, JSON.stringify(toSave));
     }
   }, [messages, storageKey]);
