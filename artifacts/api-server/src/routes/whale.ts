@@ -2213,6 +2213,138 @@ function startFlowMonitor() {
 
 startFlowMonitor();
 
+router.post("/whale/trades", async (req, res) => {
+  try {
+    const { userId, signalId, ticker, direction, category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore } = req.body;
+    if (!userId || !signalId || !ticker) {
+      return res.status(400).json({ error: "userId, signalId, and ticker are required" });
+    }
+    const existing = await dbQuery(
+      `SELECT id FROM user_trades WHERE user_id = $1 AND signal_id = $2`,
+      [userId, signalId]
+    );
+    if (existing && existing.rows.length > 0) {
+      return res.status(409).json({ error: "Trade already taken", tradeId: existing.rows[0].id });
+    }
+    const result = await dbQuery(
+      `INSERT INTO user_trades (user_id, signal_id, ticker, direction, category, strike, expiry, option_type, entry_trigger, target, invalidation, conviction_score)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [userId, signalId, ticker, direction || "bullish", category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore]
+    );
+    if (!result) return res.status(500).json({ error: "Failed to save trade" });
+    res.json({ success: true, trade: result.rows[0] });
+  } catch (e: any) {
+    console.error("[user_trades] POST error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/whale/trades/:signalId", async (req, res) => {
+  try {
+    const { signalId } = req.params;
+    const userId = req.query.userId as string;
+    if (!userId || !signalId) return res.status(400).json({ error: "userId and signalId required" });
+    await dbQuery(`DELETE FROM user_trades WHERE user_id = $1 AND signal_id = $2`, [userId, signalId]);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[user_trades] DELETE error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/whale/trades", async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    const result = await dbQuery(
+      `SELECT ut.*, so.outcome as signal_outcome, so.resolved_at as signal_resolved_at
+       FROM user_trades ut
+       LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
+       WHERE ut.user_id = $1
+       ORDER BY ut.taken_at DESC
+       LIMIT 200`,
+      [userId]
+    );
+    if (!result) return res.json({ trades: [] });
+    res.json({ trades: result.rows });
+  } catch (e: any) {
+    console.error("[user_trades] GET error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/whale/trades/stats", async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    const allTrades = await dbQuery(
+      `SELECT ut.*, so.outcome, so.resolved_at
+       FROM user_trades ut
+       LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
+       WHERE ut.user_id = $1
+       ORDER BY ut.taken_at DESC`,
+      [userId]
+    );
+    if (!allTrades) return res.json({ stats: null });
+
+    const trades = allTrades.rows;
+    const total = trades.length;
+    const resolved = trades.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
+    const hits = resolved.filter((t: any) => t.outcome === "hit").length;
+    const misses = resolved.filter((t: any) => t.outcome === "missed").length;
+    const pending = trades.filter((t: any) => !t.outcome || t.outcome === "pending").length;
+    const winRate = resolved.length > 0 ? Math.round((hits / resolved.length) * 100) : 0;
+
+    let streak = 0;
+    for (const t of resolved) {
+      if ((t as any).outcome === "hit") streak++;
+      else break;
+    }
+
+    const byTicker: Record<string, { hits: number; total: number }> = {};
+    for (const t of resolved) {
+      const tk = (t as any).ticker;
+      if (!byTicker[tk]) byTicker[tk] = { hits: 0, total: 0 };
+      byTicker[tk].total++;
+      if ((t as any).outcome === "hit") byTicker[tk].hits++;
+    }
+
+    const byCategory: Record<string, { hits: number; total: number }> = {};
+    for (const t of resolved) {
+      const cat = (t as any).category || "unknown";
+      if (!byCategory[cat]) byCategory[cat] = { hits: 0, total: 0 };
+      byCategory[cat].total++;
+      if ((t as any).outcome === "hit") byCategory[cat].hits++;
+    }
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= weekAgo);
+    const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
+    const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit").length;
+    const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
+
+    res.json({
+      stats: {
+        total,
+        hits,
+        misses,
+        pending,
+        winRate,
+        streak,
+        weekWinRate,
+        weekHits,
+        weekTotal: thisWeek.length,
+        byTicker,
+        byCategory,
+      },
+    });
+  } catch (e: any) {
+    console.error("[user_trades] stats error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/whale/health", (_req, res) => {
   res.json({
     ok: true,

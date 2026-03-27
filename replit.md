@@ -145,6 +145,18 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - Runs price action confirmation and gamma zone analysis
   - Claude AI synthesizes everything into structured JSON: verdict, market structure, flow analysis, dark pool analysis, key levels, trade setup (entry/target/stop), and watch-for items
   - Frontend: `/dashboard/market` — search bar with popular/recent tickers, animated loading, structured analysis cards
+- **User Trades** (`POST/GET/DELETE /api/whale/trades`):
+  - Users click "I Took This Trade" on signal cards to track which signals they followed
+  - `POST /api/whale/trades` — save a taken trade (linked to signal_id + user_id)
+  - `GET /api/whale/trades?userId=X` — fetch user's taken trades (joined with signal_outcomes for outcome data)
+  - `DELETE /api/whale/trades/:signalId?userId=X` — remove a taken trade
+  - `GET /api/whale/trades/stats?userId=X` — computed stats: win rate, streak, by-ticker, by-category, weekly
+  - Database: `user_trades` table in PostgreSQL
+- **Analytics Dashboard** (`/dashboard/analytics`):
+  - Overview tab: AI win rate, personal win rate, trades taken, win streak, top tickers, category breakdown
+  - My Trades tab: personal stats, recent trades list with WIN/LOSS/PENDING badges, ticker breakdown
+  - AI Signals tab: overall signal performance, win rate rings by category, top performing tickers
+  - No longer admin-only — accessible to all users as a Pro feature
 - **Signal Verification** (`POST /api/whale/verify-signals`):
   - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table
   - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date

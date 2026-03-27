@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 
@@ -116,10 +117,61 @@ function formatTimestamp(isoStr: string): string {
 
 const DashboardSignals = () => {
   const { signals: liveSignals, signalHistory, loading: liveLoading } = useMarketData();
+  const { user } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
+  const [takingId, setTakingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`/api/whale/trades?userId=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.trades) {
+          setTakenSignalIds(new Set(data.trades.map((t: any) => t.signal_id)));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
+    if (!user?.id) return;
+    const isTaken = takenSignalIds.has(signal.id);
+    setTakingId(signal.id);
+    try {
+      if (isTaken) {
+        await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
+        setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
+      } else {
+        await fetch("/api/whale/trades", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            signalId: signal.id,
+            ticker: signal.ticker,
+            direction: signal.type,
+            category: signal.category,
+            strike: signal.strike,
+            expiry: signal.expiry,
+            optionType: signal.putCall,
+            entryTrigger: signal.entryTrigger,
+            target: signal.targetZone,
+            invalidation: signal.invalidation,
+            convictionScore: signal.convictionScore,
+          }),
+        });
+        setTakenSignalIds(prev => new Set(prev).add(signal.id));
+      }
+    } catch (e) {
+      console.error("Failed to toggle trade:", e);
+    } finally {
+      setTakingId(null);
+    }
+  }, [user?.id, takenSignalIds]);
 
   useEffect(() => {
     const loadRecentSignals = async () => {
@@ -341,7 +393,7 @@ const DashboardSignals = () => {
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalCard signal={signal} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
                         </motion.div>
                       ))}
                     </div>
@@ -374,7 +426,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
                       </motion.div>
                     ))}
                   </div>
@@ -406,7 +458,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
                       </motion.div>
                     ))}
                   </div>
@@ -420,7 +472,7 @@ const DashboardSignals = () => {
   );
 };
 
-function SignalCard({ signal }: { signal: MarketSignal }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void }) {
   const isCall = signal.putCall === "call" || signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -651,6 +703,34 @@ function SignalCard({ signal }: { signal: MarketSignal }) {
             </span>
           )}
         </div>
+
+        {onTakeTrade && (
+          <div className="pt-2 mt-2 border-t border-white/5">
+            <button
+              onClick={() => onTakeTrade(signal)}
+              disabled={isTaking}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                isTaken
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
+                  : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+              } disabled:opacity-50`}
+            >
+              {isTaking ? (
+                <span className="animate-pulse">...</span>
+              ) : isTaken ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Trade Taken</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>I Took This Trade</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
