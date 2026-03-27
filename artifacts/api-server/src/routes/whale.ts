@@ -1905,6 +1905,7 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
       const target = parseTargetRange(signal.target_zone || signal.target);
       const invalidationPrice = parsePrice(signal.invalidation);
+      const entryPrice = parsePrice(signal.entry_trigger);
       const isBullish = signal.signal_type === "bullish";
 
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
@@ -1923,16 +1924,25 @@ router.post("/whale/verify-signals", async (_req, res) => {
         }
       }
 
+      if (!outcome && isBullish && history.current < (entryPrice || 0)) {
+        if (isExpired) outcome = "missed";
+      }
+      if (!outcome && !isBullish && history.current > (entryPrice || Infinity)) {
+        if (isExpired) outcome = "missed";
+      }
+
       if (!outcome && target.low && target.high) {
         if (isBullish) {
-          if (history.highSince >= target.low) {
+          const entryOk = !entryPrice || history.current >= entryPrice;
+          if (entryOk && history.highSince >= target.low) {
             outcome = "hit";
             outcomePrice = history.highSince;
           } else if (isExpired) {
             outcome = "missed";
           }
         } else {
-          if (history.lowSince <= target.high) {
+          const entryOk = !entryPrice || history.current <= entryPrice;
+          if (entryOk && history.lowSince <= target.high) {
             outcome = "hit";
             outcomePrice = history.lowSince;
           } else if (isExpired) {
@@ -2275,6 +2285,7 @@ async function autoVerifySignals() {
       if (!history) continue;
       const target = parseTargetRange(signal.target_zone || signal.target);
       const invalidationPrice = parsePrice(signal.invalidation);
+      const entryPrice = parsePrice(signal.entry_trigger);
       const isBullish = signal.signal_type === "bullish";
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
       const isExpired = expiryDate && expiryDate < now;
@@ -2285,10 +2296,23 @@ async function autoVerifySignals() {
         else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
       }
 
+      if (!outcome && isBullish && history.current < (entryPrice || 0)) {
+        if (isExpired) outcome = "missed";
+      }
+      if (!outcome && !isBullish && history.current > (entryPrice || Infinity)) {
+        if (isExpired) outcome = "missed";
+      }
+
       if (!outcome && target.low && target.high) {
-        if (isBullish && history.highSince >= target.low) outcome = "hit";
-        else if (!isBullish && history.lowSince <= target.high) outcome = "hit";
-        else if (isExpired) outcome = "missed";
+        if (isBullish) {
+          const entryOk = !entryPrice || history.current >= entryPrice;
+          if (entryOk && history.highSince >= target.low) outcome = "hit";
+          else if (isExpired) outcome = "missed";
+        } else {
+          const entryOk = !entryPrice || history.current <= entryPrice;
+          if (entryOk && history.lowSince <= target.high) outcome = "hit";
+          else if (isExpired) outcome = "missed";
+        }
       }
       if (!outcome && isExpired) outcome = "expired";
 
