@@ -735,7 +735,7 @@ const DashboardBreakout = () => {
                                           setup.thesis.flowBias?.direction === "bearish" ? "text-red-400" : "text-zinc-400"
                                         }`}>
                                           {setup.thesis.flowBias?.direction === "bullish" ? `Calls ${setup.thesis.flowBias.ratio}x` :
-                                           setup.thesis.flowBias?.direction === "bearish" ? `Puts ${(1/setup.thesis.flowBias.ratio).toFixed(1)}x` :
+                                           setup.thesis.flowBias?.direction === "bearish" ? `Puts ${setup.thesis.flowBias.ratio > 0 ? (1/setup.thesis.flowBias.ratio).toFixed(1) : "N/A"}x` :
                                            setup.thesis.flowBias ? "Neutral" : "No Data"}
                                         </p>
                                       </div>

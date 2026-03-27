@@ -945,6 +945,46 @@ router.get("/breakout/alerts", (_req, res) => {
   });
 });
 
+if (process.env.NODE_ENV !== "production") {
+  router.post("/breakout/test-alert", (req, res) => {
+    try {
+      const ticker = typeof req.body?.ticker === "string"
+        ? req.body.ticker.toUpperCase().trim().replace(/[^A-Z]/g, "")
+        : cachedResults[0]?.ticker;
+
+      if (!ticker) {
+        res.status(400).json({ error: "No ticker provided and no setups available." });
+        return;
+      }
+
+      const setup = cachedResults.find(s => s.ticker === ticker);
+      if (!setup) {
+        res.status(400).json({ error: `No setup found for ${ticker}. Run a scan first.` });
+        return;
+      }
+
+      const direction: "bullish" | "bearish" = setup.thesis?.direction === "bearish" ? "bearish" : "bullish";
+      const price = direction === "bullish"
+        ? setup.resistanceLevel! * 1.003
+        : setup.supportLevel! * 0.997;
+
+      alertCooldowns.delete(`${setup.ticker}-${direction}`);
+
+      generateBreakoutAlert(setup.ticker, price, setup, direction, {
+        sessionVolumeRatio: 2.1,
+        burstVolumeRatio: 4.5,
+        institutionalConfirmed: true,
+      });
+
+      const latest = breakoutAlerts[0];
+      console.log(`[breakout-test] Simulated ${direction} alert for ${setup.ticker}`);
+      res.json({ message: `Test alert created for ${setup.ticker}`, alert: latest });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create test alert" });
+    }
+  });
+}
+
 router.get("/breakout/scan", async (_req, res) => {
   try {
     const results = await runFullScan();
