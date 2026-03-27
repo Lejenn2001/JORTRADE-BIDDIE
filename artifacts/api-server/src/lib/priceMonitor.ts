@@ -1,9 +1,11 @@
 import WebSocket from "ws";
 
-const FINNHUB_KEY = () => process.env["FINNHUB_API_KEY"] ?? "";
-const WS_URL = () => `wss://ws.finnhub.io?token=${FINNHUB_KEY()}`;
-const QUOTE_URL = (symbol: string) =>
-  `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY()}`;
+const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_WS_URL = "wss://socket.polygon.io/stocks";
+const POLYGON_SNAPSHOT_URL = (tickers: string) =>
+  `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers}&apiKey=${POLYGON_KEY()}`;
+const POLYGON_TICKER_SNAPSHOT_URL = (ticker: string) =>
+  `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${POLYGON_KEY()}`;
 
 interface PriceData {
   price: number;
@@ -12,7 +14,11 @@ interface PriceData {
   volume: number;
   lastUpdate: number;
   trades: number;
-  source?: "ws" | "rest";
+  source?: "ws" | "rest" | "snapshot";
+  bid?: number;
+  ask?: number;
+  prevClose?: number;
+  changePercent?: number;
 }
 
 type PriceCallback = (ticker: string, data: PriceData, tradeVolume?: number) => void;
@@ -24,46 +30,58 @@ class PriceMonitor {
   private callbacks: PriceCallback[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private restPollTimer: ReturnType<typeof setInterval> | null = null;
+  private snapshotPollTimer: ReturnType<typeof setInterval> | null = null;
   private isConnecting = false;
   private isShuttingDown = false;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
+  private authenticated = false;
 
   connect() {
     if (this.isShuttingDown) return;
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) return;
-    if (!FINNHUB_KEY()) {
-      console.log("[price-monitor] No FINNHUB_API_KEY, skipping WebSocket connection");
+    if (!POLYGON_KEY()) {
+      console.log("[price-monitor] No POLYGON_API_KEY, skipping WebSocket connection");
       return;
     }
 
     this.isConnecting = true;
-    console.log("[price-monitor] Connecting to Finnhub WebSocket...");
+    this.authenticated = false;
+    console.log("[price-monitor] Connecting to Polygon.io WebSocket...");
 
     try {
-      this.ws = new WebSocket(WS_URL());
+      this.ws = new WebSocket(POLYGON_WS_URL);
 
       this.ws.on("open", () => {
         this.isConnecting = false;
         this.reconnectDelay = 1000;
-        console.log(`[price-monitor] Connected. Resubscribing ${this.subscribedTickers.size} tickers`);
+        console.log("[price-monitor] Connected to Polygon.io, authenticating...");
 
-        for (const ticker of this.subscribedTickers) {
-          this.sendSubscribe(ticker);
-        }
-
-        this.startHeartbeat();
+        this.ws!.send(JSON.stringify({ action: "auth", params: POLYGON_KEY() }));
       });
 
       this.ws.on("message", (raw: WebSocket.Data) => {
         try {
-          const msg = JSON.parse(raw.toString());
-          if (msg.type === "trade" && Array.isArray(msg.data)) {
-            for (const trade of msg.data) {
-              const ticker = trade.s;
-              const price = trade.p;
-              const volume = trade.v || 0;
+          const messages = JSON.parse(raw.toString());
+          if (!Array.isArray(messages)) return;
+
+          for (const msg of messages) {
+            if (msg.ev === "status") {
+              if (msg.status === "auth_success") {
+                this.authenticated = true;
+                console.log(`[price-monitor] Authenticated. Subscribing ${this.subscribedTickers.size} tickers`);
+                this.resubscribeAll();
+                this.startHeartbeat();
+                this.startSnapshotPoll();
+              } else if (msg.status === "auth_failed") {
+                console.error("[price-monitor] Polygon auth failed:", msg.message);
+              }
+            } else if (msg.ev === "T") {
+              const ticker = msg.sym;
+              const price = msg.p;
+              const volume = msg.s || 0;
+
+              if (!ticker || !price) continue;
 
               let data = this.priceData.get(ticker);
               if (!data) {
@@ -83,15 +101,22 @@ class PriceMonitor {
               for (const cb of this.callbacks) {
                 try { cb(ticker, data, volume); } catch {}
               }
+            } else if (msg.ev === "Q") {
+              const ticker = msg.sym;
+              if (!ticker) continue;
+              const data = this.priceData.get(ticker);
+              if (data) {
+                data.bid = msg.bp;
+                data.ask = msg.ap;
+              }
             }
-          } else if (msg.type === "ping") {
-            // heartbeat
           }
         } catch {}
       });
 
       this.ws.on("close", (code: number) => {
         this.isConnecting = false;
+        this.authenticated = false;
         this.stopHeartbeat();
         if (this.isShuttingDown) {
           console.log(`[price-monitor] Disconnected (code ${code}), shutdown requested`);
@@ -112,15 +137,25 @@ class PriceMonitor {
     }
   }
 
+  private resubscribeAll() {
+    if (!this.authenticated || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (this.subscribedTickers.size === 0) return;
+
+    const tradeSubs = [...this.subscribedTickers].map(t => `T.${t}`).join(",");
+    const quoteSubs = [...this.subscribedTickers].map(t => `Q.${t}`).join(",");
+    this.ws.send(JSON.stringify({ action: "subscribe", params: `${tradeSubs},${quoteSubs}` }));
+    console.log(`[price-monitor] Subscribed to ${this.subscribedTickers.size} tickers (trades + quotes)`);
+  }
+
   private sendSubscribe(ticker: string) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "subscribe", symbol: ticker }));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.authenticated) {
+      this.ws.send(JSON.stringify({ action: "subscribe", params: `T.${ticker},Q.${ticker}` }));
     }
   }
 
   private sendUnsubscribe(ticker: string) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "unsubscribe", symbol: ticker }));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.authenticated) {
+      this.ws.send(JSON.stringify({ action: "unsubscribe", params: `T.${ticker},Q.${ticker}` }));
     }
   }
 
@@ -137,8 +172,9 @@ class PriceMonitor {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.connect();
     }
-    if (added && !this.restPollTimer) {
-      this.startRestPoll();
+    if (added) {
+      this.fetchSnapshotForTickers(tickers);
+      if (!this.snapshotPollTimer) this.startSnapshotPoll();
     }
   }
 
@@ -177,55 +213,88 @@ class PriceMonitor {
     return [...this.subscribedTickers];
   }
 
-  private async fetchRestQuote(ticker: string): Promise<void> {
+  async fetchSnapshotForTickers(tickers: string[]): Promise<void> {
+    if (!POLYGON_KEY() || tickers.length === 0) return;
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(QUOTE_URL(ticker), { signal: controller.signal });
-      clearTimeout(timeout);
-      if (!resp.ok) return;
-      const q = await resp.json() as { c?: number; h?: number; l?: number; t?: number };
-      const price = q.c;
-      if (!price || price <= 0) return;
+      const batches: string[][] = [];
+      for (let i = 0; i < tickers.length; i += 20) {
+        batches.push(tickers.slice(i, i + 20));
+      }
 
-      const existing = this.priceData.get(ticker);
-      if (existing && existing.source === "ws" && Date.now() - existing.lastUpdate < 120000) return;
+      for (const batch of batches) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const url = POLYGON_SNAPSHOT_URL(batch.join(","));
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (!resp.ok) {
+          console.log(`[price-monitor] Snapshot HTTP ${resp.status} for batch`);
+          continue;
+        }
 
-      const data: PriceData = {
-        price,
-        high: q.h ?? price,
-        low: q.l ?? price,
-        volume: existing?.volume ?? 0,
-        lastUpdate: Date.now(),
-        trades: existing?.trades ?? 0,
-        source: "rest",
-      };
-      this.priceData.set(ticker, data);
-    } catch {}
-  }
+        const json = await resp.json() as any;
+        if (json.status !== "OK" || !Array.isArray(json.tickers)) continue;
 
-  private startRestPoll() {
-    this.stopRestPoll();
-    this.pollRestQuotes();
-    this.restPollTimer = setInterval(() => this.pollRestQuotes(), 60000);
-  }
+        for (const t of json.tickers) {
+          const ticker = t.ticker;
+          if (!ticker) continue;
 
-  private stopRestPoll() {
-    if (this.restPollTimer) {
-      clearInterval(this.restPollTimer);
-      this.restPollTimer = null;
+          const lastTrade = t.lastTrade?.p ?? t.day?.c ?? 0;
+          if (lastTrade <= 0) continue;
+
+          const existing = this.priceData.get(ticker);
+          const wsIsFresh = existing && existing.source === "ws" && Date.now() - existing.lastUpdate < 120000;
+
+          if (wsIsFresh) {
+            existing.bid = t.lastQuote?.p ?? existing.bid;
+            existing.ask = t.lastQuote?.P ?? existing.ask;
+            existing.prevClose = t.prevDay?.c ?? existing.prevClose;
+            existing.changePercent = t.todaysChangePerc ?? existing.changePercent;
+            if (!existing.high || (t.day?.h ?? 0) > existing.high) existing.high = t.day?.h ?? existing.high;
+            if (!existing.low || (t.day?.l ?? 0) < existing.low) existing.low = t.day?.l ?? existing.low;
+          } else {
+            const data: PriceData = {
+              price: lastTrade,
+              high: t.day?.h ?? lastTrade,
+              low: t.day?.l ?? lastTrade,
+              volume: t.day?.v ?? 0,
+              lastUpdate: Date.now(),
+              trades: existing?.trades ?? 0,
+              source: "snapshot",
+              bid: t.lastQuote?.p ?? undefined,
+              ask: t.lastQuote?.P ?? undefined,
+              prevClose: t.prevDay?.c ?? undefined,
+              changePercent: t.todaysChangePerc ?? undefined,
+            };
+            this.priceData.set(ticker, data);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.log(`[price-monitor] Snapshot fetch error: ${err.message}`);
     }
   }
 
-  private async pollRestQuotes() {
-    if (this.subscribedTickers.size === 0 || !FINNHUB_KEY()) return;
-    const tickers = [...this.subscribedTickers];
-    for (let i = 0; i < tickers.length; i++) {
-      const t = tickers[i];
-      const existing = this.priceData.get(t);
-      if (existing && existing.source === "ws" && Date.now() - existing.lastUpdate < 120000) continue;
-      await this.fetchRestQuote(t);
-      if (i < tickers.length - 1) await new Promise(r => setTimeout(r, 250));
+  private startSnapshotPoll() {
+    this.stopSnapshotPoll();
+    this.snapshotPollTimer = setInterval(() => this.pollSnapshots(), 30000);
+  }
+
+  private stopSnapshotPoll() {
+    if (this.snapshotPollTimer) {
+      clearInterval(this.snapshotPollTimer);
+      this.snapshotPollTimer = null;
+    }
+  }
+
+  private async pollSnapshots() {
+    if (this.subscribedTickers.size === 0 || !POLYGON_KEY()) return;
+    const stale = [...this.subscribedTickers].filter(t => {
+      const d = this.priceData.get(t);
+      return !d || d.source !== "ws" || Date.now() - d.lastUpdate > 120000;
+    });
+    if (stale.length > 0) {
+      await this.fetchSnapshotForTickers(stale);
     }
   }
 
@@ -240,7 +309,7 @@ class PriceMonitor {
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.ws?.readyState === WebSocket.OPEN && this.authenticated;
   }
 
   private startHeartbeat() {
@@ -271,7 +340,7 @@ class PriceMonitor {
   disconnect() {
     this.isShuttingDown = true;
     this.stopHeartbeat();
-    this.stopRestPoll();
+    this.stopSnapshotPoll();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

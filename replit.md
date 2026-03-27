@@ -69,7 +69,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Market Data:**
     - Unusual Whales API (`UNUSUAL_WHALES_API_KEY`)
     - Yahoo Finance (for historical OHLC data)
-    - Finnhub (for real-time market data via WebSocket)
+    - Polygon.io (`POLYGON_API_KEY`) — real-time WebSocket (trades + quotes) and snapshot polling for live prices, bid/ask, and pre-market data. Replaces Finnhub entirely.
 - **Authentication:** Supabase (for `biddie-web` via `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`)
 - **Python Libraries:** `anthropic`, `requests`, `rich`
 - **TypeScript Libraries:** `express`, `pg`, `drizzle-orm`, `zod`, `drizzle-zod`, `@tanstack/react-query`
@@ -83,5 +83,6 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Score Breakdown**: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
 - **Custom Ticker Watchlist**: Users can add up to 30 custom tickers (e.g. HOOD, RIVN) beyond the 40 default. Custom tickers appear as removable tags, are included in scans, and persist in server memory
 - **Endpoints**: `GET /api/breakout/scan` (5-min cache), `GET /api/breakout/scan/:ticker`, `GET /api/breakout/alerts`, `GET /api/breakout/watchlist`, `POST /api/breakout/watchlist/add`, `POST /api/breakout/watchlist/remove`
-- **Finnhub Live Price Injection**: Signal pipeline checks Finnhub real-time prices first (if < 2min stale), then Unusual Whales price, then Yahoo Finance as final fallback. Signal candidate tickers are temporarily subscribed to Finnhub before evaluation. Finnhub REST quote polling fallback (every 60s) when WebSocket is silent (after hours)
-- **Pre-Market Data**: `fetchPremarketSnapshot()` fetches Yahoo Finance pre/post/regular market prices with gap analysis for 18 key tickers. `GET /api/whale/premarket` returns live pre-market prices, gap %, and biggest movers (2-min cache). Morning outlook runs at 7:00 AM ET (moved from 8:15) with enriched pre-market context including gap summary and hot flow tickers
+- **Polygon.io Live Price Injection**: Signal pipeline checks Polygon real-time prices first (if < 2min stale), then Unusual Whales price, then Yahoo Finance as final fallback. Signal candidate tickers are temporarily subscribed to Polygon WebSocket before evaluation. Polygon snapshot polling fallback (every 30s) when WebSocket is silent. WebSocket uses `wss://socket.polygon.io/stocks` with `T.TICKER` (trades) + `Q.TICKER` (quotes) subscriptions
+- **Pre-Market Data**: `fetchPremarketSnapshot()` uses Polygon.io snapshot API (`/v2/snapshot/locale/us/markets/stocks/tickers`) with bid/ask/dayVolume for 18 key tickers. `GET /api/whale/premarket` returns live pre-market prices, gap %, bid/ask, and biggest movers (2-min cache). Morning outlook runs at 7:00 AM ET with enriched pre-market context including gap summary and hot flow tickers
+- **BASE_TICKERS**: GLD, QQQ, SPY, IWM (always monitored via Polygon WebSocket)

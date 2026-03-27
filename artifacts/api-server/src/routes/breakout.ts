@@ -4,8 +4,7 @@ import { priceMonitor } from "../lib/priceMonitor";
 
 const router = Router();
 
-const FINNHUB_KEY = () => process.env["FINNHUB_API_KEY"] ?? "";
-const FINNHUB_BASE = "https://finnhub.io/api/v1";
+const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
 
 const DEFAULT_WATCHLIST = [
   "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "SPY", "QQQ",
@@ -85,17 +84,22 @@ async function fetchDailyCandles(ticker: string, days: number = 60): Promise<Can
   }
 }
 
-async function fetchFinnhubQuote(ticker: string): Promise<{ price: number; prevClose: number; volume: number } | null> {
+async function fetchPolygonQuote(ticker: string): Promise<{ price: number; prevClose: number; volume: number } | null> {
   try {
-    const res = await axios.get(`${FINNHUB_BASE}/quote`, {
-      params: { symbol: ticker, token: FINNHUB_KEY() },
-      timeout: 5000,
-    });
-    if (!res.data || !res.data.c) return null;
+    const key = POLYGON_KEY();
+    if (!key) return null;
+    const res = await axios.get(
+      `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}`,
+      { params: { apiKey: key }, timeout: 5000 }
+    );
+    const t = res.data?.ticker;
+    if (!t) return null;
+    const price = t.lastTrade?.p || t.day?.c || 0;
+    if (price <= 0) return null;
     return {
-      price: res.data.c,
-      prevClose: res.data.pc,
-      volume: res.data.v || 0,
+      price,
+      prevClose: t.prevDay?.c || 0,
+      volume: t.day?.v || 0,
     };
   } catch {
     return null;
@@ -290,7 +294,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   if (candles.length < 21) return null;
 
   const lastCandle = candles[candles.length - 1];
-  let quote = await fetchFinnhubQuote(ticker);
+  let quote = await fetchPolygonQuote(ticker);
   if (!quote) {
     quote = {
       price: lastCandle.close,
@@ -730,7 +734,7 @@ function setupBreakoutMonitor() {
   console.log("[breakout-alert] Real-time breakout monitor active (volume-confirmed only)");
 }
 
-const BASE_TICKERS = new Set(["GLD", "QQQ", "SPXW", "SPY"]);
+const BASE_TICKERS = new Set(["GLD", "QQQ", "SPY", "IWM"]);
 
 function syncBreakoutSubscriptions() {
   if (cachedResults.length === 0) return;

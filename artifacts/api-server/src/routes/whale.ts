@@ -126,11 +126,11 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     }
 
     const rtData = priceMonitor.getPrice(ticker);
-    const finnhubLive = rtData && Date.now() - rtData.lastUpdate < 120000
+    const polygonLive = rtData && Date.now() - rtData.lastUpdate < 120000
       ? Math.round(rtData.price * 100) / 100
       : null;
 
-    let currentPrice: number | null = finnhubLive ?? (uwPrice ? Math.round(uwPrice * 100) / 100 : null);
+    let currentPrice: number | null = polygonLive ?? (uwPrice ? Math.round(uwPrice * 100) / 100 : null);
     if (!currentPrice) {
       const meta = intResult?.meta ?? dailyResult?.meta ?? {};
       const preMarket  = meta.preMarketPrice   ?? null;
@@ -2463,61 +2463,84 @@ async function fetchPremarketSnapshot(tickers: string[]): Promise<Record<string,
   high52w: number | null;
   low52w: number | null;
   source: string;
+  bid?: number;
+  ask?: number;
+  dayVolume?: number;
 }>> {
   const snapshot: Record<string, any> = {};
+  const polygonKey = process.env["POLYGON_API_KEY"] ?? "";
 
-  await Promise.all(tickers.map(async (ticker) => {
+  if (!polygonKey) return snapshot;
+
+  const batches: string[][] = [];
+  for (let i = 0; i < tickers.length; i += 20) {
+    batches.push(tickers.slice(i, i + 20));
+  }
+
+  for (const batch of batches) {
     try {
-      const resp = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d&includePrePost=true`,
-        { headers: { "User-Agent": "Mozilla/5.0" } }
-      );
-      if (!resp.ok) return;
-      const json = await resp.json();
-      const result = json?.chart?.result?.[0];
-      if (!result) return;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const url = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${batch.join(",")}&apiKey=${polygonKey}`;
+      const resp = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!resp.ok) continue;
 
-      const meta = result.meta ?? {};
-      const preMarket = meta.preMarketPrice ?? null;
-      const postMarket = meta.postMarketPrice ?? null;
-      const regMarket = meta.regularMarketPrice ?? null;
-      const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? regMarket ?? 0;
+      const json = await resp.json() as any;
+      if (json.status !== "OK" || !Array.isArray(json.tickers)) continue;
 
-      const preTs = meta.preMarketTime ?? 0;
-      const postTs = meta.postMarketTime ?? 0;
-      const regTs = meta.regularMarketTime ?? 0;
+      for (const t of json.tickers) {
+        const ticker = t.ticker;
+        if (!ticker) continue;
 
-      let livePrice: number | null = null;
-      let source = "close";
+        const lastTradePrice = t.lastTrade?.p ?? 0;
+        const dayClose = t.day?.c ?? 0;
+        const prevClose = t.prevDay?.c ?? 0;
+        const livePrice = lastTradePrice || dayClose;
 
-      const nowSec = Math.floor(Date.now() / 1000);
-      const staleThreshold = 24 * 60 * 60;
+        if (livePrice <= 0) continue;
 
-      if (preMarket && preTs > regTs && (nowSec - preTs) < staleThreshold) {
-        livePrice = preMarket;
-        source = "pre-market";
-      } else if (postMarket && postTs > regTs && (nowSec - postTs) < staleThreshold) {
-        livePrice = postMarket;
-        source = "after-hours";
-      } else if (regMarket) {
-        livePrice = regMarket;
-        source = "regular-close";
+        let source = "real-time";
+        const lastTradeTs = t.lastTrade?.t ?? 0;
+        const nowNano = Date.now() * 1_000_000;
+        const ageMs = lastTradeTs > 0 ? (nowNano - lastTradeTs) / 1_000_000 : Infinity;
+
+        if (ageMs < 60000) {
+          source = "real-time";
+        } else if (ageMs < 3600000) {
+          source = "recent";
+        } else {
+          const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York", hour: "2-digit", hour12: false,
+          }).formatToParts(new Date());
+          const etHour = parseInt(parts.find(p => p.type === "hour")?.value ?? "0", 10);
+          if (etHour >= 4 && etHour < 9) {
+            source = "pre-market";
+          } else if (etHour >= 16 || etHour < 4) {
+            source = "after-hours";
+          } else {
+            source = "regular-close";
+          }
+        }
+
+        const gap = prevClose > 0 ? Math.round((livePrice - prevClose) * 100) / 100 : null;
+        const gapPct = prevClose > 0 ? Math.round(((livePrice - prevClose) / prevClose) * 10000) / 100 : null;
+
+        snapshot[ticker] = {
+          preMarketPrice: Math.round(livePrice * 100) / 100,
+          prevClose: Math.round(prevClose * 100) / 100,
+          gap,
+          gapPct,
+          high52w: null,
+          low52w: null,
+          source,
+          bid: t.lastQuote?.p ?? undefined,
+          ask: t.lastQuote?.P ?? undefined,
+          dayVolume: t.day?.v ?? undefined,
+        };
       }
-
-      const gap = livePrice && prevClose ? Math.round((livePrice - prevClose) * 100) / 100 : null;
-      const gapPct = livePrice && prevClose ? Math.round(((livePrice - prevClose) / prevClose) * 10000) / 100 : null;
-
-      snapshot[ticker] = {
-        preMarketPrice: livePrice,
-        prevClose: Math.round(prevClose * 100) / 100,
-        gap,
-        gapPct,
-        high52w: meta.fiftyTwoWeekHigh ?? null,
-        low52w: meta.fiftyTwoWeekLow ?? null,
-        source,
-      };
     } catch {}
-  }));
+  }
 
   return snapshot;
 }
@@ -2576,6 +2599,8 @@ router.get("/whale/premarket", async (_req, res) => {
         gap: s.gap,
         gapPct: s.gapPct,
         source: s.source,
+        bid: s.bid,
+        ask: s.ask,
       })),
     };
     premarketCache = { data: result, timestamp: Date.now() };
@@ -3019,6 +3044,10 @@ router.get("/whale/prices/realtime", (_req, res) => {
       volume: pd.volume,
       trades: pd.trades,
       source: pd.source ?? "ws",
+      bid: pd.bid,
+      ask: pd.ask,
+      prevClose: pd.prevClose,
+      changePercent: pd.changePercent,
       lastUpdate: new Date(pd.lastUpdate).toISOString(),
       age: Math.round((Date.now() - pd.lastUpdate) / 1000),
     };
