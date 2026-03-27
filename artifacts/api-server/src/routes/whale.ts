@@ -870,6 +870,22 @@ TRADING SLANG YOU UNDERSTAND — translate these automatically:
 - "risk on" / "risk off" → market mood toward or away from aggressive trades
 - "what's hot" / "what's moving" → what has notable flow or price action today
 
+OPTIONS CONTRACT FORMAT — UNDERSTAND THIS:
+When users say things like "SPY 580p" or "AAPL 200c 4/4" or "QQQ 480 puts for Friday" — they're describing a specific options contract:
+- Format: TICKER STRIKE TYPE EXPIRY (any order, any abbreviation)
+- "580p" = $580 put, "200c" = $200 call
+- "4/4" or "April 4" = expiry date
+- A contract like "SPY 580p 3/28" means: SPY $580 Put expiring March 28
+
+OPTIONS EXPIRY SCHEDULE — KNOW THIS COLD:
+- SPY, QQQ, IWM: Options expire EVERY trading day (Mon-Fri). These always have 0DTE available.
+- AAPL, MSFT, AMZN, META, NVDA, TSLA, GOOGL, AMD, NFLX, GLD, TLT, XOM, JPM, DIS, BA, V, MA, COIN: Options expire Mon/Wed/Fri (MWF).
+- Most other tickers: Options expire only on Fridays (weeklies) or monthly (3rd Friday).
+- There is NO options expiry on weekends or market holidays.
+- If a user mentions a date that's a Tuesday or Thursday for an MWF ticker, that expiry does NOT exist. Gently correct them: "Hey, AAPL only has Mon/Wed/Fri expirations — closest would be [correct date]."
+- If someone says "SPY 6/20" — check if June 20 is a trading day. If it's a Saturday/Sunday, that expiry doesn't exist.
+- ALWAYS validate expiry dates make sense before discussing a trade. Don't just repeat back an impossible expiry.
+
 YOU NOW HAVE ACCESS TO REAL-TIME KEY LEVELS for each ticker including:
 - Current price (live)
 - VWAP (calculated from intraday 5-min bars — use this for entry/rejection triggers)
@@ -987,10 +1003,10 @@ function getEasternDateContext(): string {
   const todayYear = parseInt(get("year"), 10);
   const timeStr   = `${get("hour")}:${get("minute")} ${get("dayPeriod")} ET`;
 
-  // Build the next 7 calendar days with their day-of-week labels
+  // Build the next 14 calendar days with their day-of-week labels
   const todayDate = new Date(todayYear, todayMon, todayDay);
   const upcoming: string[] = [];
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 14; i++) {
     const d = new Date(todayDate);
     d.setDate(todayDate.getDate() + i);
     const dow = DAY_NAMES[d.getDay()];
@@ -1003,13 +1019,20 @@ function getEasternDateContext(): string {
     !l.includes("Saturday") && !l.includes("Sunday")
   );
 
+  // MWF-only expiry dates for the next 14 days
+  const mwfDays = upcoming.filter((l) =>
+    l.includes("Monday") || l.includes("Wednesday") || l.includes("Friday")
+  );
+
   return [
     `TODAY: ${todayDow}, ${MONTH_NAMES[todayMon]} ${todayDay}, ${todayYear} — ${timeStr}`,
     `TODAY'S DATE IN M/D FORMAT: ${todayMon + 1}/${todayDay}/${todayYear}`,
     `UPCOMING DATES (use these exact day-of-week labels — do not calculate yourself):`,
     ...upcoming.map((l) => `  ${l}`),
     `NEXT TRADING DAYS IN ORDER: ${tradingDays.join(", ")}`,
-    `IMPORTANT: When referencing any expiration date, look it up in the list above and use the exact day-of-week shown. Never guess.`,
+    `VALID MWF EXPIRY DATES (for AAPL, MSFT, NVDA, etc.): ${mwfDays.join(", ")}`,
+    `SPY/QQQ/IWM EXPIRE DAILY — any trading day above is valid for them.`,
+    `IMPORTANT: When a user mentions an expiry date, VALIDATE IT. Check the day-of-week. If it falls on a weekend, correct them. If it's a Tue/Thu for an MWF-only ticker, tell them the nearest valid date. NEVER repeat back an invalid expiry without correcting it.`,
   ].join("\n");
 }
 
