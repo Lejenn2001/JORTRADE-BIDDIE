@@ -1,33 +1,9 @@
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, XCircle, Radio, Percent } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, XCircle, Radio } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
 import type { PriceInfo } from "@/hooks/useRealtimePrices";
 import SignalLegend from "./SignalLegend";
 import ConvictionScoreRing from "./ConvictionScoreRing";
-
-function parseTargetPrice(targetZone?: string): number | null {
-  if (!targetZone) return null;
-  const match = targetZone.match(/\$?([\d,]+(?:\.\d+)?)/);
-  if (!match) return null;
-  return parseFloat(match[1].replace(/,/g, ""));
-}
-
-function calcPercentToTarget(
-  entryPrice: number,
-  currentPrice: number,
-  targetPrice: number,
-  isBullish: boolean
-): number {
-  const totalMove = isBullish
-    ? targetPrice - entryPrice
-    : entryPrice - targetPrice;
-  if (totalMove <= 0) return 0;
-  const currentMove = isBullish
-    ? currentPrice - entryPrice
-    : entryPrice - currentPrice;
-  const pct = (currentMove / totalMove) * 100;
-  return Math.max(0, Math.min(pct, 100));
-}
 
 interface Props {
   signals: MarketSignal[];
@@ -357,7 +333,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 </div>
 
                 {onTakeTrade && (
-                  <div className="pt-2 border-t border-white/5 space-y-2">
+                  <div className="pt-2 border-t border-white/5">
                     <button
                       onClick={() => onTakeTrade(signal)}
                       disabled={takingId === signal.id}
@@ -381,61 +357,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         </>
                       )}
                     </button>
-
-                    {takenSignalIds?.has(signal.id) && (() => {
-                      const targetPrice = parseTargetPrice(signal.targetZone);
-                      const entryPrice = signal.priceAtSignal;
-                      const priceInfo = getPrice?.(signal.ticker);
-                      const currentPrice = priceInfo?.price;
-                      if (!targetPrice || !entryPrice || !currentPrice) return null;
-                      const isBullish = signal.type === "bullish";
-                      const pct = calcPercentToTarget(entryPrice, currentPrice, targetPrice, isBullish);
-                      const pctRounded = Math.round(pct);
-                      const barColor = pct >= 100
-                        ? "bg-emerald-400"
-                        : pct >= 75
-                        ? "bg-emerald-500"
-                        : pct >= 50
-                        ? "bg-blue-400"
-                        : pct >= 25
-                        ? "bg-amber-400"
-                        : "bg-orange-400";
-                      const label = pct >= 100
-                        ? "Target Reached!"
-                        : `${pctRounded}% to Target`;
-                      const currentMove = isBullish
-                        ? currentPrice - entryPrice
-                        : entryPrice - currentPrice;
-                      const moveSign = currentMove >= 0 ? "+" : "";
-                      return (
-                        <div className="bg-muted/20 rounded-lg px-3 py-2.5 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <Target className="h-3 w-3 text-primary" />
-                              <span className={`text-[11px] font-bold ${pct >= 100 ? "text-emerald-400" : "text-foreground"}`}>
-                                {label}
-                              </span>
-                            </div>
-                            <span className={`text-[10px] font-semibold ${currentMove >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                              {moveSign}${Math.abs(currentMove).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="w-full h-2 bg-muted/40 rounded-full overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${barColor}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(pct, 100)}%` }}
-                              transition={{ duration: 0.8, ease: "easeOut" }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-[9px] text-muted-foreground">
-                            <span>Entry: ${entryPrice.toFixed(2)}</span>
-                            <span className="text-foreground font-medium">${currentPrice.toFixed(2)}</span>
-                            <span>Target: ${targetPrice.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
                   </div>
                 )}
               </div>

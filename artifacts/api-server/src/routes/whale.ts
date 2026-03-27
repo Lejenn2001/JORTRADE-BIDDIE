@@ -3411,7 +3411,7 @@ router.get("/whale/trades", async (req, res) => {
     const userId = req.query.userId as string;
     if (!userId) return res.status(400).json({ error: "userId required" });
     const result = await dbQuery(
-      `SELECT ut.*, so.outcome as signal_outcome, so.resolved_at as signal_resolved_at
+      `SELECT ut.*, so.outcome as signal_outcome, so.resolved_at as signal_resolved_at, so.price_at_signal, so.signal_type
        FROM user_trades ut
        LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
        WHERE ut.user_id = $1

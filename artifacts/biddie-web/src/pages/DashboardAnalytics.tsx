@@ -10,6 +10,8 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import PerformanceCalendar from "@/components/dashboard/PerformanceCalendar";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimePrices } from "@/hooks/useRealtimePrices";
+import type { PriceInfo } from "@/hooks/useRealtimePrices";
 
 interface TradeStats {
   total: number;
@@ -47,6 +49,8 @@ interface UserTrade {
   taken_at: string;
   signal_outcome: string;
   target: string;
+  price_at_signal: number | null;
+  signal_type: string | null;
 }
 
 interface SignalRecord {
@@ -67,6 +71,7 @@ interface SignalRecord {
 
 const DashboardAnalytics = () => {
   const { user } = useAuth();
+  const { getPrice } = useRealtimePrices();
   const [userStats, setUserStats] = useState<TradeStats | null>(null);
   const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
   const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
@@ -233,7 +238,7 @@ const DashboardAnalytics = () => {
                   />
                 )}
                 {activeTab === "mytrades" && (
-                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} />
+                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} getPrice={getPrice} />
                 )}
                 {activeTab === "signals" && (
                   <SignalsTab signalStats={signalStats} topTickers={topTickers} />
@@ -434,8 +439,29 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
   );
 }
 
-function MyTradesTab({ userStats, userTrades, userTopTickers }: {
+function parseTargetPrice(target?: string): number | null {
+  if (!target) return null;
+  const match = target.match(/\$?([\d,]+(?:\.\d+)?)/);
+  if (!match) return null;
+  return parseFloat(match[1].replace(/,/g, ""));
+}
+
+function calcPercentToTarget(
+  entryPrice: number,
+  currentPrice: number,
+  targetPrice: number,
+  isBullish: boolean
+): number {
+  const totalMove = isBullish ? targetPrice - entryPrice : entryPrice - targetPrice;
+  if (totalMove <= 0) return 0;
+  const currentMove = isBullish ? currentPrice - entryPrice : entryPrice - currentPrice;
+  const pct = (currentMove / totalMove) * 100;
+  return Math.max(0, Math.min(pct, 100));
+}
+
+function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
   userStats: TradeStats | null; userTrades: UserTrade[]; userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
+  getPrice: (ticker: string) => PriceInfo | null;
 }) {
   return (
     <div className="space-y-6">
@@ -480,39 +506,92 @@ function MyTradesTab({ userStats, userTrades, userTopTickers }: {
 
           <div className="glass-panel rounded-xl p-5 border border-white/10">
             <h3 className="text-sm font-bold text-foreground mb-3">Recent Trades</h3>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {userTrades.slice(0, 20).map(trade => (
-                <div key={trade.id} className="flex items-center gap-3 bg-white/5 rounded-lg px-3 py-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    trade.direction === "bullish" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-                  }`}>
-                    {trade.direction === "bullish" ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-foreground">{trade.ticker}</span>
-                      {trade.strike && <span className="text-[10px] text-muted-foreground">${trade.strike} {trade.option_type || ""}</span>}
-                      {trade.category && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                          trade.category === "whale" ? "bg-blue-500/20 text-blue-400"
-                          : trade.category === "spread" ? "bg-violet-500/20 text-violet-400"
-                          : "bg-primary/20 text-primary"
-                        }`}>{trade.category}</span>
-                      )}
+            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+              {userTrades.slice(0, 20).map(trade => {
+                const targetPrice = parseTargetPrice(trade.target);
+                const entryPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
+                const priceInfo = getPrice(trade.ticker);
+                const currentPrice = priceInfo?.price ?? null;
+                const isBullish = (trade.signal_type || trade.direction) === "bullish";
+                const showProgress = trade.signal_outcome !== "hit" && trade.signal_outcome !== "missed" && targetPrice && entryPrice && currentPrice;
+
+                let pct = 0;
+                let barColor = "bg-orange-400";
+                let label = "0% to Target";
+                let currentMove = 0;
+
+                if (showProgress) {
+                  pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
+                  const pctRounded = Math.round(pct);
+                  barColor = pct >= 100 ? "bg-emerald-400" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-400" : pct >= 25 ? "bg-amber-400" : "bg-orange-400";
+                  label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
+                  currentMove = isBullish ? currentPrice! - entryPrice! : entryPrice! - currentPrice!;
+                }
+
+                return (
+                  <div key={trade.id} className="bg-white/5 rounded-lg px-3 py-2 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        trade.direction === "bullish" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+                      }`}>
+                        {trade.direction === "bullish" ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">{trade.ticker}</span>
+                          {trade.strike && <span className="text-[10px] text-muted-foreground">${trade.strike} {trade.option_type || ""}</span>}
+                          {trade.category && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                              trade.category === "whale" ? "bg-blue-500/20 text-blue-400"
+                              : trade.category === "spread" ? "bg-violet-500/20 text-violet-400"
+                              : "bg-primary/20 text-primary"
+                            }`}>{trade.category}</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <div className={`text-xs font-bold px-2 py-1 rounded-md ${
+                        trade.signal_outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
+                        : trade.signal_outcome === "missed" ? "bg-red-500/20 text-red-400"
+                        : "bg-yellow-500/20 text-yellow-400"
+                      }`}>
+                        {trade.signal_outcome === "hit" ? "WIN" : trade.signal_outcome === "missed" ? "LOSS" : "PENDING"}
+                      </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                    </p>
+
+                    {showProgress && (
+                      <div className="bg-muted/20 rounded-lg px-3 py-2.5 space-y-1.5 ml-11">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Target className="h-3 w-3 text-primary" />
+                            <span className={`text-[11px] font-bold ${pct >= 100 ? "text-emerald-400" : "text-foreground"}`}>
+                              {label}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-semibold ${currentMove >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                            {currentMove >= 0 ? "+" : ""}${Math.abs(currentMove).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-muted/40 rounded-full overflow-hidden">
+                          <motion.div
+                            className={`h-full rounded-full ${barColor}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(pct, 100)}%` }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] text-muted-foreground">
+                          <span>Entry: ${entryPrice!.toFixed(2)}</span>
+                          <span className="text-foreground font-medium">${currentPrice!.toFixed(2)}</span>
+                          <span>Target: ${targetPrice!.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className={`text-xs font-bold px-2 py-1 rounded-md ${
-                    trade.signal_outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
-                    : trade.signal_outcome === "missed" ? "bg-red-500/20 text-red-400"
-                    : "bg-yellow-500/20 text-yellow-400"
-                  }`}>
-                    {trade.signal_outcome === "hit" ? "WIN" : trade.signal_outcome === "missed" ? "LOSS" : "PENDING"}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </>
