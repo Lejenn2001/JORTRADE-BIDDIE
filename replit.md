@@ -163,7 +163,9 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - Checks if the stock's high (bullish) or low (bearish) reached the target zone at any point since the signal was issued
   - Marks as "hit" (target reached), "missed" (expired without hitting), or "expired"
   - Updates `outcome` and `resolved_at` in PostgreSQL + syncs `user_trades.signal_outcome` for any user who took the trade
-  - **Auto-verification**: `setInterval` runs every 30 min on server startup (first run after 60s delay)
+  - **Auto-verification with Finnhub WebSocket**: Uses real-time trade data during market hours (every 5 min), falls back to Yahoo Finance polling after hours (every 30 min)
+  - **PriceMonitor** (`src/lib/priceMonitor.ts`): Finnhub WebSocket client with auto-reconnect (exponential backoff up to 30s), heartbeat ping, per-ticker high/low/volume tracking. Auto-subscribes to tickers with pending signals.
+  - **`GET /api/whale/prices/realtime`**: Returns live price data for all subscribed tickers (price, high, low, volume, trades, age) plus connection status and market hours flag
   - **Admin Panel**: Analytics page "Admin" tab (visible only to admin users) with "Verify Now" button + full signal outcomes table with ticker/direction/category/strike/target/outcome columns
   - **Admin Role System**: `user_roles` PostgreSQL table, `GET /api/whale/admin/check?userId=X`, `POST /api/whale/admin/grant` (requires `adminSecret`)
   - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button

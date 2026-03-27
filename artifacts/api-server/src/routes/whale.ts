@@ -2,6 +2,7 @@ import { Router } from "express";
 import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
+import { priceMonitor, type PriceData } from "../lib/priceMonitor";
 
 const router = Router();
 
@@ -2715,7 +2716,37 @@ function startFlowMonitor() {
 
 startFlowMonitor();
 
-async function autoVerifySignals() {
+function isMarketHours(): boolean {
+  const now = new Date();
+  const hour = now.getUTCHours();
+  const min = now.getUTCMinutes();
+  const utcTime = hour + min / 60;
+  const day = now.getUTCDay();
+  return day >= 1 && day <= 5 && utcTime >= 13.5 && utcTime < 20;
+}
+
+async function syncPriceMonitorSubscriptions() {
+  try {
+    const result = await dbQuery(
+      `SELECT DISTINCT ticker FROM signal_outcomes WHERE outcome = 'pending'`
+    );
+    if (!result || !result.rows.length) {
+      if (priceMonitor.getSubscribedTickers().length > 0) {
+        priceMonitor.updateSubscriptions([]);
+        console.log("[price-monitor] No pending signals, unsubscribed all");
+      }
+      return;
+    }
+    const tickers = result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5);
+    priceMonitor.updateSubscriptions(tickers);
+    console.log(`[price-monitor] Subscribed to ${tickers.length} tickers: ${tickers.join(", ")}`);
+  } catch (e: any) {
+    console.error("[price-monitor] Subscription sync error:", e.message);
+  }
+}
+
+async function realtimeVerifySignals() {
+
   try {
     const pendingResult = await dbQuery(
       `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at ASC LIMIT 100`
@@ -2723,25 +2754,40 @@ async function autoVerifySignals() {
     if (!pendingResult || pendingResult.rows.length === 0) return;
 
     const pending = pendingResult.rows;
+    const now = new Date();
+    let hits = 0, misses = 0, expired = 0;
+
     const tickers = [...new Set(pending.map((s: any) => s.ticker))];
     const priceMap: Record<string, PriceHistory> = {};
-    await Promise.all(
-      tickers.map(async (t) => {
-        const oldest = pending
-          .filter((s: any) => s.ticker === t)
-          .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
-        const history = await fetchPriceHistory(t, oldest);
-        if (history) priceMap[t] = history;
-      })
-    );
 
-    let hits = 0, misses = 0, expired = 0;
-    const now = new Date();
+    for (const t of tickers) {
+      const rtData = priceMonitor.getPrice(t);
+      if (rtData && Date.now() - rtData.lastUpdate < 60000) {
+        priceMap[t] = {
+          current: rtData.price,
+          highSince: rtData.high,
+          lowSince: rtData.low,
+        };
+      }
+    }
+
+    const tickersNeedingYahoo = tickers.filter(t => !priceMap[t]);
+    if (tickersNeedingYahoo.length > 0) {
+      await Promise.all(
+        tickersNeedingYahoo.map(async (t) => {
+          const oldest = pending
+            .filter((s: any) => s.ticker === t)
+            .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
+          const history = await fetchPriceHistory(t, oldest);
+          if (history) priceMap[t] = history;
+        })
+      );
+    }
 
     for (const signal of pending) {
       const history = priceMap[signal.ticker];
       if (!history) continue;
-      const target = parseTargetRange(signal.target_zone || signal.target);
+      const target_val = parseTargetRange(signal.target_zone || signal.target);
       const invalidationPrice = parsePrice(signal.invalidation);
       const entryPrice = parsePrice(signal.entry_trigger);
       const signalPrice = signal.price_at_signal ? parseFloat(signal.price_at_signal) : null;
@@ -2762,17 +2808,17 @@ async function autoVerifySignals() {
         if (isExpired) outcome = "missed";
       }
 
-      if (!outcome && target.low && target.high) {
+      if (!outcome && target_val.low && target_val.high) {
         if (isBullish) {
           const entryOk = !entryPrice || history.current >= entryPrice;
-          const notAlreadyPastTarget = !signalPrice || signalPrice <= target.low * 1.03;
-          if (entryOk && notAlreadyPastTarget && history.highSince >= target.low) outcome = "hit";
-          else if (isExpired || (signalPrice && signalPrice > target.low * 1.03 && history.current < (entryPrice || signalPrice))) outcome = "missed";
+          const notAlreadyPastTarget = !signalPrice || signalPrice <= target_val.low * 1.03;
+          if (entryOk && notAlreadyPastTarget && history.highSince >= target_val.low) outcome = "hit";
+          else if (isExpired || (signalPrice && signalPrice > target_val.low * 1.03 && history.current < (entryPrice || signalPrice))) outcome = "missed";
         } else {
           const entryOk = !entryPrice || history.current <= entryPrice;
-          const notAlreadyPastTarget = !signalPrice || signalPrice >= target.high * 0.97;
-          if (entryOk && notAlreadyPastTarget && history.lowSince <= target.high) outcome = "hit";
-          else if (isExpired || (signalPrice && signalPrice < target.high * 0.97 && history.current > (entryPrice || signalPrice))) outcome = "missed";
+          const notAlreadyPastTarget = !signalPrice || signalPrice >= target_val.high * 0.97;
+          if (entryOk && notAlreadyPastTarget && history.lowSince <= target_val.high) outcome = "hit";
+          else if (isExpired || (signalPrice && signalPrice < target_val.high * 0.97 && history.current > (entryPrice || signalPrice))) outcome = "missed";
         }
       }
       if (!outcome && isExpired) outcome = "expired";
@@ -2790,15 +2836,64 @@ async function autoVerifySignals() {
     }
 
     if (hits + misses + expired > 0) {
-      console.log(`[auto-verify] Verified: ${hits} hits, ${misses} misses, ${expired} expired`);
+      const source = priceMonitor.isConnected() ? "real-time" : "Yahoo";
+      console.log(`[auto-verify] ${source} | Verified: ${hits} hits, ${misses} misses, ${expired} expired`);
     }
   } catch (e: any) {
     console.error("[auto-verify] Error:", e.message);
   }
 }
 
-setInterval(autoVerifySignals, 30 * 60 * 1000);
-setTimeout(autoVerifySignals, 60 * 1000);
+function startPriceMonitorSystem() {
+  priceMonitor.connect();
+
+  syncPriceMonitorSubscriptions();
+  setInterval(syncPriceMonitorSubscriptions, 5 * 60 * 1000);
+
+  let verifyInterval: ReturnType<typeof setInterval> | null = null;
+
+  function adjustVerifyFrequency() {
+    if (verifyInterval) clearInterval(verifyInterval);
+
+    if (isMarketHours()) {
+      verifyInterval = setInterval(realtimeVerifySignals, 5 * 60 * 1000);
+      console.log("[auto-verify] Market hours: verifying every 5 minutes");
+    } else {
+      verifyInterval = setInterval(realtimeVerifySignals, 30 * 60 * 1000);
+      console.log("[auto-verify] After hours: verifying every 30 minutes");
+    }
+  }
+
+  adjustVerifyFrequency();
+  setInterval(adjustVerifyFrequency, 15 * 60 * 1000);
+
+  setTimeout(realtimeVerifySignals, 30 * 1000);
+}
+
+setTimeout(startPriceMonitorSystem, 5000);
+
+router.get("/whale/prices/realtime", (_req, res) => {
+  const prices = priceMonitor.getAllPrices();
+  const data: Record<string, any> = {};
+  for (const [ticker, pd] of prices) {
+    data[ticker] = {
+      price: pd.price,
+      high: pd.high,
+      low: pd.low,
+      volume: pd.volume,
+      trades: pd.trades,
+      lastUpdate: new Date(pd.lastUpdate).toISOString(),
+      age: Math.round((Date.now() - pd.lastUpdate) / 1000),
+    };
+  }
+  res.json({
+    connected: priceMonitor.isConnected(),
+    marketOpen: isMarketHours(),
+    subscribedTickers: priceMonitor.getSubscribedTickers(),
+    tickerCount: priceMonitor.getSubscribedTickers().length,
+    prices: data,
+  });
+});
 
 router.post("/whale/trades", async (req, res) => {
   try {
