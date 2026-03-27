@@ -702,20 +702,25 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   if (consolidation.consolidationDays >= 5) imminenceScore += 15;
   else if (consolidation.consolidationDays >= 3) imminenceScore += 10;
 
+  const hasMomentumConfirmation = squeeze.squeezeActive || volumeRatio >= 1.2;
+
   let imminenceLabel: string | null = null;
   if (breakout.breakoutTriggered) {
     imminenceLabel = "BREAKOUT ACTIVE";
-  } else if (imminenceScore >= 80) {
+  } else if (imminenceScore >= 80 && hasMomentumConfirmation) {
     imminenceLabel = "BREAKOUT IMMINENT";
-  } else if (imminenceScore >= 60) {
+  } else if (imminenceScore >= 60 && hasMomentumConfirmation) {
     imminenceLabel = "LIKELY WITHIN 15 MIN";
   } else if (imminenceScore >= 45) {
-    imminenceLabel = "LIKELY WITHIN 1 HOUR";
+    imminenceLabel = hasMomentumConfirmation ? "LIKELY WITHIN 1 HOUR" : "BUILDING PRESSURE";
   } else if (imminenceScore >= 30) {
     imminenceLabel = "BUILDING PRESSURE";
   }
 
-  const effectiveDir2 = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
+  let effectiveDir2 = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
+  if (effectiveDir2 === "neutral" && closerDist <= 1.0) {
+    effectiveDir2 = proximityDir;
+  }
   const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
 
   return {
