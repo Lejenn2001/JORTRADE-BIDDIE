@@ -163,6 +163,11 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     >
                       {signal.putCall === "call" ? "CALL" : signal.putCall === "put" ? "PUT" : signal.type}
                     </span>
+                    {signal.aiEvaluated && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 animate-pulse">
+                        Biddie AI Pick
+                      </span>
+                    )}
                   </div>
                   <ConvictionScoreRing
                     score={signal.convictionScore ?? Math.round(signal.confidence * 10)}
