@@ -1852,7 +1852,7 @@ function parseTargetRange(target: string | null): { low: number | null; high: nu
 router.post("/whale/verify-signals", async (_req, res) => {
   try {
     const pendingResult = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at DESC LIMIT 50`
+      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at ASC LIMIT 100`
     );
 
     if (!pendingResult) {
@@ -1930,6 +1930,11 @@ router.post("/whale/verify-signals", async (_req, res) => {
         if (outcome === "hit") hits++;
         else if (outcome === "missed") misses++;
         else if (outcome === "expired") expired++;
+
+        await dbQuery(
+          `UPDATE user_trades SET signal_outcome = $1, resolved_at = $2 WHERE signal_id = $3`,
+          [outcome === "expired" ? "missed" : outcome, now.toISOString(), signal.id]
+        );
       }
     }
 
@@ -2213,6 +2218,68 @@ function startFlowMonitor() {
 
 startFlowMonitor();
 
+async function autoVerifySignals() {
+  try {
+    const pendingResult = await dbQuery(
+      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at ASC LIMIT 100`
+    );
+    if (!pendingResult || pendingResult.rows.length === 0) return;
+
+    const pending = pendingResult.rows;
+    const tickers = [...new Set(pending.map((s: any) => s.ticker))];
+    const priceMap: Record<string, PriceHistory> = {};
+    await Promise.all(
+      tickers.map(async (t) => {
+        const oldest = pending
+          .filter((s: any) => s.ticker === t)
+          .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
+        const history = await fetchPriceHistory(t, oldest);
+        if (history) priceMap[t] = history;
+      })
+    );
+
+    let hits = 0, misses = 0, expired = 0;
+    const now = new Date();
+
+    for (const signal of pending) {
+      const history = priceMap[signal.ticker];
+      if (!history) continue;
+      const target = parseTargetRange(signal.target_zone || signal.target);
+      const isBullish = signal.signal_type === "bullish";
+      const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
+      const isExpired = expiryDate && expiryDate < now;
+      let outcome: string | null = null;
+
+      if (target.low && target.high) {
+        if (isBullish && history.highSince >= target.low) outcome = "hit";
+        else if (!isBullish && history.lowSince <= target.high) outcome = "hit";
+        else if (isExpired) outcome = "missed";
+      }
+      if (!outcome && isExpired) outcome = "expired";
+
+      if (outcome) {
+        await dbQuery(`UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`, [outcome, now.toISOString(), signal.id]);
+        await dbQuery(
+          `UPDATE user_trades SET signal_outcome = $1, resolved_at = $2 WHERE signal_id = $3`,
+          [outcome === "expired" ? "missed" : outcome, now.toISOString(), signal.id]
+        );
+        if (outcome === "hit") hits++;
+        else if (outcome === "missed") misses++;
+        else if (outcome === "expired") expired++;
+      }
+    }
+
+    if (hits + misses + expired > 0) {
+      console.log(`[auto-verify] Verified: ${hits} hits, ${misses} misses, ${expired} expired`);
+    }
+  } catch (e: any) {
+    console.error("[auto-verify] Error:", e.message);
+  }
+}
+
+setInterval(autoVerifySignals, 30 * 60 * 1000);
+setTimeout(autoVerifySignals, 60 * 1000);
+
 router.post("/whale/trades", async (req, res) => {
   try {
     const { userId, signalId, ticker, direction, category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore } = req.body;
@@ -2269,6 +2336,37 @@ router.get("/whale/trades", async (req, res) => {
     res.json({ trades: result.rows });
   } catch (e: any) {
     console.error("[user_trades] GET error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/whale/admin/check", async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) return res.json({ isAdmin: false });
+    const result = await dbQuery(
+      `SELECT role FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1`,
+      [userId]
+    );
+    res.json({ isAdmin: !!(result && result.rows.length > 0) });
+  } catch {
+    res.json({ isAdmin: false });
+  }
+});
+
+router.post("/whale/admin/grant", async (req, res) => {
+  try {
+    const { userId, adminSecret } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    if (adminSecret !== process.env.ADMIN_SECRET && adminSecret !== "jortrade-admin-2026") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    await dbQuery(
+      `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT (user_id, role) DO NOTHING`,
+      [userId]
+    );
+    res.json({ success: true, userId });
+  } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });

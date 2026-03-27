@@ -158,11 +158,14 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - AI Signals tab: overall signal performance, win rate rings by category, top performing tickers
   - No longer admin-only — accessible to all users as a Pro feature
 - **Signal Verification** (`POST /api/whale/verify-signals`):
-  - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table
+  - Fetches pending signals from Replit PostgreSQL `signal_outcomes` table (oldest first, 100 per batch)
   - For each pending signal, pulls historical OHLC data from Yahoo Finance since signal creation date
   - Checks if the stock's high (bullish) or low (bearish) reached the target zone at any point since the signal was issued
   - Marks as "hit" (target reached), "missed" (expired without hitting), or "expired"
-  - Updates `outcome` and `resolved_at` in PostgreSQL
+  - Updates `outcome` and `resolved_at` in PostgreSQL + syncs `user_trades.signal_outcome` for any user who took the trade
+  - **Auto-verification**: `setInterval` runs every 30 min on server startup (first run after 60s delay)
+  - **Admin Panel**: Analytics page "Admin" tab (visible only to admin users) with "Verify Now" button + full signal outcomes table with ticker/direction/category/strike/target/outcome columns
+  - **Admin Role System**: `user_roles` PostgreSQL table, `GET /api/whale/admin/check?userId=X`, `POST /api/whale/admin/grant` (requires `adminSecret`)
   - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`

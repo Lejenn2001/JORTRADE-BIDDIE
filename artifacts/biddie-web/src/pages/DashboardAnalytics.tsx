@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3, TrendingUp, TrendingDown, Target, Flame, Trophy,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
-  ArrowUpRight, ArrowDownRight, Loader2
+  ArrowUpRight, ArrowDownRight, Loader2, ShieldCheck, RefreshCw
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -47,13 +47,59 @@ interface UserTrade {
   target: string;
 }
 
+interface SignalRecord {
+  id: string;
+  ticker: string;
+  signal_type: string;
+  category: string;
+  target: string;
+  outcome: string;
+  confidence: number;
+  conviction_score: number;
+  detected_at: string;
+  resolved_at: string;
+  strike: string;
+  expiry: string;
+  option_type: string;
+}
+
 const DashboardAnalytics = () => {
   const { user } = useAuth();
   const [userStats, setUserStats] = useState<TradeStats | null>(null);
   const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
   const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
+  const [allSignals, setAllSignals] = useState<SignalRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "signals">("overview");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "signals" | "admin">("overview");
+
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/whale/admin/check?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => setIsAdmin(d.isAdmin))
+        .catch(() => setIsAdmin(false));
+    }
+  }, [user?.id]);
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const resp = await fetch("/api/whale/verify-signals", { method: "POST" });
+      const data = await resp.json();
+      setVerifyResult(data);
+      const histResp = await fetch("/api/whale/signals/history?limit=200");
+      const histData = await histResp.json();
+      if (histData.signals) setAllSignals(histData.signals);
+    } catch (e) {
+      setVerifyResult({ error: "Verification failed" });
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -80,6 +126,7 @@ const DashboardAnalytics = () => {
         if (tradesData.trades) setUserTrades(tradesData.trades);
 
         if (historyData.signals) {
+          setAllSignals(historyData.signals);
           const signals = historyData.signals;
           const resolved = signals.filter((s: any) => s.outcome === "hit" || s.outcome === "missed");
           const hits = resolved.filter((s: any) => s.outcome === "hit").length;
@@ -151,15 +198,15 @@ const DashboardAnalytics = () => {
               </div>
 
               <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
-                {(["overview", "mytrades", "signals"] as const).map(tab => (
+                {(["overview", "mytrades", "signals", ...(isAdmin ? ["admin" as const] : [])] as const).map(tab => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => setActiveTab(tab as any)}
                     className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
                       activeTab === tab ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {tab === "overview" ? "Overview" : tab === "mytrades" ? "My Trades" : "AI Signals"}
+                    {tab === "overview" ? "Overview" : tab === "mytrades" ? "My Trades" : tab === "admin" ? "Admin" : "AI Signals"}
                   </button>
                 ))}
               </div>
@@ -184,6 +231,14 @@ const DashboardAnalytics = () => {
                 )}
                 {activeTab === "signals" && (
                   <SignalsTab signalStats={signalStats} topTickers={topTickers} />
+                )}
+                {activeTab === "admin" && isAdmin && (
+                  <AdminTab
+                    allSignals={allSignals}
+                    onVerify={handleVerify}
+                    verifying={verifying}
+                    verifyResult={verifyResult}
+                  />
                 )}
               </>
             )}
@@ -544,6 +599,115 @@ function SignalsTab({ signalStats, topTickers }: {
           <p className="text-sm text-muted-foreground mt-2">Signal performance will appear here once signals are generated and verified.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminTab({ allSignals, onVerify, verifying, verifyResult }: {
+  allSignals: SignalRecord[];
+  onVerify: () => void;
+  verifying: boolean;
+  verifyResult: any;
+}) {
+  const summary = useMemo(() => {
+    const total = allSignals.length;
+    const hits = allSignals.filter(s => s.outcome === "hit").length;
+    const misses = allSignals.filter(s => s.outcome === "missed").length;
+    const expired = allSignals.filter(s => s.outcome === "expired").length;
+    const pending = allSignals.filter(s => !s.outcome || s.outcome === "pending").length;
+    const resolved = hits + misses;
+    const winRate = resolved > 0 ? Math.round((hits / resolved) * 100) : 0;
+    return { total, hits, misses, expired, pending, winRate };
+  }, [allSignals]);
+
+  return (
+    <div className="space-y-6">
+      <div className="glass-panel rounded-xl p-5 border border-yellow-500/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-yellow-400" />
+            <h3 className="text-sm font-bold text-foreground">Signal Verification</h3>
+          </div>
+          <button
+            onClick={onVerify}
+            disabled={verifying}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 text-xs font-bold transition-all disabled:opacity-50"
+          >
+            {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {verifying ? "Verifying..." : "Verify Now"}
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Checks each pending signal against real price data from Yahoo Finance. Signals that hit their target are marked as wins, expired ones as misses. Auto-runs every 30 minutes.
+        </p>
+        {verifyResult && (
+          <div className={`p-3 rounded-lg text-xs font-medium ${verifyResult.error ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"}`}>
+            {verifyResult.error ? verifyResult.error : `Checked ${verifyResult.verified} signals: ${verifyResult.hits} hits, ${verifyResult.misses} misses, ${verifyResult.expired} expired, ${verifyResult.remaining_pending} still pending`}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatCard label="Total Signals" value={summary.total} icon={<Zap className="h-5 w-5 text-primary" />} color="border-primary/20" />
+        <StatCard label="Win Rate" value={`${summary.winRate}%`} icon={<Target className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
+        <StatCard label="Hits" value={summary.hits} icon={<CheckCircle2 className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
+        <StatCard label="Misses" value={summary.misses} icon={<XCircle className="h-5 w-5 text-red-400" />} color="border-red-500/20" />
+        <StatCard label="Pending" value={summary.pending} icon={<Clock className="h-5 w-5 text-yellow-400" />} color="border-yellow-500/20" />
+      </div>
+
+      <div className="glass-panel rounded-xl p-5 border border-white/10">
+        <h3 className="text-sm font-bold text-foreground mb-3">All Signals ({allSignals.length})</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/10 text-muted-foreground">
+                <th className="text-left py-2 px-2 font-semibold">Ticker</th>
+                <th className="text-left py-2 px-2 font-semibold">Direction</th>
+                <th className="text-left py-2 px-2 font-semibold">Category</th>
+                <th className="text-left py-2 px-2 font-semibold">Strike</th>
+                <th className="text-left py-2 px-2 font-semibold">Target</th>
+                <th className="text-left py-2 px-2 font-semibold">Detected</th>
+                <th className="text-left py-2 px-2 font-semibold">Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allSignals.map(s => (
+                <tr key={s.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="py-2 px-2 font-bold text-foreground">{s.ticker}</td>
+                  <td className="py-2 px-2">
+                    <span className={`flex items-center gap-1 ${s.signal_type === "bullish" ? "text-emerald-400" : "text-red-400"}`}>
+                      {s.signal_type === "bullish" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {s.signal_type}
+                    </span>
+                  </td>
+                  <td className="py-2 px-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      s.category === "whale" ? "bg-blue-500/20 text-blue-400"
+                      : s.category === "spread" ? "bg-violet-500/20 text-violet-400"
+                      : "bg-primary/20 text-primary"
+                    }`}>{s.category || "algorithm"}</span>
+                  </td>
+                  <td className="py-2 px-2 text-muted-foreground">{s.strike ? `$${s.strike}` : "—"}</td>
+                  <td className="py-2 px-2 text-muted-foreground max-w-[120px] truncate">{s.target || "—"}</td>
+                  <td className="py-2 px-2 text-muted-foreground">
+                    {s.detected_at ? new Date(s.detected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : "—"}
+                  </td>
+                  <td className="py-2 px-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      s.outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
+                      : s.outcome === "missed" ? "bg-red-500/20 text-red-400"
+                      : s.outcome === "expired" ? "bg-zinc-500/20 text-zinc-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                    }`}>
+                      {s.outcome === "hit" ? "HIT" : s.outcome === "missed" ? "MISSED" : s.outcome === "expired" ? "EXPIRED" : "PENDING"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
