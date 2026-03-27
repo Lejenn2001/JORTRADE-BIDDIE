@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 const HEARTBEAT_INTERVAL = 30_000;
@@ -11,30 +11,7 @@ export { PresenceContext };
 export function usePresenceSetup() {
   const { session, profile } = useAuth();
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-
-  const sendHeartbeat = useCallback(async (userId: string, name: string) => {
-    try {
-      await fetch("/api/whale/presence/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
-        body: JSON.stringify({ name }),
-      });
-    } catch {}
-  }, []);
-
-  const pollOnline = useCallback(async (myId: string) => {
-    try {
-      const resp = await fetch("/api/whale/presence/online");
-      if (resp.ok) {
-        const data = await resp.json();
-        const ids = new Set<string>([myId]);
-        for (const u of data.online) {
-          ids.add(u.userId);
-        }
-        setOnlineUsers(ids);
-      }
-    } catch {}
-  }, []);
+  const intervalRef = useRef<ReturnType<typeof setInterval>[]>([]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -43,17 +20,42 @@ export function usePresenceSetup() {
 
     setOnlineUsers(new Set([myId]));
 
-    sendHeartbeat(myId, myName);
-    pollOnline(myId);
+    const heartbeat = async () => {
+      try {
+        await fetch("/api/whale/presence/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-user-id": myId },
+          body: JSON.stringify({ name: myName }),
+        });
+      } catch {}
+    };
 
-    const heartbeatTimer = setInterval(() => sendHeartbeat(myId, myName), HEARTBEAT_INTERVAL);
-    const pollTimer = setInterval(() => pollOnline(myId), POLL_INTERVAL);
+    const poll = async () => {
+      try {
+        const resp = await fetch("/api/whale/presence/online");
+        if (resp.ok) {
+          const data = await resp.json();
+          const ids = new Set<string>([myId]);
+          for (const u of data.online) {
+            ids.add(u.userId);
+          }
+          setOnlineUsers(ids);
+        }
+      } catch {}
+    };
+
+    heartbeat();
+    poll();
+
+    const h = setInterval(heartbeat, HEARTBEAT_INTERVAL);
+    const p = setInterval(poll, POLL_INTERVAL);
+    intervalRef.current = [h, p];
 
     return () => {
-      clearInterval(heartbeatTimer);
-      clearInterval(pollTimer);
+      clearInterval(h);
+      clearInterval(p);
     };
-  }, [session?.user?.id, profile?.full_name, sendHeartbeat, pollOnline]);
+  }, [session?.user?.id, profile?.full_name]);
 
   return onlineUsers;
 }

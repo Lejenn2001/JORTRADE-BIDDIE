@@ -148,15 +148,16 @@ const DashboardAdmin = () => {
         headers: { "Content-Type": "application/json", "x-user-id": user?.id || "" },
         body: JSON.stringify({ userId, makeAdmin: !currentlyAdmin }),
       });
-      const data = await resp.json();
       if (!resp.ok) {
-        toast.error(data.error || "Failed to update admin role");
+        let msg = "Failed to update admin role";
+        try { const data = await resp.json(); msg = data.error || msg; } catch {}
+        toast.error(msg);
       } else {
         toast.success(currentlyAdmin ? "Admin role removed" : "Admin role granted");
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: !currentlyAdmin } : u));
       }
-    } catch {
-      toast.error("Failed to update admin role");
+    } catch (e: any) {
+      toast.error("Network error: " + (e?.message || "Failed to update admin role"));
     }
     setUpdating(null);
   };
