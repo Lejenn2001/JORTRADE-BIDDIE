@@ -78,34 +78,14 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
               initial="hidden"
               animate="visible"
               variants={cardVariants}
-              className={`rounded-xl border overflow-hidden relative ${
-                signal.aiEvaluated
-                  ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20 bg-emerald-500/5"
-                  : signal.type === "bullish"
+              className={`rounded-xl border overflow-hidden ${
+                signal.type === "bullish"
                   ? "border-primary/30 bg-primary/5"
                   : signal.type === "bearish"
                   ? "border-destructive/30 bg-destructive/5"
                   : "border-muted bg-muted/30"
               }`}
             >
-              {(signal.outcome === "hit" || signal.outcome === "win") && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/25 border border-emerald-400/40 backdrop-blur-sm">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider">Winner</span>
-                </div>
-              )}
-              {(signal.outcome === "missed" || signal.outcome === "loss") && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/25 border border-red-400/40 backdrop-blur-sm">
-                  <XCircle className="h-4 w-4 text-red-400" />
-                  <span className="text-[11px] font-extrabold text-red-400 uppercase tracking-wider">Missed</span>
-                </div>
-              )}
-              {signal.aiEvaluated && !signal.outcome && signal.outcome !== "hit" && signal.outcome !== "win" && signal.outcome !== "missed" && signal.outcome !== "loss" && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-500/15 border border-yellow-400/30 backdrop-blur-sm">
-                  <Clock className="h-3 w-3 text-yellow-400" />
-                  <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Pending</span>
-                </div>
-              )}
               {/* Price Confirmed Banner */}
               {signal.priceConfirmed && (
                 <div className="px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
@@ -157,9 +137,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   {signal.source === "live" ? (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
                   ) : null}
-                  {signal.aiEvaluated && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie AI Pick</span>
-                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5" />
