@@ -39,7 +39,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .select("full_name, selected_plan")
       .eq("id", userId)
       .single();
-    if (data) setProfile({ full_name: data.full_name, selected_plan: (data.selected_plan as UserPlan) || null });
+    if (data) {
+      const plan = (data.selected_plan as UserPlan) || "starter";
+      if (!data.selected_plan) {
+        supabase.from("profiles").update({ selected_plan: "starter" }).eq("id", userId).then(() => {});
+      }
+      setProfile({ full_name: data.full_name, selected_plan: plan });
+    }
 
     const { data: roleData } = await supabase
       .from("user_roles")

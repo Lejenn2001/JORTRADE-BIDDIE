@@ -75,7 +75,7 @@ const plans = [
 ];
 
 const Signup = () => {
-  const [selectedPlan, setSelectedPlan] = useState("active");
+  const [selectedPlan, setSelectedPlan] = useState("starter");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
