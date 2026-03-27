@@ -507,24 +507,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
     <div className={`rounded-xl border overflow-hidden transition-shadow relative ${glowClass} ${
       isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
-      {isWinner && (
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/25 border border-emerald-400/40 backdrop-blur-sm">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider">Winner</span>
-        </div>
-      )}
-      {isLoser && (
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/25 border border-red-400/40 backdrop-blur-sm">
-          <XCircle className="h-4 w-4 text-red-400" />
-          <span className="text-[11px] font-extrabold text-red-400 uppercase tracking-wider">Missed</span>
-        </div>
-      )}
-      {isPending && (
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-500/15 border border-yellow-400/30 backdrop-blur-sm">
-          <Clock className="h-3 w-3 text-yellow-400" />
-          <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Pending</span>
-        </div>
-      )}
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
@@ -587,6 +569,21 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
+            {isWinner && (
+              <span className="inline-flex items-center -rotate-12 border-2 border-emerald-400 rounded-full px-2 py-0.5 ml-1">
+                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-emerald-400 leading-none">Winner</span>
+              </span>
+            )}
+            {isLoser && (
+              <span className="inline-flex items-center -rotate-6 border-2 border-red-400 rounded-full px-2 py-0.5 ml-1">
+                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-red-400 leading-none">Missed</span>
+              </span>
+            )}
+            {isPending && (
+              <span className="inline-flex items-center border border-yellow-400/60 rounded-full px-2 py-0.5 ml-1">
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-yellow-400/70 leading-none">Pending</span>
+              </span>
+            )}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
