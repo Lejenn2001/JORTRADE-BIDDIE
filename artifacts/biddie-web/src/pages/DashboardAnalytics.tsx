@@ -119,7 +119,7 @@ const DashboardAnalytics = () => {
         }
 
         promises.push(
-          fetch("/api/whale/signals/history?limit=200").then(r => r.json())
+          fetch("/api/whale/signals/calendar?limit=500").then(r => r.json())
         );
 
         const [statsData, tradesData, historyData] = await Promise.all(promises);

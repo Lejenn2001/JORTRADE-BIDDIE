@@ -23,7 +23,7 @@ const PerformanceSnapshot = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await fetch('/api/whale/signals/history?limit=500');
+        const resp = await fetch('/api/whale/signals/calendar?limit=500');
         const result = resp.ok ? await resp.json() : null;
         const data = result?.signals;
         if (!data) return;

@@ -70,7 +70,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
 
   const fetchOutcomes = async () => {
     try {
-      const resp = await fetch('/api/whale/signals/history?limit=100');
+      const resp = await fetch('/api/whale/signals/calendar?limit=500');
       if (resp.ok) {
         const result = await resp.json();
         if (result.signals) setOutcomes(result.signals as any);
