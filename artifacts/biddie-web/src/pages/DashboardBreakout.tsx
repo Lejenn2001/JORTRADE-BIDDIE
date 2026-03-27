@@ -636,7 +636,11 @@ const DashboardBreakout = () => {
                                           : "bg-blue-500/15 text-blue-400 border-blue-500/30"
                                   }`}>
                                     <Radio className="h-2.5 w-2.5" />
-                                    {setup.imminenceLabel}
+                                    {setup.imminenceLabel === "BREAKOUT IMMINENT" ? "🔥 MOVE NOW"
+                                      : setup.imminenceLabel === "BREAKOUT ACTIVE" ? "🔥 ACTIVE"
+                                      : setup.imminenceLabel === "LIKELY WITHIN 15 MIN" ? "⚡ HEATING UP"
+                                      : setup.imminenceLabel === "BUILDING PRESSURE" ? "👀 WATCH"
+                                      : setup.imminenceLabel}
                                   </span>
                                 )}
                                 {setup.scannedAt && (
@@ -730,7 +734,11 @@ const DashboardBreakout = () => {
                                   />
                                   <DetailCard
                                     label="Breakout"
-                                    value={setup.breakoutTriggered ? setup.breakoutDirection : "Pending"}
+                                    value={setup.breakoutTriggered ? (setup.breakoutDirection === "bullish" ? "Breaking Up" : "Breaking Down")
+                                      : setup.imminenceLabel === "BREAKOUT IMMINENT" ? "Almost There"
+                                      : setup.imminenceLabel === "LIKELY WITHIN 15 MIN" ? "Heating Up"
+                                      : setup.imminenceLabel === "BUILDING PRESSURE" ? "Building"
+                                      : "Setting Up"}
                                     icon={setup.breakoutDirection === "bullish"
                                       ? <ArrowUpRight className="h-3.5 w-3.5" />
                                       : setup.breakoutDirection === "bearish"

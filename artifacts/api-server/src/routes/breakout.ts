@@ -529,7 +529,37 @@ function generateContractRec(
   }
 
   const strike = snapToStrike(strikeBase, direction);
-  const { expiry, label } = getNextExpiry(ticker);
+
+  const isUrgent = breakoutTriggered || imminenceLabel === "BREAKOUT IMMINENT" || imminenceLabel === "LIKELY WITHIN 15 MIN";
+  let expiry: string;
+  let label: string;
+  if (isUrgent) {
+    const urgent = getNextExpiry(ticker);
+    expiry = urgent.expiry;
+    label = urgent.label;
+  } else {
+    const base = getNextExpiry(ticker);
+    if (base.label === "0DTE" && !breakoutTriggered) {
+      const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const tomorrow = new Date(et);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1);
+      if (tomorrow.getDay() === 6) tomorrow.setDate(tomorrow.getDate() + 2);
+      const friday = new Date(et);
+      const daysUntilFri = (5 - et.getDay() + 7) % 7 || 7;
+      friday.setDate(friday.getDate() + daysUntilFri);
+      if (tomorrow.getTime() < friday.getTime()) {
+        expiry = formatDate(tomorrow);
+        label = "1DTE";
+      } else {
+        expiry = formatDate(friday);
+        label = "Weekly";
+      }
+    } else {
+      expiry = base.expiry;
+      label = base.label;
+    }
+  }
 
   const entryPrice = price;
   const stopPrice = isBullish
@@ -541,8 +571,11 @@ function generateContractRec(
       : Math.round((price - atr * 1.5) * 100) / 100);
 
   const parts: string[] = [];
-  if (breakoutTriggered) parts.push("Active breakout");
-  else if (imminenceLabel) parts.push(imminenceLabel.toLowerCase());
+  if (breakoutTriggered) parts.push("Active breakout — move now");
+  else if (imminenceLabel === "BREAKOUT IMMINENT") parts.push("Imminent — be ready");
+  else if (imminenceLabel === "LIKELY WITHIN 15 MIN") parts.push("Heating up fast");
+  else if (imminenceLabel === "BUILDING PRESSURE") parts.push("Building — watch for entry");
+  else parts.push("Setting up — be patient");
   if (isBullish && resistance) parts.push(`resistance $${resistance.toFixed(2)}`);
   if (!isBullish && support) parts.push(`support $${support.toFixed(2)}`);
   parts.push(`${label} expiry`);
