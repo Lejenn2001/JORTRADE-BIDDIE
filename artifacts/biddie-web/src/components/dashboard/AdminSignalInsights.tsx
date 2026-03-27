@@ -644,6 +644,7 @@ const AdminSignalInsights = () => {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-background/95 backdrop-blur z-10">
               <tr className="border-b border-border/30">
+                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">#</th>
                 {[
                   { key: "status", label: "Status" },
                   { key: "detected", label: "Detected" },
@@ -672,7 +673,7 @@ const AdminSignalInsights = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredSignals.map(s => {
+              {filteredSignals.map((s, idx) => {
                 const detected = new Date(s.detected_at || s.created_at);
                 const isExpanded = expandedSignal === s.id;
                 const detail = signalDetails[s.id];
@@ -683,6 +684,7 @@ const AdminSignalInsights = () => {
                       className={`border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer ${isExpanded ? "bg-muted/30" : ""}`}
                       onClick={() => toggleExpand(s.id)}
                     >
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-2">
                         {s.outcome === "hit" ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
@@ -738,7 +740,7 @@ const AdminSignalInsights = () => {
                     <AnimatePresence>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={10} className="p-0">
+                          <td colSpan={11} className="p-0">
                             <motion.div
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
