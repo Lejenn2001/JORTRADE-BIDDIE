@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Target, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, RefreshCw, Zap } from "lucide-react";
+import { Target, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, RefreshCw, Zap, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -65,6 +65,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
   const [outcomes, setOutcomes] = useState<SignalOutcome[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
   const apiBase = import.meta.env.BASE_URL ?? "/";
 
   const fetchOutcomes = async () => {
@@ -194,6 +195,82 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
           <p className="text-2xl font-bold text-primary">{uniqueLive.length}</p>
           <p className="text-[9px] text-muted-foreground mt-1">Live flow — what's moving now</p>
         </div>
+      </div>
+
+      {/* Methodology Explainer */}
+      <div className="px-4 pb-1">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors py-1.5"
+        >
+          <Info className="h-3.5 w-3.5" />
+          <span className="font-medium">How are signals scored?</span>
+          {showMethodology ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+        {showMethodology && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-muted/15 rounded-lg p-4 mb-3 border border-border/30 space-y-3"
+          >
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-emerald-400/15 flex items-center justify-center">
+                  <CheckCircle className="h-3 w-3 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-emerald-400">HIT — Target Reached</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                    The stock price reached the signal's target at any point before expiry. For calls, the price hit or exceeded the target high. For puts, the price dropped to or below the target low. Hits are checked first and always take priority — even if the price later reversed, the target was reached.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-destructive/15 flex items-center justify-center">
+                  <XCircle className="h-3 w-3 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-destructive">MISSED — Invalidation Breached</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                    The current price crossed the signal's invalidation level after a minimum 2-hour hold period. For calls, the price dropped below the invalidation floor. For puts, the price rose above the invalidation ceiling. A signal cannot be marked missed within the first 2 hours — the trade needs time to develop. Uses current price only, so a brief spike past invalidation doesn't kill the trade.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-muted/30 flex items-center justify-center">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground">EXPIRED — Time Ran Out</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                    The option's expiry date passed without hitting the target or invalidation. If the price moved in the right direction (favorable) but didn't reach the target, it's marked expired. If it moved against the trade, it's counted as a miss. Expired signals may have been profitable — they just didn't reach the full target.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/15 flex items-center justify-center">
+                  <Zap className="h-3 w-3 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-amber-400">PENDING — Still Active</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                    The signal hasn't hit target or invalidation yet, and the expiry date is still in the future. These are live swing trades being tracked in real-time. Verification runs every 5 minutes during market hours and every 30 minutes after hours.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-border/30 pt-2.5 mt-2.5">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground/80">Win Rate</span> = Hits / (Hits + Misses). Pending and expired signals are excluded from the win rate calculation. Only fully resolved trades count toward accuracy. This ensures the win rate reflects real outcomes, not premature judgments.
+              </p>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Per-Ticker Accuracy */}
