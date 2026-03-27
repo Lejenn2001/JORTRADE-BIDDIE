@@ -52,6 +52,7 @@ export interface MarketSignal {
   recommendedStrike?: string;
   category?: SignalCategory;
   aiEvaluated?: boolean;
+  outcome?: "hit" | "win" | "missed" | "loss" | "pending" | null;
   spreadDetails?: {
     type: string;
     legs: string;

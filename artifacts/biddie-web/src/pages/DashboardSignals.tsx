@@ -4,7 +4,7 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 
@@ -58,17 +58,17 @@ function dbRecordToSignal(record: any): MarketSignal {
   const isBullish = record.signal_type === 'bullish';
   const confidence = parseFloat(record.confidence) || 5;
   
-  // Derive conviction score from confidence (1-10 scale → approximate 0-100)
   let convictionScore = Math.round(confidence * 10);
-  if (confidence >= 9) convictionScore = Math.max(convictionScore, 85);
-  else if (confidence >= 8) convictionScore = Math.max(convictionScore, 75);
-  else if (confidence >= 7) convictionScore = Math.max(convictionScore, 65);
+  if (confidence >= 9) convictionScore = Math.max(convictionScore, 92);
+  else if (confidence >= 8) convictionScore = Math.max(convictionScore, 85);
+  else if (confidence >= 7) convictionScore = Math.max(convictionScore, 78);
+  else if (confidence >= 6) convictionScore = Math.max(convictionScore, 70);
 
   let convictionLabel = "Low Conviction";
   if (convictionScore >= 90) convictionLabel = "Extreme Conviction";
-  else if (convictionScore >= 75) convictionLabel = "Very High Conviction";
-  else if (convictionScore >= 60) convictionLabel = "High Conviction";
-  else if (convictionScore >= 40) convictionLabel = "Moderate Conviction";
+  else if (convictionScore >= 80) convictionLabel = "Very High Conviction";
+  else if (convictionScore >= 68) convictionLabel = "High Conviction";
+  else if (convictionScore >= 50) convictionLabel = "Moderate Conviction";
 
   const putCall = record.put_call || record.option_type || 'call';
   const tags: string[] = [];
@@ -100,6 +100,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     category: record.category,
     reason: record.reason,
     aiEvaluated: true,
+    outcome: record.outcome || null,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
   };
@@ -498,10 +499,32 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
     ? "border-primary/20"
     : "border-destructive/20";
 
+  const isWinner = signal.outcome === "hit" || signal.outcome === "win";
+  const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
+  const isPending = isAI && !isWinner && !isLoser;
+
   return (
-    <div className={`rounded-xl border overflow-hidden transition-shadow ${glowClass} ${
-      isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${glowClass} ${
+      isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
+      {isWinner && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/25 border border-emerald-400/40 backdrop-blur-sm">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider">Winner</span>
+        </div>
+      )}
+      {isLoser && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/25 border border-red-400/40 backdrop-blur-sm">
+          <XCircle className="h-4 w-4 text-red-400" />
+          <span className="text-[11px] font-extrabold text-red-400 uppercase tracking-wider">Missed</span>
+        </div>
+      )}
+      {isPending && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-500/15 border border-yellow-400/30 backdrop-blur-sm">
+          <Clock className="h-3 w-3 text-yellow-400" />
+          <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Pending</span>
+        </div>
+      )}
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">

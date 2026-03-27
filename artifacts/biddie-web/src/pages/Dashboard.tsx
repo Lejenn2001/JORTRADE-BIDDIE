@@ -34,7 +34,11 @@ const formatRelativeTimestamp = (isoString: string) => {
 
 const recordToDashboardSignal = (record: any): MarketSignal => {
   const confidence = Number(record.confidence) || 0;
-  const convictionScore = Math.round(confidence * 10);
+  let convictionScore = Math.round(confidence * 10);
+  if (confidence >= 9) convictionScore = Math.max(convictionScore, 92);
+  else if (confidence >= 8) convictionScore = Math.max(convictionScore, 85);
+  else if (confidence >= 7) convictionScore = Math.max(convictionScore, 78);
+  else if (confidence >= 6) convictionScore = Math.max(convictionScore, 70);
   const isBullish = record.signal_type === "bullish";
   const putCall = record.put_call || record.option_type || "call";
   const tags = [putCall === "call" ? "Call Flow" : "Put Flow"];
@@ -52,11 +56,11 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     convictionScore,
     convictionLabel: convictionScore >= 90
       ? "Extreme Conviction"
-      : convictionScore >= 75
+      : convictionScore >= 80
         ? "Very High Conviction"
-        : convictionScore >= 60
+        : convictionScore >= 68
           ? "High Conviction"
-          : convictionScore >= 40
+          : convictionScore >= 50
             ? "Moderate Conviction"
             : "Low Conviction",
     description:
@@ -77,6 +81,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
     aiEvaluated: true,
+    outcome: record.outcome || null,
   };
 };
 
