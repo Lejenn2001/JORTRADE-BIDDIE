@@ -627,13 +627,17 @@ async function runFullScan(): Promise<SqueezeResult[]> {
   }
 
   const results: SqueezeResult[] = [];
+  const seenTickers = new Set<string>();
 
   const batchSize = 5;
   for (let i = 0; i < WATCHLIST.length; i += batchSize) {
     const batch = WATCHLIST.slice(i, i + batchSize);
     const batchResults = await Promise.all(batch.map(t => scanTicker(t)));
     for (const r of batchResults) {
-      if (r) results.push(r);
+      if (r && !seenTickers.has(r.ticker)) {
+        seenTickers.add(r.ticker);
+        results.push(r);
+      }
     }
     if (i + batchSize < WATCHLIST.length) {
       await new Promise(r => setTimeout(r, 1200));
