@@ -338,11 +338,7 @@ const AdminSignalInsights = () => {
         case "score": return ((a.confidence || 0) - (b.confidence || 0)) * dir;
         case "source": return (a.category || "").localeCompare(b.category || "") * dir;
         case "entry": return ((a.price_at_signal || 0) - (b.price_at_signal || 0)) * dir;
-        case "aipick": {
-          const aIsAI = Number(a.confidence) >= 7 ? 1 : 0;
-          const bIsAI = Number(b.confidence) >= 7 ? 1 : 0;
-          return (aIsAI - bIsAI) * dir;
-        }
+        case "aipick": return 0;
         case "detected":
         default: {
           const at = new Date(a.detected_at || a.created_at).getTime();
@@ -726,12 +722,8 @@ const AdminSignalInsights = () => {
                       <td className="px-4 py-2 text-xs text-muted-foreground">{s.price_at_signal ? `$${Number(s.price_at_signal).toFixed(2)}` : "—"}</td>
                       <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
                       <td className="px-4 py-2 text-center">
-                        <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          Number(s.confidence) >= 7
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-400/30"
-                            : "bg-muted/30 text-muted-foreground"
-                        }`}>
-                          {Number(s.confidence) >= 7 ? "Y" : "N"}
+                        <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30">
+                          Y
                         </span>
                       </td>
                     </tr>
