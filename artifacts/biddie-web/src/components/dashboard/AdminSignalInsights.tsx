@@ -384,7 +384,7 @@ const AdminSignalInsights = () => {
                   <CheckCircle className="h-4 w-4 text-emerald-400" />
                   <span className="text-xs font-bold text-emerald-400 uppercase">HIT (Checked First)</span>
                 </div>
-                <p className="text-xs leading-relaxed">Price reached the target zone. For <span className="text-emerald-400 font-semibold">bullish/CALL</span> signals: the high since detection reached the target price. For <span className="text-red-400 font-semibold">bearish/PUT</span> signals: the low since detection dropped to the target price. Target must be in the correct direction (above entry for bullish, below entry for bearish) or it is ignored.</p>
+                <p className="text-xs leading-relaxed">Price reached the target zone. For <span className="text-emerald-400 font-semibold">bullish/CALL</span> signals: the high since detection reached the target price. For <span className="text-red-400 font-semibold">bearish/PUT</span> signals: the low since detection dropped to the target price. <span className="text-foreground font-semibold">Directional move fallback:</span> If the parsed target is invalid or in the wrong direction, the signal is still a HIT if price moved at least 0.5% in the correct direction (up for bullish, down for bearish).</p>
               </div>
               <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
                 <div className="flex items-center gap-2 mb-2">

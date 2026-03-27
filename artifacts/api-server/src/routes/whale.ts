@@ -3325,17 +3325,19 @@ router.post("/whale/admin/grant", async (req, res) => {
 
 router.post("/whale/admin/reset-bad-outcomes", async (req, res) => {
   try {
-    const { adminSecret } = req.body;
+    const { adminSecret, resetAll } = req.body;
     if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
-    const result = await dbQuery(
-      `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL
-       WHERE signal_source = 'replit'
-       AND outcome IN ('missed', 'hit')
-       AND resolved_at IS NOT NULL
-       AND EXTRACT(EPOCH FROM (resolved_at - COALESCE(detected_at, created_at))) < 7200`
-    );
+    const query = resetAll
+      ? `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL
+         WHERE signal_source = 'replit' AND outcome IN ('missed', 'hit')`
+      : `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL
+         WHERE signal_source = 'replit'
+         AND outcome IN ('missed', 'hit')
+         AND resolved_at IS NOT NULL
+         AND EXTRACT(EPOCH FROM (resolved_at - COALESCE(detected_at, created_at))) < 7200`;
+    const result = await dbQuery(query);
     const count = result?.rowCount || 0;
-    console.log(`[admin] Reset ${count} incorrectly resolved signals to pending`);
+    console.log(`[admin] Reset ${count} signals to pending (resetAll=${!!resetAll})`);
     res.json({ success: true, reset: count });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
