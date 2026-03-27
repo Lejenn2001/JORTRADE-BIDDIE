@@ -1604,10 +1604,35 @@ async function runSignalsPipeline() {
       } catch { return expiryDate; }
     })();
 
+    const smartExpiry = (() => {
+      const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const dayOfWeek = et.getDay();
+      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+      const ZERO_DTE = new Set(["SPY","QQQ","IWM","AAPL","MSFT","AMZN","META","NVDA","TSLA","GOOGL","AMD","NFLX","GLD","TLT","XOM","JPM","DIS","BA","V","MA","COIN"]);
+      const has0DTE = ZERO_DTE.has(ticker);
+      const isMWF = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5;
+      const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+      if (daysOut <= 2 && has0DTE && isWeekday) {
+        if (ticker === "SPY" || ticker === "QQQ" || ticker === "IWM" || isMWF) {
+          return { expiry: fmt(et), label: "0DTE" };
+        }
+        const tom = new Date(et); tom.setDate(tom.getDate() + 1);
+        if (tom.getDay() === 0) tom.setDate(tom.getDate() + 1);
+        if (tom.getDay() === 6) tom.setDate(tom.getDate() + 2);
+        return { expiry: fmt(tom), label: "1DTE" };
+      }
+      if (daysOut <= 7) return { expiry: expiryFormatted, label: "This week" };
+      const fri = new Date(et);
+      const duf = (5 - dayOfWeek + 7) % 7 || 7;
+      fri.setDate(fri.getDate() + duf);
+      return { expiry: fmt(fri), label: "Weekly" };
+    })();
+
     return {
       ticker, direction, option_type: optType, category,
       trade: `Buy ${ticker} $${strike} ${optType === "call" ? "Call" : "Put"}`,
-      strike, expiry: expiryFormatted, premium,
+      strike, expiry: smartExpiry.expiry, premium,
       ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
       current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
       pivot, r1, s1,
@@ -1620,7 +1645,7 @@ async function runSignalsPipeline() {
       gamma_zone: confirmation?.gamma_zone ?? "neutral",
       gamma_description: confirmation?.gamma_description ?? null,
       recommended_action: confirmation?.trade_recommendation?.action ?? `Buy ${ticker} $${strike} ${optType === "call" ? "Call" : "Put"}`,
-      recommended_expiry: confirmation?.trade_recommendation?.expiry ?? expiryFormatted,
+      recommended_expiry: confirmation?.trade_recommendation?.expiry ?? smartExpiry.expiry,
       recommended_strike: confirmation?.trade_recommendation?.entry_trigger ?? entryTrigger,
       spread_details: null,
     };
