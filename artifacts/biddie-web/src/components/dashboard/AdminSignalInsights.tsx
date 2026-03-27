@@ -339,8 +339,8 @@ const AdminSignalInsights = () => {
         case "source": return (a.category || "").localeCompare(b.category || "") * dir;
         case "entry": return ((a.price_at_signal || 0) - (b.price_at_signal || 0)) * dir;
         case "aipick": {
-          const aIsAI = Number(a.confidence) >= 9 ? 1 : 0;
-          const bIsAI = Number(b.confidence) >= 9 ? 1 : 0;
+          const aIsAI = Number(a.confidence) >= 9.5 ? 1 : 0;
+          const bIsAI = Number(b.confidence) >= 9.5 ? 1 : 0;
           return (aIsAI - bIsAI) * dir;
         }
         case "detected":
@@ -729,11 +729,11 @@ const AdminSignalInsights = () => {
                       <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
                       <td className="px-4 py-2 text-center">
                         <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          Number(s.confidence) >= 9
+                          Number(s.confidence) >= 9.5
                             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-400/30"
                             : "bg-muted/30 text-muted-foreground border border-border/20"
                         }`}>
-                          {Number(s.confidence) >= 9 ? "Y" : "N"}
+                          {Number(s.confidence) >= 9.5 ? "Y" : "N"}
                         </span>
                       </td>
                     </tr>
