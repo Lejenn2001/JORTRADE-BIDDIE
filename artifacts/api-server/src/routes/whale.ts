@@ -2267,7 +2267,8 @@ router.get("/whale/signals/calendar", async (req, res) => {
     const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
     const result = await dbQuery(
       `SELECT id, ticker, signal_type, option_type AS "put_call", confidence, strike, expiry,
-              outcome, created_at, detected_at, resolved_at, category, price_at_signal
+              outcome, created_at, detected_at, resolved_at, category, price_at_signal,
+              target AS target_price, invalidation, entry_trigger
        FROM signal_outcomes
        WHERE signal_source = 'replit'
        ORDER BY detected_at DESC
@@ -2404,9 +2405,16 @@ function parsePrice(s: string | null | undefined): number | null {
 
 function parseTargetRange(target: string | null): { low: number | null; high: number | null } {
   if (!target) return { low: null, high: null };
-  const nums = target.match(/\d+\.?\d*/g);
-  if (!nums || nums.length === 0) return { low: null, high: null };
-  const values = nums.map(Number).filter(n => !isNaN(n) && n > 0);
+  const priceMatches = target.match(/\$[\d,]+\.?\d*/g);
+  let values: number[] = [];
+  if (priceMatches && priceMatches.length > 0) {
+    values = priceMatches.map(p => parseFloat(p.replace(/[$,]/g, ""))).filter(n => !isNaN(n) && n > 0);
+  }
+  if (values.length === 0) {
+    const nums = target.match(/\d+\.?\d*/g);
+    if (!nums) return { low: null, high: null };
+    values = nums.map(Number).filter(n => !isNaN(n) && n >= 5);
+  }
   if (values.length === 0) return { low: null, high: null };
   if (values.length === 1) return { low: values[0], high: values[0] };
   return { low: Math.min(...values), high: Math.max(...values) };
@@ -2464,30 +2472,41 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
       let outcome: string | null = null;
       let outcomePrice = history.current;
+      const refPrice = signalPrice || entryPrice || 0;
 
-      if (target.low && target.high) {
-        if (isBullish) {
-          const notAlreadyPastTarget = !signalPrice || signalPrice <= target.low * 1.03;
-          if (notAlreadyPastTarget && history.highSince >= target.low) {
-            outcome = "hit";
-            outcomePrice = history.highSince;
-          }
-        } else {
-          const notAlreadyPastTarget = !signalPrice || signalPrice >= target.high * 0.97;
-          if (notAlreadyPastTarget && history.lowSince <= target.high) {
-            outcome = "hit";
-            outcomePrice = history.lowSince;
+      if (target.low && target.high && refPrice > 0) {
+        const targetMakesDirectionalSense = isBullish
+          ? target.low > refPrice * 0.98
+          : target.high < refPrice * 1.02;
+        if (targetMakesDirectionalSense) {
+          if (isBullish) {
+            const notAlreadyPastTarget = !signalPrice || signalPrice <= target.low * 1.03;
+            if (notAlreadyPastTarget && history.highSince >= target.low) {
+              outcome = "hit";
+              outcomePrice = history.highSince;
+            }
+          } else {
+            const notAlreadyPastTarget = !signalPrice || signalPrice >= target.high * 0.97;
+            if (notAlreadyPastTarget && history.lowSince <= target.high) {
+              outcome = "hit";
+              outcomePrice = history.lowSince;
+            }
           }
         }
       }
 
-      if (!outcome && canMiss && invalidationPrice) {
-        if (isBullish && history.current <= invalidationPrice) {
-          outcome = "missed";
-          outcomePrice = history.lowSince;
-        } else if (!isBullish && history.current >= invalidationPrice) {
-          outcome = "missed";
-          outcomePrice = history.highSince;
+      if (!outcome && canMiss && invalidationPrice && refPrice > 0) {
+        const invMakesDirectionalSense = isBullish
+          ? invalidationPrice < refPrice
+          : invalidationPrice > refPrice;
+        if (invMakesDirectionalSense) {
+          if (isBullish && history.current <= invalidationPrice) {
+            outcome = "missed";
+            outcomePrice = history.lowSince;
+          } else if (!isBullish && history.current >= invalidationPrice) {
+            outcome = "missed";
+            outcomePrice = history.highSince;
+          }
         }
       }
 
@@ -3051,20 +3070,31 @@ async function realtimeVerifySignals() {
       const canMiss = hoursAlive >= MIN_HOURS_BEFORE_MISS || isExpired;
 
       let outcome: string | null = null;
+      const refPrice2 = signalPrice || entryPrice || 0;
 
-      if (target_val.low && target_val.high) {
-        if (isBullish) {
-          const notAlreadyPastTarget = !signalPrice || signalPrice <= target_val.low * 1.03;
-          if (notAlreadyPastTarget && history.highSince >= target_val.low) outcome = "hit";
-        } else {
-          const notAlreadyPastTarget = !signalPrice || signalPrice >= target_val.high * 0.97;
-          if (notAlreadyPastTarget && history.lowSince <= target_val.high) outcome = "hit";
+      if (target_val.low && target_val.high && refPrice2 > 0) {
+        const targetMakesDirectionalSense = isBullish
+          ? target_val.low > refPrice2 * 0.98
+          : target_val.high < refPrice2 * 1.02;
+        if (targetMakesDirectionalSense) {
+          if (isBullish) {
+            const notAlreadyPastTarget = !signalPrice || signalPrice <= target_val.low * 1.03;
+            if (notAlreadyPastTarget && history.highSince >= target_val.low) outcome = "hit";
+          } else {
+            const notAlreadyPastTarget = !signalPrice || signalPrice >= target_val.high * 0.97;
+            if (notAlreadyPastTarget && history.lowSince <= target_val.high) outcome = "hit";
+          }
         }
       }
 
-      if (!outcome && canMiss && invalidationPrice) {
-        if (isBullish && history.current <= invalidationPrice) outcome = "missed";
-        else if (!isBullish && history.current >= invalidationPrice) outcome = "missed";
+      if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
+        const invMakesDirectionalSense = isBullish
+          ? invalidationPrice < refPrice2
+          : invalidationPrice > refPrice2;
+        if (invMakesDirectionalSense) {
+          if (isBullish && history.current <= invalidationPrice) outcome = "missed";
+          else if (!isBullish && history.current >= invalidationPrice) outcome = "missed";
+        }
       }
 
       if (!outcome && isExpired) {
@@ -3256,6 +3286,25 @@ router.post("/whale/admin/grant", async (req, res) => {
       [userId]
     );
     res.json({ success: true, userId });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/reset-bad-outcomes", async (req, res) => {
+  try {
+    const { adminSecret } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    const result = await dbQuery(
+      `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL
+       WHERE signal_source = 'replit'
+       AND outcome IN ('missed', 'hit')
+       AND resolved_at IS NOT NULL
+       AND EXTRACT(EPOCH FROM (resolved_at - COALESCE(detected_at, created_at))) < 7200`
+    );
+    const count = result?.rowCount || 0;
+    console.log(`[admin] Reset ${count} incorrectly resolved signals to pending`);
+    res.json({ success: true, reset: count });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
