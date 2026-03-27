@@ -2891,6 +2891,7 @@ router.get("/whale/prices/realtime", (_req, res) => {
       low: pd.low,
       volume: pd.volume,
       trades: pd.trades,
+      source: pd.source ?? "ws",
       lastUpdate: new Date(pd.lastUpdate).toISOString(),
       age: Math.round((Date.now() - pd.lastUpdate) / 1000),
     };

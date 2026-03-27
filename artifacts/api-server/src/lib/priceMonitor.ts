@@ -2,6 +2,8 @@ import WebSocket from "ws";
 
 const FINNHUB_KEY = () => process.env["FINNHUB_API_KEY"] ?? "";
 const WS_URL = () => `wss://ws.finnhub.io?token=${FINNHUB_KEY()}`;
+const QUOTE_URL = (symbol: string) =>
+  `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY()}`;
 
 interface PriceData {
   price: number;
@@ -10,6 +12,7 @@ interface PriceData {
   volume: number;
   lastUpdate: number;
   trades: number;
+  source?: "ws" | "rest";
 }
 
 type PriceCallback = (ticker: string, data: PriceData, tradeVolume?: number) => void;
@@ -21,6 +24,7 @@ class PriceMonitor {
   private callbacks: PriceCallback[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private restPollTimer: ReturnType<typeof setInterval> | null = null;
   private isConnecting = false;
   private isShuttingDown = false;
   private reconnectDelay = 1000;
@@ -63,7 +67,7 @@ class PriceMonitor {
 
               let data = this.priceData.get(ticker);
               if (!data) {
-                data = { price, high: price, low: price, volume: 0, lastUpdate: Date.now(), trades: 0 };
+                data = { price, high: price, low: price, volume: 0, lastUpdate: Date.now(), trades: 0, source: "ws" };
                 this.priceData.set(ticker, data);
               }
 
@@ -71,6 +75,7 @@ class PriceMonitor {
               data.volume += volume;
               data.trades++;
               data.lastUpdate = Date.now();
+              data.source = "ws";
 
               if (price > data.high) data.high = price;
               if (price < data.low) data.low = price;
@@ -120,15 +125,20 @@ class PriceMonitor {
   }
 
   subscribe(tickers: string[]) {
+    let added = false;
     for (const ticker of tickers) {
       if (!this.subscribedTickers.has(ticker)) {
         this.subscribedTickers.add(ticker);
         this.sendSubscribe(ticker);
+        added = true;
       }
     }
 
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.connect();
+    }
+    if (added && !this.restPollTimer) {
+      this.startRestPoll();
     }
   }
 
@@ -165,6 +175,55 @@ class PriceMonitor {
 
   getSubscribedTickers(): string[] {
     return [...this.subscribedTickers];
+  }
+
+  private async fetchRestQuote(ticker: string): Promise<void> {
+    try {
+      const resp = await fetch(QUOTE_URL(ticker));
+      if (!resp.ok) return;
+      const q = await resp.json() as { c?: number; h?: number; l?: number; t?: number };
+      const price = q.c;
+      if (!price || price <= 0) return;
+
+      const existing = this.priceData.get(ticker);
+      if (existing && existing.source === "ws" && Date.now() - existing.lastUpdate < 120000) return;
+
+      const data: PriceData = {
+        price,
+        high: q.h ?? price,
+        low: q.l ?? price,
+        volume: existing?.volume ?? 0,
+        lastUpdate: Date.now(),
+        trades: existing?.trades ?? 0,
+        source: "rest",
+      };
+      this.priceData.set(ticker, data);
+    } catch {}
+  }
+
+  private startRestPoll() {
+    this.stopRestPoll();
+    this.pollRestQuotes();
+    this.restPollTimer = setInterval(() => this.pollRestQuotes(), 60000);
+  }
+
+  private stopRestPoll() {
+    if (this.restPollTimer) {
+      clearInterval(this.restPollTimer);
+      this.restPollTimer = null;
+    }
+  }
+
+  private async pollRestQuotes() {
+    if (this.subscribedTickers.size === 0 || !FINNHUB_KEY()) return;
+    const tickers = [...this.subscribedTickers];
+    for (let i = 0; i < tickers.length; i++) {
+      const t = tickers[i];
+      const existing = this.priceData.get(t);
+      if (existing && existing.source === "ws" && Date.now() - existing.lastUpdate < 120000) continue;
+      await this.fetchRestQuote(t);
+      if (i < tickers.length - 1) await new Promise(r => setTimeout(r, 250));
+    }
   }
 
   resetDailyHighLow(ticker: string) {
@@ -209,6 +268,7 @@ class PriceMonitor {
   disconnect() {
     this.isShuttingDown = true;
     this.stopHeartbeat();
+    this.stopRestPoll();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
