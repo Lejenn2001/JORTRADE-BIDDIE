@@ -2231,14 +2231,34 @@ async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<Pri
     const timestamps = result.timestamp ?? [];
 
     const sinceTs = since.getTime() / 1000;
+
+    const sinceHourUTC = since.getUTCHours();
+    const marketOpenUTC = 13.5;
+    const marketCloseUTC = 20;
+    const signalAfterHours = sinceHourUTC >= marketCloseUTC || sinceHourUTC < marketOpenUTC;
+
+    let effectiveSinceTs = sinceTs;
+    if (signalAfterHours) {
+      const nextDay = new Date(since);
+      if (sinceHourUTC >= marketCloseUTC) {
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      }
+      nextDay.setUTCHours(13, 30, 0, 0);
+      const dayOfWeek = nextDay.getUTCDay();
+      if (dayOfWeek === 0) nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      if (dayOfWeek === 6) nextDay.setUTCDate(nextDay.getUTCDate() + 2);
+      effectiveSinceTs = nextDay.getTime() / 1000;
+    }
+
     let highSince = -Infinity;
     let lowSince = Infinity;
+    let hasDataAfterSignal = false;
     for (let i = 0; i < timestamps.length; i++) {
-      if (timestamps[i] >= sinceTs) {
+      if (timestamps[i] >= effectiveSinceTs) {
         const h = quote?.high?.[i];
         const l = quote?.low?.[i];
-        if (h && h > highSince) highSince = h;
-        if (l && l < lowSince) lowSince = l;
+        if (h && h > highSince) { highSince = h; hasDataAfterSignal = true; }
+        if (l && l < lowSince) { lowSince = l; hasDataAfterSignal = true; }
       }
     }
 
@@ -2257,8 +2277,10 @@ async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<Pri
     }
     if (!current) return null;
 
-    if (highSince === -Infinity) highSince = current;
-    if (lowSince === Infinity) lowSince = current;
+    if (!hasDataAfterSignal) {
+      highSince = current;
+      lowSince = current;
+    }
 
     return {
       current: Math.round(current * 100) / 100,
