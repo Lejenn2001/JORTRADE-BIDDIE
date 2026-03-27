@@ -582,7 +582,20 @@ const DashboardBreakout = () => {
                                 )}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                <span className="truncate max-w-md">{setup.reason}</span>
+                                {setup.contract ? (
+                                  <span className={`shrink-0 font-black ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>
+                                    {setup.ticker} ${setup.contract.strike} {setup.contract.type}
+                                    <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                      setup.contract.expiryLabel === "0DTE"
+                                        ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+                                        : setup.contract.expiryLabel === "1DTE"
+                                          ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                                          : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                    }`}>{setup.contract.expiryLabel}</span>
+                                  </span>
+                                ) : (
+                                  <span className="truncate max-w-md">{setup.reason}</span>
+                                )}
                                 {setup.targetPrice && (
                                   <span className="shrink-0 font-semibold text-primary">
                                     Target: ${setup.targetPrice.toFixed(2)}
@@ -777,6 +790,65 @@ const DashboardBreakout = () => {
                                         ))}
                                       </div>
                                     )}
+                                  </div>
+                                )}
+
+                                {setup.contract && (
+                                  <div className={`mt-3 rounded-xl p-4 border ${
+                                    setup.contract.type === "CALL"
+                                      ? "bg-emerald-500/[0.07] border-emerald-500/25"
+                                      : "bg-red-500/[0.07] border-red-500/25"
+                                  }`}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <Zap className={`h-4 w-4 ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`} />
+                                      <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Contract Recommendation</span>
+                                      <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                        setup.contract.expiryLabel === "0DTE"
+                                          ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40 animate-pulse"
+                                          : setup.contract.expiryLabel === "1DTE"
+                                            ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                                            : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                      }`}>
+                                        {setup.contract.expiryLabel}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 mb-3">
+                                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center border ${
+                                        setup.contract.type === "CALL"
+                                          ? "bg-emerald-500/20 border-emerald-500/40"
+                                          : "bg-red-500/20 border-red-500/40"
+                                      }`}>
+                                        {setup.contract.type === "CALL"
+                                          ? <ArrowUpRight className="h-5 w-5 text-emerald-400" />
+                                          : <ArrowDownRight className="h-5 w-5 text-red-400" />
+                                        }
+                                      </div>
+                                      <div>
+                                        <p className={`text-lg font-black tracking-tight ${
+                                          setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"
+                                        }`}>
+                                          {setup.ticker} ${setup.contract.strike} {setup.contract.type}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                          Exp {setup.contract.expiry} ({setup.contract.expiryLabel})
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 mb-3">
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Entry</p>
+                                        <p className="text-xs font-bold text-foreground mt-0.5">{setup.contract.entry}</p>
+                                      </div>
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Target</p>
+                                        <p className={`text-xs font-bold mt-0.5 ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>{setup.contract.target}</p>
+                                      </div>
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Stop</p>
+                                        <p className="text-xs font-bold text-yellow-400 mt-0.5">{setup.contract.stop}</p>
+                                      </div>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground/80">{setup.contract.rationale}</p>
                                   </div>
                                 )}
 

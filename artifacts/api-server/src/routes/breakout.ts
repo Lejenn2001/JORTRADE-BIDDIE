@@ -132,6 +132,17 @@ interface CandleData {
   volume: number;
 }
 
+interface ContractRec {
+  type: "CALL" | "PUT";
+  strike: number;
+  expiry: string;
+  expiryLabel: string;
+  entry: string;
+  target: string;
+  stop: string;
+  rationale: string;
+}
+
 interface SqueezeResult {
   ticker: string;
   squeezeActive: boolean;
@@ -156,6 +167,7 @@ interface SqueezeResult {
   proximityPct: number | null;
   imminenceLabel: string | null;
   imminenceScore: number;
+  contract: ContractRec | null;
   thesis: {
     direction: "bullish" | "bearish" | "neutral";
     confidence: number;
@@ -392,6 +404,120 @@ function detectBreakout(candles: CandleData[], resistanceLevel: number, supportL
 
 let currentFlowData: any[] | null = null;
 
+const ZERO_DTE_TICKERS = new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GLD", "TLT", "XOM", "JPM", "DIS", "BA", "V", "MA", "COIN"]);
+
+function snapToStrike(price: number, direction: "bullish" | "bearish" | "neutral" | "none"): number {
+  let interval: number;
+  if (price >= 500) interval = 5;
+  else if (price >= 100) interval = 1;
+  else if (price >= 20) interval = 0.5;
+  else interval = 0.5;
+
+  if (direction === "bullish") {
+    return Math.ceil(price / interval) * interval;
+  } else if (direction === "bearish") {
+    return Math.floor(price / interval) * interval;
+  }
+  return Math.round(price / interval) * interval;
+}
+
+function getNextExpiry(ticker: string): { expiry: string; label: string } {
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const dayOfWeek = et.getDay();
+
+  const has0DTE = ZERO_DTE_TICKERS.has(ticker);
+  const isMWF = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5;
+  const isTuTh = dayOfWeek === 2 || dayOfWeek === 4;
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+
+  if (has0DTE && isWeekday) {
+    if (ticker === "SPY" || ticker === "QQQ" || ticker === "IWM") {
+      return { expiry: formatDate(et), label: "0DTE" };
+    }
+    if (isMWF) {
+      return { expiry: formatDate(et), label: "0DTE" };
+    }
+    const tomorrow = new Date(et);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDay() === 6) tomorrow.setDate(tomorrow.getDate() + 2);
+    return { expiry: formatDate(tomorrow), label: "1DTE" };
+  }
+
+  const friday = new Date(et);
+  const daysUntilFri = (5 - dayOfWeek + 7) % 7 || 7;
+  friday.setDate(friday.getDate() + (daysUntilFri === 0 ? 7 : daysUntilFri));
+  return { expiry: formatDate(friday), label: "Weekly" };
+}
+
+function formatDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function generateContractRec(
+  ticker: string,
+  price: number,
+  atr: number,
+  direction: "bullish" | "bearish" | "neutral" | "none",
+  resistance: number | null,
+  support: number | null,
+  target: number | null,
+  breakoutTriggered: boolean,
+  imminenceLabel: string | null,
+): ContractRec | null {
+  if (direction === "neutral" || direction === "none") return null;
+  if (price <= 0) return null;
+
+  const isBullish = direction === "bullish";
+  const type: "CALL" | "PUT" = isBullish ? "CALL" : "PUT";
+
+  let strikeBase: number;
+  if (breakoutTriggered) {
+    strikeBase = isBullish
+      ? price - atr * 0.3
+      : price + atr * 0.3;
+  } else if (imminenceLabel === "BREAKOUT IMMINENT" || imminenceLabel === "LIKELY WITHIN 15 MIN") {
+    strikeBase = isBullish
+      ? Math.min(price, resistance ?? price)
+      : Math.max(price, support ?? price);
+  } else {
+    strikeBase = isBullish
+      ? price - atr * 0.15
+      : price + atr * 0.15;
+  }
+
+  const strike = snapToStrike(strikeBase, direction);
+  const { expiry, label } = getNextExpiry(ticker);
+
+  const entryPrice = price;
+  const stopPrice = isBullish
+    ? Math.round((price - atr * 0.5) * 100) / 100
+    : Math.round((price + atr * 0.5) * 100) / 100;
+  const targetPrice = target
+    ?? (isBullish
+      ? Math.round((price + atr * 1.5) * 100) / 100
+      : Math.round((price - atr * 1.5) * 100) / 100);
+
+  const parts: string[] = [];
+  if (breakoutTriggered) parts.push("Active breakout");
+  else if (imminenceLabel) parts.push(imminenceLabel.toLowerCase());
+  if (isBullish && resistance) parts.push(`resistance $${resistance.toFixed(2)}`);
+  if (!isBullish && support) parts.push(`support $${support.toFixed(2)}`);
+  parts.push(`${label} expiry`);
+
+  return {
+    type,
+    strike,
+    expiry,
+    expiryLabel: label,
+    entry: `$${entryPrice.toFixed(2)}`,
+    target: `$${targetPrice.toFixed(2)}`,
+    stop: `$${stopPrice.toFixed(2)}`,
+    rationale: parts.join(" | "),
+  };
+}
+
 async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   const candles = await fetchDailyCandles(ticker, 60);
   if (candles.length < 21) return null;
@@ -570,6 +696,9 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     imminenceLabel = "BUILDING PRESSURE";
   }
 
+  const effectiveDir2 = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
+  const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
+
   return {
     ticker,
     squeezeActive: squeeze.squeezeActive,
@@ -594,6 +723,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     proximityPct: Math.round(closerDist * 100) / 100,
     imminenceLabel,
     imminenceScore,
+    contract,
     thesis: {
       direction: thesisDirection,
       confidence: thesisConfidence,
