@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Zap, TrendingUp, TrendingDown, Activity, Target, Loader2,
   RefreshCw, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle,
   ChevronRight, BarChart3, Crosshair, Minus, Bell, Radio,
-  Info, ChevronDown, Plus, X
+  Info, ChevronDown, Plus, X, CheckCircle2
 } from "lucide-react";
 
 interface FlowBias {
@@ -118,6 +119,7 @@ function saveWatched(set: Set<string>) {
 }
 
 const DashboardBreakout = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +135,45 @@ const DashboardBreakout = () => {
   const [customTickers, setCustomTickers] = useState<string[]>([]);
   const [addingTicker, setAddingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [takenTrades, setTakenTrades] = useState<Set<string>>(new Set());
+  const [takingTrade, setTakingTrade] = useState<string | null>(null);
+
+  const buildTradeKey = (setup: BreakoutSetup) =>
+    `${setup.ticker}|${setup.contract?.strike}|${setup.contract?.type}|${setup.contract?.expiry}`;
+
+  const handleTakeTrade = useCallback(async (setup: BreakoutSetup, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user || !setup.contract) return;
+    const key = buildTradeKey(setup);
+    if (takenTrades.has(key)) return;
+
+    setTakingTrade(setup.ticker);
+    try {
+      const signalId = `breakout-${setup.ticker}-${setup.contract.expiry}-${setup.contract.strike}`;
+      const resp = await fetch("/api/whale/trades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          signalId,
+          ticker: setup.ticker,
+          direction: setup.thesis?.direction || "neutral",
+          category: "breakout",
+          strike: setup.contract.strike,
+          expiry: setup.contract.expiry,
+          optionType: setup.contract.type,
+          entryTrigger: setup.contract.entry,
+          target: setup.contract.target,
+          invalidation: setup.contract.stop,
+          convictionScore: setup.score,
+        }),
+      });
+      if (resp.ok || resp.status === 409) {
+        setTakenTrades(prev => new Set(prev).add(key));
+      }
+    } catch {}
+    setTakingTrade(null);
+  }, [user, takenTrades]);
 
   const toggleWatch = useCallback((ticker: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -232,10 +273,26 @@ const DashboardBreakout = () => {
     fetchAlerts();
     fetchCustomTickers();
     alertPollRef.current = setInterval(fetchAlerts, 15000);
+
+    if (user) {
+      fetch(`/api/whale/trades?userId=${user.id}`)
+        .then(r => r.json())
+        .then(data => {
+          const taken = new Set<string>();
+          for (const t of (data.trades || [])) {
+            if (t.category === "breakout") {
+              taken.add(`${t.ticker}|${t.strike}|${t.option_type}|${t.expiry}`);
+            }
+          }
+          setTakenTrades(taken);
+        })
+        .catch(() => {});
+    }
+
     return () => {
       if (alertPollRef.current) clearInterval(alertPollRef.current);
     };
-  }, [runScan, fetchAlerts, fetchCustomTickers]);
+  }, [runScan, fetchAlerts, fetchCustomTickers, user]);
 
   const timeSinceStr = lastScan
     ? `${Math.floor((Date.now() - lastScan.getTime()) / 60000)}m ago`
@@ -849,6 +906,31 @@ const DashboardBreakout = () => {
                                       </div>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground/80">{setup.contract.rationale}</p>
+                                    {user && (
+                                      <button
+                                        onClick={(e) => handleTakeTrade(setup, e)}
+                                        disabled={takingTrade === setup.ticker || takenTrades.has(buildTradeKey(setup))}
+                                        className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                                          takenTrades.has(buildTradeKey(setup))
+                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 cursor-default"
+                                            : setup.contract.type === "CALL"
+                                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-[0.98]"
+                                              : "bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 active:scale-[0.98]"
+                                        }`}
+                                      >
+                                        {takingTrade === setup.ticker ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : takenTrades.has(buildTradeKey(setup)) ? (
+                                          <CheckCircle2 className="h-4 w-4" />
+                                        ) : (
+                                          <Zap className="h-4 w-4" />
+                                        )}
+                                        {takenTrades.has(buildTradeKey(setup))
+                                          ? "Trade Logged"
+                                          : "I Took This Trade"
+                                        }
+                                      </button>
+                                    )}
                                   </div>
                                 )}
 
