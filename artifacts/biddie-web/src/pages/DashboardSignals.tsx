@@ -606,22 +606,29 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
             </div>
           )}
           {signal.spreadDetails && (
-            <div className="flex items-start gap-2 bg-violet-500/10 rounded-lg px-2.5 py-1.5">
-              <Target className="h-3 w-3 text-violet-400 mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Strategy: </span>
-                <span className="text-violet-400 font-semibold">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                {signal.spreadDetails.legs && (
-                  <span className="text-muted-foreground text-[10px] block mt-0.5">{signal.spreadDetails.legs}</span>
-                )}
-                {(signal.spreadDetails.max_profit || signal.spreadDetails.max_loss) && (
-                  <span className="text-[10px] text-muted-foreground block mt-0.5">
-                    {signal.spreadDetails.max_profit != null && `Max Profit: $${signal.spreadDetails.max_profit}`}
-                    {signal.spreadDetails.max_profit != null && signal.spreadDetails.max_loss != null && ' | '}
-                    {signal.spreadDetails.max_loss != null && `Max Loss: $${signal.spreadDetails.max_loss}`}
-                  </span>
-                )}
+            <div className="bg-violet-500/10 rounded-lg px-2.5 py-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Target className="h-3 w-3 text-violet-400 shrink-0" />
+                <span className="text-violet-400 font-semibold text-xs">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
               </div>
+              {signal.spreadDetails.legs && (
+                <div className="flex items-start gap-2 pl-5">
+                  <span className="text-foreground font-medium text-[11px]">{signal.spreadDetails.legs}</span>
+                </div>
+              )}
+              {(signal.spreadDetails.max_profit != null || signal.spreadDetails.max_loss != null || signal.spreadDetails.risk_reward) && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 pl-5 text-[10px]">
+                  {signal.spreadDetails.max_profit != null && (
+                    <span><span className="text-muted-foreground">Max Profit: </span><span className="text-emerald-400 font-semibold">${signal.spreadDetails.max_profit}</span></span>
+                  )}
+                  {signal.spreadDetails.max_loss != null && (
+                    <span><span className="text-muted-foreground">Max Loss: </span><span className="text-red-400 font-semibold">${signal.spreadDetails.max_loss}</span></span>
+                  )}
+                  {signal.spreadDetails.risk_reward && (
+                    <span><span className="text-muted-foreground">R/R: </span><span className="text-violet-400 font-semibold">{signal.spreadDetails.risk_reward}</span></span>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {signal.gammaZone && signal.gammaZone !== 'neutral' && (
