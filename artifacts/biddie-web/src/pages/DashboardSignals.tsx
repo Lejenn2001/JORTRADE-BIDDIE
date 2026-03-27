@@ -99,6 +99,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     timeframe: classifyTimeframeFromRecord(record),
     category: record.category,
     reason: record.reason,
+    aiEvaluated: true,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
   };
@@ -477,7 +478,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
   const isWhale = signal.category === "whale";
   const isSpread = signal.category === "spread";
 
-  const glowClass = isWhale
+  const isAI = signal.aiEvaluated;
+
+  const glowClass = isAI
+    ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20"
+    : isWhale
     ? score >= 85
       ? "shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] border-blue-500/40"
       : "shadow-[0_0_10px_-3px_rgba(59,130,246,0.25)] border-blue-500/30"
@@ -535,6 +540,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
           {signal.source === "live" ? (
             <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
           ) : null}
+          {isAI && (
+            <span className="text-[8px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie AI Pick</span>
+          )}
         </div>
         <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
           <Clock className="h-2.5 w-2.5" />

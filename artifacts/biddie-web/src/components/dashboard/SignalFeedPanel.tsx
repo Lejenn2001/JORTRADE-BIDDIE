@@ -79,7 +79,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
               animate="visible"
               variants={cardVariants}
               className={`rounded-xl border overflow-hidden ${
-                signal.type === "bullish"
+                signal.aiEvaluated
+                  ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20 bg-emerald-500/5"
+                  : signal.type === "bullish"
                   ? "border-primary/30 bg-primary/5"
                   : signal.type === "bearish"
                   ? "border-destructive/30 bg-destructive/5"
@@ -137,6 +139,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   {signal.source === "live" ? (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
                   ) : null}
+                  {signal.aiEvaluated && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie AI Pick</span>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5" />

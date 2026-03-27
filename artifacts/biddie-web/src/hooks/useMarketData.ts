@@ -51,6 +51,7 @@ export interface MarketSignal {
   recommendedExpiry?: string;
   recommendedStrike?: string;
   category?: SignalCategory;
+  aiEvaluated?: boolean;
   spreadDetails?: {
     type: string;
     legs: string;

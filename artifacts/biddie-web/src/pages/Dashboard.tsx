@@ -76,6 +76,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     reason: record.reason,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
+    aiEvaluated: true,
   };
 };
 
