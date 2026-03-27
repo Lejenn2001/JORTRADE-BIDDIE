@@ -241,6 +241,171 @@ async function fetchRecentCandles(ticker: string, interval = "1m", count = 10): 
   } catch { return []; }
 }
 
+async function fetchStructureCandles(ticker: string): Promise<CandleBar[]> {
+  try {
+    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
+    const res = await axios.get(`${YF}/${ticker}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      params: { interval: "5m", range: "5d" },
+      timeout: 10000,
+    });
+    const result = res.data?.chart?.result?.[0];
+    if (!result) return [];
+    const quote = result.indicators?.quote?.[0];
+    const timestamps = result.timestamp ?? [];
+    const bars: CandleBar[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const o = quote?.open?.[i];
+      const h = quote?.high?.[i];
+      const l = quote?.low?.[i];
+      const c = quote?.close?.[i];
+      const v = quote?.volume?.[i];
+      if (o && h && l && c) {
+        bars.push({ open: o, high: h, low: l, close: c, volume: v ?? 0, timestamp: timestamps[i] });
+      }
+    }
+    return bars;
+  } catch { return []; }
+}
+
+interface SwingPoint {
+  type: "high" | "low";
+  price: number;
+  index: number;
+  timestamp: number;
+}
+
+interface FairValueGap {
+  type: "bullish" | "bearish";
+  top: number;
+  bottom: number;
+  midpoint: number;
+  index: number;
+  filled: boolean;
+}
+
+interface MarketStructure {
+  trend: "uptrend" | "downtrend" | "ranging";
+  swing_highs: { price: number; timestamp: number }[];
+  swing_lows: { price: number; timestamp: number }[];
+  fair_value_gaps: FairValueGap[];
+  nearest_support: number | null;
+  nearest_resistance: number | null;
+  break_of_structure: string | null;
+  structure_summary: string;
+}
+
+function findSwingPoints(candles: CandleBar[], lookback = 3): SwingPoint[] {
+  const swings: SwingPoint[] = [];
+  for (let i = lookback; i < candles.length - lookback; i++) {
+    let isSwingHigh = true;
+    let isSwingLow = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (candles[i].high <= candles[i - j].high || candles[i].high <= candles[i + j].high) isSwingHigh = false;
+      if (candles[i].low >= candles[i - j].low || candles[i].low >= candles[i + j].low) isSwingLow = false;
+    }
+    if (isSwingHigh) swings.push({ type: "high", price: candles[i].high, index: i, timestamp: candles[i].timestamp });
+    if (isSwingLow) swings.push({ type: "low", price: candles[i].low, index: i, timestamp: candles[i].timestamp });
+  }
+  return swings;
+}
+
+function findFairValueGaps(candles: CandleBar[]): FairValueGap[] {
+  const fvgs: FairValueGap[] = [];
+  for (let i = 2; i < candles.length; i++) {
+    const c1 = candles[i - 2];
+    const c3 = candles[i];
+    if (c3.low > c1.high) {
+      const filled = candles.slice(i + 1).some(c => c.low <= c3.low);
+      fvgs.push({ type: "bullish", top: c3.low, bottom: c1.high, midpoint: (c3.low + c1.high) / 2, index: i - 1, filled });
+    }
+    if (c1.low > c3.high) {
+      const filled = candles.slice(i + 1).some(c => c.high >= c1.low);
+      fvgs.push({ type: "bearish", top: c1.low, bottom: c3.high, midpoint: (c1.low + c3.high) / 2, index: i - 1, filled });
+    }
+  }
+  return fvgs;
+}
+
+function analyzeMarketStructure(candles: CandleBar[], currentPrice: number | null): MarketStructure {
+  const defaultResult: MarketStructure = {
+    trend: "ranging",
+    swing_highs: [],
+    swing_lows: [],
+    fair_value_gaps: [],
+    nearest_support: null,
+    nearest_resistance: null,
+    break_of_structure: null,
+    structure_summary: "Insufficient data",
+  };
+  if (candles.length < 10) return defaultResult;
+
+  const swings = findSwingPoints(candles, 3);
+  const highs = swings.filter(s => s.type === "high").sort((a, b) => a.index - b.index);
+  const lows = swings.filter(s => s.type === "low").sort((a, b) => a.index - b.index);
+
+  let trend: "uptrend" | "downtrend" | "ranging" = "ranging";
+  if (highs.length >= 2 && lows.length >= 2) {
+    const recentHighs = highs.slice(-3);
+    const recentLows = lows.slice(-3);
+    const hhCount = recentHighs.filter((h, i) => i > 0 && h.price > recentHighs[i - 1].price).length;
+    const hlCount = recentLows.filter((l, i) => i > 0 && l.price > recentLows[i - 1].price).length;
+    const lhCount = recentHighs.filter((h, i) => i > 0 && h.price < recentHighs[i - 1].price).length;
+    const llCount = recentLows.filter((l, i) => i > 0 && l.price < recentLows[i - 1].price).length;
+    if (hhCount >= 1 && hlCount >= 1) trend = "uptrend";
+    else if (lhCount >= 1 && llCount >= 1) trend = "downtrend";
+  }
+
+  const fvgs = findFairValueGaps(candles);
+  const unfilledFvgs = fvgs.filter(f => !f.filled).slice(-6);
+
+  const price = currentPrice || candles[candles.length - 1]?.close || 0;
+  const supports = [
+    ...lows.map(l => l.price),
+    ...unfilledFvgs.filter(f => f.type === "bullish").map(f => f.midpoint),
+  ].filter(p => p < price).sort((a, b) => b - a);
+  const resistances = [
+    ...highs.map(h => h.price),
+    ...unfilledFvgs.filter(f => f.type === "bearish").map(f => f.midpoint),
+  ].filter(p => p > price).sort((a, b) => a - b);
+
+  let bos: string | null = null;
+  if (highs.length >= 2 && lows.length >= 1) {
+    const lastHigh = highs[highs.length - 1];
+    const prevHigh = highs[highs.length - 2];
+    const lastLow = lows[lows.length - 1];
+    if (price > lastHigh.price && lastHigh.index > lastLow.index) {
+      bos = `Bullish BOS: Price broke above swing high at $${lastHigh.price.toFixed(2)}`;
+    } else if (lows.length >= 2) {
+      const prevLow = lows[lows.length - 2];
+      if (price < lastLow.price && lastLow.index > lastHigh.index) {
+        bos = `Bearish BOS: Price broke below swing low at $${lastLow.price.toFixed(2)}`;
+      }
+    }
+  }
+
+  const summaryParts: string[] = [];
+  summaryParts.push(`Market Structure: ${trend.toUpperCase()}`);
+  if (supports.length) summaryParts.push(`Nearest support: $${supports[0].toFixed(2)}`);
+  if (resistances.length) summaryParts.push(`Nearest resistance: $${resistances[0].toFixed(2)}`);
+  if (bos) summaryParts.push(bos);
+  const bullFvgs = unfilledFvgs.filter(f => f.type === "bullish");
+  const bearFvgs = unfilledFvgs.filter(f => f.type === "bearish");
+  if (bullFvgs.length) summaryParts.push(`${bullFvgs.length} unfilled bullish FVG(s) — nearest at $${bullFvgs[bullFvgs.length - 1].midpoint.toFixed(2)}`);
+  if (bearFvgs.length) summaryParts.push(`${bearFvgs.length} unfilled bearish FVG(s) — nearest at $${bearFvgs[0].midpoint.toFixed(2)}`);
+
+  return {
+    trend,
+    swing_highs: highs.slice(-4).map(h => ({ price: h.price, timestamp: h.timestamp })),
+    swing_lows: lows.slice(-4).map(l => ({ price: l.price, timestamp: l.timestamp })),
+    fair_value_gaps: unfilledFvgs,
+    nearest_support: supports[0] ?? null,
+    nearest_resistance: resistances[0] ?? null,
+    break_of_structure: bos,
+    structure_summary: summaryParts.join(" | "),
+  };
+}
+
 function detectPriceActionConfirmation(
   candles: CandleBar[],
   strikePrice: number,
@@ -1029,18 +1194,19 @@ async function runSignalsPipeline() {
   // Get unique tickers — limit to 10 to avoid Yahoo Finance rate limits
   const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
 
-  // Fetch key levels and candles in parallel with a global timeout
+  // Fetch key levels, candles, and structure candles in parallel with a global timeout
   const dataFetchPromise = (async () => {
     const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null).catch(() => null)));
     const candleResults = await Promise.all(uniqueTickers.map((t) => fetchRecentCandles(t, "1m", 10).catch(() => [])));
-    return { levelResults, candleResults };
+    const structureResults = await Promise.all(uniqueTickers.map((t) => fetchStructureCandles(t).catch(() => [])));
+    return { levelResults, candleResults, structureResults };
   })();
 
-  const timeoutPromise = new Promise<{ levelResults: any[]; candleResults: any[] }>((resolve) =>
-    setTimeout(() => resolve({ levelResults: uniqueTickers.map(() => null), candleResults: uniqueTickers.map(() => []) }), 15000)
+  const timeoutPromise = new Promise<{ levelResults: any[]; candleResults: any[]; structureResults: any[] }>((resolve) =>
+    setTimeout(() => resolve({ levelResults: uniqueTickers.map(() => null), candleResults: uniqueTickers.map(() => []), structureResults: uniqueTickers.map(() => []) }), 15000)
   );
 
-  const { levelResults, candleResults } = await Promise.race([dataFetchPromise, timeoutPromise]);
+  const { levelResults, candleResults, structureResults } = await Promise.race([dataFetchPromise, timeoutPromise]);
   console.log(`[signals] key levels + candles done: ${Date.now() - t0}ms`);
 
   const keyLevels: Record<string, any> = {};
@@ -1048,6 +1214,13 @@ async function runSignalsPipeline() {
 
   const candleMap: Record<string, CandleBar[]> = {};
   uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
+
+  const structureMap: Record<string, MarketStructure> = {};
+  uniqueTickers.forEach((t, i) => {
+    const sCandles = structureResults[i] || [];
+    const price = keyLevels[t]?.current_price ?? null;
+    structureMap[t] = analyzeMarketStructure(sCandles, price);
+  });
 
   // Run price action confirmation for each candidate
   const priceConfirmations: Record<string, any> = {};
@@ -1351,6 +1524,7 @@ async function runSignalsPipeline() {
         const dayLow = Math.min(...candles.filter(c => c.low && c.low > 0).map(c => c.low));
         trend_description = `Open: $${openPrice?.toFixed(2)}, High: $${dayHigh.toFixed(2)}, Low: $${dayLow.toFixed(2)}, Current: $${s.current_price.toFixed(2)}, Change: ${intraday_change_pct > 0 ? '+' : ''}${intraday_change_pct}%, Trend: ${intraday_trend}`;
       }
+      const structure = structureMap[s.ticker] || null;
       return {
         idx: i,
         ticker: s.ticker,
@@ -1379,12 +1553,33 @@ async function runSignalsPipeline() {
         intraday_trend,
         intraday_change_pct,
         trend_description,
+        market_structure: structure ? {
+          multi_day_trend: structure.trend,
+          nearest_support: structure.nearest_support,
+          nearest_resistance: structure.nearest_resistance,
+          break_of_structure: structure.break_of_structure,
+          unfilled_fvgs: structure.fair_value_gaps.map(f => ({
+            type: f.type,
+            zone: `$${f.bottom.toFixed(2)} - $${f.top.toFixed(2)}`,
+            midpoint: f.midpoint,
+          })),
+          structure_summary: structure.structure_summary,
+        } : null,
       };
     });
 
-    const aiPrompt = `You are a professional options flow analyst and CHART READER. Evaluate these ${topCandidates.length} pre-screened trade signals. Your job is to determine which are REAL actionable directional bets vs hedges/noise/counter-trend traps.
+    const aiPrompt = `You are a professional options flow analyst and CHART READER with ICT/SMC (Smart Money Concepts) knowledge. Evaluate these ${topCandidates.length} pre-screened trade signals. Your job is to determine which are REAL actionable directional bets vs hedges/noise.
 
-CRITICAL: Each signal includes "trend_description" and "intraday_trend" showing exactly what the stock is doing RIGHT NOW. You MUST use this data. If a stock is dumping -3% intraday and someone is buying calls, that is almost certainly NOT a trade you want to recommend as bullish. The flow could be a hedge, a trap, or a contrarian bet that retail shouldn't follow.
+CRITICAL DATA YOU HAVE:
+1. "trend_description" + "intraday_trend" — what the stock is doing TODAY (open/high/low/current/change%)
+2. "market_structure" — MULTI-DAY structural analysis including:
+   - multi_day_trend: uptrend/downtrend/ranging based on swing highs & lows
+   - nearest_support / nearest_resistance: key structural levels
+   - break_of_structure: any recent BOS (bullish or bearish)
+   - unfilled_fvgs: Fair Value Gaps that haven't been filled yet — these are magnets for price
+   - structure_summary: plain-English summary of the chart structure
+
+USE THIS STRUCTURE DATA. A call buy on a stock near a key support/FVG with an overall uptrend structure is a GREAT reversal play — even if intraday is red. A call buy in a confirmed downtrend with no support nearby and bearish BOS is likely a hedge.
 
 For EACH signal, return a JSON object with:
 - idx: the signal index
@@ -1394,25 +1589,37 @@ For EACH signal, return a JSON object with:
 - signal_quality: "strong" | "moderate" | "weak" | "hedge"
 - recommended_category: "whale" | "algorithm" | "spread"
 
-MARKET STRUCTURE ANALYSIS — use trend data to assess signal quality:
+MARKET STRUCTURE ANALYSIS — combine flow + structure for high-conviction reads:
 
-TREND-ALIGNED SIGNALS (highest conviction):
-- Calls on a stock trending UP with price above VWAP = strong setup
-- Puts on a stock trending DOWN with price below VWAP = strong setup
-- Sweeps with high aggression IN the direction of the trend = highest conviction
-- Multiple confirming factors: sweep + aggression + trend + VWAP = score 8-10
+TREND-ALIGNED SIGNALS (highest conviction, score 8-10):
+- Calls on a stock in multi-day UPTREND with price above VWAP = strong
+- Puts on a stock in multi-day DOWNTREND with price below VWAP = strong
+- Sweeps with high aggression IN the direction of the structural trend
+- Flow aligns with bullish BOS (for calls) or bearish BOS (for puts)
+- Price near an unfilled FVG in the direction of the trade (e.g., call near a bullish FVG = expecting fill)
 
-COUNTER-TREND SIGNALS (not automatically bad — but need extra scrutiny):
-- Calls on a falling stock CAN be a valid reversal play if the stock is near a strong support/gamma level. Keep confidence moderate (5-7) and note it as a counter-trend/reversal setup.
-- Puts on a rising stock CAN be valid if near resistance. Same treatment.
-- If counter-trend with NO nearby support/resistance level visible → lower confidence to 4-5.
-- If counter-trend with intraday_change_pct worse than -3% (calls) or better than +3% (puts) → very likely a hedge. Score 3-4 or mark as hedge.
+FAIR VALUE GAP PLAYS (can be very high conviction):
+- If price is sitting ON or NEAR an unfilled bullish FVG and someone is buying calls → strong reversal setup (FVGs act as magnets)
+- If price is at an unfilled bearish FVG and someone is buying puts → strong continuation down
+- FVGs near the strike price add conviction — smart money targets these levels
 
-HEDGE INDICATORS — mark as hedge if:
+COUNTER-TREND / REVERSAL PLAYS (moderate conviction, score 5-7):
+- Calls on a falling stock are VALID IF:
+  → Price is near strong support (nearest_support close to current_price)
+  → Multi-day structure is still uptrend (just a pullback, not a trend break)
+  → Unfilled bullish FVG below price could act as support/magnet
+  → No bearish BOS has occurred
+- Puts on a rising stock are VALID IF:
+  → Price is near strong resistance
+  → Multi-day structure is downtrend (just a relief rally)
+  → Unfilled bearish FVG above price
+
+HEDGE / WEAK SIGNALS (score 3-5, or mark as hedge):
+- Counter-trend with bearish BOS AND no nearby support = hedge
 - Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend with large premium
 - Far OTM options with massive premium = tail risk hedge
-- Very large premium ($1M+) with far-dated expiry on a counter-trend day = institutional positioning, not a trade signal
-- No key level or technical reason to justify the counter-trend flow
+- Very large premium ($1M+) with far-dated expiry = institutional positioning
+- No key structural level, FVG, or technical reason to justify the direction
 
 CATEGORY ASSIGNMENT:
 - "whale": ONLY for $1M+ premium with sweep/high aggression, or $2M+. Rare.
