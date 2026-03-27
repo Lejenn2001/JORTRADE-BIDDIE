@@ -296,6 +296,20 @@ const AdminSignalInsights = () => {
       return normalized === filterOutcome;
     });
 
+    const parseExpiryDate = (expiry: string | null): number => {
+      if (!expiry) return 0;
+      const d = new Date(expiry);
+      if (!isNaN(d.getTime())) return d.getTime();
+      const cleaned = expiry.replace(/,/g, "").trim();
+      const parts = cleaned.split(/\s+/);
+      if (parts.length >= 3) {
+        const rebuilt = `${parts[0]} ${parts[1]}, ${parts[2]}`;
+        const d2 = new Date(rebuilt);
+        if (!isNaN(d2.getTime())) return d2.getTime();
+      }
+      return 0;
+    };
+
     list.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       switch (sortCol) {
@@ -310,6 +324,16 @@ const AdminSignalInsights = () => {
           const ad = a.put_call || a.signal_type;
           const bd = b.put_call || b.signal_type;
           return ad.localeCompare(bd) * dir;
+        }
+        case "strike": {
+          const as = parseFloat(a.strike || "0");
+          const bs = parseFloat(b.strike || "0");
+          return (as - bs) * dir;
+        }
+        case "expiry": {
+          const ae = parseExpiryDate(a.expiry);
+          const be = parseExpiryDate(b.expiry);
+          return (ae - be) * dir;
         }
         case "score": return ((a.confidence || 0) - (b.confidence || 0)) * dir;
         case "source": return (a.category || "").localeCompare(b.category || "") * dir;
