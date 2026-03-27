@@ -92,7 +92,9 @@ function dbRecordToSignal(record: any): MarketSignal {
     expiry: record.expiry || undefined,
     premium: record.premium || undefined,
     putCall: putCall as 'call' | 'put' | undefined,
-    suggestedTrade: `Buy ${record.ticker} ${record.strike || ''} ${putCall === 'call' ? 'Calls' : 'Puts'}${record.expiry ? ` exp ${record.expiry}` : ''}`,
+    suggestedTrade: record.category === 'spread' && record.spread_details?.legs
+      ? `${record.ticker} ${record.spread_details.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Spread'} — ${record.spread_details.legs}`
+      : `Buy ${record.ticker} $${record.strike || ''} ${putCall === 'call' ? 'Call' : 'Put'}`,
     targetZone: record.target_zone || record.target || undefined,
     createdAt,
     source: 'live',
@@ -103,6 +105,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     outcome: record.outcome || null,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
+    spreadDetails: record.spread_details || null,
   };
 }
 
