@@ -8,6 +8,7 @@ import {
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
+import PerformanceCalendar from "@/components/dashboard/PerformanceCalendar";
 import { useAuth } from "@/hooks/useAuth";
 
 interface TradeStats {
@@ -214,6 +215,8 @@ const DashboardAnalytics = () => {
             </div>
 
             <PerformanceSnapshot />
+
+            <PerformanceCalendar />
 
             {loading ? (
               <div className="flex items-center justify-center h-60">

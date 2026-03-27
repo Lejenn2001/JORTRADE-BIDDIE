@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useAuth } from "@/hooks/useAuth";
-import PerformanceCalendar from "@/components/dashboard/PerformanceCalendar";
 import {
   Zap, TrendingUp, TrendingDown, Activity, Target, Loader2,
   RefreshCw, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle,
@@ -328,8 +327,6 @@ const DashboardBreakout = () => {
                 {loading ? "Scanning..." : "Rescan"}
               </button>
             </div>
-
-            <PerformanceCalendar compact />
 
             <div className="glass-panel rounded-xl border border-white/[0.06] p-3">
               <div className="flex items-center gap-2 flex-wrap">
