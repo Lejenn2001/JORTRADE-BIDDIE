@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Target, Flame, RefreshCw } from "lucide-react";
+import { Target, Flame } from "lucide-react";
 
 interface Stats {
   total: number;
@@ -13,57 +13,36 @@ interface Stats {
 const PerformanceSnapshot = () => {
   const [stats, setStats] = useState<Stats>({ total: 0, wins: 0, losses: 0, pending: 0, streak: 0 });
   const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState(false);
-
-  const fetchStats = async () => {
-    try {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const resp = await fetch('/api/whale/signals/history?limit=100');
-      const result = resp.ok ? await resp.json() : null;
-      const data = result?.signals;
-
-      if (data) {
-        const resolved = data.filter(d => d.outcome !== "pending" && d.outcome !== "expired");
-        const wins = data.filter(d => d.outcome === "win" || d.outcome === "hit").length;
-        const losses = data.filter(d => d.outcome === "loss" || d.outcome === "missed").length;
-        const pending = data.filter(d => d.outcome === "pending").length;
-
-        let streak = 0;
-        for (const d of data) {
-          if (d.outcome === "win" || d.outcome === "hit") streak++;
-          else if (d.outcome !== "pending" && d.outcome !== "expired") break;
-        }
-
-        setStats({ total: resolved.length, wins, losses, pending, streak });
-      }
-    } catch (e) {
-      console.error("Performance fetch error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const apiBase = import.meta.env.BASE_URL ?? "/";
 
   useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const resp = await fetch('/api/whale/signals/history?limit=100');
+        const result = resp.ok ? await resp.json() : null;
+        const data = result?.signals;
+
+        if (data) {
+          const resolved = data.filter((d: any) => d.outcome !== "pending" && d.outcome !== "expired");
+          const wins = data.filter((d: any) => d.outcome === "win" || d.outcome === "hit").length;
+          const losses = data.filter((d: any) => d.outcome === "loss" || d.outcome === "missed").length;
+          const pending = data.filter((d: any) => d.outcome === "pending").length;
+
+          let streak = 0;
+          for (const d of data) {
+            if (d.outcome === "win" || d.outcome === "hit") streak++;
+            else if (d.outcome !== "pending" && d.outcome !== "expired") break;
+          }
+
+          setStats({ total: resolved.length, wins, losses, pending, streak });
+        }
+      } catch (e) {
+        console.error("Performance fetch error:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchStats();
   }, []);
-
-  const handleVerify = async () => {
-    setVerifying(true);
-    try {
-      const resp = await fetch(`${apiBase}api/whale/verify-signals`, { method: "POST" });
-      if (resp.ok) {
-        const data = await resp.json();
-        console.log("Verification result:", data);
-        await fetchStats();
-      }
-    } catch (e) {
-      console.error("Verify error:", e);
-    } finally {
-      setVerifying(false);
-    }
-  };
 
   const winRate = stats.total > 0 ? Math.round((stats.wins / stats.total) * 100) : 0;
 
@@ -83,22 +62,12 @@ const PerformanceSnapshot = () => {
           <Target className="h-4 w-4 text-emerald-400" />
           <span className="text-xs font-semibold text-foreground">This Week's Performance</span>
         </div>
-        <div className="flex items-center gap-2">
-          {stats.streak >= 3 && (
-            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400">
-              <Flame className="h-3 w-3" />
-              {stats.streak}W Streak
-            </div>
-          )}
-          <button
-            onClick={handleVerify}
-            disabled={verifying}
-            className="flex items-center gap-1 text-[10px] font-semibold text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3 w-3 ${verifying ? "animate-spin" : ""}`} />
-            {verifying ? "Checking..." : "Verify"}
-          </button>
-        </div>
+        {stats.streak >= 3 && (
+          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400">
+            <Flame className="h-3 w-3" />
+            {stats.streak}W Streak
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-4 gap-3">
         <div className="text-center">
