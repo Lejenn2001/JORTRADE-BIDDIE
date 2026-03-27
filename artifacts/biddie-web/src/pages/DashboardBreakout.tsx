@@ -50,6 +50,7 @@ interface BreakoutSetup {
   proximityPct: number | null;
   imminenceLabel: string | null;
   imminenceScore: number;
+  directionContext?: string | null;
   scannedAt?: string;
   thesis?: BreakoutThesis;
 }
@@ -666,6 +667,12 @@ const DashboardBreakout = () => {
                                   </span>
                                 )}
                               </div>
+                              {setup.directionContext && (
+                                <p className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5 flex items-start gap-1">
+                                  <Info className="h-2.5 w-2.5 mt-0.5 shrink-0" />
+                                  <span>{setup.directionContext}</span>
+                                </p>
+                              )}
                             </div>
                           </div>
 

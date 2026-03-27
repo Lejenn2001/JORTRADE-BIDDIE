@@ -168,6 +168,7 @@ interface SqueezeResult {
   imminenceLabel: string | null;
   imminenceScore: number;
   contract: ContractRec | null;
+  directionContext: string | null;
   scannedAt: string;
   thesis: {
     direction: "bullish" | "bearish" | "neutral";
@@ -718,13 +719,36 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   }
 
   let effectiveDir2 = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
-  if (effectiveDir2 === "neutral" && closerDist <= 1.0) {
-    if (proximityDir === "bearish" && momentum === "bearish") {
+  let directionContext: string | null = null;
+
+  if (effectiveDir2 === "neutral" && closerDist <= 1.5) {
+    if (flowBias && flowBias.direction !== "neutral" && flowBias.conviction >= 15) {
+      effectiveDir2 = flowBias.direction;
+      directionContext = `Flow-driven: Smart money leaning ${flowBias.direction} (${flowBias.details}). ${proximityDir === "bearish" ? "Near support" : "Near resistance"} — watching for ${flowBias.direction === "bullish" ? "bounce" : "breakdown"}`;
+    } else if (proximityDir === "bearish" && momentum === "bearish") {
       effectiveDir2 = "bullish";
+      directionContext = "Reversal play: Extended downtrend at support — watching for bounce";
     } else if (proximityDir === "bullish" && momentum === "bullish") {
       effectiveDir2 = "bearish";
+      directionContext = "Reversal play: Extended uptrend at resistance — watching for rejection";
     } else {
       effectiveDir2 = proximityDir;
+      directionContext = proximityDir === "bullish"
+        ? "Near resistance — watching for breakout above"
+        : "Near support — watching for breakdown below";
+    }
+  } else if (effectiveDir2 !== "neutral") {
+    if (flowBias && flowBias.direction === effectiveDir2 && flowBias.conviction >= 15) {
+      directionContext = `Flow confirms: Smart money agrees — ${flowBias.details}`;
+    } else if (flowBias && flowBias.direction !== "neutral" && flowBias.direction !== effectiveDir2 && flowBias.conviction >= 20) {
+      directionContext = `⚠️ Flow divergence: Smart money leans ${flowBias.direction} but technicals say ${effectiveDir2}`;
+    } else {
+      const reasons: string[] = [];
+      if (momentum === effectiveDir2) reasons.push("momentum");
+      if (smaPosition === (effectiveDir2 === "bullish" ? "above" : "below")) reasons.push("SMA position");
+      if (closerDist <= 1.0) reasons.push(proximityDir === "bearish" ? "near support" : "near resistance");
+      if (!flowBias || flowBias.direction === "neutral") reasons.push("no strong flow signal");
+      directionContext = `Technical-driven: ${reasons.join(", ")}`;
     }
   }
   const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
@@ -754,6 +778,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     imminenceLabel,
     imminenceScore,
     contract,
+    directionContext,
     scannedAt: new Date().toISOString(),
     thesis: {
       direction: thesisDirection,
