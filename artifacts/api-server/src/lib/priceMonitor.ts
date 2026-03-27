@@ -54,8 +54,13 @@ class PriceMonitor {
 
       this.ws.on("open", () => {
         this.isConnecting = false;
-        this.reconnectDelay = 1000;
         console.log("[price-monitor] Connected to Polygon.io, authenticating...");
+
+        setTimeout(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.reconnectDelay = 1000;
+          }
+        }, 30000);
 
         this.ws!.send(JSON.stringify({ action: "auth", params: POLYGON_KEY() }));
       });

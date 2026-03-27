@@ -934,9 +934,11 @@ router.get("/breakout/alerts", (_req, res) => {
   }
   const now = Date.now();
   const active = breakoutAlerts.filter(a => a.expiresAt > now);
+  res.set("Cache-Control", "no-cache, no-store");
   res.json({
     count: active.length,
     alerts: active,
+    lastScan: lastScanTime,
     monitoring: {
       subscribedTickers: priceMonitor.getSubscribedTickers().length,
       setupsWatched: cachedResults.length,
@@ -989,6 +991,7 @@ router.get("/breakout/scan", async (_req, res) => {
   try {
     const results = await runFullScan();
     syncBreakoutSubscriptions();
+    res.set("Cache-Control", "no-cache, no-store");
     res.json({
       count: results.length,
       lastScan: new Date(lastScanTime).toISOString(),
