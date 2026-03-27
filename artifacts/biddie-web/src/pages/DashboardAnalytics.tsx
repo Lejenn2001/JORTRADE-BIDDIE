@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import { useAuth } from "@/hooks/useAuth";
 
 interface TradeStats {
@@ -211,6 +212,8 @@ const DashboardAnalytics = () => {
                 ))}
               </div>
             </div>
+
+            <PerformanceSnapshot />
 
             {loading ? (
               <div className="flex items-center justify-center h-60">
