@@ -3213,6 +3213,54 @@ router.post("/whale/admin/grant", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/update-plan", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    const adminCheck = await dbQuery(
+      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin'`,
+      [adminUserId]
+    );
+    if (!adminCheck?.rows?.length) return res.status(403).json({ error: "Not an admin" });
+
+    const { userId, plan } = req.body;
+    if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
+    if (!["starter", "active", "pro"].includes(plan)) return res.status(400).json({ error: "Invalid plan" });
+
+    await dbQuery(`UPDATE profiles SET selected_plan = $1 WHERE id = $2`, [plan, userId]);
+    res.json({ success: true, userId, plan });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/toggle-admin", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    const adminCheck = await dbQuery(
+      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin'`,
+      [adminUserId]
+    );
+    if (!adminCheck?.rows?.length) return res.status(403).json({ error: "Not an admin" });
+
+    const { userId, makeAdmin } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+
+    if (makeAdmin) {
+      await dbQuery(
+        `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT (user_id, role) DO NOTHING`,
+        [userId]
+      );
+    } else {
+      await dbQuery(`DELETE FROM user_roles WHERE user_id = $1 AND role = 'admin'`, [userId]);
+    }
+    res.json({ success: true, userId, isAdmin: !!makeAdmin });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get("/whale/trades/stats", async (req, res) => {
   try {
     const userId = req.query.userId as string;
