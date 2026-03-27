@@ -2080,8 +2080,8 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   for (const s of signals.slice(0, 20)) {
     try {
       const existing = await dbQuery(
-        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND category = $2 AND strike = $3 AND option_type = $4 LIMIT 1`,
-        [s.ticker, s.category, s.strike, s.option_type]
+        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND strike = $2 AND option_type = $3 AND expiry = $4 AND signal_source = 'replit' LIMIT 1`,
+        [s.ticker, s.strike, s.option_type, s.expiry]
       );
       if (existing && existing.rows.length > 0) continue;
 
@@ -2516,7 +2516,10 @@ router.post("/whale/verify-signals", async (_req, res) => {
         }
       }
 
-      if (!outcome && canMiss && invalidationPrice && refPrice > 0) {
+      const daysToExpiry = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : 0;
+      const canUseInvalidation = canMiss && (daysToExpiry <= 3 || isExpired);
+
+      if (!outcome && canUseInvalidation && invalidationPrice && refPrice > 0) {
         const invMakesDirectionalSense = isBullish
           ? invalidationPrice < refPrice
           : invalidationPrice > refPrice;
@@ -3119,7 +3122,10 @@ async function realtimeVerifySignals() {
         else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_MOVE_PCT2)) outcome = "hit";
       }
 
-      if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
+      const daysToExpiry2 = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : 0;
+      const canUseInvalidation2 = canMiss && (daysToExpiry2 <= 3 || isExpired);
+
+      if (!outcome && canUseInvalidation2 && invalidationPrice && refPrice2 > 0) {
         const invMakesDirectionalSense = isBullish
           ? invalidationPrice < refPrice2
           : invalidationPrice > refPrice2;
@@ -3339,6 +3345,29 @@ router.post("/whale/admin/reset-bad-outcomes", async (req, res) => {
     const count = result?.rowCount || 0;
     console.log(`[admin] Reset ${count} signals to pending (resetAll=${!!resetAll})`);
     res.json({ success: true, reset: count });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/dedup-signals", async (req, res) => {
+  try {
+    const { adminSecret } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    const result = await dbQuery(
+      `DELETE FROM signal_outcomes WHERE id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY ticker, strike, option_type, expiry
+            ORDER BY detected_at ASC
+          ) as rn
+          FROM signal_outcomes WHERE signal_source = 'replit'
+        ) sub WHERE rn > 1
+      )`
+    );
+    const count = result?.rowCount || 0;
+    console.log(`[admin] Removed ${count} duplicate signals`);
+    res.json({ success: true, removed: count });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
