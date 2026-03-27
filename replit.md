@@ -81,4 +81,6 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Breakout Imminence Predictor**: `imminenceScore` (0-100) with labels: "BREAKOUT ACTIVE", "BREAKOUT IMMINENT" (>=80), "LIKELY WITHIN 15 MIN" (>=60), "LIKELY WITHIN 1 HOUR" (>=45), "BUILDING PRESSURE" (>=30). Based on proximity to breakout level, squeeze pressure, volume momentum, consolidation tightness
 - **Target Prices**: resistance/support + 1 ATR. Displayed on setup cards, expanded detail, and alert cards
 - **Score Breakdown**: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
-- **Endpoints**: `GET /api/breakout/scan` (5-min cache), `GET /api/breakout/scan/:ticker`, `GET /api/breakout/alerts`, `GET /api/breakout/watchlist`
+- **Custom Ticker Watchlist**: Users can add up to 30 custom tickers (e.g. HOOD, RIVN) beyond the 40 default. Custom tickers appear as removable tags, are included in scans, and persist in server memory
+- **Endpoints**: `GET /api/breakout/scan` (5-min cache), `GET /api/breakout/scan/:ticker`, `GET /api/breakout/alerts`, `GET /api/breakout/watchlist`, `POST /api/breakout/watchlist/add`, `POST /api/breakout/watchlist/remove`
+- **Finnhub Live Price Injection**: Signal pipeline checks Finnhub real-time prices first (if < 2min stale), then Unusual Whales price, then Yahoo Finance as final fallback. Signal candidate tickers are temporarily subscribed to Finnhub before evaluation

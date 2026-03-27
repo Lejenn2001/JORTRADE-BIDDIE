@@ -125,8 +125,12 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
       vwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
     }
 
-    // Use Unusual Whales real-time price if available, otherwise fall back to Yahoo
-    let currentPrice: number | null = uwPrice ? Math.round(uwPrice * 100) / 100 : null;
+    const rtData = priceMonitor.getPrice(ticker);
+    const finnhubLive = rtData && Date.now() - rtData.lastUpdate < 120000
+      ? Math.round(rtData.price * 100) / 100
+      : null;
+
+    let currentPrice: number | null = finnhubLive ?? (uwPrice ? Math.round(uwPrice * 100) / 100 : null);
     if (!currentPrice) {
       const meta = intResult?.meta ?? dailyResult?.meta ?? {};
       const preMarket  = meta.preMarketPrice   ?? null;
@@ -1078,6 +1082,12 @@ router.post("/whale/chat", async (req, res) => {
   const baselineTickers = ["SPY", "QQQ"];
   const allLevelTickers = [...new Set([...tickersToFetch, ...baselineTickers])].slice(0, 6);
 
+  const currentSubs = priceMonitor.getSubscribedTickers?.() ?? [];
+  const signalSubs = [...new Set([...currentSubs, ...allLevelTickers.map(t => t.toUpperCase())])];
+  if (signalSubs.length > currentSubs.length) {
+    priceMonitor.updateSubscriptions(signalSubs);
+  }
+
   const [flowAlerts, sectorData, econData] = await Promise.all([
     fetchFlowAlerts(200),
     needs.market ? fetchSectorEtfs() : Promise.resolve([]),
@@ -1086,7 +1096,6 @@ router.post("/whale/chat", async (req, res) => {
 
   const enriched = enrichAlerts(flowAlerts);
 
-  // Extract real-time prices from UW flow data for each ticker
   const uwPrices: Record<string, number> = {};
   for (const alert of enriched) {
     const t = (alert.ticker ?? "").toUpperCase();

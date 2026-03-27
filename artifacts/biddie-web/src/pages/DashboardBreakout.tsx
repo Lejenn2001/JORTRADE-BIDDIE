@@ -6,7 +6,7 @@ import {
   Zap, TrendingUp, TrendingDown, Activity, Target, Loader2,
   RefreshCw, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle,
   ChevronRight, BarChart3, Crosshair, Minus, Bell, Radio,
-  Info, ChevronDown
+  Info, ChevronDown, Plus, X
 } from "lucide-react";
 
 interface BreakoutSetup {
@@ -109,6 +109,10 @@ const DashboardBreakout = () => {
   const alertPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [watchedTickers, setWatchedTickers] = useState<Set<string>>(loadWatched);
   const prevAlertsRef = useRef<string[]>([]);
+  const [customTickerInput, setCustomTickerInput] = useState("");
+  const [customTickers, setCustomTickers] = useState<string[]>([]);
+  const [addingTicker, setAddingTicker] = useState(false);
+  const [tickerMessage, setTickerMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const toggleWatch = useCallback((ticker: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -150,14 +154,68 @@ const DashboardBreakout = () => {
     } catch {}
   }, []);
 
+  const fetchCustomTickers = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/breakout/watchlist");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      setCustomTickers(data.customTickers || []);
+    } catch {}
+  }, []);
+
+  const addCustomTicker = useCallback(async () => {
+    const symbol = customTickerInput.toUpperCase().trim().replace(/[^A-Z]/g, "");
+    if (!symbol) return;
+    setAddingTicker(true);
+    setTickerMessage(null);
+    try {
+      const resp = await fetch("/api/breakout/watchlist/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: symbol }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setTickerMessage({ text: data.error, type: "error" });
+        return;
+      }
+      setTickerMessage({ text: data.message, type: "success" });
+      setCustomTickerInput("");
+      fetchCustomTickers();
+      if (data.added) {
+        setTimeout(() => runScan(), 500);
+      }
+    } catch {
+      setTickerMessage({ text: "Failed to add ticker", type: "error" });
+    } finally {
+      setAddingTicker(false);
+      setTimeout(() => setTickerMessage(null), 4000);
+    }
+  }, [customTickerInput, fetchCustomTickers, runScan]);
+
+  const removeCustomTicker = useCallback(async (ticker: string) => {
+    try {
+      const resp = await fetch("/api/breakout/watchlist/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker }),
+      });
+      if (resp.ok) {
+        fetchCustomTickers();
+        runScan();
+      }
+    } catch {}
+  }, [fetchCustomTickers, runScan]);
+
   useEffect(() => {
     runScan();
     fetchAlerts();
+    fetchCustomTickers();
     alertPollRef.current = setInterval(fetchAlerts, 15000);
     return () => {
       if (alertPollRef.current) clearInterval(alertPollRef.current);
     };
-  }, [runScan, fetchAlerts]);
+  }, [runScan, fetchAlerts, fetchCustomTickers]);
 
   const timeSinceStr = lastScan
     ? `${Math.floor((Date.now() - lastScan.getTime()) / 60000)}m ago`
@@ -178,7 +236,7 @@ const DashboardBreakout = () => {
                   Breakout Scanner
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Bollinger/Keltner squeeze detection + consolidation patterns across 40 tickers
+                  Bollinger/Keltner squeeze detection + consolidation patterns across {result ? result.tickersScanned : "40+"} tickers
                 </p>
               </div>
               <button
@@ -189,6 +247,47 @@ const DashboardBreakout = () => {
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 {loading ? "Scanning..." : "Rescan"}
               </button>
+            </div>
+
+            <div className="glass-panel rounded-xl border border-white/[0.06] p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                  <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    value={customTickerInput}
+                    onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5))}
+                    onKeyDown={(e) => { if (e.key === "Enter") addCustomTicker(); }}
+                    placeholder="Add ticker (e.g. HOOD)"
+                    maxLength={5}
+                    className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none w-full"
+                  />
+                  <button
+                    onClick={addCustomTicker}
+                    disabled={addingTicker || !customTickerInput.trim()}
+                    className="px-3 py-1 rounded-lg bg-primary/15 hover:bg-primary/25 text-primary text-xs font-bold transition-all disabled:opacity-30 shrink-0"
+                  >
+                    {addingTicker ? "Adding..." : "Add"}
+                  </button>
+                </div>
+                {customTickers.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {customTickers.map(t => (
+                      <span key={t} className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                        {t}
+                        <button onClick={() => removeCustomTicker(t)} className="hover:text-red-400 transition-colors">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {tickerMessage && (
+                <p className={`text-xs mt-2 font-medium ${tickerMessage.type === "error" ? "text-red-400" : "text-emerald-400"}`}>
+                  {tickerMessage.text}
+                </p>
+              )}
             </div>
 
             {lastScan && (

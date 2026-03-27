@@ -7,12 +7,19 @@ const router = Router();
 const FINNHUB_KEY = () => process.env["FINNHUB_API_KEY"] ?? "";
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
-const WATCHLIST = [
+const DEFAULT_WATCHLIST = [
   "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "SPY", "QQQ",
   "NFLX", "COIN", "MARA", "RIOT", "PLTR", "SOFI", "NIO", "BABA", "BA", "DIS",
   "JPM", "GS", "V", "MA", "XOM", "CVX", "GLD", "SLV", "TLT", "IWM",
   "MRVL", "MU", "INTC", "AVGO", "CRM", "SNOW", "NET", "DKNG", "UBER", "ABNB",
 ];
+
+const customTickers = new Set<string>();
+const MAX_CUSTOM_TICKERS = 30;
+
+function getFullWatchlist(): string[] {
+  return [...new Set([...DEFAULT_WATCHLIST, ...customTickers])];
+}
 
 interface CandleData {
   timestamp: number;
@@ -430,6 +437,7 @@ async function runFullScan(): Promise<SqueezeResult[]> {
     return cachedResults;
   }
 
+  const WATCHLIST = getFullWatchlist();
   console.log(`[breakout] Starting scan of ${WATCHLIST.length} tickers...`);
   const t0 = Date.now();
   const results: SqueezeResult[] = [];
@@ -467,7 +475,64 @@ router.get("/breakout/scan/:ticker", async (req, res) => {
 });
 
 router.get("/breakout/watchlist", (_req, res) => {
-  res.json({ watchlist: WATCHLIST });
+  res.json({
+    watchlist: getFullWatchlist(),
+    defaultCount: DEFAULT_WATCHLIST.length,
+    customTickers: [...customTickers],
+    maxCustom: MAX_CUSTOM_TICKERS,
+  });
+});
+
+router.post("/breakout/watchlist/add", (req, res) => {
+  const { ticker } = req.body;
+  if (!ticker || typeof ticker !== "string") {
+    res.status(400).json({ error: "Ticker is required" });
+    return;
+  }
+  const symbol = ticker.toUpperCase().trim().replace(/[^A-Z]/g, "");
+  if (!symbol || symbol.length > 5) {
+    res.status(400).json({ error: "Invalid ticker symbol" });
+    return;
+  }
+  if (DEFAULT_WATCHLIST.includes(symbol)) {
+    res.json({ message: `${symbol} is already in the default watchlist`, ticker: symbol, added: false });
+    return;
+  }
+  if (customTickers.has(symbol)) {
+    res.json({ message: `${symbol} is already being watched`, ticker: symbol, added: false });
+    return;
+  }
+  if (customTickers.size >= MAX_CUSTOM_TICKERS) {
+    res.status(400).json({ error: `Maximum ${MAX_CUSTOM_TICKERS} custom tickers allowed. Remove one first.` });
+    return;
+  }
+  customTickers.add(symbol);
+  lastScanTime = 0;
+  console.log(`[breakout] Custom ticker added: ${symbol} (${customTickers.size} custom total)`);
+  res.json({ message: `${symbol} added to watchlist`, ticker: symbol, added: true, customCount: customTickers.size });
+});
+
+router.post("/breakout/watchlist/remove", (req, res) => {
+  const { ticker } = req.body;
+  if (!ticker || typeof ticker !== "string") {
+    res.status(400).json({ error: "Ticker is required" });
+    return;
+  }
+  const symbol = ticker.toUpperCase().trim().replace(/[^A-Z]/g, "");
+  if (!symbol || symbol.length > 5) {
+    res.status(400).json({ error: "Invalid ticker symbol" });
+    return;
+  }
+  if (DEFAULT_WATCHLIST.includes(symbol)) {
+    res.status(400).json({ error: `${symbol} is a default ticker and cannot be removed` });
+    return;
+  }
+  const removed = customTickers.delete(symbol);
+  if (removed) {
+    cachedResults = cachedResults.filter(r => r.ticker !== symbol);
+    syncBreakoutSubscriptions();
+  }
+  res.json({ message: removed ? `${symbol} removed` : `${symbol} was not in custom list`, ticker: symbol, removed });
 });
 
 interface BreakoutAlert {
@@ -701,7 +766,7 @@ router.get("/breakout/scan", async (_req, res) => {
     res.json({
       count: results.length,
       lastScan: new Date(lastScanTime).toISOString(),
-      tickersScanned: WATCHLIST.length,
+      tickersScanned: getFullWatchlist().length,
       setups: results,
     });
   } catch (err: any) {
