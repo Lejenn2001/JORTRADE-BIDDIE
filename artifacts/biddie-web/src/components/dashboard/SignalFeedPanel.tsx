@@ -312,11 +312,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       </span>
                     );
                   })}
-                  {signal.premium && (
-                    <span className="text-[10px] bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
-                      Premium: {signal.premium}
-                    </span>
-                  )}
                 </div>
 
                 {onTakeTrade && (

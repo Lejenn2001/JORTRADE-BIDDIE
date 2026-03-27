@@ -587,9 +587,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
-            {signal.premium && (
-              <span className="text-[10px] sm:text-xs text-accent font-semibold">{signal.premium}</span>
-            )}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
