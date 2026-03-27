@@ -122,7 +122,7 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Tailwind V3 + shadcn/ui.
 
 - **Stack**: React 19, Vite 7, Tailwind CSS 3, Framer Motion, Recharts, Supabase Auth, React Router v6
-- **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
+- **Pages**: Landing (`/`), Login (`/login`), Signup (`/signup`), Dashboard (`/dashboard`) with tabs (Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Community, Settings), Ecosystem (`/ecosystem`), Contact (`/contact`), 404
 - **Signal Categories**: 3 categories — Algorithm Plays (price action + gamma analysis), Whale Plays ($250K+ institutional flow), Spreads & Butterflies (multi-leg strategies). Dashboard shows Algorithm Plays + Whale Plays (top 5 each, sorted 0DTE first then conviction score). Signals page has 3 tabs for all categories. Each signal card labeled "DAY TRADE" (buy_now/short_term) or "SWING TRADE" (swing), plus "Live" or "Example" badge. Example signals fill tabs when no live data (META/AMZN/GOOGL for spreads, AAPL/PLTR/AMD for whale).
 - **Performance Tracking**: `PerformanceSnapshot` and `SignalAccuracyPanel` track signals from the `signal_outcomes` table in Replit PostgreSQL.
 - **Pricing Tiers**: Signal Scout ($49, 5 questions/day), Active Trader ($89, 25 questions/day), Pro Trader ($129, 50 questions/day). All tiers get Biddie AI access. Daily limits enforced via `useQuestionLimit` hook (localStorage-based, resets at midnight). JORTRADE Chat is the community chat room (separate from Biddie AI).
@@ -167,6 +167,14 @@ Full JORTRADE / Biddie AI web frontend, migrated from Lovable. React + Vite + Ta
   - **Admin Panel**: Analytics page "Admin" tab (visible only to admin users) with "Verify Now" button + full signal outcomes table with ticker/direction/category/strike/target/outcome columns
   - **Admin Role System**: `user_roles` PostgreSQL table, `GET /api/whale/admin/check?userId=X`, `POST /api/whale/admin/grant` (requires `adminSecret`)
   - Frontend `PerformanceSnapshot` and `SignalAccuracyPanel` components call this endpoint via manual "Verify" button
+- **Breakout Scanner** (`/dashboard/breakout`):
+  - Bollinger Band / Keltner Channel squeeze detection across 40-ticker watchlist
+  - Consolidation pattern detection (multi-day tight ranges)
+  - Volume spike filtering and breakout trigger logic
+  - Backend: `GET /api/breakout/scan` (full scan, 5-min cache), `GET /api/breakout/scan/:ticker` (single), `GET /api/breakout/watchlist`
+  - Uses Yahoo Finance daily candles (60 days) + Finnhub quotes (with candle fallback if Finnhub unavailable)
+  - Score 25+ threshold; scoring: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
+  - Frontend: expandable cards with detail view (squeeze/consolidation/volume/breakout metrics, resistance/support, BB/KC band width visualization)
 - **Design tokens**: Dark trading theme with `--background: 230 25% 5%`, `--primary: 230 85% 60%`, Inter + Orbitron fonts
 - **Env vars**: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - **Build**: `pnpm --filter @workspace/biddie-web run dev` (dev) / `pnpm --filter @workspace/biddie-web run build` (prod static)

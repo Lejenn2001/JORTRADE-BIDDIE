@@ -14,6 +14,7 @@ import {
   Users,
   PieChart,
   Shield,
+  Crosshair,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jortradeLogo from "@/assets/jortrade-logo.png";
@@ -25,6 +26,7 @@ const navItems = [
   { icon: BarChart3, label: "Market View", path: "/dashboard/market" },
   { icon: Wallet, label: "P&L Calendar", path: "/dashboard/pnl" },
   { icon: PieChart, label: "Analytics", path: "/dashboard/analytics" },
+  { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
 ];
 

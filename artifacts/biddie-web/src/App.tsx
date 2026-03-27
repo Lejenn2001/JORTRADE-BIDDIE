@@ -14,6 +14,7 @@ import DashboardPnL from "./pages/DashboardPnL.tsx";
 import DashboardCommunity from "./pages/DashboardCommunity.tsx";
 import DashboardAnalytics from "./pages/DashboardAnalytics.tsx";
 import DashboardSettings from "./pages/DashboardSettings.tsx";
+import DashboardBreakout from "./pages/DashboardBreakout.tsx";
 import DashboardAdmin from "./pages/DashboardAdmin.tsx";
 import Login from "./pages/Login.tsx";
 import Signup from "./pages/Signup.tsx";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/dashboard/pnl" element={<ProtectedRoute><DashboardPnL /></ProtectedRoute>} />
             <Route path="/dashboard/community" element={<ProtectedRoute><DashboardCommunity /></ProtectedRoute>} />
             <Route path="/dashboard/analytics" element={<ProtectedRoute><DashboardAnalytics /></ProtectedRoute>} />
+            <Route path="/dashboard/breakout" element={<ProtectedRoute><DashboardBreakout /></ProtectedRoute>} />
             <Route path="/dashboard/settings" element={<ProtectedRoute><DashboardSettings /></ProtectedRoute>} />
             <Route path="/dashboard/admin" element={<ProtectedRoute><DashboardAdmin /></ProtectedRoute>} />
             <Route path="/login" element={<Login />} />

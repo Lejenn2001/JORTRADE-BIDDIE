@@ -1,0 +1,429 @@
+import { Router } from "express";
+import axios from "axios";
+
+const router = Router();
+
+const FINNHUB_KEY = () => process.env["FINNHUB_API_KEY"] ?? "";
+const FINNHUB_BASE = "https://finnhub.io/api/v1";
+
+const WATCHLIST = [
+  "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "SPY", "QQQ",
+  "NFLX", "COIN", "MARA", "RIOT", "PLTR", "SOFI", "NIO", "BABA", "BA", "DIS",
+  "JPM", "GS", "V", "MA", "XOM", "CVX", "GLD", "SLV", "TLT", "IWM",
+  "MRVL", "MU", "INTC", "AVGO", "CRM", "SNOW", "NET", "DKNG", "UBER", "ABNB",
+];
+
+interface CandleData {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+interface SqueezeResult {
+  ticker: string;
+  squeezeActive: boolean;
+  squeezeLength: number;
+  bbWidth: number;
+  kcWidth: number;
+  atr: number;
+  currentPrice: number;
+  volume20dAvg: number;
+  currentVolume: number;
+  volumeRatio: number;
+  consolidationDays: number;
+  rangeHighLow: [number, number];
+  breakoutDirection: "bullish" | "bearish" | "none";
+  breakoutTriggered: boolean;
+  breakoutPrice: number | null;
+  resistanceLevel: number | null;
+  supportLevel: number | null;
+  score: number;
+  reason: string;
+}
+
+async function fetchDailyCandles(ticker: string, days: number = 60): Promise<CandleData[]> {
+  try {
+    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
+    const res = await axios.get(`${YF}/${ticker}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      params: { interval: "1d", range: `${days}d` },
+      timeout: 10000,
+    });
+    const result = res.data?.chart?.result?.[0];
+    if (!result) return [];
+    const quote = result.indicators?.quote?.[0];
+    const timestamps = result.timestamp ?? [];
+    const candles: CandleData[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const o = quote?.open?.[i];
+      const h = quote?.high?.[i];
+      const l = quote?.low?.[i];
+      const c = quote?.close?.[i];
+      const v = quote?.volume?.[i];
+      if (o && h && l && c) {
+        candles.push({ timestamp: timestamps[i], open: o, high: h, low: l, close: c, volume: v ?? 0 });
+      }
+    }
+    return candles;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchFinnhubQuote(ticker: string): Promise<{ price: number; prevClose: number; volume: number } | null> {
+  try {
+    const res = await axios.get(`${FINNHUB_BASE}/quote`, {
+      params: { symbol: ticker, token: FINNHUB_KEY() },
+      timeout: 5000,
+    });
+    if (!res.data || !res.data.c) return null;
+    return {
+      price: res.data.c,
+      prevClose: res.data.pc,
+      volume: res.data.v || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function calcSMA(values: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    if (i < period - 1) { result.push(NaN); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += values[j];
+    result.push(sum / period);
+  }
+  return result;
+}
+
+function calcEMA(values: number[], period: number): number[] {
+  const result: number[] = [];
+  const k = 2 / (period + 1);
+  for (let i = 0; i < values.length; i++) {
+    if (i === 0) { result.push(values[0]); continue; }
+    if (i < period - 1) {
+      let sum = 0;
+      for (let j = 0; j <= i; j++) sum += values[j];
+      result.push(sum / (i + 1));
+      continue;
+    }
+    if (i === period - 1) {
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += values[j];
+      result.push(sum / period);
+      continue;
+    }
+    result.push(values[i] * k + result[i - 1] * (1 - k));
+  }
+  return result;
+}
+
+function calcATR(candles: CandleData[], period: number): number[] {
+  const trueRanges: number[] = [];
+  for (let i = 0; i < candles.length; i++) {
+    if (i === 0) {
+      trueRanges.push(candles[i].high - candles[i].low);
+    } else {
+      const prevClose = candles[i - 1].close;
+      trueRanges.push(Math.max(
+        candles[i].high - candles[i].low,
+        Math.abs(candles[i].high - prevClose),
+        Math.abs(candles[i].low - prevClose)
+      ));
+    }
+  }
+  return calcEMA(trueRanges, period);
+}
+
+function calcStdDev(values: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    if (i < period - 1) { result.push(NaN); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += values[j];
+    const mean = sum / period;
+    let variance = 0;
+    for (let j = i - period + 1; j <= i; j++) variance += (values[j] - mean) ** 2;
+    result.push(Math.sqrt(variance / period));
+  }
+  return result;
+}
+
+function detectSqueeze(candles: CandleData[]): {
+  squeezeActive: boolean;
+  squeezeLength: number;
+  bbWidth: number;
+  kcWidth: number;
+} {
+  if (candles.length < 21) return { squeezeActive: false, squeezeLength: 0, bbWidth: 0, kcWidth: 0 };
+
+  const closes = candles.map(c => c.close);
+  const sma20 = calcSMA(closes, 20);
+  const stdDev20 = calcStdDev(closes, 20);
+  const ema20 = calcEMA(closes, 20);
+  const atr20 = calcATR(candles, 20);
+
+  let squeezeLength = 0;
+  const last = candles.length - 1;
+
+  for (let i = last; i >= 20; i--) {
+    const bbUpper = sma20[i] + 2 * stdDev20[i];
+    const bbLower = sma20[i] - 2 * stdDev20[i];
+    const kcUpper = ema20[i] + 1.5 * atr20[i];
+    const kcLower = ema20[i] - 1.5 * atr20[i];
+
+    if (bbUpper < kcUpper && bbLower > kcLower) {
+      squeezeLength++;
+    } else {
+      break;
+    }
+  }
+
+  const bbW = sma20[last] > 0 ? (2 * stdDev20[last]) / sma20[last] : 0;
+  const kcW = ema20[last] > 0 ? (2 * 1.5 * atr20[last]) / ema20[last] : 0;
+
+  return {
+    squeezeActive: squeezeLength >= 3,
+    squeezeLength,
+    bbWidth: Math.round(bbW * 10000) / 10000,
+    kcWidth: Math.round(kcW * 10000) / 10000,
+  };
+}
+
+function detectConsolidation(candles: CandleData[]): {
+  consolidationDays: number;
+  rangeHigh: number;
+  rangeLow: number;
+  resistanceLevel: number;
+  supportLevel: number;
+} {
+  if (candles.length < 5) return { consolidationDays: 0, rangeHigh: 0, rangeLow: 0, resistanceLevel: 0, supportLevel: 0 };
+
+  const last = candles.length - 1;
+  const recentPrice = candles[last].close;
+  const threshold = recentPrice * 0.03;
+
+  let consolidationDays = 0;
+  let rangeHigh = candles[last].high;
+  let rangeLow = candles[last].low;
+
+  for (let i = last; i >= 1; i--) {
+    const dayHigh = candles[i].high;
+    const dayLow = candles[i].low;
+
+    const testHigh = Math.max(rangeHigh, dayHigh);
+    const testLow = Math.min(rangeLow, dayLow);
+
+    if (testHigh - testLow <= threshold) {
+      rangeHigh = testHigh;
+      rangeLow = testLow;
+      consolidationDays++;
+    } else {
+      break;
+    }
+  }
+
+  if (!Number.isFinite(rangeHigh)) rangeHigh = candles[last].high;
+  if (!Number.isFinite(rangeLow)) rangeLow = candles[last].low;
+
+  let resistanceLevel = rangeHigh;
+  let supportLevel = rangeLow;
+
+  const highs = candles.slice(-20).map(c => c.high);
+  const highCounts = new Map<number, number>();
+  for (const h of highs) {
+    const rounded = Math.round(h * 4) / 4;
+    highCounts.set(rounded, (highCounts.get(rounded) || 0) + 1);
+  }
+  let maxCount = 0;
+  for (const [level, count] of highCounts) {
+    if (count > maxCount && level >= recentPrice * 0.995) {
+      maxCount = count;
+      resistanceLevel = level;
+    }
+  }
+
+  return { consolidationDays, rangeHigh, rangeLow, resistanceLevel, supportLevel };
+}
+
+function detectBreakout(candles: CandleData[], resistanceLevel: number, supportLevel: number): {
+  breakoutTriggered: boolean;
+  breakoutDirection: "bullish" | "bearish" | "none";
+  breakoutPrice: number | null;
+} {
+  if (candles.length < 3) return { breakoutTriggered: false, breakoutDirection: "none", breakoutPrice: null };
+
+  const last = candles[candles.length - 1];
+  const prev = candles[candles.length - 2];
+  const vol20 = candles.slice(-20).reduce((s, c) => s + c.volume, 0) / Math.min(20, candles.length);
+
+  if (last.close > resistanceLevel && last.volume > vol20 * 1.5 && prev.close <= resistanceLevel) {
+    return { breakoutTriggered: true, breakoutDirection: "bullish", breakoutPrice: last.close };
+  }
+
+  if (last.close < supportLevel && last.volume > vol20 * 1.5 && prev.close >= supportLevel) {
+    return { breakoutTriggered: true, breakoutDirection: "bearish", breakoutPrice: last.close };
+  }
+
+  return { breakoutTriggered: false, breakoutDirection: "none", breakoutPrice: null };
+}
+
+async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
+  const candles = await fetchDailyCandles(ticker, 60);
+  if (candles.length < 21) return null;
+
+  const lastCandle = candles[candles.length - 1];
+  let quote = await fetchFinnhubQuote(ticker);
+  if (!quote) {
+    quote = {
+      price: lastCandle.close,
+      prevClose: candles.length >= 2 ? candles[candles.length - 2].close : lastCandle.close,
+      volume: lastCandle.volume,
+    };
+  }
+
+  const squeeze = detectSqueeze(candles);
+  const consolidation = detectConsolidation(candles);
+  const breakout = detectBreakout(candles, consolidation.resistanceLevel, consolidation.supportLevel);
+
+  const atrValues = calcATR(candles, 14);
+  const atr = atrValues[atrValues.length - 1] || 0;
+
+  const vol20Avg = candles.slice(-20).reduce((s, c) => s + c.volume, 0) / Math.min(20, candles.length);
+  const currentVol = quote.volume || candles[candles.length - 1].volume;
+  const volumeRatio = vol20Avg > 0 ? currentVol / vol20Avg : 0;
+
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (squeeze.squeezeActive) {
+    score += 25 + Math.min(squeeze.squeezeLength * 3, 15);
+    reasons.push(`Squeeze active (${squeeze.squeezeLength} bars)`);
+  } else if (squeeze.bbWidth > 0 && squeeze.kcWidth > 0 && squeeze.bbWidth / squeeze.kcWidth < 1.2) {
+    score += 15;
+    reasons.push(`Near squeeze (BB/KC ratio ${(squeeze.bbWidth / squeeze.kcWidth).toFixed(2)})`);
+  }
+
+  if (consolidation.consolidationDays >= 3) {
+    score += 15 + Math.min(consolidation.consolidationDays * 2, 10);
+    reasons.push(`Consolidating ${consolidation.consolidationDays} days`);
+  } else if (consolidation.consolidationDays >= 2) {
+    score += 10;
+    reasons.push(`Tight range ${consolidation.consolidationDays} days`);
+  }
+
+  if (volumeRatio >= 2.0) {
+    score += 20;
+    reasons.push(`Volume spike ${volumeRatio.toFixed(1)}x avg`);
+  } else if (volumeRatio >= 1.3) {
+    score += 10;
+    reasons.push(`Elevated volume ${volumeRatio.toFixed(1)}x avg`);
+  }
+
+  if (breakout.breakoutTriggered) {
+    score += 30;
+    reasons.push(`Breakout ${breakout.breakoutDirection} at $${breakout.breakoutPrice?.toFixed(2)}`);
+  }
+
+  const rangePct = quote.price > 0 ? ((consolidation.rangeHigh - consolidation.rangeLow) / quote.price) * 100 : 0;
+  if (rangePct > 0 && rangePct < 3 && consolidation.consolidationDays >= 2) {
+    score += 10;
+    reasons.push(`Tight ${rangePct.toFixed(1)}% range`);
+  }
+
+  if (score < 25) return null;
+
+  return {
+    ticker,
+    squeezeActive: squeeze.squeezeActive,
+    squeezeLength: squeeze.squeezeLength,
+    bbWidth: squeeze.bbWidth,
+    kcWidth: squeeze.kcWidth,
+    atr: Math.round(atr * 100) / 100,
+    currentPrice: quote.price,
+    volume20dAvg: Math.round(vol20Avg),
+    currentVolume: currentVol,
+    volumeRatio: Math.round(volumeRatio * 100) / 100,
+    consolidationDays: consolidation.consolidationDays,
+    rangeHighLow: [consolidation.rangeHigh, consolidation.rangeLow],
+    breakoutDirection: breakout.breakoutDirection,
+    breakoutTriggered: breakout.breakoutTriggered,
+    breakoutPrice: breakout.breakoutPrice,
+    resistanceLevel: consolidation.resistanceLevel,
+    supportLevel: consolidation.supportLevel,
+    score,
+    reason: reasons.join(". "),
+  };
+}
+
+let cachedResults: SqueezeResult[] = [];
+let lastScanTime = 0;
+const SCAN_INTERVAL = 5 * 60 * 1000;
+
+async function runFullScan(): Promise<SqueezeResult[]> {
+  const now = Date.now();
+  if (cachedResults.length > 0 && now - lastScanTime < SCAN_INTERVAL) {
+    return cachedResults;
+  }
+
+  console.log(`[breakout] Starting scan of ${WATCHLIST.length} tickers...`);
+  const t0 = Date.now();
+  const results: SqueezeResult[] = [];
+
+  const batchSize = 5;
+  for (let i = 0; i < WATCHLIST.length; i += batchSize) {
+    const batch = WATCHLIST.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(t => scanTicker(t)));
+    for (const r of batchResults) {
+      if (r) results.push(r);
+    }
+    if (i + batchSize < WATCHLIST.length) {
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  cachedResults = results;
+  lastScanTime = Date.now();
+  console.log(`[breakout] Scan complete: ${Date.now() - t0}ms, ${results.length} setups found`);
+  return results;
+}
+
+router.get("/breakout/scan", async (_req, res) => {
+  try {
+    const results = await runFullScan();
+    res.json({
+      count: results.length,
+      lastScan: new Date(lastScanTime).toISOString(),
+      tickersScanned: WATCHLIST.length,
+      setups: results,
+    });
+  } catch (err: any) {
+    console.error("[breakout] Scan error:", err.message);
+    res.status(500).json({ error: "Scan failed" });
+  }
+});
+
+router.get("/breakout/scan/:ticker", async (req, res) => {
+  try {
+    const result = await scanTicker(req.params.ticker.toUpperCase());
+    if (!result) {
+      res.json({ ticker: req.params.ticker.toUpperCase(), setup: null, message: "No setup detected" });
+      return;
+    }
+    res.json({ ticker: result.ticker, setup: result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/breakout/watchlist", (_req, res) => {
+  res.json({ watchlist: WATCHLIST });
+});
+
+export default router;
