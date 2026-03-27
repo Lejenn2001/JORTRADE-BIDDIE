@@ -105,15 +105,26 @@ const DashboardCommunity = () => {
       });
       const data = await res.json().catch(() => null);
       const replyText = data?.content || data?.analysis || "";
-      if (replyText && !data?.posted) {
-        const ephemeral: ChatMessage = {
-          id: `biddie-local-${Date.now()}`,
-          user_id: BIDDIE_USER_ID,
-          user_name: "Biddie AI",
-          content: replyText,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, ephemeral]);
+      if (replyText) {
+        setTimeout(() => {
+          setMessages((prev) => {
+            const alreadyHas = prev.some(
+              (m) => m.user_id === BIDDIE_USER_ID && m.content === replyText
+            );
+            if (alreadyHas) return prev;
+            return [
+              ...prev,
+              {
+                id: `biddie-local-${Date.now()}`,
+                user_id: BIDDIE_USER_ID,
+                user_name: "Biddie AI",
+                content: replyText,
+                created_at: new Date().toISOString(),
+              },
+            ];
+          });
+          scrollToBottom();
+        }, 500);
       }
     } catch (e) {
       console.error("Biddie community chat error:", e);
