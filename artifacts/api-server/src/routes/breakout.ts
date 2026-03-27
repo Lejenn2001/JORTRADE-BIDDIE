@@ -719,7 +719,13 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
 
   let effectiveDir2 = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
   if (effectiveDir2 === "neutral" && closerDist <= 1.0) {
-    effectiveDir2 = proximityDir;
+    if (proximityDir === "bearish" && momentum === "bearish") {
+      effectiveDir2 = "bullish";
+    } else if (proximityDir === "bullish" && momentum === "bullish") {
+      effectiveDir2 = "bearish";
+    } else {
+      effectiveDir2 = proximityDir;
+    }
   }
   const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
 
