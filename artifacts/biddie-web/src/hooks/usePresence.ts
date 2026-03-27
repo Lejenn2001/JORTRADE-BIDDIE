@@ -1,8 +1,8 @@
-import { useState, useEffect, createContext, useContext } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
-const CHANNEL_NAME = "presence-room";
+const HEARTBEAT_INTERVAL = 30_000;
+const POLL_INTERVAL = 15_000;
 
 const PresenceContext = createContext<Set<string>>(new Set());
 
@@ -12,45 +12,48 @@ export function usePresenceSetup() {
   const { session, profile } = useAuth();
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
+  const sendHeartbeat = useCallback(async (userId: string, name: string) => {
+    try {
+      await fetch("/api/whale/presence/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ name }),
+      });
+    } catch {}
+  }, []);
+
+  const pollOnline = useCallback(async (myId: string) => {
+    try {
+      const resp = await fetch("/api/whale/presence/online");
+      if (resp.ok) {
+        const data = await resp.json();
+        const ids = new Set<string>([myId]);
+        for (const u of data.online) {
+          ids.add(u.userId);
+        }
+        setOnlineUsers(ids);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!session?.user?.id) return;
     const myId = session.user.id;
+    const myName = profile?.full_name || "Unknown";
 
     setOnlineUsers(new Set([myId]));
 
-    const channel = supabase.channel(CHANNEL_NAME, {
-      config: { presence: { key: myId } },
-    });
+    sendHeartbeat(myId, myName);
+    pollOnline(myId);
 
-    const extractUsers = () => {
-      const state = channel.presenceState();
-      const ids = new Set<string>([myId]);
-      Object.values(state).forEach((presences: any) => {
-        (presences as any[]).forEach((p: any) => {
-          if (p.user_id) ids.add(p.user_id);
-        });
-      });
-      setOnlineUsers(ids);
-    };
-
-    channel
-      .on("presence", { event: "sync" }, extractUsers)
-      .on("presence", { event: "join" }, extractUsers)
-      .on("presence", { event: "leave" }, extractUsers)
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({
-            user_id: myId,
-            full_name: profile?.full_name || "Unknown",
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
+    const heartbeatTimer = setInterval(() => sendHeartbeat(myId, myName), HEARTBEAT_INTERVAL);
+    const pollTimer = setInterval(() => pollOnline(myId), POLL_INTERVAL);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(heartbeatTimer);
+      clearInterval(pollTimer);
     };
-  }, [session?.user?.id, profile?.full_name]);
+  }, [session?.user?.id, profile?.full_name, sendHeartbeat, pollOnline]);
 
   return onlineUsers;
 }

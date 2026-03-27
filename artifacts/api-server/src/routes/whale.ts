@@ -3182,6 +3182,30 @@ router.get("/whale/trades", async (req, res) => {
   }
 });
 
+const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
+const ONLINE_TIMEOUT = 90_000;
+
+router.post("/whale/presence/heartbeat", (req, res) => {
+  const userId = req.headers["x-user-id"] as string;
+  const name = req.body?.name || "Unknown";
+  if (!userId) return res.status(400).json({ error: "userId required" });
+  onlineUsersMap.set(userId, { name, lastSeen: Date.now() });
+  res.json({ ok: true });
+});
+
+router.get("/whale/presence/online", (_req, res) => {
+  const now = Date.now();
+  const online: { userId: string; name: string }[] = [];
+  for (const [userId, data] of onlineUsersMap) {
+    if (now - data.lastSeen < ONLINE_TIMEOUT) {
+      online.push({ userId, name: data.name });
+    } else {
+      onlineUsersMap.delete(userId);
+    }
+  }
+  res.json({ online, count: online.length });
+});
+
 router.get("/whale/admin/check", async (req, res) => {
   try {
     const userId = req.query.userId as string;
