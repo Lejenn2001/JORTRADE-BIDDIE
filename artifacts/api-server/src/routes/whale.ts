@@ -1791,10 +1791,11 @@ async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<Pri
     const since = new Date(sinceDate);
     const daysDiff = Math.max(1, Math.ceil((Date.now() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     const range = daysDiff <= 5 ? "5d" : daysDiff <= 30 ? "1mo" : "3mo";
+    const interval = daysDiff <= 7 ? "15m" : "1d";
 
     const res = await axios.get(`${YF}/${ticker}`, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      params: { interval: "1d", range },
+      params: { interval, range },
       timeout: 10000,
     });
     const result = res.data?.chart?.result?.[0];
@@ -1898,6 +1899,7 @@ router.post("/whale/verify-signals", async (_req, res) => {
       if (!history) continue;
 
       const target = parseTargetRange(signal.target_zone || signal.target);
+      const invalidationPrice = parsePrice(signal.invalidation);
       const isBullish = signal.signal_type === "bullish";
 
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
@@ -1906,7 +1908,17 @@ router.post("/whale/verify-signals", async (_req, res) => {
       let outcome: string | null = null;
       let outcomePrice = history.current;
 
-      if (target.low && target.high) {
+      if (invalidationPrice) {
+        if (isBullish && history.lowSince <= invalidationPrice) {
+          outcome = "missed";
+          outcomePrice = history.lowSince;
+        } else if (!isBullish && history.highSince >= invalidationPrice) {
+          outcome = "missed";
+          outcomePrice = history.highSince;
+        }
+      }
+
+      if (!outcome && target.low && target.high) {
         if (isBullish) {
           if (history.highSince >= target.low) {
             outcome = "hit";
@@ -2257,12 +2269,18 @@ async function autoVerifySignals() {
       const history = priceMap[signal.ticker];
       if (!history) continue;
       const target = parseTargetRange(signal.target_zone || signal.target);
+      const invalidationPrice = parsePrice(signal.invalidation);
       const isBullish = signal.signal_type === "bullish";
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
       const isExpired = expiryDate && expiryDate < now;
       let outcome: string | null = null;
 
-      if (target.low && target.high) {
+      if (invalidationPrice) {
+        if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
+        else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+      }
+
+      if (!outcome && target.low && target.high) {
         if (isBullish && history.highSince >= target.low) outcome = "hit";
         else if (!isBullish && history.lowSince <= target.high) outcome = "hit";
         else if (isExpired) outcome = "missed";
