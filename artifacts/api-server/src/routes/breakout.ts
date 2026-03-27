@@ -404,6 +404,40 @@ function detectBreakout(candles: CandleData[], resistanceLevel: number, supportL
 
 let currentFlowData: any[] | null = null;
 
+const directionLock = new Map<string, { direction: "bullish" | "bearish"; score: number; lockedAt: number }>();
+const DIRECTION_LOCK_THRESHOLD = 25;
+const DIRECTION_FLIP_THRESHOLD = 35;
+const DIRECTION_LOCK_TTL = 30 * 60 * 1000;
+
+function resolveStableDirection(ticker: string, thesisScore: number): "bullish" | "bearish" | "neutral" {
+  const absScore = Math.abs(thesisScore);
+  const now = Date.now();
+  const lock = directionLock.get(ticker);
+
+  if (lock && now - lock.lockedAt < DIRECTION_LOCK_TTL) {
+    const sameDir = (lock.direction === "bullish" && thesisScore > 0) || (lock.direction === "bearish" && thesisScore < 0);
+    if (sameDir) {
+      lock.score = absScore;
+      lock.lockedAt = now;
+      return lock.direction;
+    }
+    if (absScore >= DIRECTION_FLIP_THRESHOLD) {
+      const newDir = thesisScore > 0 ? "bullish" : "bearish";
+      directionLock.set(ticker, { direction: newDir, score: absScore, lockedAt: now });
+      return newDir;
+    }
+    return lock.direction;
+  }
+
+  if (absScore >= DIRECTION_LOCK_THRESHOLD) {
+    const dir = thesisScore > 0 ? "bullish" : "bearish";
+    directionLock.set(ticker, { direction: dir, score: absScore, lockedAt: now });
+    return dir;
+  }
+
+  return "neutral";
+}
+
 const ZERO_DTE_TICKERS = new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GLD", "TLT", "XOM", "JPM", "DIS", "BA", "V", "MA", "COIN"]);
 
 function snapToStrike(price: number, direction: "bullish" | "bearish" | "neutral" | "none"): number {
@@ -645,11 +679,10 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     else if (r3Bullish === 0) { thesisScore -= 5; thesisReasons.push("3 consecutive red candles"); }
   }
 
-  let thesisDirection: "bullish" | "bearish" | "neutral" = "neutral";
+  const thesisDirection = breakout.breakoutTriggered
+    ? breakout.breakoutDirection as "bullish" | "bearish" | "neutral"
+    : resolveStableDirection(ticker, thesisScore);
   const absThesis = Math.abs(thesisScore);
-  if (thesisScore >= 15) thesisDirection = "bullish";
-  else if (thesisScore <= -15) thesisDirection = "bearish";
-
   const thesisConfidence = Math.min(absThesis, 100);
 
   let targetPrice: number | null = null;

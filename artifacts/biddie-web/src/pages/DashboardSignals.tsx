@@ -208,30 +208,13 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const signalMap = new Map<string, MarketSignal>();
-
-    for (const s of (signalHistory || [])) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
-      signalMap.set(key, s);
-    }
-
-    for (const s of dbSignals) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
-      signalMap.set(key, s);
-    }
-
-    for (const s of liveSignals) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
-      signalMap.set(key, s);
-    }
-
-    const all = Array.from(signalMap.values());
+    const all = [...(signalHistory || []), ...dbSignals, ...liveSignals];
     const bestPerTickerCategory = new Map<string, MarketSignal>();
     for (const s of all) {
-      const deKey = `${s.ticker}|${s.category || 'algorithm'}`;
-      const existing = bestPerTickerCategory.get(deKey);
+      const key = `${s.ticker}|${s.category || 'algorithm'}`;
+      const existing = bestPerTickerCategory.get(key);
       if (!existing || (s.confidence ?? 0) > (existing.confidence ?? 0)) {
-        bestPerTickerCategory.set(deKey, s);
+        bestPerTickerCategory.set(key, s);
       }
     }
     return Array.from(bestPerTickerCategory.values());
