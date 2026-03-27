@@ -281,17 +281,39 @@ interface FairValueGap {
   bottom: number;
   midpoint: number;
   index: number;
-  filled: boolean;
+  status: "unfilled" | "partially_filled" | "inversed";
+  consequent_encroachment: boolean;
+}
+
+interface OrderBlock {
+  type: "bullish" | "bearish";
+  high: number;
+  low: number;
+  midpoint: number;
+  index: number;
+  respected: boolean;
+}
+
+interface LiquidityLevel {
+  type: "buy_side" | "sell_side";
+  price: number;
+  strength: "weak" | "moderate" | "strong";
+  swept: boolean;
 }
 
 interface MarketStructure {
   trend: "uptrend" | "downtrend" | "ranging";
   swing_highs: { price: number; timestamp: number }[];
   swing_lows: { price: number; timestamp: number }[];
-  fair_value_gaps: FairValueGap[];
+  fvgs: { type: string; zone: string; midpoint: number; status: string }[];
+  ifvgs: { original_type: string; zone: string; midpoint: number; implication: string }[];
+  order_blocks: { type: string; zone: string; midpoint: number; respected: boolean }[];
+  liquidity_levels: { type: string; price: number; strength: string; swept: boolean }[];
   nearest_support: number | null;
   nearest_resistance: number | null;
   break_of_structure: string | null;
+  change_of_character: string | null;
+  premium_discount: "premium" | "discount" | "equilibrium" | null;
   structure_summary: string;
 }
 
@@ -316,15 +338,97 @@ function findFairValueGaps(candles: CandleBar[]): FairValueGap[] {
     const c1 = candles[i - 2];
     const c3 = candles[i];
     if (c3.low > c1.high) {
-      const filled = candles.slice(i + 1).some(c => c.low <= c3.low);
-      fvgs.push({ type: "bullish", top: c3.low, bottom: c1.high, midpoint: (c3.low + c1.high) / 2, index: i - 1, filled });
+      const top = c3.low;
+      const bottom = c1.high;
+      const mid = (top + bottom) / 2;
+      let status: "unfilled" | "partially_filled" | "inversed" = "unfilled";
+      let ce = false;
+      const subsequent = candles.slice(i + 1);
+      for (const sc of subsequent) {
+        if (sc.low <= bottom) { status = "inversed"; break; }
+        if (sc.low <= mid) { ce = true; status = "partially_filled"; }
+      }
+      fvgs.push({ type: "bullish", top, bottom, midpoint: mid, index: i - 1, status, consequent_encroachment: ce });
     }
     if (c1.low > c3.high) {
-      const filled = candles.slice(i + 1).some(c => c.high >= c1.low);
-      fvgs.push({ type: "bearish", top: c1.low, bottom: c3.high, midpoint: (c1.low + c3.high) / 2, index: i - 1, filled });
+      const top = c1.low;
+      const bottom = c3.high;
+      const mid = (top + bottom) / 2;
+      let status: "unfilled" | "partially_filled" | "inversed" = "unfilled";
+      let ce = false;
+      const subsequent = candles.slice(i + 1);
+      for (const sc of subsequent) {
+        if (sc.high >= top) { status = "inversed"; break; }
+        if (sc.high >= mid) { ce = true; status = "partially_filled"; }
+      }
+      fvgs.push({ type: "bearish", top, bottom, midpoint: mid, index: i - 1, status, consequent_encroachment: ce });
     }
   }
   return fvgs;
+}
+
+function findOrderBlocks(candles: CandleBar[], swings: SwingPoint[]): OrderBlock[] {
+  const obs: OrderBlock[] = [];
+  for (const swing of swings) {
+    const idx = swing.index;
+    if (idx < 1 || idx >= candles.length) continue;
+    if (swing.type === "low") {
+      for (let j = idx; j >= Math.max(0, idx - 3); j--) {
+        const c = candles[j];
+        if (c.close < c.open) {
+          const respected = candles.slice(idx + 1).every(sc => sc.low >= c.low * 0.998);
+          obs.push({ type: "bullish", high: c.high, low: c.low, midpoint: (c.high + c.low) / 2, index: j, respected });
+          break;
+        }
+      }
+    } else {
+      for (let j = idx; j >= Math.max(0, idx - 3); j--) {
+        const c = candles[j];
+        if (c.close > c.open) {
+          const respected = candles.slice(idx + 1).every(sc => sc.high <= c.high * 1.002);
+          obs.push({ type: "bearish", high: c.high, low: c.low, midpoint: (c.high + c.low) / 2, index: j, respected });
+          break;
+        }
+      }
+    }
+  }
+  return obs;
+}
+
+function findLiquidityLevels(swings: SwingPoint[], candles: CandleBar[], currentPrice: number): LiquidityLevel[] {
+  const levels: LiquidityLevel[] = [];
+  const highs = swings.filter(s => s.type === "high").sort((a, b) => a.index - b.index);
+  const lows = swings.filter(s => s.type === "low").sort((a, b) => a.index - b.index);
+  const equalThreshold = 0.002;
+  for (let i = 1; i < highs.length; i++) {
+    const diff = Math.abs(highs[i].price - highs[i - 1].price) / highs[i].price;
+    if (diff < equalThreshold) {
+      const eqPrice = (highs[i].price + highs[i - 1].price) / 2;
+      const swept = candles.slice(highs[i].index + 1).some(c => c.high > eqPrice * 1.001);
+      levels.push({ type: "buy_side", price: eqPrice, strength: "strong", swept });
+    }
+  }
+  for (let i = 1; i < lows.length; i++) {
+    const diff = Math.abs(lows[i].price - lows[i - 1].price) / lows[i].price;
+    if (diff < equalThreshold) {
+      const eqPrice = (lows[i].price + lows[i - 1].price) / 2;
+      const swept = candles.slice(lows[i].index + 1).some(c => c.low < eqPrice * 0.999);
+      levels.push({ type: "sell_side", price: eqPrice, strength: "strong", swept });
+    }
+  }
+  for (const h of highs.slice(-5)) {
+    if (!levels.some(l => Math.abs(l.price - h.price) / h.price < 0.003)) {
+      const swept = candles.slice(h.index + 1).some(c => c.high > h.price * 1.001);
+      levels.push({ type: "buy_side", price: h.price, strength: "moderate", swept });
+    }
+  }
+  for (const l of lows.slice(-5)) {
+    if (!levels.some(lv => Math.abs(lv.price - l.price) / l.price < 0.003)) {
+      const swept = candles.slice(l.index + 1).some(c => c.low < l.price * 0.999);
+      levels.push({ type: "sell_side", price: l.price, strength: "moderate", swept });
+    }
+  }
+  return levels.sort((a, b) => Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice)).slice(0, 8);
 }
 
 function analyzeMarketStructure(candles: CandleBar[], currentPrice: number | null): MarketStructure {
@@ -332,10 +436,15 @@ function analyzeMarketStructure(candles: CandleBar[], currentPrice: number | nul
     trend: "ranging",
     swing_highs: [],
     swing_lows: [],
-    fair_value_gaps: [],
+    fvgs: [],
+    ifvgs: [],
+    order_blocks: [],
+    liquidity_levels: [],
     nearest_support: null,
     nearest_resistance: null,
     break_of_structure: null,
+    change_of_character: null,
+    premium_discount: null,
     structure_summary: "Insufficient data",
   };
   if (candles.length < 10) return defaultResult;
@@ -356,52 +465,114 @@ function analyzeMarketStructure(candles: CandleBar[], currentPrice: number | nul
     else if (lhCount >= 1 && llCount >= 1) trend = "downtrend";
   }
 
-  const fvgs = findFairValueGaps(candles);
-  const unfilledFvgs = fvgs.filter(f => !f.filled).slice(-6);
+  const allFvgs = findFairValueGaps(candles);
+  const activeFvgs = allFvgs.filter(f => f.status === "unfilled" || f.status === "partially_filled").slice(-8);
+  const inversedFvgs = allFvgs.filter(f => f.status === "inversed").slice(-6);
+
+  const orderBlocks = findOrderBlocks(candles, swings).slice(-6);
 
   const price = currentPrice || candles[candles.length - 1]?.close || 0;
+  const liquidityLevels = findLiquidityLevels(swings, candles, price);
+
   const supports = [
     ...lows.map(l => l.price),
-    ...unfilledFvgs.filter(f => f.type === "bullish").map(f => f.midpoint),
+    ...activeFvgs.filter(f => f.type === "bullish").map(f => f.midpoint),
+    ...orderBlocks.filter(o => o.type === "bullish" && o.respected).map(o => o.midpoint),
   ].filter(p => p < price).sort((a, b) => b - a);
   const resistances = [
     ...highs.map(h => h.price),
-    ...unfilledFvgs.filter(f => f.type === "bearish").map(f => f.midpoint),
+    ...activeFvgs.filter(f => f.type === "bearish").map(f => f.midpoint),
+    ...orderBlocks.filter(o => o.type === "bearish" && o.respected).map(o => o.midpoint),
   ].filter(p => p > price).sort((a, b) => a - b);
 
   let bos: string | null = null;
-  if (highs.length >= 2 && lows.length >= 1) {
+  let choch: string | null = null;
+  if (highs.length >= 2 && lows.length >= 2) {
     const lastHigh = highs[highs.length - 1];
-    const prevHigh = highs[highs.length - 2];
+    const prevHigh = highs.length >= 2 ? highs[highs.length - 2] : null;
     const lastLow = lows[lows.length - 1];
-    if (price > lastHigh.price && lastHigh.index > lastLow.index) {
-      bos = `Bullish BOS: Price broke above swing high at $${lastHigh.price.toFixed(2)}`;
-    } else if (lows.length >= 2) {
-      const prevLow = lows[lows.length - 2];
-      if (price < lastLow.price && lastLow.index > lastHigh.index) {
-        bos = `Bearish BOS: Price broke below swing low at $${lastLow.price.toFixed(2)}`;
+    const prevLow = lows.length >= 2 ? lows[lows.length - 2] : null;
+    if (price > lastHigh.price) {
+      if (trend === "uptrend") {
+        bos = `Bullish BOS: Price broke above swing high at $${lastHigh.price.toFixed(2)} — trend continuation`;
+      } else {
+        choch = `Bullish CHoCH: Price broke above $${lastHigh.price.toFixed(2)} after downtrend — potential reversal to upside`;
+      }
+    }
+    if (price < lastLow.price) {
+      if (trend === "downtrend") {
+        bos = `Bearish BOS: Price broke below swing low at $${lastLow.price.toFixed(2)} — trend continuation`;
+      } else {
+        choch = `Bearish CHoCH: Price broke below $${lastLow.price.toFixed(2)} after uptrend — potential reversal to downside`;
       }
     }
   }
 
+  let premDisc: "premium" | "discount" | "equilibrium" | null = null;
+  if (highs.length && lows.length) {
+    const rangeHigh = Math.max(...highs.slice(-3).map(h => h.price));
+    const rangeLow = Math.min(...lows.slice(-3).map(l => l.price));
+    const eq = (rangeHigh + rangeLow) / 2;
+    if (price > eq * 1.01) premDisc = "premium";
+    else if (price < eq * 0.99) premDisc = "discount";
+    else premDisc = "equilibrium";
+  }
+
   const summaryParts: string[] = [];
-  summaryParts.push(`Market Structure: ${trend.toUpperCase()}`);
-  if (supports.length) summaryParts.push(`Nearest support: $${supports[0].toFixed(2)}`);
-  if (resistances.length) summaryParts.push(`Nearest resistance: $${resistances[0].toFixed(2)}`);
+  summaryParts.push(`Structure: ${trend.toUpperCase()}`);
+  if (premDisc) summaryParts.push(`Price in ${premDisc.toUpperCase()} zone`);
+  if (supports.length) summaryParts.push(`Support: $${supports[0].toFixed(2)}`);
+  if (resistances.length) summaryParts.push(`Resistance: $${resistances[0].toFixed(2)}`);
   if (bos) summaryParts.push(bos);
-  const bullFvgs = unfilledFvgs.filter(f => f.type === "bullish");
-  const bearFvgs = unfilledFvgs.filter(f => f.type === "bearish");
-  if (bullFvgs.length) summaryParts.push(`${bullFvgs.length} unfilled bullish FVG(s) — nearest at $${bullFvgs[bullFvgs.length - 1].midpoint.toFixed(2)}`);
-  if (bearFvgs.length) summaryParts.push(`${bearFvgs.length} unfilled bearish FVG(s) — nearest at $${bearFvgs[0].midpoint.toFixed(2)}`);
+  if (choch) summaryParts.push(choch);
+  const bullAFvgs = activeFvgs.filter(f => f.type === "bullish");
+  const bearAFvgs = activeFvgs.filter(f => f.type === "bearish");
+  if (bullAFvgs.length) summaryParts.push(`${bullAFvgs.length} active bullish FVG(s)`);
+  if (bearAFvgs.length) summaryParts.push(`${bearAFvgs.length} active bearish FVG(s)`);
+  const bullIFvgs = inversedFvgs.filter(f => f.type === "bullish");
+  const bearIFvgs = inversedFvgs.filter(f => f.type === "bearish");
+  if (bullIFvgs.length) summaryParts.push(`${bullIFvgs.length} IFVG(s) from bullish gaps (now bearish reversal zones)`);
+  if (bearIFvgs.length) summaryParts.push(`${bearIFvgs.length} IFVG(s) from bearish gaps (now bullish reversal zones)`);
+  const respOBs = orderBlocks.filter(o => o.respected);
+  if (respOBs.length) summaryParts.push(`${respOBs.length} respected order block(s)`);
+  const unsweptLiq = liquidityLevels.filter(l => !l.swept);
+  if (unsweptLiq.length) summaryParts.push(`${unsweptLiq.length} unswept liquidity level(s) nearby`);
 
   return {
     trend,
     swing_highs: highs.slice(-4).map(h => ({ price: h.price, timestamp: h.timestamp })),
     swing_lows: lows.slice(-4).map(l => ({ price: l.price, timestamp: l.timestamp })),
-    fair_value_gaps: unfilledFvgs,
+    fvgs: activeFvgs.map(f => ({
+      type: f.type,
+      zone: `$${f.bottom.toFixed(2)} - $${f.top.toFixed(2)}`,
+      midpoint: f.midpoint,
+      status: f.consequent_encroachment ? "CE reached (partially filled)" : "unfilled",
+    })),
+    ifvgs: inversedFvgs.map(f => ({
+      original_type: f.type,
+      zone: `$${f.bottom.toFixed(2)} - $${f.top.toFixed(2)}`,
+      midpoint: f.midpoint,
+      implication: f.type === "bullish"
+        ? "Originally bullish FVG got violated → now acts as BEARISH reversal zone (resistance)"
+        : "Originally bearish FVG got violated → now acts as BULLISH reversal zone (support)",
+    })),
+    order_blocks: orderBlocks.map(o => ({
+      type: o.type,
+      zone: `$${o.low.toFixed(2)} - $${o.high.toFixed(2)}`,
+      midpoint: o.midpoint,
+      respected: o.respected,
+    })),
+    liquidity_levels: liquidityLevels.map(l => ({
+      type: l.type,
+      price: l.price,
+      strength: l.strength,
+      swept: l.swept,
+    })),
     nearest_support: supports[0] ?? null,
     nearest_resistance: resistances[0] ?? null,
     break_of_structure: bos,
+    change_of_character: choch,
+    premium_discount: premDisc,
     structure_summary: summaryParts.join(" | "),
   };
 }
@@ -1555,14 +1726,15 @@ async function runSignalsPipeline() {
         trend_description,
         market_structure: structure ? {
           multi_day_trend: structure.trend,
+          premium_discount: structure.premium_discount,
           nearest_support: structure.nearest_support,
           nearest_resistance: structure.nearest_resistance,
           break_of_structure: structure.break_of_structure,
-          unfilled_fvgs: structure.fair_value_gaps.map(f => ({
-            type: f.type,
-            zone: `$${f.bottom.toFixed(2)} - $${f.top.toFixed(2)}`,
-            midpoint: f.midpoint,
-          })),
+          change_of_character: structure.change_of_character,
+          active_fvgs: structure.fvgs,
+          inversed_fvgs: structure.ifvgs,
+          order_blocks: structure.order_blocks,
+          liquidity_levels: structure.liquidity_levels,
           structure_summary: structure.structure_summary,
         } : null,
       };
@@ -1570,16 +1742,24 @@ async function runSignalsPipeline() {
 
     const aiPrompt = `You are a professional options flow analyst and CHART READER with ICT/SMC (Smart Money Concepts) knowledge. Evaluate these ${topCandidates.length} pre-screened trade signals. Your job is to determine which are REAL actionable directional bets vs hedges/noise.
 
-CRITICAL DATA YOU HAVE:
-1. "trend_description" + "intraday_trend" — what the stock is doing TODAY (open/high/low/current/change%)
-2. "market_structure" — MULTI-DAY structural analysis including:
-   - multi_day_trend: uptrend/downtrend/ranging based on swing highs & lows
+CRITICAL DATA YOU HAVE FOR EACH SIGNAL:
+1. "trend_description" + "intraday_trend" — what the stock is doing TODAY
+2. "market_structure" — FULL ICT/SMC structural analysis including:
+   - multi_day_trend: uptrend/downtrend/ranging (swing highs & lows)
+   - premium_discount: is price in premium (above equilibrium), discount (below), or at equilibrium?
    - nearest_support / nearest_resistance: key structural levels
-   - break_of_structure: any recent BOS (bullish or bearish)
-   - unfilled_fvgs: Fair Value Gaps that haven't been filled yet — these are magnets for price
-   - structure_summary: plain-English summary of the chart structure
+   - break_of_structure (BOS): trend continuation signal
+   - change_of_character (CHoCH): potential trend REVERSAL signal — very important!
+   - active_fvgs: Fair Value Gaps that are still open (unfilled or partially filled with CE)
+     → Bullish FVG = continuation support for longs
+     → Bearish FVG = continuation resistance for shorts
+   - inversed_fvgs (IFVGs): FVGs that got VIOLATED — they flip meaning!
+     → Inversed bullish FVG = was support, now acts as RESISTANCE (bearish)
+     → Inversed bearish FVG = was resistance, now acts as SUPPORT (bullish)
+   - order_blocks: last opposing candle before an impulse move. Respected OBs are strong S/R.
+   - liquidity_levels: equal highs/lows where stops are resting. Unswept = magnet for price.
 
-USE THIS STRUCTURE DATA. A call buy on a stock near a key support/FVG with an overall uptrend structure is a GREAT reversal play — even if intraday is red. A call buy in a confirmed downtrend with no support nearby and bearish BOS is likely a hedge.
+READ THE STRUCTURE LIKE A CHART. Combine these elements for your analysis.
 
 For EACH signal, return a JSON object with:
 - idx: the signal index
@@ -1589,37 +1769,36 @@ For EACH signal, return a JSON object with:
 - signal_quality: "strong" | "moderate" | "weak" | "hedge"
 - recommended_category: "whale" | "algorithm" | "spread"
 
-MARKET STRUCTURE ANALYSIS — combine flow + structure for high-conviction reads:
+ICT/SMC ANALYSIS FRAMEWORK — score signals based on structural confluence:
 
-TREND-ALIGNED SIGNALS (highest conviction, score 8-10):
-- Calls on a stock in multi-day UPTREND with price above VWAP = strong
-- Puts on a stock in multi-day DOWNTREND with price below VWAP = strong
-- Sweeps with high aggression IN the direction of the structural trend
-- Flow aligns with bullish BOS (for calls) or bearish BOS (for puts)
-- Price near an unfilled FVG in the direction of the trade (e.g., call near a bullish FVG = expecting fill)
+HIGHEST CONVICTION (score 8-10) — multiple ICT confluences:
+- Trend-aligned flow: calls in uptrend above VWAP, puts in downtrend below VWAP
+- Flow at discount (for calls) or premium (for puts) — buying low, selling high
+- Price at a respected order block in the trend direction
+- Bullish BOS + calls, or Bearish BOS + puts = continuation trade
+- Active FVG supporting the trade direction (bullish FVG below for calls, bearish FVG above for puts)
+- Liquidity just got swept in the opposite direction (sell-side swept → now bullish, buy-side swept → now bearish)
 
-FAIR VALUE GAP PLAYS (can be very high conviction):
-- If price is sitting ON or NEAR an unfilled bullish FVG and someone is buying calls → strong reversal setup (FVGs act as magnets)
-- If price is at an unfilled bearish FVG and someone is buying puts → strong continuation down
-- FVGs near the strike price add conviction — smart money targets these levels
+FVG / IFVG PLAYS (can be very high conviction):
+- Active (unfilled) bullish FVG + call buying = price expected to respect the gap and continue up (continuation)
+- Active (unfilled) bearish FVG + put buying = price expected to respect the gap and continue down (continuation)
+- IFVG (inversed bullish FVG) + put buying = originally bullish gap got violated, now acts as resistance. Bearish setup. (reversal)
+- IFVG (inversed bearish FVG) + call buying = originally bearish gap got violated, now acts as support. Bullish reversal. (reversal)
+- FVG with consequent encroachment (CE) = partially filled, price touched midpoint. Could still hold or fully inverse — moderate conviction.
 
-COUNTER-TREND / REVERSAL PLAYS (moderate conviction, score 5-7):
-- Calls on a falling stock are VALID IF:
-  → Price is near strong support (nearest_support close to current_price)
-  → Multi-day structure is still uptrend (just a pullback, not a trend break)
-  → Unfilled bullish FVG below price could act as support/magnet
-  → No bearish BOS has occurred
-- Puts on a rising stock are VALID IF:
-  → Price is near strong resistance
-  → Multi-day structure is downtrend (just a relief rally)
-  → Unfilled bearish FVG above price
+REVERSAL PLAYS (score 5-8 depending on confluence):
+- CHoCH (change of character) is a KEY reversal signal. If CHoCH is bullish + call buying → strong reversal setup.
+- Calls on a dump are VALID IF: CHoCH bullish, or price at IFVG support (inversed bearish), or price at respected bullish OB, or sell-side liquidity was just swept
+- Puts on a rally are VALID IF: CHoCH bearish, or price at IFVG resistance (inversed bullish), or price at respected bearish OB, or buy-side liquidity was just swept
+- Price in DISCOUNT zone + calls = smart money buying cheap
+- Price in PREMIUM zone + puts = smart money selling high
 
-HEDGE / WEAK SIGNALS (score 3-5, or mark as hedge):
-- Counter-trend with bearish BOS AND no nearby support = hedge
-- Options on indices (SPY/QQQ/IWM) going AGAINST the day's trend with large premium
-- Far OTM options with massive premium = tail risk hedge
-- Very large premium ($1M+) with far-dated expiry = institutional positioning
-- No key structural level, FVG, or technical reason to justify the direction
+HEDGE / LOW CONVICTION (score 3-5):
+- No ICT confluence: no FVG, no OB, no liquidity sweep, no BOS/CHoCH supporting the direction
+- Counter-trend with NO structural reason (no CHoCH, no IFVG, no OB support)
+- Flow on indices (SPY/QQQ/IWM) against the trend = likely portfolio hedge
+- Far OTM + massive premium + far expiry = tail hedge
+- Price in PREMIUM buying calls, or price in DISCOUNT buying puts (buying expensive)
 
 CATEGORY ASSIGNMENT:
 - "whale": ONLY for $1M+ premium with sweep/high aggression, or $2M+. Rare.
