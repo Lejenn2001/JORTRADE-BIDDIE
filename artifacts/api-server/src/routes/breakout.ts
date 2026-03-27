@@ -57,28 +57,18 @@ interface SqueezeResult {
 
 async function fetchDailyCandles(ticker: string, days: number = 60): Promise<CandleData[]> {
   try {
-    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
-    const res = await axios.get(`${YF}/${ticker}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      params: { interval: "1d", range: `${days}d` },
-      timeout: 10000,
-    });
-    const result = res.data?.chart?.result?.[0];
-    if (!result) return [];
-    const quote = result.indicators?.quote?.[0];
-    const timestamps = result.timestamp ?? [];
-    const candles: CandleData[] = [];
-    for (let i = 0; i < timestamps.length; i++) {
-      const o = quote?.open?.[i];
-      const h = quote?.high?.[i];
-      const l = quote?.low?.[i];
-      const c = quote?.close?.[i];
-      const v = quote?.volume?.[i];
-      if (o && h && l && c) {
-        candles.push({ timestamp: timestamps[i], open: o, high: h, low: l, close: c, volume: v ?? 0 });
-      }
-    }
-    return candles;
+    const key = POLYGON_KEY();
+    if (!key) return [];
+    const now = new Date();
+    const from = new Date(now); from.setDate(from.getDate() - days - 5);
+    const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${from.toISOString().slice(0, 10)}/${now.toISOString().slice(0, 10)}?adjusted=true&sort=asc&apiKey=${key}`;
+    const res = await axios.get(url, { timeout: 10000 });
+    const bars = res.data?.results;
+    if (!Array.isArray(bars)) return [];
+    return bars.map((b: any) => ({
+      timestamp: Math.floor(b.t / 1000),
+      open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v ?? 0,
+    }));
   } catch {
     return [];
   }

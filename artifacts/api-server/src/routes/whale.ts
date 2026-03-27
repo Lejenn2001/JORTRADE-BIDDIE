@@ -10,6 +10,50 @@ const UW_BASE = "https://api.unusualwhales.com";
 const UW_HEADERS = () => ({ Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}` });
 const AI_BASE_URL = process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"] ?? "https://api.anthropic.com";
 const AI_API_KEY = process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "";
+const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_AGGS_URL = (ticker: string, mult: number, span: string, from: string, to: string) =>
+  `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${mult}/${span}/${from}/${to}?adjusted=true&sort=asc&apiKey=${POLYGON_KEY()}`;
+const POLYGON_SNAPSHOT_TICKER = (ticker: string) =>
+  `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${POLYGON_KEY()}`;
+
+function fmtDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+interface PolygonBar {
+  open: number; high: number; low: number; close: number; volume: number; timestamp: number;
+}
+
+async function fetchPolygonAggs(ticker: string, mult: number, span: string, fromDate: string, toDate: string): Promise<PolygonBar[]> {
+  try {
+    const key = POLYGON_KEY();
+    if (!key) return [];
+    const url = POLYGON_AGGS_URL(ticker, mult, span, fromDate, toDate);
+    const res = await axios.get(url, { timeout: 8000 });
+    const bars = res.data?.results;
+    if (!Array.isArray(bars)) return [];
+    return bars.map((b: any) => ({
+      open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v ?? 0, timestamp: Math.floor(b.t / 1000),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPolygonSnapshot(ticker: string): Promise<{ price: number; prevClose: number } | null> {
+  try {
+    const key = POLYGON_KEY();
+    if (!key) return null;
+    const res = await axios.get(POLYGON_SNAPSHOT_TICKER(ticker), { timeout: 5000 });
+    const t = res.data?.ticker;
+    if (!t) return null;
+    const price = t.lastTrade?.p || t.day?.c || 0;
+    if (price <= 0) return null;
+    return { price, prevClose: t.prevDay?.c || 0 };
+  } catch {
+    return null;
+  }
+}
 
 const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
 
@@ -48,78 +92,36 @@ async function fetchDarkpool(ticker: string, limit = 40) {
 
 async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
   try {
-    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
-    const headers = { "User-Agent": "Mozilla/5.0" };
+    const now = new Date();
+    const from5d = new Date(now); from5d.setDate(from5d.getDate() - 7);
+    const today = fmtDate(now);
 
-    // Fetch last 2 days of daily bars for prior day OHLC
-    const daily = await axios.get(`${YF}/${ticker}`, {
-      headers, params: { interval: "1d", range: "5d" }, timeout: 6000,
-    });
-    const dailyResult = daily.data?.chart?.result?.[0];
-    const dailyQuote = dailyResult?.indicators?.quote?.[0];
-    const dailyTs = dailyResult?.timestamp ?? [];
-    const dailyLen = dailyTs.length;
+    const [dailyBars, intradayBars] = await Promise.all([
+      fetchPolygonAggs(ticker, 1, "day", fmtDate(from5d), today),
+      fetchPolygonAggs(ticker, 5, "minute", today, today),
+    ]);
 
-    // Find the last completed day (has a close) walking backward from the end
-    let prevIdx = -1;
-    let todayIdx = dailyLen - 1;
-    for (let i = dailyLen - 1; i >= 0; i--) {
-      if (dailyQuote?.close?.[i] != null) {
-        if (prevIdx === -1) {
-          // If the very last bar has a close, it could be today's final or prior day
-          // Check if there's another bar after it (meaning this is prior day)
-          if (i < dailyLen - 1) {
-            prevIdx = i;
-            todayIdx = i + 1;
-            break;
-          }
-          // Last bar has close — check if the one before also has close (yesterday)
-          if (i > 0 && dailyQuote?.close?.[i - 1] != null) {
-            prevIdx = i - 1;
-            todayIdx = i;
-            break;
-          }
-          prevIdx = i;
-          todayIdx = i;
-          break;
-        }
-      } else {
-        // This bar has no close — it's today (market open). Prior day is one before.
-        if (i > 0 && dailyQuote?.close?.[i - 1] != null) {
-          prevIdx = i - 1;
-          todayIdx = i;
-          break;
-        }
-      }
+    let prevClose: number | null = null, prevHigh: number | null = null;
+    let prevLow: number | null = null, prevOpen: number | null = null;
+    let todayOpen: number | null = null, todayHigh: number | null = null, todayLow: number | null = null;
+
+    if (dailyBars.length >= 2) {
+      const prev = dailyBars[dailyBars.length - 2];
+      const tod = dailyBars[dailyBars.length - 1];
+      prevClose = prev.close; prevHigh = prev.high; prevLow = prev.low; prevOpen = prev.open;
+      todayOpen = tod.open; todayHigh = tod.high; todayLow = tod.low;
+    } else if (dailyBars.length === 1) {
+      const bar = dailyBars[0];
+      prevClose = bar.close; prevHigh = bar.high; prevLow = bar.low; prevOpen = bar.open;
     }
 
-    const prevClose  = prevIdx >= 0 ? (dailyQuote?.close?.[prevIdx] ?? null) : null;
-    const prevHigh   = prevIdx >= 0 ? (dailyQuote?.high?.[prevIdx] ?? null) : null;
-    const prevLow    = prevIdx >= 0 ? (dailyQuote?.low?.[prevIdx] ?? null) : null;
-    const prevOpen   = prevIdx >= 0 ? (dailyQuote?.open?.[prevIdx] ?? null) : null;
-    const todayOpen  = dailyQuote?.open?.[todayIdx] ?? null;
-    const todayHigh  = dailyQuote?.high?.[todayIdx] ?? null;
-    const todayLow   = dailyQuote?.low?.[todayIdx] ?? null;
-
-    // Fetch intraday 5-min bars for VWAP calculation
-    const intraday = await axios.get(`${YF}/${ticker}`, {
-      headers, params: { interval: "5m", range: "1d" }, timeout: 6000,
-    });
-    const intResult = intraday.data?.chart?.result?.[0];
-    const intQuote  = intResult?.indicators?.quote?.[0];
-    const intLen    = (intResult?.timestamp ?? []).length;
-
     let vwap: number | null = null;
-    if (intQuote && intLen > 0) {
+    if (intradayBars.length > 0) {
       let cumTPV = 0, cumVol = 0;
-      for (let i = 0; i < intLen; i++) {
-        const h = intQuote.high?.[i] ?? 0;
-        const l = intQuote.low?.[i] ?? 0;
-        const c = intQuote.close?.[i] ?? 0;
-        const v = intQuote.volume?.[i] ?? 0;
-        if (h && l && c && v) {
-          cumTPV += ((h + l + c) / 3) * v;
-          cumVol += v;
+      for (const b of intradayBars) {
+        if (b.high && b.low && b.close && b.volume) {
+          cumTPV += ((b.high + b.low + b.close) / 3) * b.volume;
+          cumVol += b.volume;
         }
       }
       vwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
@@ -132,21 +134,16 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
 
     let currentPrice: number | null = polygonLive ?? (uwPrice ? Math.round(uwPrice * 100) / 100 : null);
     if (!currentPrice) {
-      const meta = intResult?.meta ?? dailyResult?.meta ?? {};
-      const preMarket  = meta.preMarketPrice   ?? null;
-      const postMarket = meta.postMarketPrice  ?? null;
-      const regMarket  = meta.regularMarketPrice ?? null;
-      const preTs  = meta.preMarketTime   ?? 0;
-      const postTs = meta.postMarketTime  ?? 0;
-      const regTs  = meta.regularMarketTime ?? 0;
-      currentPrice = regMarket;
-      if (preMarket && preTs > regTs) currentPrice = preMarket;
-      if (postMarket && postTs > regTs && postTs > preTs) currentPrice = postMarket;
-      if (!currentPrice) currentPrice = intQuote?.close?.[intLen - 1] ?? prevClose;
-      if (currentPrice) currentPrice = Math.round(currentPrice * 100) / 100;
+      const snap = await fetchPolygonSnapshot(ticker);
+      if (snap) currentPrice = Math.round(snap.price * 100) / 100;
+    }
+    if (!currentPrice && intradayBars.length > 0) {
+      currentPrice = Math.round(intradayBars[intradayBars.length - 1].close * 100) / 100;
+    }
+    if (!currentPrice && prevClose) {
+      currentPrice = Math.round(prevClose * 100) / 100;
     }
 
-    // Pivot points from prior day
     const pivot = prevHigh && prevLow && prevClose
       ? Math.round(((prevHigh + prevLow + prevClose) / 3) * 100) / 100
       : null;
@@ -221,55 +218,18 @@ interface PriceConfirmation {
 
 async function fetchRecentCandles(ticker: string, interval = "1m", count = 10): Promise<CandleBar[]> {
   try {
-    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
-    const res = await axios.get(`${YF}/${ticker}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      params: { interval, range: "1d" },
-      timeout: 10000,
-    });
-    const result = res.data?.chart?.result?.[0];
-    if (!result) return [];
-    const quote = result.indicators?.quote?.[0];
-    const timestamps = result.timestamp ?? [];
-    const bars: CandleBar[] = [];
-    for (let i = Math.max(0, timestamps.length - count); i < timestamps.length; i++) {
-      const o = quote?.open?.[i];
-      const h = quote?.high?.[i];
-      const l = quote?.low?.[i];
-      const c = quote?.close?.[i];
-      const v = quote?.volume?.[i];
-      if (o && h && l && c) {
-        bars.push({ open: o, high: h, low: l, close: c, volume: v ?? 0, timestamp: timestamps[i] });
-      }
-    }
-    return bars;
+    const mult = interval === "5m" ? 5 : interval === "15m" ? 15 : 1;
+    const today = fmtDate(new Date());
+    const bars = await fetchPolygonAggs(ticker, mult, "minute", today, today);
+    return bars.slice(-count);
   } catch { return []; }
 }
 
 async function fetchStructureCandles(ticker: string): Promise<CandleBar[]> {
   try {
-    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
-    const res = await axios.get(`${YF}/${ticker}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      params: { interval: "5m", range: "5d" },
-      timeout: 10000,
-    });
-    const result = res.data?.chart?.result?.[0];
-    if (!result) return [];
-    const quote = result.indicators?.quote?.[0];
-    const timestamps = result.timestamp ?? [];
-    const bars: CandleBar[] = [];
-    for (let i = 0; i < timestamps.length; i++) {
-      const o = quote?.open?.[i];
-      const h = quote?.high?.[i];
-      const l = quote?.low?.[i];
-      const c = quote?.close?.[i];
-      const v = quote?.volume?.[i];
-      if (o && h && l && c) {
-        bars.push({ open: o, high: h, low: l, close: c, volume: v ?? 0, timestamp: timestamps[i] });
-      }
-    }
-    return bars;
+    const now = new Date();
+    const from5d = new Date(now); from5d.setDate(from5d.getDate() - 5);
+    return await fetchPolygonAggs(ticker, 5, "minute", fmtDate(from5d), fmtDate(now));
   } catch { return []; }
 }
 
@@ -1372,7 +1332,7 @@ async function runSignalsPipeline() {
     if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
   }
 
-  // Get unique tickers — limit to 10 to avoid Yahoo Finance rate limits
+  // Get unique tickers — limit to 10 to avoid Polygon rate limits
   const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
 
   // Fetch key levels, candles, and structure candles in parallel with a global timeout
@@ -2235,26 +2195,16 @@ interface PriceHistory {
 
 async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<PriceHistory | null> {
   try {
-    const YF = "https://query1.finance.yahoo.com/v8/finance/chart";
     const since = new Date(sinceDate);
-    const daysDiff = Math.max(1, Math.ceil((Date.now() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-    const range = daysDiff <= 5 ? "5d" : daysDiff <= 30 ? "1mo" : "3mo";
-    const interval = daysDiff <= 7 ? "15m" : "1d";
+    const now = new Date();
+    const daysDiff = Math.max(1, Math.ceil((now.getTime() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const mult = daysDiff <= 7 ? 15 : 1;
+    const span = daysDiff <= 7 ? "minute" : "day";
 
-    const res = await axios.get(`${YF}/${ticker}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      params: { interval, range },
-      timeout: 10000,
-    });
-    const result = res.data?.chart?.result?.[0];
-    if (!result) return null;
-
-    const meta = result.meta ?? {};
-    const quote = result.indicators?.quote?.[0];
-    const timestamps = result.timestamp ?? [];
+    const bars = await fetchPolygonAggs(ticker, mult, span, fmtDate(since), fmtDate(now));
+    if (bars.length === 0) return null;
 
     const sinceTs = since.getTime() / 1000;
-
     const sinceHourUTC = since.getUTCHours();
     const marketOpenUTC = 13.5;
     const marketCloseUTC = 20;
@@ -2276,27 +2226,24 @@ async function fetchPriceHistory(ticker: string, sinceDate: string): Promise<Pri
     let highSince = -Infinity;
     let lowSince = Infinity;
     let hasDataAfterSignal = false;
-    for (let i = 0; i < timestamps.length; i++) {
-      if (timestamps[i] >= effectiveSinceTs) {
-        const h = quote?.high?.[i];
-        const l = quote?.low?.[i];
-        if (h && h > highSince) { highSince = h; hasDataAfterSignal = true; }
-        if (l && l < lowSince) { lowSince = l; hasDataAfterSignal = true; }
+    for (const b of bars) {
+      if (b.timestamp >= effectiveSinceTs) {
+        if (b.high > highSince) { highSince = b.high; hasDataAfterSignal = true; }
+        if (b.low < lowSince) { lowSince = b.low; hasDataAfterSignal = true; }
       }
     }
 
-    const preMarket = meta.preMarketPrice ?? null;
-    const postMarket = meta.postMarketPrice ?? null;
-    const regMarket = meta.regularMarketPrice ?? null;
-    const preTs = meta.preMarketTime ?? 0;
-    const postTs = meta.postMarketTime ?? 0;
-    const regTs = meta.regularMarketTime ?? 0;
-    let current: number | null = regMarket;
-    if (preMarket && preTs > regTs) current = preMarket;
-    if (postMarket && postTs > regTs && postTs > preTs) current = postMarket;
+    const rtData = priceMonitor.getPrice(ticker);
+    let current: number | null = null;
+    if (rtData && Date.now() - rtData.lastUpdate < 120000) {
+      current = rtData.price;
+    }
     if (!current) {
-      const len = timestamps.length;
-      current = quote?.close?.[len - 1] ?? null;
+      const snap = await fetchPolygonSnapshot(ticker);
+      if (snap) current = snap.price;
+    }
+    if (!current) {
+      current = bars[bars.length - 1].close;
     }
     if (!current) return null;
 
@@ -2932,10 +2879,10 @@ async function realtimeVerifySignals() {
       }
     }
 
-    const tickersNeedingYahoo = tickers.filter(t => !priceMap[t]);
-    if (tickersNeedingYahoo.length > 0) {
+    const tickersNeedingFetch = tickers.filter(t => !priceMap[t]);
+    if (tickersNeedingFetch.length > 0) {
       await Promise.all(
-        tickersNeedingYahoo.map(async (t) => {
+        tickersNeedingFetch.map(async (t) => {
           const oldest = pending
             .filter((s: any) => s.ticker === t)
             .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
@@ -2997,7 +2944,7 @@ async function realtimeVerifySignals() {
     }
 
     if (hits + misses + expired > 0) {
-      const source = priceMonitor.isConnected() ? "real-time" : "Yahoo";
+      const source = priceMonitor.isConnected() ? "real-time" : "Polygon";
       console.log(`[auto-verify] ${source} | Verified: ${hits} hits, ${misses} misses, ${expired} expired`);
     }
   } catch (e: any) {
