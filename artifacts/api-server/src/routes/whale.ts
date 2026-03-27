@@ -1577,10 +1577,15 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 
   for (const s of signals.slice(0, 20)) {
     try {
+      const existing = await dbQuery(
+        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND category = $2 AND strike = $3 AND option_type = $4 LIMIT 1`,
+        [s.ticker, s.category, s.strike, s.option_type]
+      );
+      if (existing && existing.rows.length > 0) continue;
+
       await dbQuery(
         `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, detected_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
-         ON CONFLICT DO NOTHING`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())`,
         [
           s.ticker, s.direction, "replit", s.strike, s.expiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
