@@ -1,4 +1,4 @@
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
 import SignalLegend from "./SignalLegend";
@@ -11,6 +11,9 @@ interface Props {
   title?: string;
   subtitle?: string;
   icon?: "algorithm" | "whale" | "spread";
+  takenSignalIds?: Set<string>;
+  takingId?: string | null;
+  onTakeTrade?: (signal: MarketSignal) => void;
 }
 
 const cardVariants = {
@@ -21,7 +24,7 @@ const cardVariants = {
   }),
 };
 
-const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Props) => {
+const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, takenSignalIds, takingId, onTakeTrade }: Props) => {
   const displaySignals = limit ? signals.slice(0, limit) : signals;
   const isWhale = icon === "whale";
   const isSpread = icon === "spread";
@@ -317,6 +320,34 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon }: Pro
                     </span>
                   )}
                 </div>
+
+                {onTakeTrade && (
+                  <div className="pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => onTakeTrade(signal)}
+                      disabled={takingId === signal.id}
+                      className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                        takenSignalIds?.has(signal.id)
+                          ? "bg-emerald-500/20 text-emerald-400 hover:bg-red-500/20 hover:text-red-400"
+                          : "bg-muted/30 text-muted-foreground hover:bg-primary/20 hover:text-primary"
+                      } disabled:opacity-50`}
+                    >
+                      {takingId === signal.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : takenSignalIds?.has(signal.id) ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Trade Taken</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>I Took This Trade</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}

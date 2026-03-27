@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import SignalFeedPanel from "@/components/dashboard/SignalFeedPanel";
@@ -7,6 +7,7 @@ import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
+import { useAuth } from "@/hooks/useAuth";
 
 const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
   signal.convictionScore ?? Math.round(signal.confidence * 10);
@@ -80,8 +81,11 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
 
 const Dashboard = () => {
   const { signals, loading } = useMarketData();
+  const { user } = useAuth();
   const [persistedSignals, setPersistedSignals] = useState<MarketSignal[]>([]);
   const [persistedLoading, setPersistedLoading] = useState(true);
+  const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
+  const [takingId, setTakingId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadTodaysLiveSignals = async () => {
@@ -108,6 +112,54 @@ const Dashboard = () => {
     loadTodaysLiveSignals();
   }, []);
 
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`/api/whale/trades?userId=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.trades) {
+          setTakenSignalIds(new Set(data.trades.map((t: any) => t.signal_id)));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
+    if (!user?.id) return;
+    const isTaken = takenSignalIds.has(signal.id);
+    setTakingId(signal.id);
+    try {
+      if (isTaken) {
+        await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
+        setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
+      } else {
+        await fetch("/api/whale/trades", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            signalId: signal.id,
+            ticker: signal.ticker,
+            direction: signal.type,
+            category: signal.category || "algorithm",
+            strike: signal.strike,
+            expiry: signal.expiry,
+            optionType: signal.putCall,
+            entryTrigger: signal.entryTrigger,
+            target: signal.targetZone,
+            invalidation: signal.invalidation,
+            convictionScore: signal.convictionScore ?? Math.round(signal.confidence * 10),
+          }),
+        });
+        setTakenSignalIds(prev => new Set(prev).add(signal.id));
+      }
+    } catch (e) {
+      console.error("Trade toggle error:", e);
+    } finally {
+      setTakingId(null);
+    }
+  }, [user?.id, takenSignalIds]);
 
   const allMergedSignals = useMemo(() => {
     const mergedSignals = new Map<string, MarketSignal>();
@@ -218,6 +270,9 @@ const Dashboard = () => {
                 subtitle="Price action confirmed + gamma analysis — intraday entries"
                 icon="algorithm"
                 limit={5}
+                takenSignalIds={takenSignalIds}
+                takingId={takingId}
+                onTakeTrade={handleTakeTrade}
               />
               <SignalFeedPanel
                 signals={whalePlays}
@@ -226,6 +281,9 @@ const Dashboard = () => {
                 subtitle="Institutional flow — swing positioning"
                 icon="whale"
                 limit={5}
+                takenSignalIds={takenSignalIds}
+                takingId={takingId}
+                onTakeTrade={handleTakeTrade}
               />
               <SignalFeedPanel
                 signals={spreadPlays}
@@ -234,6 +292,9 @@ const Dashboard = () => {
                 subtitle="Multi-leg strategies — defined risk plays"
                 icon="spread"
                 limit={5}
+                takenSignalIds={takenSignalIds}
+                takingId={takingId}
+                onTakeTrade={handleTakeTrade}
               />
             </div>
           </div>
