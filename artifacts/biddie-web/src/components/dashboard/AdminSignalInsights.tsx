@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   CheckCircle, XCircle, Clock, TrendingUp, TrendingDown,
   BarChart3, AlertTriangle, Lightbulb, ChevronDown, ChevronUp,
-  Target, Activity, Zap
+  Target, Activity, Zap, BookOpen
 } from "lucide-react";
 
 interface Signal {
@@ -50,6 +50,7 @@ const AdminSignalInsights = () => {
   const [fetchError, setFetchError] = useState(false);
   const [sortCol, setSortCol] = useState<string>("detected");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [showMethodology, setShowMethodology] = useState(false);
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -359,6 +360,81 @@ const AdminSignalInsights = () => {
             })}
           </div>
         </div>
+      </div>
+
+      <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+        <button
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="w-full px-5 py-4 border-b border-border/40 flex items-center gap-2 hover:bg-muted/10 transition-colors"
+        >
+          <BookOpen className="h-5 w-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-foreground">Signal Verification Methodology</h2>
+          {showMethodology ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+        </button>
+        {showMethodology && (
+          <div className="p-5 space-y-4 text-sm text-muted-foreground">
+            <div>
+              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Verification Cycle</h3>
+              <p>Every pending signal is checked on a regular interval against live Polygon.io price data. The verifier pulls the stock's price history since the signal was detected, including the current price, the highest price since detection, and the lowest price since detection.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-emerald-400 uppercase">HIT (Checked First)</span>
+                </div>
+                <p className="text-xs leading-relaxed">Price reached the target zone. For <span className="text-emerald-400 font-semibold">bullish/CALL</span> signals: the high since detection reached the target price. For <span className="text-red-400 font-semibold">bearish/PUT</span> signals: the low since detection dropped to the target price. Target must be in the correct direction (above entry for bullish, below entry for bearish) or it is ignored.</p>
+              </div>
+              <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <XCircle className="h-4 w-4 text-red-400" />
+                  <span className="text-xs font-bold text-red-400 uppercase">MISS (Checked Second)</span>
+                </div>
+                <p className="text-xs leading-relaxed">Price breached the invalidation level <span className="text-foreground font-semibold">after 2+ hours</span> of being active. For <span className="text-emerald-400 font-semibold">bullish</span>: current price fell to or below invalidation. For <span className="text-red-400 font-semibold">bearish</span>: current price rose to or above invalidation. Invalidation must be on the correct side (below entry for bullish, above entry for bearish) or it is ignored.</p>
+              </div>
+              <div className="rounded-lg bg-muted/20 border border-border/40 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-400 uppercase">EXPIRED</span>
+                </div>
+                <p className="text-xs leading-relaxed">The signal's expiry date passed without hitting target or invalidation. If the current price is on the <span className="text-foreground font-semibold">wrong side of entry</span> at expiry, it becomes a MISS. If price is flat or favorable but didn't reach the target, it's marked EXPIRED (not counted in win rate).</p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Key Rules</h3>
+              <ul className="space-y-1.5 text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">1.</span>
+                  <span><span className="text-foreground font-semibold">Priority order:</span> HIT is checked before MISS every cycle. If price touched the target at any point — even if it later hit invalidation — it's a HIT.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">2.</span>
+                  <span><span className="text-foreground font-semibold">2-hour grace period:</span> A signal cannot be marked MISS until it has been active for at least 2 hours. This prevents premature resolution from market noise.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">3.</span>
+                  <span><span className="text-foreground font-semibold">Directional sanity checks:</span> Targets and invalidation levels must make directional sense. A bearish signal with a target ABOVE entry price is ignored (bad parse). Same for a bullish signal with invalidation ABOVE entry.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">4.</span>
+                  <span><span className="text-foreground font-semibold">Win Rate formula:</span> Hits ÷ (Hits + Misses). Pending and Expired signals are excluded from the calculation.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">5.</span>
+                  <span><span className="text-foreground font-semibold">Direction detection:</span> Uses option type (CALL/PUT) first. Falls back to signal_type (bullish/bearish) only if option type is missing.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3">
+              <p className="text-xs text-blue-300">
+                <span className="font-bold">Data source:</span> All price verification uses Polygon.io real-time and historical data. Signals are generated by Claude AI analyzing Unusual Whales options flow data with ICT/SMC methodology.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {insights.length > 0 && (

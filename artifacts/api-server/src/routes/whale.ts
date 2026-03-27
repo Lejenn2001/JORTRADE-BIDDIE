@@ -2460,7 +2460,8 @@ router.post("/whale/verify-signals", async (_req, res) => {
       const invalidationPrice = parsePrice(signal.invalidation);
       const entryPrice = parsePrice(signal.entry_trigger);
       const signalPrice = signal.price_at_signal ? parseFloat(signal.price_at_signal) : null;
-      const isBullish = signal.signal_type === "bullish";
+      const putCall = (signal.put_call || "").toUpperCase();
+      const isBullish = putCall === "CALL" ? true : putCall === "PUT" ? false : signal.signal_type === "bullish";
 
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
       const isExpired = expiryDate && expiryDate < now;
@@ -2476,8 +2477,8 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
       if (target.low && target.high && refPrice > 0) {
         const targetMakesDirectionalSense = isBullish
-          ? target.low > refPrice * 0.98
-          : target.high < refPrice * 1.02;
+          ? target.low > refPrice * 0.999
+          : target.high < refPrice * 1.001;
         if (targetMakesDirectionalSense) {
           if (isBullish) {
             const notAlreadyPastTarget = !signalPrice || signalPrice <= target.low * 1.03;
@@ -2500,10 +2501,10 @@ router.post("/whale/verify-signals", async (_req, res) => {
           ? invalidationPrice < refPrice
           : invalidationPrice > refPrice;
         if (invMakesDirectionalSense) {
-          if (isBullish && history.current <= invalidationPrice) {
+          if (isBullish && history.lowSince <= invalidationPrice) {
             outcome = "missed";
             outcomePrice = history.lowSince;
-          } else if (!isBullish && history.current >= invalidationPrice) {
+          } else if (!isBullish && history.highSince >= invalidationPrice) {
             outcome = "missed";
             outcomePrice = history.highSince;
           }
@@ -3060,7 +3061,8 @@ async function realtimeVerifySignals() {
       const invalidationPrice = parsePrice(signal.invalidation);
       const entryPrice = parsePrice(signal.entry_trigger);
       const signalPrice = signal.price_at_signal ? parseFloat(signal.price_at_signal) : null;
-      const isBullish = signal.signal_type === "bullish";
+      const putCall2 = (signal.put_call || signal.option_type || "").toUpperCase();
+      const isBullish = putCall2 === "CALL" ? true : putCall2 === "PUT" ? false : signal.signal_type === "bullish";
       const expiryDate = signal.expiry ? new Date(signal.expiry) : null;
       const isExpired = expiryDate && expiryDate < now;
 
@@ -3074,8 +3076,8 @@ async function realtimeVerifySignals() {
 
       if (target_val.low && target_val.high && refPrice2 > 0) {
         const targetMakesDirectionalSense = isBullish
-          ? target_val.low > refPrice2 * 0.98
-          : target_val.high < refPrice2 * 1.02;
+          ? target_val.low > refPrice2 * 0.999
+          : target_val.high < refPrice2 * 1.001;
         if (targetMakesDirectionalSense) {
           if (isBullish) {
             const notAlreadyPastTarget = !signalPrice || signalPrice <= target_val.low * 1.03;
@@ -3092,8 +3094,8 @@ async function realtimeVerifySignals() {
           ? invalidationPrice < refPrice2
           : invalidationPrice > refPrice2;
         if (invMakesDirectionalSense) {
-          if (isBullish && history.current <= invalidationPrice) outcome = "missed";
-          else if (!isBullish && history.current >= invalidationPrice) outcome = "missed";
+          if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
+          else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
         }
       }
 
