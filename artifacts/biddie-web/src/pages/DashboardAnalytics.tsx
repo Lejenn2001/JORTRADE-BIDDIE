@@ -196,7 +196,7 @@ const DashboardAnalytics = () => {
                   <BarChart3 className="h-6 w-6 text-primary" />
                   Performance Analytics
                 </h1>
-                <p className="text-sm text-muted-foreground">Track Biddie AI signal accuracy and your personal trading performance</p>
+                <p className="text-sm text-muted-foreground">Track Biddie AI Pick accuracy and your personal trading performance</p>
               </div>
 
               <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
@@ -323,7 +323,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Biddie AI Win Rate"
+          label="Biddie AI Pick Win Rate"
           value={signalStats ? `${signalStats.winRate}%` : "—"}
           sub={signalStats ? `${signalStats.hits} hits / ${signalStats.hits + signalStats.misses} resolved` : undefined}
           icon={<Target className="h-5 w-5 text-emerald-400" />}
@@ -356,7 +356,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
-            Biddie AI Signal Performance
+            Biddie AI Pick Performance
           </h3>
           {signalStats ? (
             <div className="flex items-center gap-6">
@@ -415,7 +415,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
             <PieChart className="h-4 w-4 text-primary" />
-            Top Tickers — Biddie AI Accuracy
+            Top Tickers — Biddie AI Pick Accuracy
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {topTickers.map(t => (
@@ -539,8 +539,8 @@ function SignalsTab({ signalStats, topTickers }: {
       {signalStats ? (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Biddie AI Signals" value={signalStats.total} icon={<Zap className="h-5 w-5 text-primary" />} color="border-primary/20" />
-            <StatCard label="Biddie AI Win Rate" value={`${signalStats.winRate}%`} sub={`${signalStats.hits} hits`} icon={<Target className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
+            <StatCard label="Biddie AI Picks" value={signalStats.total} icon={<Zap className="h-5 w-5 text-primary" />} color="border-primary/20" />
+            <StatCard label="Pick Win Rate" value={`${signalStats.winRate}%`} sub={`${signalStats.hits} hits`} icon={<Target className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
             <StatCard label="Misses" value={signalStats.misses} icon={<XCircle className="h-5 w-5 text-red-400" />} color="border-red-500/20" />
             <StatCard label="Pending" value={signalStats.pending} icon={<Clock className="h-5 w-5 text-yellow-400" />} color="border-yellow-500/20" />
           </div>
@@ -581,7 +581,7 @@ function SignalsTab({ signalStats, topTickers }: {
 
           <div className="glass-panel rounded-xl p-5 border border-white/10">
             <h3 className="text-sm font-bold text-foreground mb-2">Signal Breakdown</h3>
-            <p className="text-xs text-muted-foreground mb-4">How Biddie AI signals have performed across all categories</p>
+            <p className="text-xs text-muted-foreground mb-4">How Biddie AI Picks have performed across all categories</p>
             <div className="grid grid-cols-3 gap-4">
               {signalStats.byCategory && Object.entries(signalStats.byCategory).map(([cat, data]) => {
                 const rate = data.total > 0 ? Math.round((data.hits / data.total) * 100) : 0;
