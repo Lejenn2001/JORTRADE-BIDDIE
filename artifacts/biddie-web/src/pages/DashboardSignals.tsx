@@ -103,6 +103,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     category: record.category,
     reason: record.reason,
     aiEvaluated: true,
+    priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,

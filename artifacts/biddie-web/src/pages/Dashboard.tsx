@@ -82,6 +82,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
     aiEvaluated: true,
+    priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
   };
 };
