@@ -1971,7 +1971,18 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   }
 
   signals.sort((a, b) => b.confidence - a.confidence);
-  console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals`);
+
+  const dedupedSignals: typeof signals = [];
+  const seenTickerCategory = new Set<string>();
+  for (const s of signals) {
+    const key = `${s.ticker}|${s.category}`;
+    if (seenTickerCategory.has(key)) continue;
+    seenTickerCategory.add(key);
+    dedupedSignals.push(s);
+  }
+  signals = dedupedSignals;
+
+  console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const responseData = { signals: signals.slice(0, 20), count: Math.min(signals.length, 20), timestamp: now };
   signalsCache = { data: responseData, timestamp: Date.now() };
@@ -2166,7 +2177,11 @@ router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE signal_source = 'replit' ORDER BY detected_at DESC LIMIT $1`,
+      `SELECT * FROM (
+        SELECT DISTINCT ON (ticker, category) * FROM signal_outcomes
+        WHERE signal_source = 'replit'
+        ORDER BY ticker, category, confidence DESC, detected_at DESC
+      ) deduped ORDER BY detected_at DESC LIMIT $1`,
       [limit]
     );
     const countResult = await dbQuery(

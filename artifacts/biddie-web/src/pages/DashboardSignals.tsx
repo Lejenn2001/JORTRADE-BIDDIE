@@ -226,7 +226,15 @@ const DashboardSignals = () => {
     }
 
     const all = Array.from(signalMap.values());
-    return all;
+    const bestPerTickerCategory = new Map<string, MarketSignal>();
+    for (const s of all) {
+      const deKey = `${s.ticker}|${s.category || 'algorithm'}`;
+      const existing = bestPerTickerCategory.get(deKey);
+      if (!existing || (s.confidence ?? 0) > (existing.confidence ?? 0)) {
+        bestPerTickerCategory.set(deKey, s);
+      }
+    }
+    return Array.from(bestPerTickerCategory.values());
   }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;
