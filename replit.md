@@ -89,6 +89,14 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Pre-Market Data**: `fetchPremarketSnapshot()` uses Polygon.io snapshot API (`/v2/snapshot/locale/us/markets/stocks/tickers`) with bid/ask/dayVolume for 18 key tickers. `GET /api/whale/premarket` returns live pre-market prices, gap %, bid/ask, and biggest movers (2-min cache). Morning outlook runs at 7:00 AM ET with enriched pre-market context including gap summary and hot flow tickers
 - **BASE_TICKERS**: GLD, QQQ, SPY, IWM (always monitored via Polygon WebSocket)
 
+## Signal Performance Tracking
+
+- **Performance Calendar** (`PerformanceCalendar.tsx`): Color-coded calendar heatmap showing daily win rates. Compact version on Dashboard and Breakout pages, full version on Signals page. Click any day to see all signals from that session with hit/miss/pending status.
+- **Dedicated Calendar API** (`GET /api/whale/signals/calendar`): Returns all signals (no dedup) with outcome stats for accurate daily performance tracking.
+- **Methodology Explainer**: Collapsible "How are signals scored?" section in Signal Accuracy Panel explains HIT (target reached), MISSED (invalidation breached after 2hr minimum hold), EXPIRED (time ran out, may have been profitable), PENDING (still active).
+- **Win Rate Formula**: Hits / (Hits + Misses). Pending and expired excluded.
+- **Signal Verification**: Auto-verifies every 5 min during market hours, 30 min after hours. 2-hour minimum hold before miss. Hits checked first. Uses current price for invalidation (not intraday extremes).
+
 ## Trump Feed
 
 - **Trump Truth Social Monitor** (`/dashboard/trump`): Polls CNN's public Truth Social archive (`ix.cnn.io/data/truth-social/truth_archive.json`) every 5 minutes

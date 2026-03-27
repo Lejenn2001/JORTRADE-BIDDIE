@@ -2234,6 +2234,35 @@ Respond in this exact JSON format:
   }
 });
 
+router.get("/whale/signals/calendar", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
+    const result = await dbQuery(
+      `SELECT id, ticker, signal_type, option_type AS "put_call", confidence, strike, expiry,
+              outcome, created_at, detected_at, resolved_at, category, price_at_signal
+       FROM signal_outcomes
+       WHERE signal_source = 'replit'
+       ORDER BY detected_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    const statsResult = await dbQuery(
+      `SELECT outcome, COUNT(*)::int AS count FROM signal_outcomes
+       WHERE signal_source = 'replit' GROUP BY outcome`
+    );
+    const stats: Record<string, number> = {};
+    for (const row of (statsResult?.rows || [])) {
+      stats[row.outcome || "pending"] = row.count;
+    }
+    res.json({
+      signals: result?.rows || [],
+      stats,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
