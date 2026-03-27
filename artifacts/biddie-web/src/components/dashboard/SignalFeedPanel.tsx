@@ -135,7 +135,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
                   ) : null}
                   {signal.source === "live" ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
+                    <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
                   ) : null}
                 </div>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
