@@ -48,6 +48,8 @@ const AdminSignalInsights = () => {
   const [showAllSignals, setShowAllSignals] = useState(false);
   const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "missed" | "pending">("all");
   const [fetchError, setFetchError] = useState(false);
+  const [sortCol, setSortCol] = useState<string>("detected");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -227,13 +229,50 @@ const AdminSignalInsights = () => {
     return results;
   }, [directionStats, tickerPatterns, categoryStats]);
 
+  const toggleSort = (col: string) => {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  };
+
   const filteredSignals = useMemo(() => {
-    if (filterOutcome === "all") return signals;
-    return signals.filter(s => {
+    let list = filterOutcome === "all" ? [...signals] : signals.filter(s => {
       const normalized = s.outcome === "hit" ? "hit" : s.outcome === "missed" ? "missed" : "pending";
       return normalized === filterOutcome;
     });
-  }, [signals, filterOutcome]);
+
+    list.sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortCol) {
+        case "status": {
+          const order = { hit: 0, missed: 1, pending: 2 };
+          const ao = order[(a.outcome === "hit" ? "hit" : a.outcome === "missed" ? "missed" : "pending") as keyof typeof order];
+          const bo = order[(b.outcome === "hit" ? "hit" : b.outcome === "missed" ? "missed" : "pending") as keyof typeof order];
+          return (ao - bo) * dir;
+        }
+        case "ticker": return a.ticker.localeCompare(b.ticker) * dir;
+        case "direction": {
+          const ad = a.put_call || a.signal_type;
+          const bd = b.put_call || b.signal_type;
+          return ad.localeCompare(bd) * dir;
+        }
+        case "score": return ((a.confidence || 0) - (b.confidence || 0)) * dir;
+        case "source": return (a.category || "").localeCompare(b.category || "") * dir;
+        case "entry": return ((a.price_at_signal || 0) - (b.price_at_signal || 0)) * dir;
+        case "detected":
+        default: {
+          const at = new Date(a.detected_at || a.created_at).getTime();
+          const bt = new Date(b.detected_at || b.created_at).getTime();
+          return (at - bt) * dir;
+        }
+      }
+    });
+
+    return list;
+  }, [signals, filterOutcome, sortCol, sortDir]);
 
   if (loading) {
     return (
@@ -449,15 +488,30 @@ const AdminSignalInsights = () => {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-background/95 backdrop-blur z-10">
               <tr className="border-b border-border/30">
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Status</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Ticker</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Direction</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Strike</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Expiry</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Score</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Source</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Entry $</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">Detected</th>
+                {[
+                  { key: "status", label: "Status" },
+                  { key: "ticker", label: "Ticker" },
+                  { key: "direction", label: "Direction" },
+                  { key: "strike", label: "Strike" },
+                  { key: "expiry", label: "Expiry" },
+                  { key: "score", label: "Score" },
+                  { key: "source", label: "Source" },
+                  { key: "entry", label: "Entry $" },
+                  { key: "detected", label: "Detected" },
+                ].map(col => (
+                  <th
+                    key={col.key}
+                    onClick={() => toggleSort(col.key)}
+                    className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors select-none"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {sortCol === col.key && (
+                        <span className="text-primary">{sortDir === "asc" ? "▲" : "▼"}</span>
+                      )}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>

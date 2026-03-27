@@ -8,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
-import PerformanceCalendar from "@/components/dashboard/PerformanceCalendar";
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
@@ -287,8 +286,6 @@ const DashboardSignals = () => {
               Today's signal log — {totalCount} signals recorded
             </p>
           </div>
-
-          <PerformanceCalendar />
 
           {/* Tab Switcher */}
           <div className="flex gap-2">
