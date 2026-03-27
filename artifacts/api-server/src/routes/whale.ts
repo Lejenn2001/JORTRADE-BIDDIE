@@ -1885,14 +1885,22 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
         invalidation: s.invalidation,
       }));
 
-      const spreadPrompt = `You are a professional options strategist. Based on these high-conviction directional signals from institutional flow, suggest 2-3 SPREAD strategies that offer defined-risk ways to play the same thesis.
+      const spreadPrompt = `You are a professional options strategist. Review these directional signals from institutional flow and decide if any of them would genuinely benefit from a SPREAD strategy instead of just buying the option outright.
 
-DIRECTIONAL SIGNALS (these are confirmed by institutional flow):
+DIRECTIONAL SIGNALS (confirmed by institutional flow):
 ${JSON.stringify(spreadInput, null, 2)}
 
-For each spread, return a JSON object with:
+IMPORTANT: Only suggest a spread if it GENUINELY makes sense. A straight put or call is often the better play. Reasons to suggest a spread:
+- IV is elevated and you want to reduce cost basis
+- The move has a clear price ceiling/floor making a vertical spread ideal
+- Risk/reward improves meaningfully vs the outright option
+- The signal suggests a pinning/range-bound scenario (butterfly)
+
+If NONE of the signals justify a spread, return an empty array: []
+
+For each spread you DO suggest, return a JSON object with:
 - ticker: the underlying ticker
-- direction: "bullish" or "bearish"
+- direction: "bullish" or "bearish" (MUST match the parent signal direction)
 - trade: human-readable trade description (e.g. "GOOG Bull Call Spread $280/$290 Apr 25")
 - option_type: "call" or "put" (the dominant leg)
 - strategy_type: "bull_call_spread" | "bear_put_spread" | "call_debit_spread" | "put_credit_spread" | "iron_condor" | "butterfly"
@@ -1902,18 +1910,17 @@ For each spread, return a JSON object with:
 - max_loss: estimated max loss per contract in dollars (number)
 - risk_reward: ratio as string (e.g. "1:2.5")
 - entry_trigger: when to enter this spread
-- target: profit target
-- invalidation: when to exit for loss
+- target: profit target (must be in the correct direction — below current for bearish, above for bullish)
+- invalidation: when to exit for loss (must be in the opposite direction from target)
 - confidence: 1-10 based on the underlying signal strength
-- reason: 1-2 sentence explanation of why this spread makes sense given the flow
+- reason: 1-2 sentence explanation of why a SPREAD specifically makes more sense than buying the option outright
 
 RULES:
-- Build spreads around the STRONGEST signals (highest confidence)
+- Do NOT force spreads. Return [] if outright options are better.
+- Maximum 2 spread suggestions total.
 - Use strikes near the current price and key levels (VWAP, PDH, PDL, R1, S1)
 - Keep expiries within 2-4 weeks for day/swing trades
-- Favor vertical spreads (bull call, bear put) for simplicity
-- If you see a strong directional move with high gamma, consider a butterfly for a pinning play
-- Make the risk/reward compelling (at least 1:1.5)
+- Risk/reward must be at least 1:1.5
 
 Respond ONLY with a JSON array. No markdown, no explanation.`;
 
