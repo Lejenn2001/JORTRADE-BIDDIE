@@ -2455,6 +2455,73 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
 // ── Morning Outlook ──────────────────────────────────────────────────────────
 
+async function fetchPremarketSnapshot(tickers: string[]): Promise<Record<string, {
+  preMarketPrice: number | null;
+  prevClose: number;
+  gap: number | null;
+  gapPct: number | null;
+  high52w: number | null;
+  low52w: number | null;
+  source: string;
+}>> {
+  const snapshot: Record<string, any> = {};
+
+  await Promise.all(tickers.map(async (ticker) => {
+    try {
+      const resp = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d&includePrePost=true`,
+        { headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      if (!resp.ok) return;
+      const json = await resp.json();
+      const result = json?.chart?.result?.[0];
+      if (!result) return;
+
+      const meta = result.meta ?? {};
+      const preMarket = meta.preMarketPrice ?? null;
+      const postMarket = meta.postMarketPrice ?? null;
+      const regMarket = meta.regularMarketPrice ?? null;
+      const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? regMarket ?? 0;
+
+      const preTs = meta.preMarketTime ?? 0;
+      const postTs = meta.postMarketTime ?? 0;
+      const regTs = meta.regularMarketTime ?? 0;
+
+      let livePrice: number | null = null;
+      let source = "close";
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const staleThreshold = 24 * 60 * 60;
+
+      if (preMarket && preTs > regTs && (nowSec - preTs) < staleThreshold) {
+        livePrice = preMarket;
+        source = "pre-market";
+      } else if (postMarket && postTs > regTs && (nowSec - postTs) < staleThreshold) {
+        livePrice = postMarket;
+        source = "after-hours";
+      } else if (regMarket) {
+        livePrice = regMarket;
+        source = "regular-close";
+      }
+
+      const gap = livePrice && prevClose ? Math.round((livePrice - prevClose) * 100) / 100 : null;
+      const gapPct = livePrice && prevClose ? Math.round(((livePrice - prevClose) / prevClose) * 10000) / 100 : null;
+
+      snapshot[ticker] = {
+        preMarketPrice: livePrice,
+        prevClose: Math.round(prevClose * 100) / 100,
+        gap,
+        gapPct,
+        high52w: meta.fiftyTwoWeekHigh ?? null,
+        low52w: meta.fiftyTwoWeekLow ?? null,
+        source,
+      };
+    } catch {}
+  }));
+
+  return snapshot;
+}
+
 const MORNING_OUTLOOK_SYSTEM = `You are Biddie AI dropping the morning outlook for the JORTRADE trading community.
 
 YOUR VIBE: You're a seasoned trader who's chill but sharp. Think "cool older brother who trades for a living." You're not trying to impress anyone — you just call it like you see it. Casual, confident, relatable. Use natural language, contractions, real talk.
@@ -2465,55 +2532,122 @@ FORMAT:
 Start with a casual greeting that references the day/vibe (Monday energy, midweek grind, Friday vibes, etc.)
 
 Then cover:
-1. **Market Mood** — 2-3 sentences on overnight futures, any big macro news, general direction
-2. **Big Movers** — Only the 2-3 tickers with the most notable pre-market flow or news. Include the actual numbers (premium, direction, strike if relevant)
-3. **Watch List** — 1-2 tickers that could pop off today based on the flow data. Quick "why" for each
-4. **Bottom Line** — One sentence on overall bias for the day
+1. **Pre-Market Prices** — SPY, QQQ, and any notable movers. Use the ACTUAL pre-market prices provided (with gap from previous close). Say the real numbers. Example: "SPY gapping down -0.8% to $643 in pre-market"
+2. **Market Mood** — 2-3 sentences. Read the gap direction + flow direction. Are they aligned or diverging? Any big macro/econ catalysts today?
+3. **Big Movers** — 2-3 tickers with the most notable pre-market flow or gap. Include actual numbers (pre-market price, gap %, premium, strike)
+4. **Key Levels to Watch** — For SPY and any hot ticker, call out the specific support/resistance. "SPY needs to hold $644 or we test $641"
+5. **The Play** — 1-2 specific things to watch at open. What would make you bullish? Bearish? What's the trigger?
+6. **Bottom Line** — One sentence on overall bias for the day
 
 RULES:
+- ALWAYS use the pre-market prices provided in the data — these are LIVE. Never say "futures" when you have actual pre-market equity prices
 - ONLY near-term plays. Nothing expiring more than 2 weeks out unless it's massive institutional flow
-- Only mention things that actually need attention RIGHT NOW
-- If the market is quiet, say so. Don't manufacture excitement
-- Keep the whole thing under 250 words
-- No sign-off, no "let's get it" — just end with the bottom line
-- Reference actual data numbers, not vibes`;
+- If the market is quiet or flat, say so. Don't manufacture excitement
+- Keep the whole thing under 300 words
+- No sign-off — just end with the bottom line
+- Reference actual data numbers, not vibes
+- If gap is > 0.5%, call it out prominently. If gap is > 1%, lead with it`;
 
-router.post("/whale/morning-outlook", async (_req, res) => {
+let premarketCache: { data: any; timestamp: number } | null = null;
+const PREMARKET_CACHE_TTL = 120000;
+
+router.get("/whale/premarket", async (_req, res) => {
   try {
-    const now = getNowEastern();
-    const dateContext = getEasternDateContext();
-
-    const [flowAlerts, sectorData, econData] = await Promise.all([
-      fetchFlowAlerts(200),
-      fetchSectorEtfs(),
-      fetchEconomicCalendar(),
-    ]);
-
-    const enriched = enrichAlerts(flowAlerts);
-
-    const uwPrices: Record<string, number> = {};
-    for (const alert of enriched) {
-      const t = (alert.ticker ?? "").toUpperCase();
-      const p = parseFloat(alert.underlying_price);
-      if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+    if (premarketCache && Date.now() - premarketCache.timestamp < PREMARKET_CACHE_TTL) {
+      res.json(premarketCache.data);
+      return;
     }
+    const tickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA", "AMZN", "META", "AMD", "MSFT", "GLD",
+                      "GOOGL", "NFLX", "BA", "JPM", "COIN", "PLTR", "SOFI", "IWM"];
+    const snapshot = await fetchPremarketSnapshot(tickers);
 
-    const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
-    const keyLevelsResults = await Promise.all(
-      keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null))
-    );
-    const keyLevels: Record<string, any> = {};
-    keyTickers.forEach((t, i) => {
-      if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
-    });
+    const sorted = Object.entries(snapshot)
+      .filter(([, s]) => s.gapPct !== null)
+      .sort((a, b) => Math.abs(b[1].gapPct ?? 0) - Math.abs(a[1].gapPct ?? 0));
 
-    const context = {
+    const result = {
+      timestamp: getNowEastern(),
+      marketOpen: isMarketHours(),
+      tickers: snapshot,
+      biggestGaps: sorted.slice(0, 5).map(([t, s]) => ({
+        ticker: t,
+        price: s.preMarketPrice,
+        prevClose: s.prevClose,
+        gap: s.gap,
+        gapPct: s.gapPct,
+        source: s.source,
+      })),
+    };
+    premarketCache = { data: result, timestamp: Date.now() };
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function buildMorningContext() {
+  const now = getNowEastern();
+  const dateContext = getEasternDateContext();
+
+  const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA", "AMZN", "META", "AMD", "MSFT", "GLD"];
+
+  const [flowAlerts, sectorData, econData, premarketPrices] = await Promise.all([
+    fetchFlowAlerts(200),
+    fetchSectorEtfs(),
+    fetchEconomicCalendar(),
+    fetchPremarketSnapshot(keyTickers),
+  ]);
+
+  const enriched = enrichAlerts(flowAlerts);
+
+  const uwPrices: Record<string, number> = {};
+  for (const alert of enriched) {
+    const t = (alert.ticker ?? "").toUpperCase();
+    const p = parseFloat(alert.underlying_price);
+    if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
+  }
+
+  const flowTickers = [...new Set(enriched.slice(0, 100).map(a => (a.ticker ?? "").toUpperCase()).filter(Boolean))];
+  const hotTickers = flowTickers.filter(t => !keyTickers.includes(t)).slice(0, 5);
+  if (hotTickers.length > 0) {
+    const extraPrices = await fetchPremarketSnapshot(hotTickers);
+    Object.assign(premarketPrices, extraPrices);
+  }
+
+  const keyLevelsResults = await Promise.all(
+    keyTickers.slice(0, 6).map((t) => fetchKeyLevels(t, uwPrices[t] ?? null))
+  );
+  const keyLevels: Record<string, any> = {};
+  keyTickers.slice(0, 6).forEach((t, i) => {
+    if (keyLevelsResults[i]) keyLevels[t] = keyLevelsResults[i];
+  });
+
+  const gapSummary: Record<string, string> = {};
+  for (const [t, snap] of Object.entries(premarketPrices)) {
+    if (snap.preMarketPrice && snap.gapPct !== null) {
+      gapSummary[t] = `$${snap.preMarketPrice} (${snap.gapPct > 0 ? "+" : ""}${snap.gapPct}% from $${snap.prevClose}) [${snap.source}]`;
+    }
+  }
+
+  return {
+    now,
+    dateContext,
+    enriched,
+    context: {
       fetched_at: now,
+      premarket_prices: premarketPrices,
+      gap_summary: gapSummary,
       key_levels: keyLevels,
       top_flow: enriched.slice(0, 50),
       sector_etfs: sectorData,
       economic_calendar: (econData as any[]).slice(0, 10),
-    };
+    },
+  };
+}
+
+router.post("/whale/morning-outlook", async (_req, res) => {
+  try {
+    const { now, dateContext, context } = await buildMorningContext();
 
     const response = await claude.messages.create({
       model: "claude-sonnet-4-6",
@@ -2526,17 +2660,20 @@ router.post("/whale/morning-outlook", async (_req, res) => {
 --- CURRENT DATE & TRADING CALENDAR ---
 ${dateContext}
 
---- LIVE MARKET DATA (fetched ${now}) ---
+--- PRE-MARKET PRICES (LIVE) ---
+${Object.entries(context.gap_summary).map(([t, s]) => `${t}: ${s}`).join("\n") || "No pre-market data available yet"}
+
+--- FULL MARKET DATA (fetched ${now}) ---
 \`\`\`json
 ${JSON.stringify(context, null, 2)}
 \`\`\`
 
-Drop the morning outlook. Keep it real.`,
+Drop the morning outlook. Keep it real. Use the actual pre-market prices above — those are live.`,
       }],
     });
 
     const outlook = response.content[0].type === "text" ? response.content[0].text : "";
-    res.json({ outlook, timestamp: now });
+    res.json({ outlook, timestamp: now, premarketPrices: context.premarket_prices });
   } catch (err: any) {
     console.error("Morning outlook error:", err);
     res.status(500).json({ error: err.message ?? "Failed to generate morning outlook" });
@@ -2588,7 +2725,6 @@ function startFlowMonitor() {
   if (flowMonitorStarted) return;
   flowMonitorStarted = true;
 
-  // Morning outlook at ~8:20 ET
   setInterval(async () => {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/New_York",
@@ -2600,7 +2736,7 @@ function startFlowMonitor() {
     const day = get("weekday");
 
     if (["Saturday", "Sunday"].includes(day)) return;
-    if (hour !== 8 || minute < 15 || minute > 30) return;
+    if (hour !== 7 || minute < 0 || minute > 15) return;
 
     const today = new Date().toISOString().split("T")[0];
     const existingResult = await dbQuery(
@@ -2610,27 +2746,13 @@ function startFlowMonitor() {
     if (existingResult && existingResult.rows.length > 0) return;
 
     try {
-      const [flowAlerts, sectorData, econData] = await Promise.all([
-        fetchFlowAlerts(200), fetchSectorEtfs(), fetchEconomicCalendar(),
-      ]);
-      const enriched = enrichAlerts(flowAlerts);
-      const uwPrices: Record<string, number> = {};
-      for (const a of enriched) {
-        const t = (a.ticker ?? "").toUpperCase();
-        const p = parseFloat(a.underlying_price);
-        if (t && p > 0 && !uwPrices[t]) uwPrices[t] = p;
-      }
-      const keyTickers = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
-      const kl = await Promise.all(keyTickers.map((t) => fetchKeyLevels(t, uwPrices[t] ?? null)));
-      const keyLevels: Record<string, any> = {};
-      keyTickers.forEach((t, i) => { if (kl[i]) keyLevels[t] = kl[i]; });
+      const { now, dateContext, context } = await buildMorningContext();
 
-      const now = getNowEastern();
       const response = await claude.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1500,
         system: MORNING_OUTLOOK_SYSTEM,
-        messages: [{ role: "user", content: `Drop the morning outlook. Keep it real.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify({ fetched_at: now, key_levels: keyLevels, top_flow: enriched.slice(0, 50), sector_etfs: sectorData, economic_calendar: (econData as any[]).slice(0, 10) }, null, 2)}\n\`\`\`` }],
+        messages: [{ role: "user", content: `Drop the morning outlook. Keep it real.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${dateContext}\n\n--- PRE-MARKET PRICES (LIVE) ---\n${Object.entries(context.gap_summary).map(([t, s]) => `${t}: ${s}`).join("\n") || "No pre-market data available yet"}\n\n--- FULL MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\`\n\nUse the actual pre-market prices above — those are live.` }],
       });
       const content = response.content[0].type === "text" ? response.content[0].text : "";
       const insertRes = await dbQuery(
@@ -2726,12 +2848,17 @@ function startFlowMonitor() {
 startFlowMonitor();
 
 function isMarketHours(): boolean {
-  const now = new Date();
-  const hour = now.getUTCHours();
-  const min = now.getUTCMinutes();
-  const utcTime = hour + min / 60;
-  const day = now.getUTCDay();
-  return day >= 1 && day <= 5 && utcTime >= 13.5 && utcTime < 20;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  const hour = parseInt(get("hour"), 10);
+  const minute = parseInt(get("minute"), 10);
+  const day = get("weekday");
+  if (["Sat", "Sun"].includes(day)) return false;
+  const etTime = hour + minute / 60;
+  return etTime >= 9.5 && etTime < 16;
 }
 
 async function syncPriceMonitorSubscriptions() {

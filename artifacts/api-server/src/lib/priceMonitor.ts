@@ -179,7 +179,10 @@ class PriceMonitor {
 
   private async fetchRestQuote(ticker: string): Promise<void> {
     try {
-      const resp = await fetch(QUOTE_URL(ticker));
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(QUOTE_URL(ticker), { signal: controller.signal });
+      clearTimeout(timeout);
       if (!resp.ok) return;
       const q = await resp.json() as { c?: number; h?: number; l?: number; t?: number };
       const price = q.c;
