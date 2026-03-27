@@ -102,7 +102,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     timeframe: classifyTimeframeFromRecord(record),
     category: record.category,
     reason: record.reason,
-    aiEvaluated: true,
+    aiEvaluated: confidence >= 7,
     outcome: record.outcome || null,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,

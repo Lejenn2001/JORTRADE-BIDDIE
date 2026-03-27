@@ -81,7 +81,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     reason: record.reason,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
-    aiEvaluated: true,
+    aiEvaluated: confidence >= 7,
     outcome: record.outcome || null,
   };
 };
