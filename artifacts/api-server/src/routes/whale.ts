@@ -1930,12 +1930,18 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 
         for (const spread of spreadIdeas) {
           const parentSig = whaleAndAlgoSignals.find((s) => s.ticker === spread.ticker);
+          const rawDir = String(spread.direction || "").toLowerCase().trim();
+          const spreadDir = parentSig ? parentSig.direction : (rawDir === "bullish" ? "bullish" : "bearish");
+          const spreadOptType = spreadDir === "bullish" ? "call" : "put";
+
+          const spreadTrade = spread.trade || `Buy ${spread.ticker} ${spreadOptType === "call" ? "Call" : "Put"} Spread`;
+
           signals.push({
             ticker: spread.ticker,
-            direction: spread.direction,
-            option_type: spread.option_type,
+            direction: spreadDir,
+            option_type: spreadOptType,
             category: "spread",
-            trade: spread.trade,
+            trade: spreadTrade,
             strike: parentSig?.strike ?? 0,
             expiry: spread.expiry,
             premium: parentSig?.premium ?? 0,
@@ -1960,13 +1966,13 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
             tags: [
               spread.strategy_type?.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase()) ?? "Spread",
               "Defined Risk",
-              spread.direction === "bullish" ? "Call Flow" : "Put Flow",
+              spreadDir === "bullish" ? "Call Flow" : "Put Flow",
             ],
             price_confirmed: parentSig?.price_confirmed ?? false,
             price_pattern: parentSig?.price_pattern ?? null,
             gamma_zone: parentSig?.gamma_zone ?? "neutral",
             gamma_description: parentSig?.gamma_description ?? null,
-            recommended_action: spread.trade,
+            recommended_action: spreadTrade,
             recommended_expiry: spread.expiry,
             recommended_strike: spread.entry_trigger,
             spread_details: {

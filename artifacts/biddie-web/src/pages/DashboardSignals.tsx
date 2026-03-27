@@ -206,17 +206,17 @@ const DashboardSignals = () => {
     const signalMap = new Map<string, MarketSignal>();
 
     for (const s of (signalHistory || [])) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}`;
+      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
       signalMap.set(key, s);
     }
 
     for (const s of dbSignals) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}`;
+      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
       signalMap.set(key, s);
     }
 
     for (const s of liveSignals) {
-      const key = `${s.ticker}|${s.strike}|${s.expiry}`;
+      const key = `${s.ticker}|${s.strike}|${s.expiry}|${s.category || ''}`;
       signalMap.set(key, s);
     }
 
@@ -474,7 +474,7 @@ const DashboardSignals = () => {
 };
 
 function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void }) {
-  const isCall = signal.putCall === "call" || signal.type === "bullish";
+  const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
   const isSpread = signal.category === "spread";

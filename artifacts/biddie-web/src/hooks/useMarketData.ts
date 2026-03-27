@@ -262,7 +262,7 @@ const HISTORY_TTL = 16 * 60 * 60 * 1000; // 16 hours — clears overnight so yes
 const MAX_HISTORY = 200;
 
 function signalUniqueKey(s: MarketSignal): string {
-  return `${s.ticker}|${s.strike}|${s.expiry}|${s.putCall}`;
+  return `${s.ticker}|${s.strike}|${s.expiry}|${s.putCall}|${s.category || ''}`;
 }
 
 function loadCachedSignals(): MarketSignal[] | null {
@@ -483,7 +483,7 @@ export function useMarketData() {
             }
 
             const signal = {
-              id: `replit-${s.ticker}-${i}`,
+              id: `replit-${s.ticker}-${category}-${i}`,
               ticker: s.ticker,
               type: isBullish ? 'bullish' as const : 'bearish' as const,
               confidence: s.confidence,
@@ -503,7 +503,9 @@ export function useMarketData() {
               expiry: s.expiry,
               premium: `$${formatPremium(s.premium)}`,
               putCall: s.option_type as 'call' | 'put',
-              suggestedTrade: s.recommended_action || s.trade,
+              suggestedTrade: s.category === "spread"
+                ? (s.recommended_action || s.trade)
+                : `Buy ${s.ticker} $${s.strike} ${s.option_type === "call" ? "Call" : "Put"}`,
               entryTrigger: s.entry_trigger,
               invalidation: s.invalidation,
               keyLevel: s.key_level,
@@ -526,7 +528,7 @@ export function useMarketData() {
             const s = replitSignals[i];
             console.error(`[JORTRADE] Signal mapping error for ${s?.ticker}:`, mapErr);
             mapped.push({
-              id: `replit-${s?.ticker || 'unknown'}-${i}`,
+              id: `replit-${s?.ticker || 'unknown'}-${s?.category || 'signal'}-${i}`,
               ticker: s?.ticker || 'Unknown',
               type: s?.direction === 'bullish' ? 'bullish' as const : 'bearish' as const,
               confidence: s?.confidence || 5,
@@ -539,7 +541,9 @@ export function useMarketData() {
               expiry: s?.expiry,
               premium: s?.premium ? `$${s.premium.toLocaleString?.() || s.premium}` : undefined,
               putCall: s?.option_type as 'call' | 'put',
-              suggestedTrade: s?.trade || s?.recommended_action,
+              suggestedTrade: s?.category === "spread"
+                ? (s?.trade || s?.recommended_action)
+                : `Buy ${s?.ticker} $${s?.strike} ${s?.option_type === "call" ? "Call" : "Put"}`,
               source: 'live',
               detectedAtMs: Date.now(),
               category: s?.category || 'algorithm',
