@@ -7,6 +7,7 @@ import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 
 import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
+import { useRealtimePrices } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
 
 const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
@@ -87,6 +88,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
 
 const Dashboard = () => {
   const { signals, loading } = useMarketData();
+  const { getPrice, connected: wsConnected } = useRealtimePrices();
   const { user } = useAuth();
   const [persistedSignals, setPersistedSignals] = useState<MarketSignal[]>([]);
   const [persistedLoading, setPersistedLoading] = useState(true);
@@ -277,6 +279,8 @@ const Dashboard = () => {
                 takenSignalIds={takenSignalIds}
                 takingId={takingId}
                 onTakeTrade={handleTakeTrade}
+                getPrice={getPrice}
+                wsConnected={wsConnected}
               />
               <SignalFeedPanel
                 signals={whalePlays}
@@ -288,6 +292,8 @@ const Dashboard = () => {
                 takenSignalIds={takenSignalIds}
                 takingId={takingId}
                 onTakeTrade={handleTakeTrade}
+                getPrice={getPrice}
+                wsConnected={wsConnected}
               />
               <SignalFeedPanel
                 signals={spreadPlays}
@@ -299,6 +305,8 @@ const Dashboard = () => {
                 takenSignalIds={takenSignalIds}
                 takingId={takingId}
                 onTakeTrade={handleTakeTrade}
+                getPrice={getPrice}
+                wsConnected={wsConnected}
               />
             </div>
           </div>

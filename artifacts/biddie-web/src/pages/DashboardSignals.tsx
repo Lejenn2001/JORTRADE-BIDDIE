@@ -3,8 +3,9 @@ import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
+import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 
@@ -122,6 +123,7 @@ function formatTimestamp(isoStr: string): string {
 
 const DashboardSignals = () => {
   const { signals: liveSignals, signalHistory, loading: liveLoading } = useMarketData();
+  const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
   const { user } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
@@ -280,7 +282,15 @@ const DashboardSignals = () => {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4">
           {/* Header */}
           <div className="flex flex-col gap-1">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">Live Signals</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">Live Signals</h1>
+              {wsConnected && (
+                <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <Radio className="h-2.5 w-2.5 animate-pulse" />
+                  Real-Time
+                </span>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Today's signal log — {totalCount} signals recorded
             </p>
@@ -397,7 +407,7 @@ const DashboardSignals = () => {
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
                         </motion.div>
                       ))}
                     </div>
@@ -430,7 +440,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
                       </motion.div>
                     ))}
                   </div>
@@ -462,7 +472,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={signal.id} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
                       </motion.div>
                     ))}
                   </div>
@@ -476,7 +486,7 @@ const DashboardSignals = () => {
   );
 };
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -567,6 +577,16 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade }: { signal: Market
               <TrendingDown className="h-4 w-4 text-destructive" />
             )}
             <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
+            {(() => {
+              const priceInfo = getPrice?.(signal.ticker);
+              if (!priceInfo) return null;
+              return (
+                <span className="flex items-center gap-1 text-xs font-mono">
+                  <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
+                  <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
+                </span>
+              );
+            })()}
             <span className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
               isCall ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
             }`}>

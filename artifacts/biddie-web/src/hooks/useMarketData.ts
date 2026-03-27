@@ -483,7 +483,7 @@ export function useMarketData() {
             }
 
             const signal = {
-              id: `replit-${s.ticker}-${category}-${i}`,
+              id: `replit-${s.ticker}-${s.strike || 'na'}-${s.expiry || 'na'}-${category}`,
               ticker: s.ticker,
               type: isBullish ? 'bullish' as const : 'bearish' as const,
               confidence: s.confidence,
@@ -528,7 +528,7 @@ export function useMarketData() {
             const s = replitSignals[i];
             console.error(`[JORTRADE] Signal mapping error for ${s?.ticker}:`, mapErr);
             mapped.push({
-              id: `replit-${s?.ticker || 'unknown'}-${s?.category || 'signal'}-${i}`,
+              id: `replit-${s?.ticker || 'unknown'}-${s?.strike || 'na'}-${s?.expiry || 'na'}-${s?.category || 'signal'}`,
               ticker: s?.ticker || 'Unknown',
               type: s?.direction === 'bullish' ? 'bullish' as const : 'bearish' as const,
               confidence: s?.confidence || 5,

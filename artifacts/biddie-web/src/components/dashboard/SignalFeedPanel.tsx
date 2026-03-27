@@ -1,6 +1,7 @@
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, XCircle } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, XCircle, Radio } from "lucide-react";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
+import type { PriceInfo } from "@/hooks/useRealtimePrices";
 import SignalLegend from "./SignalLegend";
 import ConvictionScoreRing from "./ConvictionScoreRing";
 
@@ -14,6 +15,8 @@ interface Props {
   takenSignalIds?: Set<string>;
   takingId?: string | null;
   onTakeTrade?: (signal: MarketSignal) => void;
+  getPrice?: (ticker: string) => PriceInfo | null;
+  wsConnected?: boolean;
 }
 
 const cardVariants = {
@@ -24,7 +27,7 @@ const cardVariants = {
   }),
 };
 
-const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, takenSignalIds, takingId, onTakeTrade }: Props) => {
+const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, takenSignalIds, takingId, onTakeTrade, getPrice, wsConnected }: Props) => {
   const displaySignals = limit ? signals.slice(0, limit) : signals;
   const isWhale = icon === "whale";
   const isSpread = icon === "spread";
@@ -154,6 +157,16 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       <TrendingDown className="h-4 w-4 text-destructive" />
                     )}
                     <span className="font-bold text-foreground text-base">{signal.ticker}</span>
+                    {(() => {
+                      const priceInfo = getPrice?.(signal.ticker);
+                      if (!priceInfo) return null;
+                      return (
+                        <span className="flex items-center gap-1 text-xs font-mono">
+                          <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
+                          <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
+                        </span>
+                      );
+                    })()}
                     <span
                       className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                         signal.type === "bullish"
