@@ -9,6 +9,25 @@ import {
   Info, ChevronDown, Plus, X
 } from "lucide-react";
 
+interface FlowBias {
+  direction: "bullish" | "bearish" | "neutral";
+  callPremium: number;
+  putPremium: number;
+  ratio: number;
+  sweepBias: "bullish" | "bearish" | "neutral";
+  conviction: number;
+  details: string;
+}
+
+interface BreakoutThesis {
+  direction: "bullish" | "bearish" | "neutral";
+  confidence: number;
+  reasons: string[];
+  flowBias: FlowBias | null;
+  momentum: "bullish" | "bearish" | "neutral";
+  smaPosition: "above" | "below" | "neutral";
+}
+
 interface BreakoutSetup {
   ticker: string;
   squeezeActive: boolean;
@@ -30,6 +49,7 @@ interface BreakoutSetup {
   proximityPct: number | null;
   imminenceLabel: string | null;
   imminenceScore: number;
+  thesis?: BreakoutThesis;
 }
 
 interface ScanResult {
@@ -530,6 +550,22 @@ const DashboardBreakout = () => {
                                     SQUEEZE
                                   </span>
                                 )}
+                                {setup.thesis && setup.thesis.direction !== "neutral" && (
+                                  <span className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border ${
+                                    setup.thesis.direction === "bullish"
+                                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                      : "bg-red-500/10 text-red-400 border-red-500/30"
+                                  }`}>
+                                    {setup.thesis.direction === "bullish"
+                                      ? <ArrowUpRight className="h-3 w-3" />
+                                      : <ArrowDownRight className="h-3 w-3" />
+                                    }
+                                    {setup.thesis.direction === "bullish" ? "CALLS" : "PUTS"}
+                                    {setup.thesis.flowBias && setup.thesis.flowBias.direction !== "neutral" && (
+                                      <span className="ml-0.5 opacity-70">+ FLOW</span>
+                                    )}
+                                  </span>
+                                )}
                                 {setup.imminenceLabel && (
                                   <span className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border ${
                                     setup.imminenceLabel === "BREAKOUT IMMINENT" || setup.imminenceLabel === "BREAKOUT ACTIVE"
@@ -655,6 +691,94 @@ const DashboardBreakout = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                {setup.thesis && (
+                                  <div className="mt-3 glass-panel rounded-xl p-4 border border-white/[0.04]">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <Crosshair className="h-3.5 w-3.5 text-purple-400" />
+                                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Directional Thesis</span>
+                                      <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full border ${
+                                        setup.thesis.direction === "bullish"
+                                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                          : setup.thesis.direction === "bearish"
+                                            ? "bg-red-500/15 text-red-400 border-red-500/30"
+                                            : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                                      }`}>
+                                        {setup.thesis.direction === "bullish" ? "BULLISH" : setup.thesis.direction === "bearish" ? "BEARISH" : "NEUTRAL"}
+                                        {setup.thesis.confidence > 0 && ` ${setup.thesis.confidence}%`}
+                                      </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2 mb-3">
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Momentum</p>
+                                        <p className={`text-xs font-bold mt-0.5 ${
+                                          setup.thesis.momentum === "bullish" ? "text-emerald-400" :
+                                          setup.thesis.momentum === "bearish" ? "text-red-400" : "text-zinc-400"
+                                        }`}>
+                                          {setup.thesis.momentum === "bullish" ? "Rising" : setup.thesis.momentum === "bearish" ? "Falling" : "Flat"}
+                                        </p>
+                                      </div>
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Trend</p>
+                                        <p className={`text-xs font-bold mt-0.5 ${
+                                          setup.thesis.smaPosition === "above" ? "text-emerald-400" :
+                                          setup.thesis.smaPosition === "below" ? "text-red-400" : "text-zinc-400"
+                                        }`}>
+                                          {setup.thesis.smaPosition === "above" ? "Above 50d" : setup.thesis.smaPosition === "below" ? "Below 50d" : "At 50d"}
+                                        </p>
+                                      </div>
+                                      <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                                        <p className="text-[10px] text-muted-foreground uppercase">Flow</p>
+                                        <p className={`text-xs font-bold mt-0.5 ${
+                                          setup.thesis.flowBias?.direction === "bullish" ? "text-emerald-400" :
+                                          setup.thesis.flowBias?.direction === "bearish" ? "text-red-400" : "text-zinc-400"
+                                        }`}>
+                                          {setup.thesis.flowBias?.direction === "bullish" ? `Calls ${setup.thesis.flowBias.ratio}x` :
+                                           setup.thesis.flowBias?.direction === "bearish" ? `Puts ${(1/setup.thesis.flowBias.ratio).toFixed(1)}x` :
+                                           setup.thesis.flowBias ? "Neutral" : "No Data"}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {setup.thesis.flowBias && setup.thesis.flowBias.direction !== "neutral" && (
+                                      <div className={`mb-3 p-2.5 rounded-lg border text-xs ${
+                                        setup.thesis.flowBias.direction === "bullish"
+                                          ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-300"
+                                          : "bg-red-500/5 border-red-500/20 text-red-300"
+                                      }`}>
+                                        <div className="flex items-center gap-1.5 font-bold mb-1">
+                                          {setup.thesis.flowBias.direction === "bullish"
+                                            ? <TrendingUp className="h-3 w-3" />
+                                            : <TrendingDown className="h-3 w-3" />
+                                          }
+                                          Smart Money Flow
+                                          {setup.thesis.flowBias.sweepBias !== "neutral" && (
+                                            <span className="ml-1 text-[10px] opacity-80">SWEEPS {setup.thesis.flowBias.sweepBias.toUpperCase()}</span>
+                                          )}
+                                        </div>
+                                        <p className="text-[11px] opacity-80">{setup.thesis.flowBias.details}</p>
+                                      </div>
+                                    )}
+
+                                    {setup.thesis.reasons.length > 0 && (
+                                      <div className="space-y-1">
+                                        {setup.thesis.reasons.map((r, idx) => (
+                                          <div key={idx} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                                            <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${
+                                              r.toLowerCase().includes("bullish") || r.toLowerCase().includes("call") || r.toLowerCase().includes("above") || r.toLowerCase().includes("green") || r.toLowerCase().includes("rising")
+                                                ? "bg-emerald-400"
+                                                : r.toLowerCase().includes("bearish") || r.toLowerCase().includes("put") || r.toLowerCase().includes("below") || r.toLowerCase().includes("red") || r.toLowerCase().includes("falling")
+                                                  ? "bg-red-400"
+                                                  : "bg-zinc-400"
+                                            }`} />
+                                            {r}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
                                 <button
                                   onClick={(e) => toggleWatch(setup.ticker, e)}
