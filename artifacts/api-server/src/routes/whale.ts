@@ -2079,9 +2079,19 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 
   for (const s of signals.slice(0, 20)) {
     try {
+      let fixedExpiry = s.expiry || "";
+      const currentYear = new Date().getFullYear();
+      const expiryYearMatch = fixedExpiry.match(/\b(20\d{2})\b/);
+      if (expiryYearMatch) {
+        const expiryYear = parseInt(expiryYearMatch[1]);
+        if (expiryYear < currentYear) {
+          fixedExpiry = fixedExpiry.replace(String(expiryYear), String(currentYear));
+        }
+      }
+
       const existing = await dbQuery(
         `SELECT id FROM signal_outcomes WHERE ticker = $1 AND strike = $2 AND option_type = $3 AND expiry = $4 AND signal_source = 'replit' LIMIT 1`,
-        [s.ticker, s.strike, s.option_type, s.expiry]
+        [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
       if (existing && existing.rows.length > 0) continue;
 
@@ -2089,7 +2099,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, detected_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())`,
         [
-          s.ticker, s.direction, "replit", s.strike, s.expiry, s.premium,
+          s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
@@ -3484,6 +3494,28 @@ router.post("/whale/admin/reset-bad-outcomes", async (req, res) => {
     const count = result?.rowCount || 0;
     console.log(`[admin] Reset ${count} signals to pending (resetAll=${!!resetAll})`);
     res.json({ success: true, reset: count });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/fix-expiry", async (req, res) => {
+  try {
+    const { adminSecret } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    const currentYear = new Date().getFullYear();
+    const fixes: string[] = [];
+    for (let pastYear = 2020; pastYear < currentYear; pastYear++) {
+      const result = await dbQuery(
+        `UPDATE signal_outcomes SET expiry = REPLACE(expiry, $1, $2) WHERE expiry LIKE $3 AND signal_source = 'replit'`,
+        [String(pastYear), String(currentYear), `%${pastYear}%`]
+      );
+      if (result?.rowCount && result.rowCount > 0) {
+        fixes.push(`${pastYear} → ${currentYear}: ${result.rowCount} fixed`);
+      }
+    }
+    console.log(`[admin] Fixed expiry dates:`, fixes);
+    res.json({ success: true, fixes });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
