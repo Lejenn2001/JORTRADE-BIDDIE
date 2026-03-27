@@ -83,6 +83,20 @@ const scoreBg = (score: number) => {
   return "bg-zinc-500/15 border-zinc-500/30";
 };
 
+const WATCHED_KEY = "jortrade-breakout-watched";
+
+function loadWatched(): Set<string> {
+  try {
+    const raw = localStorage.getItem(WATCHED_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+
+function saveWatched(set: Set<string>) {
+  localStorage.setItem(WATCHED_KEY, JSON.stringify([...set]));
+}
+
 const DashboardBreakout = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -93,6 +107,22 @@ const DashboardBreakout = () => {
   const [monitoring, setMonitoring] = useState<AlertsResponse["monitoring"] | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const alertPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [watchedTickers, setWatchedTickers] = useState<Set<string>>(loadWatched);
+  const prevAlertsRef = useRef<string[]>([]);
+
+  const toggleWatch = useCallback((ticker: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWatchedTickers(prev => {
+      const next = new Set(prev);
+      if (next.has(ticker)) {
+        next.delete(ticker);
+      } else {
+        next.add(ticker);
+      }
+      saveWatched(next);
+      return next;
+    });
+  }, []);
 
   const runScan = useCallback(async () => {
     setLoading(true);
@@ -184,6 +214,15 @@ const DashboardBreakout = () => {
                     </span>
                   </>
                 )}
+                {watchedTickers.size > 0 && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="flex items-center gap-1.5 text-primary font-semibold">
+                      <Bell className="h-3 w-3 fill-current" />
+                      {watchedTickers.size} watched
+                    </span>
+                  </>
+                )}
               </div>
             )}
 
@@ -195,17 +234,26 @@ const DashboardBreakout = () => {
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 font-bold">
                     {alerts.length}
                   </span>
+                  {watchedTickers.size > 0 && alerts.some(a => watchedTickers.has(a.ticker)) && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-bold">
+                      {alerts.filter(a => watchedTickers.has(a.ticker)).length} watched
+                    </span>
+                  )}
                 </div>
-                {alerts.map((alert) => (
+                {[...alerts].sort((a, b) => {
+                  const aWatched = watchedTickers.has(a.ticker) ? 1 : 0;
+                  const bWatched = watchedTickers.has(b.ticker) ? 1 : 0;
+                  return bWatched - aWatched;
+                }).map((alert) => (
                   <motion.div
                     key={alert.id}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className={`rounded-2xl border p-4 ${
-                      alert.direction === "bullish"
-                        ? "bg-emerald-500/10 border-emerald-500/30"
-                        : "bg-red-500/10 border-red-500/30"
-                    }`}
+                    className={[
+                      "rounded-2xl border p-4",
+                      alert.direction === "bullish" ? "bg-emerald-500/10 border-emerald-500/30" : "bg-red-500/10 border-red-500/30",
+                      watchedTickers.has(alert.ticker) ? "ring-2 ring-primary/40" : ""
+                    ].join(" ")}
                   >
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="flex items-center gap-3">
@@ -409,11 +457,25 @@ const DashboardBreakout = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-4 shrink-0">
+                          <div className="flex items-center gap-3 shrink-0">
                             <div className="text-right hidden sm:block">
                               <p className="text-sm font-bold text-foreground">${setup.currentPrice.toFixed(2)}</p>
                               <p className="text-[10px] text-muted-foreground">Current Price</p>
                             </div>
+                            <button
+                              onClick={(e) => toggleWatch(setup.ticker, e)}
+                              className={`relative h-9 w-9 rounded-xl flex items-center justify-center transition-all border ${
+                                watchedTickers.has(setup.ticker)
+                                  ? "bg-primary/20 border-primary/50 text-primary shadow-[0_0_12px_rgba(124,58,237,0.3)]"
+                                  : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
+                              }`}
+                              title={watchedTickers.has(setup.ticker) ? "Stop watching for breakout" : "Watch for breakout alert"}
+                            >
+                              <Bell className={`h-4 w-4 ${watchedTickers.has(setup.ticker) ? "fill-current" : ""}`} />
+                              {watchedTickers.has(setup.ticker) && (
+                                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                              )}
+                            </button>
                             <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${expandedTicker === setup.ticker ? "rotate-90" : ""}`} />
                           </div>
                         </div>
@@ -494,6 +556,18 @@ const DashboardBreakout = () => {
                                     </div>
                                   )}
                                 </div>
+
+                                <button
+                                  onClick={(e) => toggleWatch(setup.ticker, e)}
+                                  className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                                    watchedTickers.has(setup.ticker)
+                                      ? "bg-primary/20 border-primary/50 text-primary hover:bg-primary/30"
+                                      : "bg-white/[0.04] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary hover:bg-primary/5"
+                                  }`}
+                                >
+                                  <Bell className={`h-4 w-4 ${watchedTickers.has(setup.ticker) ? "fill-current" : ""}`} />
+                                  {watchedTickers.has(setup.ticker) ? `Watching ${setup.ticker} for Breakout` : `Watch ${setup.ticker} for Breakout Alert`}
+                                </button>
 
                                 {setup.bbWidth > 0 && setup.kcWidth > 0 && (
                                   <div className="mt-3 glass-panel rounded-xl p-3 border border-white/[0.04]">
