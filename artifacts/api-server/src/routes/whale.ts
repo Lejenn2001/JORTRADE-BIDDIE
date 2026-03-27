@@ -2292,6 +2292,145 @@ router.get("/whale/signals/calendar", async (req, res) => {
   }
 });
 
+router.get("/whale/signals/detail/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await dbQuery(
+      `SELECT id, ticker, signal_type, option_type, confidence, strike, expiry,
+              outcome, created_at, detected_at, resolved_at, category, price_at_signal,
+              target, invalidation, entry_trigger, reason, direction
+       FROM signal_outcomes WHERE id = $1`,
+      [id]
+    );
+    if (!result?.rows?.length) return res.status(404).json({ error: "Signal not found" });
+    const signal = result.rows[0];
+    const ticker = signal.ticker;
+    const detectedAt = new Date(signal.detected_at || signal.created_at);
+    const now = new Date();
+    const hoursAlive = (now.getTime() - detectedAt.getTime()) / (1000 * 60 * 60);
+    const daysAlive = hoursAlive / 24;
+
+    let priceHistory: any = null;
+    try {
+      const polygonKey = process.env.POLYGON_API_KEY;
+      if (polygonKey) {
+        const fromDate = detectedAt.toISOString().split("T")[0];
+        const toDate = now.toISOString().split("T")[0];
+
+        if (daysAlive <= 2) {
+          const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/5/minute/${fromDate}/${toDate}?adjusted=true&sort=asc&limit=5000&apiKey=${polygonKey}`;
+          const resp = await fetch(url);
+          if (resp.ok) {
+            const data = await resp.json();
+            const bars = (data.results || [])
+              .filter((b: any) => b.t >= detectedAt.getTime())
+              .map((b: any) => ({
+                time: new Date(b.t).toISOString(),
+                open: b.o,
+                high: b.h,
+                low: b.l,
+                close: b.c,
+                volume: b.v,
+              }));
+            const signalTs = detectedAt.getTime();
+            let highSince = -Infinity, lowSince = Infinity, currentPrice = 0;
+            for (const bar of bars) {
+              const barTs = new Date(bar.time).getTime();
+              if (barTs >= signalTs) {
+                if (bar.high > highSince) highSince = bar.high;
+                if (bar.low < lowSince) lowSince = bar.low;
+                currentPrice = bar.close;
+              }
+            }
+            priceHistory = {
+              bars,
+              highSince: highSince === -Infinity ? null : Math.round(highSince * 100) / 100,
+              lowSince: lowSince === Infinity ? null : Math.round(lowSince * 100) / 100,
+              currentPrice: Math.round(currentPrice * 100) / 100,
+              resolution: "5min",
+            };
+          }
+        } else {
+          const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/hour/${fromDate}/${toDate}?adjusted=true&sort=asc&limit=5000&apiKey=${polygonKey}`;
+          const resp = await fetch(url);
+          if (resp.ok) {
+            const data = await resp.json();
+            const bars = (data.results || [])
+              .filter((b: any) => b.t >= detectedAt.getTime())
+              .map((b: any) => ({
+                time: new Date(b.t).toISOString(),
+                open: b.o,
+                high: b.h,
+                low: b.l,
+                close: b.c,
+                volume: b.v,
+              }));
+            let highSince = -Infinity, lowSince = Infinity, currentPrice = 0;
+            for (const bar of bars) {
+              if (bar.high > highSince) highSince = bar.high;
+              if (bar.low < lowSince) lowSince = bar.low;
+              currentPrice = bar.close;
+            }
+            priceHistory = {
+              bars,
+              highSince: highSince === -Infinity ? null : Math.round(highSince * 100) / 100,
+              lowSince: lowSince === Infinity ? null : Math.round(lowSince * 100) / 100,
+              currentPrice: Math.round(currentPrice * 100) / 100,
+              resolution: "1hour",
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[signal-detail] price history fetch error:", e);
+    }
+
+    const entryPrice = signal.price_at_signal ? parseFloat(signal.price_at_signal) : null;
+    const isBullish = (signal.option_type || "").toLowerCase() === "call" ||
+                      (signal.direction || signal.signal_type || "").toLowerCase() === "bullish";
+    const resolvedAt = signal.resolved_at ? new Date(signal.resolved_at) : null;
+    const timeToResolve = resolvedAt ? ((resolvedAt.getTime() - detectedAt.getTime()) / (1000 * 60 * 60)).toFixed(1) : null;
+
+    let explanation = "";
+    if (signal.outcome === "hit") {
+      if (isBullish && priceHistory?.highSince && entryPrice) {
+        const pctMove = (((priceHistory.highSince - entryPrice) / entryPrice) * 100).toFixed(2);
+        explanation = `Price moved up from $${entryPrice.toFixed(2)} to a high of $${priceHistory.highSince} (+${pctMove}%), reaching the target zone. Resolved in ${timeToResolve || "?"}h.`;
+      } else if (!isBullish && priceHistory?.lowSince && entryPrice) {
+        const pctMove = (((entryPrice - priceHistory.lowSince) / entryPrice) * 100).toFixed(2);
+        explanation = `Price dropped from $${entryPrice.toFixed(2)} to a low of $${priceHistory.lowSince} (-${pctMove}%), reaching the target zone. Resolved in ${timeToResolve || "?"}h.`;
+      } else {
+        explanation = `Signal hit target. Resolved in ${timeToResolve || "?"}h.`;
+      }
+    } else if (signal.outcome === "missed") {
+      if (isBullish && priceHistory?.lowSince && entryPrice) {
+        explanation = `Price dropped from $${entryPrice.toFixed(2)} to a low of $${priceHistory.lowSince}, breaching the invalidation level. Resolved in ${timeToResolve || "?"}h.`;
+      } else if (!isBullish && priceHistory?.highSince && entryPrice) {
+        explanation = `Price rose from $${entryPrice.toFixed(2)} to a high of $${priceHistory.highSince}, breaching the invalidation level. Resolved in ${timeToResolve || "?"}h.`;
+      } else {
+        explanation = `Signal invalidation was breached. Resolved in ${timeToResolve || "?"}h.`;
+      }
+    } else if (signal.outcome === "expired") {
+      explanation = `Option expired without hitting target or invalidation. Price didn't move significantly in either direction.`;
+    } else {
+      explanation = `Signal is still being tracked. ${hoursAlive.toFixed(1)} hours since detection.`;
+    }
+
+    res.json({
+      signal: {
+        ...signal,
+        isBullish,
+        entryPrice,
+        timeToResolve: timeToResolve ? `${timeToResolve}h` : null,
+        explanation,
+      },
+      priceHistory,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);

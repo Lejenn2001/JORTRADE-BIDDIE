@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, XCircle, Clock, TrendingUp, TrendingDown,
   BarChart3, AlertTriangle, Lightbulb, ChevronDown, ChevronUp,
-  Target, Activity, Zap, BookOpen
+  Target, Activity, Zap, BookOpen, Info, Loader2,
+  ArrowUp, ArrowDown, Timer, Crosshair
 } from "lucide-react";
 
 interface Signal {
@@ -20,6 +21,29 @@ interface Signal {
   resolved_at: string | null;
   category?: string;
   price_at_signal?: number | null;
+  target_price?: string | null;
+  invalidation?: string | null;
+  entry_trigger?: string | null;
+}
+
+interface SignalDetail {
+  signal: {
+    isBullish: boolean;
+    entryPrice: number | null;
+    timeToResolve: string | null;
+    explanation: string;
+    target: string | null;
+    invalidation: string | null;
+    entry_trigger: string | null;
+    reason: string | null;
+  };
+  priceHistory: {
+    bars: Array<{ time: string; open: number; high: number; low: number; close: number; volume: number }>;
+    highSince: number | null;
+    lowSince: number | null;
+    currentPrice: number;
+    resolution: string;
+  } | null;
 }
 
 interface TickerPattern {
@@ -48,6 +72,33 @@ const AdminSignalInsights = () => {
   const [showAllSignals, setShowAllSignals] = useState(false);
   const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "missed" | "pending">("all");
   const [fetchError, setFetchError] = useState(false);
+  const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
+  const [signalDetails, setSignalDetails] = useState<Record<string, SignalDetail>>({});
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
+
+  const fetchSignalDetail = useCallback(async (signalId: string) => {
+    if (signalDetails[signalId]) return;
+    setDetailLoading(signalId);
+    try {
+      const resp = await fetch(`/api/whale/signals/detail/${signalId}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setSignalDetails(prev => ({ ...prev, [signalId]: data }));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch signal detail:", e);
+    }
+    setDetailLoading(null);
+  }, [signalDetails]);
+
+  const toggleExpand = useCallback((signalId: string) => {
+    if (expandedSignal === signalId) {
+      setExpandedSignal(null);
+    } else {
+      setExpandedSignal(signalId);
+      fetchSignalDetail(signalId);
+    }
+  }, [expandedSignal, fetchSignalDetail]);
   const [sortCol, setSortCol] = useState<string>("detected");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethodology, setShowMethodology] = useState(false);
@@ -593,46 +644,254 @@ const AdminSignalInsights = () => {
             <tbody>
               {filteredSignals.map(s => {
                 const detected = new Date(s.detected_at || s.created_at);
+                const isExpanded = expandedSignal === s.id;
+                const detail = signalDetails[s.id];
+                const isLoadingDetail = detailLoading === s.id;
                 return (
-                  <tr key={s.id} className="border-b border-border/20 hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-2">
-                      {s.outcome === "hit" ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                          <CheckCircle className="h-3 w-3" /> HIT
-                        </span>
-                      ) : s.outcome === "missed" ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
-                          <XCircle className="h-3 w-3" /> MISS
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                          <Clock className="h-3 w-3" /> PENDING
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-bold text-foreground">{s.ticker}</td>
-                    <td className="px-4 py-2">
-                      <span className="flex items-center gap-1 text-xs">
-                        {s.signal_type === "bullish" ? (
-                          <TrendingUp className="h-3 w-3 text-emerald-400" />
+                  <Fragment key={s.id}>
+                    <tr
+                      className={`border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer ${isExpanded ? "bg-muted/30" : ""}`}
+                      onClick={() => toggleExpand(s.id)}
+                    >
+                      <td className="px-4 py-2">
+                        {s.outcome === "hit" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle className="h-3 w-3" /> HIT
+                          </span>
+                        ) : s.outcome === "missed" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
+                            <XCircle className="h-3 w-3" /> MISS
+                          </span>
                         ) : (
-                          <TrendingDown className="h-3 w-3 text-destructive" />
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                            <Clock className="h-3 w-3" /> PENDING
+                          </span>
                         )}
-                        <span className={s.signal_type === "bullish" ? "text-emerald-400" : "text-destructive"}>
-                          {s.put_call?.toUpperCase() || s.signal_type.toUpperCase()}
+                      </td>
+                      <td className="px-4 py-2 font-bold text-foreground">{s.ticker}</td>
+                      <td className="px-4 py-2">
+                        <span className="flex items-center gap-1 text-xs">
+                          {s.signal_type === "bullish" ? (
+                            <TrendingUp className="h-3 w-3 text-emerald-400" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 text-destructive" />
+                          )}
+                          <span className={s.signal_type === "bullish" ? "text-emerald-400" : "text-destructive"}>
+                            {s.put_call?.toUpperCase() || s.signal_type.toUpperCase()}
+                          </span>
                         </span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{s.strike ? `$${s.strike}` : "—"}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{s.expiry || "—"}</td>
-                    <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{s.category || "—"}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">{s.price_at_signal ? `$${Number(s.price_at_signal).toFixed(2)}` : "—"}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {detected.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-                      {detected.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.strike ? `$${s.strike}` : "—"}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.expiry || "—"}</td>
+                      <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{s.category || "—"}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.price_at_signal ? `$${Number(s.price_at_signal).toFixed(2)}` : "—"}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                        {detected.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                        {detected.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        <span className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                          <ChevronDown className="h-3 w-3 text-muted-foreground/50" />
+                        </span>
+                      </td>
+                    </tr>
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={9} className="p-0">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="px-6 py-4 bg-muted/10 border-b border-border/30">
+                                {isLoadingDetail ? (
+                                  <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Loading signal details...
+                                  </div>
+                                ) : detail ? (
+                                  <div className="space-y-4">
+                                    <div className={`rounded-lg p-3 border ${
+                                      s.outcome === "hit" ? "bg-emerald-500/5 border-emerald-500/20" :
+                                      s.outcome === "missed" ? "bg-red-500/5 border-red-500/20" :
+                                      "bg-amber-500/5 border-amber-500/20"
+                                    }`}>
+                                      <div className="flex items-start gap-2">
+                                        <Info className={`h-4 w-4 mt-0.5 shrink-0 ${
+                                          s.outcome === "hit" ? "text-emerald-400" :
+                                          s.outcome === "missed" ? "text-destructive" :
+                                          "text-amber-400"
+                                        }`} />
+                                        <div>
+                                          <p className={`text-sm font-semibold ${
+                                            s.outcome === "hit" ? "text-emerald-400" :
+                                            s.outcome === "missed" ? "text-destructive" :
+                                            "text-amber-400"
+                                          }`}>
+                                            {s.outcome === "hit" ? "How this was scored a HIT" :
+                                             s.outcome === "missed" ? "How this was scored a MISS" :
+                                             "Signal Still Being Tracked"}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            {detail.signal.explanation}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Crosshair className="h-3.5 w-3.5 text-blue-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Entry Price</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-foreground">
+                                          {detail.signal.entryPrice ? `$${detail.signal.entryPrice.toFixed(2)}` : "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Activity className="h-3.5 w-3.5 text-violet-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Current Price</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-foreground">
+                                          {detail.priceHistory?.currentPrice ? `$${detail.priceHistory.currentPrice.toFixed(2)}` : "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <ArrowUp className="h-3.5 w-3.5 text-emerald-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">High Since Signal</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-400">
+                                          {detail.priceHistory?.highSince ? `$${detail.priceHistory.highSince.toFixed(2)}` : "—"}
+                                        </p>
+                                        {detail.priceHistory?.highSince && detail.signal.entryPrice ? (
+                                          <span className="text-[10px] text-emerald-400/70">
+                                            +{(((detail.priceHistory.highSince - detail.signal.entryPrice) / detail.signal.entryPrice) * 100).toFixed(2)}%
+                                          </span>
+                                        ) : null}
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <ArrowDown className="h-3.5 w-3.5 text-destructive" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Low Since Signal</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-destructive">
+                                          {detail.priceHistory?.lowSince ? `$${detail.priceHistory.lowSince.toFixed(2)}` : "—"}
+                                        </p>
+                                        {detail.priceHistory?.lowSince && detail.signal.entryPrice ? (
+                                          <span className="text-[10px] text-destructive/70">
+                                            {(((detail.priceHistory.lowSince - detail.signal.entryPrice) / detail.signal.entryPrice) * 100).toFixed(2)}%
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Target className="h-3.5 w-3.5 text-amber-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Target</span>
+                                        </div>
+                                        <p className="text-xs text-foreground leading-relaxed">
+                                          {detail.signal.target || s.target_price || "Not specified"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <XCircle className="h-3.5 w-3.5 text-red-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Invalidation</span>
+                                        </div>
+                                        <p className="text-xs text-foreground leading-relaxed">
+                                          {detail.signal.invalidation || s.invalidation || "Not specified"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Time to Resolve</span>
+                                        </div>
+                                        <p className="text-xs text-foreground">
+                                          {detail.signal.timeToResolve || (s.outcome === "pending" ? "Still tracking..." : "—")}
+                                        </p>
+                                        {s.resolved_at && (
+                                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                                            Resolved: {new Date(s.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                                            {new Date(s.resolved_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {detail.signal.reason && (
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <BookOpen className="h-3.5 w-3.5 text-violet-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">AI Analysis</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">{detail.signal.reason}</p>
+                                      </div>
+                                    )}
+
+                                    {detail.priceHistory && detail.priceHistory.bars.length > 0 && (
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-2">
+                                          <BarChart3 className="h-3.5 w-3.5 text-blue-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                                            Price Timeline ({detail.priceHistory.resolution === "5min" ? "5-min bars" : "Hourly bars"})
+                                          </span>
+                                          <span className="text-[10px] text-muted-foreground/50 ml-auto">{detail.priceHistory.bars.length} bars</span>
+                                        </div>
+                                        <div className="flex gap-1 items-end h-16 overflow-hidden">
+                                          {(() => {
+                                            const bars = detail.priceHistory!.bars;
+                                            const maxBars = 60;
+                                            const step = bars.length > maxBars ? Math.ceil(bars.length / maxBars) : 1;
+                                            const sampled = bars.filter((_: any, i: number) => i % step === 0);
+                                            const closes = sampled.map((b: any) => b.close);
+                                            const min = Math.min(...closes);
+                                            const max = Math.max(...closes);
+                                            const range = max - min || 1;
+                                            const entry = detail.signal.entryPrice || 0;
+                                            return sampled.map((bar: any, i: number) => {
+                                              const pct = ((bar.close - min) / range) * 100;
+                                              const isAboveEntry = bar.close >= entry;
+                                              return (
+                                                <div
+                                                  key={i}
+                                                  className={`flex-1 min-w-[2px] max-w-[6px] rounded-t-sm ${isAboveEntry ? "bg-emerald-500/60" : "bg-red-500/60"}`}
+                                                  style={{ height: `${Math.max(pct, 5)}%` }}
+                                                  title={`${new Date(bar.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} — $${bar.close.toFixed(2)}`}
+                                                />
+                                              );
+                                            });
+                                          })()}
+                                        </div>
+                                        <div className="flex justify-between text-[9px] text-muted-foreground/50 mt-1">
+                                          <span>{new Date(detail.priceHistory.bars[0].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                                          <span>{new Date(detail.priceHistory.bars[detail.priceHistory.bars.length - 1].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground py-2">Unable to load details</p>
+                                )}
+                              </div>
+                            </motion.div>
+                          </td>
+                        </tr>
+                      )}
+                    </AnimatePresence>
+                  </Fragment>
                 );
               })}
             </tbody>
