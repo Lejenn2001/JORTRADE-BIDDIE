@@ -263,20 +263,17 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         <span className="text-foreground font-semibold">{signal.suggestedTrade}</span>
                       </div>
                     )}
-                    {signal.entryTrigger && (
-                      <div className="flex items-start gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
+                    <div className="flex items-start gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
                         <TrendingUp className="h-3 w-3 text-primary shrink-0 mt-0.5" />
                         <div className="min-w-0">
                           <span className="text-muted-foreground">Entry: </span>
-                          <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
+                          <span className={`font-semibold ${signal.entryTrigger ? 'text-foreground' : 'text-muted-foreground/60 italic'}`}>{signal.entryTrigger || 'Level data not available'}</span>
                         </div>
                       </div>
-                    )}
-                    {signal.targetZone && (
-                      <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
+                    <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
                         <MapPin className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Target:</span>
-                        {(() => {
+                        {signal.targetZone ? (() => {
                           const tn = signal.targetNear;
                           const tz = signal.targetZone;
                           if (!tn || tn === tz) return <span className="text-primary font-semibold">{tz}</span>;
@@ -295,30 +292,23 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                               </span>
                             </>
                           );
-                        })()}
+                        })() : <span className="text-muted-foreground/60 italic font-semibold">Level data not available</span>}
                       </div>
-                    )}
-                    {signal.invalidation && (
-                      <div className="flex items-center gap-1.5 bg-destructive/10 rounded-lg px-3 py-1.5 text-xs">
+                    <div className="flex items-center gap-1.5 bg-destructive/10 rounded-lg px-3 py-1.5 text-xs">
                         <ShieldX className="h-3 w-3 text-destructive shrink-0" />
                         <span className="text-muted-foreground">Invalidation:</span>
-                        <span className="text-destructive font-semibold">{signal.invalidation}</span>
+                        <span className={`font-semibold ${signal.invalidation ? 'text-destructive' : 'text-muted-foreground/60 italic'}`}>{signal.invalidation || 'Level data not available'}</span>
                       </div>
-                    )}
-                    {signal.keyLevel && (
-                      <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
+                    <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
                         <Crosshair className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Key level:</span>
-                        <span className="text-primary font-semibold">{signal.keyLevel}</span>
+                        <span className={`font-semibold ${signal.keyLevel ? 'text-primary' : 'text-muted-foreground/60 italic'}`}>{signal.keyLevel || 'Level data not available'}</span>
                       </div>
-                    )}
-                    {signal.srLevel && (
-                      <div className="flex items-center gap-1.5 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
+                    <div className="flex items-center gap-1.5 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
                         <Gauge className="h-3 w-3 text-accent shrink-0" />
                         <span className="text-muted-foreground">S/R:</span>
-                        <span className="text-accent font-semibold">{signal.srLevel}</span>
+                        <span className={`font-semibold ${signal.srLevel ? 'text-accent' : 'text-muted-foreground/60 italic'}`}>{signal.srLevel || 'Level data not available'}</span>
                       </div>
-                    )}
                   </div>
 
                   {hasDetails && (

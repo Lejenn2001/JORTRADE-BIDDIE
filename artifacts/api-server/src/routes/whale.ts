@@ -4207,21 +4207,6 @@ router.post("/whale/admin/cleanup-bad-signals", async (_req, res) => {
   }
 });
 
-router.post("/whale/admin/cleanup-no-levels", async (_req, res) => {
-  try {
-    const result = await dbQuery(
-      `DELETE FROM signal_outcomes
-       WHERE signal_source = 'replit'
-       AND (entry_trigger = 'Level data not available' OR entry_trigger IS NULL OR key_level IS NULL OR key_level = '')`
-    );
-    const count = result?.rowCount || 0;
-    console.log(`[admin] Cleaned up ${count} signals with no level data`);
-    res.json({ success: true, removed: count });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 router.post("/whale/admin/dedup-signals", async (req, res) => {
   try {
     const { adminSecret } = req.body;
