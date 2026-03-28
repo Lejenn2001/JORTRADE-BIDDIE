@@ -30,6 +30,7 @@ async function fetchPolygonAggs(ticker: string, mult: number, span: string, from
     if (!key) return [];
     const url = POLYGON_AGGS_URL(ticker, mult, span, fromDate, toDate);
     const res = await axios.get(url, { timeout: 8000 });
+    logApiCall("polygon", "aggs");
     const bars = res.data?.results;
     if (!Array.isArray(bars)) return [];
     return bars.map((b: any) => ({
@@ -45,6 +46,7 @@ async function fetchPolygonSnapshot(ticker: string): Promise<{ price: number; pr
     const key = POLYGON_KEY();
     if (!key) return null;
     const res = await axios.get(POLYGON_SNAPSHOT_TICKER(ticker), { timeout: 5000 });
+    logApiCall("polygon", "snapshot");
     const t = res.data?.ticker;
     if (!t) return null;
     const price = t.lastTrade?.p || t.day?.c || 0;
@@ -144,6 +146,17 @@ async function isAdminUser(userId: string): Promise<boolean> {
   return false;
 }
 
+// ── API Usage Logging ────────────────────────────────────────────────────────
+
+async function logApiCall(apiName: string, endpoint: string) {
+  try {
+    await pool.query(
+      `INSERT INTO api_usage_log (id, api_name, endpoint, created_at) VALUES (gen_random_uuid(), $1, $2, NOW())`,
+      [apiName, endpoint]
+    );
+  } catch {}
+}
+
 // ── Data Fetchers ──────────────────────────────────────────────────────────────
 
 async function fetchFlowAlerts(limit = 200) {
@@ -151,6 +164,7 @@ async function fetchFlowAlerts(limit = 200) {
     const res = await axios.get(`${UW_BASE}/api/option-trades/flow-alerts`, {
       headers: UW_HEADERS(), params: { limit }, timeout: 15000,
     });
+    logApiCall("unusual_whales", "flow-alerts");
     const d = res.data;
     return Array.isArray(d) ? d : (d?.data ?? []);
   } catch { return []; }
@@ -161,6 +175,7 @@ async function fetchDarkpool(ticker: string, limit = 40) {
     const res = await axios.get(`${UW_BASE}/api/darkpool/${ticker.toUpperCase()}`, {
       headers: UW_HEADERS(), params: { limit }, timeout: 15000,
     });
+    logApiCall("unusual_whales", "darkpool");
     const d = res.data;
     return Array.isArray(d) ? d : (d?.data ?? []);
   } catch { return []; }
@@ -1257,6 +1272,7 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
       ],
     });
 
+    logApiCall("anthropic", "biddie-chat");
     const analysis = response.content[0].type === "text" ? response.content[0].text : "";
     const isAlert = analysis.toUpperCase().includes("ALERT\n") || analysis.match(/^ALERT$/m) !== null;
 
@@ -1404,6 +1420,7 @@ router.post("/whale/community-chat", async (req, res) => {
       messages: [{ role: "user", content: chatInstruction }],
     });
 
+    logApiCall("anthropic", "community-chat");
     const content = response.content[0].type === "text" ? response.content[0].text : "";
     let posted = false;
     if (content && content.trim().length > 0) {
@@ -1449,6 +1466,7 @@ router.get("/whale/signal", async (_req, res) => {
       }],
     });
 
+    logApiCall("anthropic", "quick-scan");
     const analysis = response.content[0].type === "text" ? response.content[0].text : "";
     const isAlert = analysis.toUpperCase().startsWith("ALERT") || analysis.toUpperCase().includes("#1");
     res.json({ analysis, isAlert, timestamp: now });
@@ -2069,6 +2087,7 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
       messages: [{ role: "user", content: aiPrompt }],
     });
 
+    logApiCall("anthropic", "signal-pipeline");
     const aiText = (aiResponse.content[0] as any)?.text ?? "";
     const jsonMatch = aiText.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
@@ -2180,6 +2199,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         messages: [{ role: "user", content: spreadPrompt }],
       });
 
+      logApiCall("anthropic", "spread-pipeline");
       const spreadText = (spreadResponse.content[0] as any)?.text ?? "";
       const spreadJsonMatch = spreadText.match(/\[[\s\S]*\]/);
       if (spreadJsonMatch) {

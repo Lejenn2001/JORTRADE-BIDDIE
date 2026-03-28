@@ -66,8 +66,7 @@ const DashboardAdmin = () => {
   const [showReference, setShowReference] = useState(false);
   const [chatCount, setChatCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users'>('overview');
-  const [apiUsageToday, setApiUsageToday] = useState(0);
-  const [apiUsageMinute, setApiUsageMinute] = useState(0);
+  const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
   const [systemHealth, setSystemHealth] = useState<{ name: string; description: string; status: string; details: string; url: string; usage?: string }[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthChecked, setHealthChecked] = useState(false);
@@ -127,21 +126,28 @@ const DashboardAdmin = () => {
     todayStart.setHours(0, 0, 0, 0);
     const minuteAgo = new Date(Date.now() - 60 * 1000);
 
-    const [dailyRes, minuteRes] = await Promise.all([
+    const apiNames = ["unusual_whales", "polygon", "anthropic", "discord"];
+    const countsObj: Record<string, { today: number; minute: number }> = {};
+    const countPromises = apiNames.flatMap((name) => [
       supabase
         .from("api_usage_log" as any)
         .select("id", { count: "exact", head: true })
-        .eq("api_name", "unusual_whales")
-        .gte("created_at", todayStart.toISOString()),
+        .eq("api_name", name)
+        .gte("created_at", todayStart.toISOString())
+        .then((r: any) => ({ name, type: "today" as const, count: r.count ?? 0 })),
       supabase
         .from("api_usage_log" as any)
         .select("id", { count: "exact", head: true })
-        .eq("api_name", "unusual_whales")
-        .gte("created_at", minuteAgo.toISOString()),
+        .eq("api_name", name)
+        .gte("created_at", minuteAgo.toISOString())
+        .then((r: any) => ({ name, type: "minute" as const, count: r.count ?? 0 })),
     ]);
-
-    if (dailyRes.count !== null) setApiUsageToday(dailyRes.count);
-    if (minuteRes.count !== null) setApiUsageMinute(minuteRes.count);
+    const countResults = await Promise.all(countPromises);
+    for (const r of countResults) {
+      if (!countsObj[r.name]) countsObj[r.name] = { today: 0, minute: 0 };
+      countsObj[r.name][r.type] = r.count;
+    }
+    setApiCounts(countsObj);
 
     setLoading(false);
   };
@@ -380,6 +386,30 @@ const DashboardAdmin = () => {
                       <StatCard icon={UserPlus} label="New Today" value={newToday} color="bg-primary" />
                       <StatCard icon={TrendingUp} label="This Week" value={newThisWeek} subtitle="New signups" color="bg-purple-500" />
                       <StatCard icon={MessageSquare} label="Chat Messages" value={chatCount} color="bg-amber-500" />
+                    </div>
+
+                    <div className="glass-panel rounded-xl p-5 border-border/40">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Gauge className="h-5 w-5 text-primary" />
+                        <h3 className="text-sm font-bold text-foreground">API Usage (Today)</h3>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {([
+                          { key: "unusual_whales", label: "Unusual Whales", color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                          { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10" },
+                          { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10" },
+                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
+                        ]).map((svc) => {
+                          const c = apiCounts[svc.key] || { today: 0, minute: 0 };
+                          return (
+                            <div key={svc.key} className={`rounded-lg p-3 ${svc.bg} border border-border/20`}>
+                              <p className={`text-[11px] font-medium ${svc.color} mb-1`}>{svc.label}</p>
+                              <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{c.minute}/min</p>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
