@@ -230,55 +230,10 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     const s2 = pivot && prevHigh && prevLow
       ? Math.round((pivot - (prevHigh - prevLow)) * 100) / 100 : null;
 
-    let vah: number | null = null, val: number | null = null, poc: number | null = null;
-    if (intradayBars.length > 5) {
-      const priceVolMap = new Map<number, number>();
-      const step = 0.01;
-      for (const b of intradayBars) {
-        if (b.high && b.low && b.volume && b.volume > 0) {
-          const bucketLow = Math.floor(b.low / step) * step;
-          const bucketHigh = Math.ceil(b.high / step) * step;
-          const buckets = Math.max(1, Math.round((bucketHigh - bucketLow) / step));
-          const volPerBucket = b.volume / buckets;
-          for (let p = bucketLow; p <= bucketHigh; p += step) {
-            const key = Math.round(p * 100) / 100;
-            priceVolMap.set(key, (priceVolMap.get(key) || 0) + volPerBucket);
-          }
-        }
-      }
-      if (priceVolMap.size > 0) {
-        const entries = Array.from(priceVolMap.entries()).sort((a, b) => a[0] - b[0]);
-        let maxVol = 0;
-        for (const [price, vol] of entries) {
-          if (vol > maxVol) { maxVol = vol; poc = price; }
-        }
-        const totalVol = entries.reduce((s, e) => s + e[1], 0);
-        const target70 = totalVol * 0.70;
-        let cumVol2 = 0;
-        const pocIdx = entries.findIndex(e => e[0] === poc);
-        const visited = new Set<number>();
-        let lo = pocIdx, hi = pocIdx;
-        if (pocIdx >= 0) {
-          cumVol2 = entries[pocIdx][1];
-          visited.add(pocIdx);
-          while (cumVol2 < target70 && (lo > 0 || hi < entries.length - 1)) {
-            const loVol = lo > 0 ? entries[lo - 1][1] : -1;
-            const hiVol = hi < entries.length - 1 ? entries[hi + 1][1] : -1;
-            if (loVol >= hiVol && lo > 0) { lo--; cumVol2 += entries[lo][1]; }
-            else if (hi < entries.length - 1) { hi++; cumVol2 += entries[hi][1]; }
-            else break;
-          }
-          val = Math.round(entries[lo][0] * 100) / 100;
-          vah = Math.round(entries[hi][0] * 100) / 100;
-        }
-      }
-    }
-
     return {
       ticker: ticker.toUpperCase(),
       current_price: currentPrice ? Math.round(currentPrice * 100) / 100 : null,
       vwap,
-      vah, val, poc,
       today: {
         open: todayOpen ? Math.round(todayOpen * 100) / 100 : null,
         high: todayHigh ? Math.round(todayHigh * 100) / 100 : null,
@@ -1727,9 +1682,6 @@ async function runSignalsPipeline() {
     const pivot = kl?.pivot_points?.pivot ?? null;
     const r1 = kl?.pivot_points?.r1 ?? null;
     const s1 = kl?.pivot_points?.s1 ?? null;
-    const vah = kl?.vah ?? null;
-    const val_level = kl?.val ?? null;
-    const poc = kl?.poc ?? null;
 
     // Entry/target/invalidation
     let entryTrigger = "";
@@ -1751,7 +1703,7 @@ async function runSignalsPipeline() {
 
     if (optType === "call") {
       // CALL: entry near VWAP/support, invalidation = closest support below, target above
-      // Entry logic: VWAP is the anchor, then support levels below price
+      // Entry logic: VWAP is the anchor
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price >= vwap && distToVwap < 0.005) {
@@ -1763,23 +1715,12 @@ async function runSignalsPipeline() {
         } else {
           entryTrigger = `On bounce from VWAP at $${vwap.toFixed(2)}`;
         }
+      } else if (pivot && price) {
+        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+        if (price >= pivot) actNow = true;
       } else if (price) {
-        const supportBelow = [
-          pdl ? { level: pdl, name: "PDL" } : null,
-          s1 ? { level: s1, name: "S1" } : null,
-          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
-        supportBelow.sort((a, b) => b.level - a.level);
-        if (supportBelow.length > 0) {
-          const nearest = supportBelow[0];
-          entryTrigger = `On bounce from ${nearest.name} at $${nearest.level.toFixed(2)}`;
-        } else if (pivot) {
-          entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-          if (price >= pivot) actNow = true;
-        } else {
-          entryTrigger = `On strength above $${price.toFixed(2)}`;
-          actNow = true;
-        }
+        entryTrigger = `At current price $${price.toFixed(2)}`;
+        actNow = true;
       } else {
         entryTrigger = `Level data not available`;
       }
@@ -1842,7 +1783,7 @@ async function runSignalsPipeline() {
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
       // PUT: entry near VWAP/resistance, invalidation = closest resistance above, target below
-      // Entry logic: VWAP is the anchor, then resistance levels above price
+      // Entry logic: VWAP is the anchor
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price <= vwap && distToVwap < 0.005) {
@@ -1854,23 +1795,12 @@ async function runSignalsPipeline() {
         } else {
           entryTrigger = `On rejection from VWAP at $${vwap.toFixed(2)}`;
         }
+      } else if (pivot && price) {
+        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+        if (price <= pivot) actNow = true;
       } else if (price) {
-        const resistanceAbove = [
-          pdh ? { level: pdh, name: "PDH" } : null,
-          r1 ? { level: r1, name: "R1" } : null,
-          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
-        resistanceAbove.sort((a, b) => a.level - b.level);
-        if (resistanceAbove.length > 0) {
-          const nearest = resistanceAbove[0];
-          entryTrigger = `On rejection from ${nearest.name} at $${nearest.level.toFixed(2)}`;
-        } else if (pivot) {
-          entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-          if (price <= pivot) actNow = true;
-        } else {
-          entryTrigger = `On weakness below $${price.toFixed(2)}`;
-          actNow = true;
-        }
+        entryTrigger = `At current price $${price.toFixed(2)}`;
+        actNow = true;
       } else {
         entryTrigger = `Level data not available`;
       }
@@ -1985,7 +1915,7 @@ async function runSignalsPipeline() {
       strike, expiry: smartExpiry.expiry, premium,
       ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
       current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
-      pivot, r1, s1, vah, val: val_level, poc,
+      pivot, r1, s1,
       entry_trigger: entryTrigger, key_level: keyLevel, sr_level: srLevel, target, target_near: targetNear, invalidation,
       reason, confidence, tags,
       created_at: c.created_at || null,
