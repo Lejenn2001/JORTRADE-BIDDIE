@@ -3200,14 +3200,12 @@ async function syncPriceMonitorSubscriptions() {
     const result = await dbQuery(
       `SELECT DISTINCT ticker FROM signal_outcomes WHERE outcome = 'pending'`
     );
+    const BASELINE = ["SPY", "QQQ", "IWM", "VIXY"];
     if (!result || !result.rows.length) {
-      if (priceMonitor.getSubscribedTickers().length > 0) {
-        priceMonitor.updateSubscriptions([]);
-        console.log("[price-monitor] No pending signals, unsubscribed all");
-      }
+      priceMonitor.updateSubscriptions(BASELINE);
       return;
     }
-    const tickers = result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5);
+    const tickers = [...new Set([...BASELINE, ...result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5)])];
     priceMonitor.updateSubscriptions(tickers);
     console.log(`[price-monitor] Subscribed to ${tickers.length} tickers: ${tickers.join(", ")}`);
   } catch (e: any) {
@@ -3393,6 +3391,172 @@ router.get("/whale/prices/realtime", (_req, res) => {
     tickerCount: priceMonitor.getSubscribedTickers().length,
     prices: data,
   });
+});
+
+let marketPulseCache: { data: any; timestamp: number } | null = null;
+const MARKET_PULSE_TTL = 60_000;
+
+router.get("/whale/market-pulse", async (_req, res) => {
+  if (marketPulseCache && Date.now() - marketPulseCache.timestamp < MARKET_PULSE_TTL) {
+    return res.json(marketPulseCache.data);
+  }
+
+  try {
+    const spyData = priceMonitor.getPrice("SPY");
+    const qqqData = priceMonitor.getPrice("QQQ");
+    const iwmData = priceMonitor.getPrice("IWM");
+
+    let vixPrice: number | null = null;
+    let vixChange: number | null = null;
+
+    const vixyData = priceMonitor.getPrice("VIXY");
+    if (vixyData?.price) {
+      vixPrice = vixyData.price;
+      vixChange = vixyData.changePercent ?? null;
+    }
+
+    if (!vixPrice) {
+      try {
+        const vixyResp = await axios.get(`https://api.polygon.io/v2/aggs/ticker/VIXY/prev`, {
+          params: { apiKey: process.env["POLYGON_API_KEY"] },
+          timeout: 5000,
+        });
+        const r = vixyResp.data?.results?.[0];
+        if (r) {
+          vixPrice = r.c;
+          if (r.o) vixChange = ((r.c - r.o) / r.o) * 100;
+        }
+      } catch {}
+    }
+
+    let vixLevel = "Unknown";
+    let vixDescription = "";
+    if (vixPrice != null) {
+      if (vixPrice < 25) {
+        vixLevel = "Low";
+        vixDescription = "Markets are calm with low expected volatility. Good conditions for selling options premium or taking directional trades with tighter stops.";
+      } else if (vixPrice < 35) {
+        vixLevel = "Normal";
+        vixDescription = "Volatility is at typical levels. Standard trading conditions — options are fairly priced and moves are predictable.";
+      } else if (vixPrice < 45) {
+        vixLevel = "Elevated";
+        vixDescription = "Traders are getting nervous. Options premiums are higher, meaning bigger potential moves. Consider wider stops and smaller position sizes.";
+      } else if (vixPrice < 55) {
+        vixLevel = "High";
+        vixDescription = "Significant fear in the market. Expect sharp swings in both directions. Options are expensive — great for sellers, risky for buyers.";
+      } else {
+        vixLevel = "Extreme";
+        vixDescription = "Panic-level volatility. Markets can move 2-5% in a single day. Only experienced traders should be active. Cash is a position too.";
+      }
+    }
+
+    const flowAlerts = await fetchFlowAlerts(500);
+    let totalCallPrem = 0;
+    let totalPutPrem = 0;
+    let totalSweeps = 0;
+    const tickerCounts: Record<string, { alerts: number; callPrem: number; putPrem: number; sweeps: number; totalPrem: number }> = {};
+
+    for (const a of flowAlerts) {
+      const prem = Number(a.total_premium || a.premium) || 0;
+      const pc = (a.type || a.put_call || a.option_type || "").toLowerCase();
+      const isSweep = !!(a.has_sweep || (a.option_activity_type || "").toLowerCase() === "sweep");
+      const ticker = (a.ticker || a.ticker_symbol || "").toUpperCase();
+
+      if (pc === "call" || pc === "c") totalCallPrem += prem;
+      else totalPutPrem += prem;
+      if (isSweep) totalSweeps++;
+
+      if (ticker) {
+        if (!tickerCounts[ticker]) tickerCounts[ticker] = { alerts: 0, callPrem: 0, putPrem: 0, sweeps: 0, totalPrem: 0 };
+        tickerCounts[ticker].alerts++;
+        tickerCounts[ticker].totalPrem += prem;
+        if (pc === "call" || pc === "c") tickerCounts[ticker].callPrem += prem;
+        else tickerCounts[ticker].putPrem += prem;
+        if (isSweep) tickerCounts[ticker].sweeps++;
+      }
+    }
+
+    const totalFlow = totalCallPrem + totalPutPrem;
+    let putCallRatio = 0;
+    let sentimentLabel = "Unavailable";
+    let sentimentDescription = "Options flow data is not available right now. Check back during market hours.";
+
+    if (totalFlow > 100_000) {
+      putCallRatio = totalCallPrem > 0 ? Math.round((totalPutPrem / totalCallPrem) * 100) / 100 : (totalPutPrem > 0 ? 99 : 0);
+      if (putCallRatio < 0.5) {
+        sentimentLabel = "Very Bullish";
+        sentimentDescription = "Traders are heavily buying calls over puts, signaling strong upside expectations. The market is confident.";
+      } else if (putCallRatio < 0.8) {
+        sentimentLabel = "Bullish";
+        sentimentDescription = "More call buying than put buying. Money is flowing toward upside bets, suggesting optimism.";
+      } else if (putCallRatio <= 1.2) {
+        sentimentLabel = "Neutral";
+        sentimentDescription = "Put and call activity is balanced. No strong directional conviction from options flow.";
+      } else if (putCallRatio <= 1.8) {
+        sentimentLabel = "Bearish";
+        sentimentDescription = "More put buying than calls. Traders are hedging or betting on downside. Proceed with caution.";
+      } else {
+        sentimentLabel = "Very Bearish";
+        sentimentDescription = "Heavy put buying signals significant downside fear. Could indicate upcoming selling pressure or a hedging event.";
+      }
+    }
+
+    const trending = Object.entries(tickerCounts)
+      .filter(([t]) => !["SPX", "SPXW"].includes(t))
+      .sort((a, b) => b[1].totalPrem - a[1].totalPrem)
+      .slice(0, 8)
+      .map(([ticker, data]) => {
+        const bias = data.callPrem > data.putPrem * 1.5 ? "bullish" : data.putPrem > data.callPrem * 1.5 ? "bearish" : "mixed";
+        return {
+          ticker,
+          alerts: data.alerts,
+          totalPremium: data.totalPrem,
+          callPremium: data.callPrem,
+          putPremium: data.putPrem,
+          sweeps: data.sweeps,
+          bias,
+        };
+      });
+
+    const formatPrice = (pd: PriceData | null) => pd ? {
+      price: pd.price,
+      changePercent: pd.changePercent,
+      prevClose: pd.prevClose,
+      high: pd.high,
+      low: pd.low,
+    } : null;
+
+    const result = {
+      timestamp: new Date().toISOString(),
+      marketOpen: isMarketHours(),
+      indices: {
+        SPY: formatPrice(spyData),
+        QQQ: formatPrice(qqqData),
+        IWM: formatPrice(iwmData),
+      },
+      vix: {
+        price: vixPrice,
+        change: vixChange,
+        level: vixLevel,
+        description: vixDescription,
+      },
+      sentiment: {
+        putCallRatio: Math.round(putCallRatio * 100) / 100,
+        label: sentimentLabel,
+        description: sentimentDescription,
+        totalCallPremium: totalCallPrem,
+        totalPutPremium: totalPutPrem,
+        sweepCount: totalSweeps,
+      },
+      trending,
+    };
+
+    marketPulseCache = { data: result, timestamp: Date.now() };
+    res.json(result);
+  } catch (e: any) {
+    console.error("[market-pulse] Error:", e.message);
+    res.status(500).json({ error: "Failed to fetch market pulse" });
+  }
 });
 
 router.post("/whale/trades", async (req, res) => {

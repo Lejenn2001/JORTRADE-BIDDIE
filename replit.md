@@ -98,6 +98,16 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Signal Verification**: Auto-verifies every 5 min during market hours, 30 min after hours. 2-hour minimum hold before miss. Hits checked first. Uses current price for invalidation (not intraday extremes).
 - **Admin Signal Insights** (`AdminSignalInsights.tsx`): On the Admin tab — shows overall win rate, CALL/PUT split, per-source stats, ticker performance grid with hit/miss bars, pattern analysis (auto-detects weak/strong tickers, directional bias, underperforming sources), and full signal log with status filters.
 
+## Market Pulse & Trending Tickers
+
+- **Market Pulse** (`MarketPulse.tsx`): Dashboard section showing real-time market overview — SPY/QQQ/IWM prices with change %, VIXY volatility level with educational tooltips, and put/call ratio sentiment indicator
+- **Educational Tooltips**: Tap any metric (VIX, Put/Call) to see a plain-English explanation of what it means and what the current level implies for trading. Designed for beginners
+- **Volatility Levels**: VIXY-based. Low (<$25), Normal ($25-35), Elevated ($35-45), High ($45-55), Extreme (>$55)
+- **Sentiment**: Derived from live options flow put/call premium ratio. Very Bullish (<0.5), Bullish (0.5-0.8), Neutral (0.8-1.2), Bearish (1.2-1.8), Very Bearish (>1.8). Shows "Unavailable" when insufficient flow data
+- **Trending Tickers**: Collapsible section showing top 8 tickers by options premium with bias indicator (bullish/bearish/mixed), alert count, sweep count, and total premium
+- **Baseline Subscriptions**: SPY, QQQ, IWM, VIXY always tracked via Polygon WebSocket even when no pending signals
+- **Endpoint**: `GET /api/whale/market-pulse` (60s cache)
+
 ## Trump Feed
 
 - **Trump Truth Social Monitor** (`/dashboard/trump`): Polls CNN's public Truth Social archive (`ix.cnn.io/data/truth-social/truth_archive.json`) every 5 minutes
