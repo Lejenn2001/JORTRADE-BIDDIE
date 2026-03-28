@@ -165,7 +165,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         <span className="font-bold text-foreground text-lg tracking-tight">{signal.ticker}</span>
                         {signal.priceAtSignal && (
                           <span className="flex items-center gap-1 text-xs font-mono">
-                            <span className="text-muted-foreground">Alert:</span>
+                            <span className="text-muted-foreground">Entry:</span>
                             <span className="text-foreground font-semibold">${signal.priceAtSignal.toFixed(2)}</span>
                           </span>
                         )}

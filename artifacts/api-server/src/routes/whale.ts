@@ -1713,6 +1713,17 @@ async function runSignalsPipeline() {
           target = `$${pct.toFixed(2)}`;
         }
       }
+      // Final validation: ensure call target is above entry
+      if (target && price) {
+        const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
+        if (tMatch) {
+          const tVal = parseFloat(tMatch[1]);
+          if (tVal < price) {
+            const pct = price * 1.02;
+            target = `$${pct.toFixed(2)}`;
+          }
+        }
+      }
       // Invalidation — next support below
       if (vwap && price && price > vwap && pdl) {
         invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
@@ -1755,6 +1766,17 @@ async function runSignalsPipeline() {
         } else {
           const pct = price ? price * 0.98 : strike * 0.98;
           target = `$${pct.toFixed(2)}`;
+        }
+      }
+      // Final validation: ensure put target is below entry
+      if (target && price) {
+        const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
+        if (tMatch) {
+          const tVal = parseFloat(tMatch[1]);
+          if (tVal > price) {
+            const pct = price * 0.98;
+            target = `$${pct.toFixed(2)}`;
+          }
         }
       }
       // Invalidation — next resistance above
