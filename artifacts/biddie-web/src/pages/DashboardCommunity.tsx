@@ -94,38 +94,25 @@ const DashboardCommunity = () => {
     };
   }, [session?.user?.id, firstName]);
 
+  const shouldBiddieRespond = (text: string): boolean => {
+    const lower = text.toLowerCase();
+    if (/\b(biddie|@biddie)\b/i.test(lower)) return true;
+    if (/\?$/.test(text.trim())) return true;
+    const tradingWords = ["play", "trade", "call", "put", "flow", "ticker", "setup", "entry", "strike", "sweep", "whale", "breakout", "signal", "what's the move", "any plays", "premarket", "news"];
+    if (tradingWords.some(w => lower.includes(w))) return true;
+    return false;
+  };
+
   const triggerBiddie = async (userMessage: string) => {
+    if (!shouldBiddieRespond(userMessage)) return;
     setBiddieThinking(true);
     scrollToBottom();
     try {
-      const res = await fetch('/api/whale/community-chat', {
+      await fetch('/api/whale/community-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage }),
       });
-      const data = await res.json().catch(() => null);
-      const replyText = data?.content || data?.analysis || "";
-      if (replyText) {
-        setTimeout(() => {
-          setMessages((prev) => {
-            const alreadyHas = prev.some(
-              (m) => m.user_id === BIDDIE_USER_ID && m.content === replyText
-            );
-            if (alreadyHas) return prev;
-            return [
-              ...prev,
-              {
-                id: `biddie-local-${Date.now()}`,
-                user_id: BIDDIE_USER_ID,
-                user_name: "Biddie AI",
-                content: replyText,
-                created_at: new Date().toISOString(),
-              },
-            ];
-          });
-          scrollToBottom();
-        }, 500);
-      }
     } catch (e) {
       console.error("Biddie community chat error:", e);
     } finally {

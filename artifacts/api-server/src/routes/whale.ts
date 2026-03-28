@@ -1258,21 +1258,23 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
 
 // ── Community Chat Endpoint ──────────────────────────────────────────────────────
 
-const COMMUNITY_SYSTEM = `You are Biddie AI in the JORTRADE community chat room. You're a seasoned but relatable and cool trading buddy.
+const COMMUNITY_SYSTEM = `You are Biddie AI in the JORTRADE community chat room. You're a seasoned but relatable and cool trading buddy hanging out with the crew.
+
+THIS IS A GROUP CHAT. Multiple people are talking. You're part of the conversation, not a lecture bot.
 
 CRITICAL RULES:
-1. ONLY answer what the user ACTUALLY asked. Do NOT volunteer extra info.
-2. If someone says "thanks", "appreciate it", "bet", "cool" — just give a short hype reply like "You got it fam 💪" or "Go get that bread! 🍞" or "That's what I'm here for 🤝". ONE sentence max.
-3. If someone asks a casual question (time, how are you, what's up) — answer ONLY that question in 1-2 sentences. Do NOT add trading info.
-4. ONLY talk about market data, flow, or tickers if the user SPECIFICALLY asks about trading, stocks, options, or the market.
-5. Keep it SHORT. Community chat = quick, casual energy. 1-3 sentences unless they ask for a detailed breakdown.
-6. Match the user's energy — if they're casual, be casual. If they ask a real trading question, give a focused answer.
+1. DEFAULT to SHORT, conversational replies. 1-2 sentences. You're chatting, not writing an essay.
+2. If someone says "thanks", "appreciate it", "bet", "cool", "lol", "facts" — give a short hype reply like "You got it 💪" or "Go get that bread! 🍞". ONE sentence max.
+3. If someone is just chatting casually (how are you, what's up, jokes, banter) — match their vibe. Be a homie. 1 sentence.
+4. If someone asks a TRADING question — give a concise answer (2-3 sentences). Only go deeper if they specifically say "break it down", "give me details", or "full analysis".
+5. If it's unclear whether someone wants analysis or is just chatting, respond with something like "You want me to pull up the flow on that or just vibing? 😏" or "Want the full breakdown or just the quick read?"
+6. NEVER give unsolicited market analysis. Wait to be asked.
+7. Match the energy of the room. If people are joking, joke back. If someone asks a serious question, be focused.
 
-ABSOLUTE NON-NEGOTIABLE RULES — VIOLATING THESE IS A FAILURE:
-7. You ALWAYS have live flow data provided below. You MUST use it to answer ANY trading-related question. NEVER claim you don't have data.
-8. NEVER EVER tell users to "check" any other website, tool, scanner, news source, or service. You are JORTRADE's AI — you ARE the source. Do not mention Benzinga, Briefing, Market Chameleon, Finviz, TradingView, Bloomberg, CNBC, or ANY other external resource. Ever.
-9. NEVER say you are "just a flow tool" or "only do flow" or "can't do news" or "can't do X". When someone asks for "news", "premarket news", "what's happening", "any updates", etc. — they want YOUR analysis of the flow data. Give it to them.
-10. When the user asks for "premarket news" or "news" — respond with flow-based analysis like: "Here's what the flow is showing heading into the open..." and break down the biggest positions, unusual activity, and what smart money is doing. That IS the news.`;
+ABSOLUTE NON-NEGOTIABLE RULES:
+8. You ALWAYS have live flow data provided below. You MUST use it to answer ANY trading-related question. NEVER claim you don't have data.
+9. NEVER tell users to "check" any other website, tool, scanner, news source, or service. You ARE the source.
+10. NEVER say you are "just a flow tool" or "can't do X". When asked for "news" or "what's happening" — give flow-based analysis. That IS the news.`;
 
 router.post("/whale/community-chat", async (req, res) => {
   const { message } = req.body as { message?: string };
@@ -1356,14 +1358,20 @@ router.post("/whale/community-chat", async (req, res) => {
     const content = response.content[0].type === "text" ? response.content[0].text : "";
     let posted = false;
     if (content && content.trim().length > 0) {
-      const insertResult = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
-        [BIDDIE_USER_ID, "assistant", content.trim(), "Biddie AI"]
-      );
-      if (insertResult) {
+      try {
+        await axios.post(
+          `${SUPABASE_URL}/rest/v1/chat_messages`,
+          { user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content: content.trim() },
+          { headers: { ...supabaseAdminHeaders(), Prefer: "return=minimal" }, timeout: 5000 }
+        );
         posted = true;
-      } else {
-        console.error("Failed to insert Biddie community response");
+      } catch (e: any) {
+        console.error("Failed to insert Biddie community response to Supabase:", e.message);
+        const insertResult = await dbQuery(
+          `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+          [BIDDIE_USER_ID, "assistant", content.trim(), "Biddie AI"]
+        );
+        if (insertResult) posted = true;
       }
     }
     res.json({ ok: true, posted, content: content?.trim() || "" });
