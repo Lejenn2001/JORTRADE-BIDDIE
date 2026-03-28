@@ -2979,43 +2979,35 @@ router.post("/whale/verify-signals", async (_req, res) => {
       }
 
       if (!outcome && canMiss && invalidationPrice && refPrice > 0) {
+        const INV_BUFFER_PCT = 0.0025;
+        const invZone = isBullish
+          ? invalidationPrice * (1 - INV_BUFFER_PCT)
+          : invalidationPrice * (1 + INV_BUFFER_PCT);
         const invMakesDirectionalSense = isBullish
           ? invalidationPrice < refPrice
           : invalidationPrice > refPrice;
         if (invMakesDirectionalSense) {
           const currentlyBreached = isBullish
-            ? history.current <= invalidationPrice
-            : history.current >= invalidationPrice;
+            ? history.current <= invZone
+            : history.current >= invZone;
+          const didBreachZone = isBullish
+            ? history.lowSince <= invZone
+            : history.highSince >= invZone;
           const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
           const isLongDated = dteHours > 48;
-          if (isExpired) {
-            if (isBullish && history.lowSince <= invalidationPrice) {
-              outcome = "missed";
-              outcomePrice = history.lowSince;
-            } else if (!isBullish && history.highSince >= invalidationPrice) {
-              outcome = "missed";
-              outcomePrice = history.highSince;
-            }
-          } else if (currentlyBreached && !isLongDated) {
-            if (isBullish && history.lowSince <= invalidationPrice) {
-              outcome = "missed";
-              outcomePrice = history.lowSince;
-            } else if (!isBullish && history.highSince >= invalidationPrice) {
-              outcome = "missed";
-              outcomePrice = history.highSince;
-            }
-          } else if (currentlyBreached && isLongDated) {
+          if (isExpired && didBreachZone) {
+            outcome = "missed";
+            outcomePrice = isBullish ? history.lowSince : history.highSince;
+          } else if (currentlyBreached && didBreachZone && !isLongDated) {
+            outcome = "missed";
+            outcomePrice = isBullish ? history.lowSince : history.highSince;
+          } else if (currentlyBreached && didBreachZone && isLongDated) {
             const breachPct = isBullish
-              ? ((invalidationPrice - history.current) / invalidationPrice) * 100
-              : ((history.current - invalidationPrice) / invalidationPrice) * 100;
+              ? ((invZone - history.current) / invZone) * 100
+              : ((history.current - invZone) / invZone) * 100;
             if (breachPct >= 1.0) {
-              if (isBullish && history.lowSince <= invalidationPrice) {
-                outcome = "missed";
-                outcomePrice = history.lowSince;
-              } else if (!isBullish && history.highSince >= invalidationPrice) {
-                outcome = "missed";
-                outcomePrice = history.highSince;
-              }
+              outcome = "missed";
+              outcomePrice = isBullish ? history.lowSince : history.highSince;
             }
           }
         }
@@ -3768,28 +3760,32 @@ async function realtimeVerifySignals() {
       }
 
       if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
+        const INV_BUFFER_PCT = 0.0025;
+        const invZone = isBullish
+          ? invalidationPrice * (1 - INV_BUFFER_PCT)
+          : invalidationPrice * (1 + INV_BUFFER_PCT);
         const invMakesDirectionalSense = isBullish
           ? invalidationPrice < refPrice2
           : invalidationPrice > refPrice2;
         if (invMakesDirectionalSense) {
           const currentlyBreached = isBullish
-            ? history.current <= invalidationPrice
-            : history.current >= invalidationPrice;
+            ? history.current <= invZone
+            : history.current >= invZone;
+          const didBreachZone = isBullish
+            ? history.lowSince <= invZone
+            : history.highSince >= invZone;
           const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
           const isLongDated = dteHours > 48;
-          if (isExpired) {
-            if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
-            else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
-          } else if (currentlyBreached && !isLongDated) {
-            if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
-            else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
-          } else if (currentlyBreached && isLongDated) {
+          if (isExpired && didBreachZone) {
+            outcome = "missed";
+          } else if (currentlyBreached && didBreachZone && !isLongDated) {
+            outcome = "missed";
+          } else if (currentlyBreached && didBreachZone && isLongDated) {
             const breachPct = isBullish
-              ? ((invalidationPrice - history.current) / invalidationPrice) * 100
-              : ((history.current - invalidationPrice) / invalidationPrice) * 100;
+              ? ((invZone - history.current) / invZone) * 100
+              : ((history.current - invZone) / invZone) * 100;
             if (breachPct >= 1.0) {
-              if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
-              else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+              outcome = "missed";
             }
           }
         }
