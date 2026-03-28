@@ -46,7 +46,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - A React application built with Vite, Tailwind CSS 3, Framer Motion, and shadcn/ui.
 - Features include:
     - User authentication via Supabase (email/password, Google/Apple OAuth).
-    - Dashboard with tabs for Chat, Signals, Market, P&L, Analytics, Breakout Scanner, Trump Feed, Community, and Settings.
+    - Dashboard with tabs for Chat, Decision Engine (signals), Market, P&L, Analytics, Breakout Scanner, Trump Feed, Community, and Settings.
     - Displays various signal categories (Algorithm Plays, Whale Plays, Spreads & Butterflies) with real-time data.
     - Performance tracking for signals and user trades.
     - AI-powered ticker analysis, integrating options flow, dark pool, and key levels.
@@ -82,7 +82,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **0DTE Contract Recommendations**: Each breakout setup includes a smart contract recommendation. Strike selection uses ATR-based offset (ITM for active breakouts, ATM for imminent, slight ITM for building). Expiry logic: 0DTE for SPY/QQQ/IWM (daily) and AAPL/MSFT/AMZN/META/NVDA/TSLA/GOOGL/AMD/NFLX etc. (M/W/F), 1DTE on off-days, Weekly for other tickers. Shows entry, target, stop levels and rationale. Displayed in compact card and expanded detail view
 - **Direction Stability Lock**: Prevents thesis direction from flip-flopping between CALL/PUT on each rescan. Uses in-memory direction lock per ticker with 15-min TTL. Lock threshold=20 (min score to establish direction). Momentum-aware flipping: if EMA/SMA momentum contradicts the locked direction, the lock flips immediately when opposing score >=20. Also breaks after 3 consecutive disagreeing scans. Confirmed breakouts always override the lock. Neutral tickers (score too weak) show no contract rec
 - **Target Prices**: resistance/support + 1 ATR. Displayed on setup cards, expanded detail, and alert cards
-- **Score Breakdown**: squeeze (25-40pts), near-squeeze (15pts), consolidation (10-25pts), volume (10-20pts), breakout (30pts), tight range (10pts)
+- **Score Breakdown (Normalized 0-100)**: Raw components (squeeze 25-40, near-squeeze 15, consolidation 10-25, volume 10-20, breakout 30, tight range 10) normalized via `rawScore/125*100`. Scores are now on the same 0-100 scale as Decision Engine conviction scores
 - **Custom Ticker Watchlist**: Users can add up to 30 custom tickers (e.g. HOOD, RIVN) beyond the 40 default. Custom tickers appear as removable tags, are included in scans, and persist in server memory
 - **Endpoints**: `GET /api/breakout/scan` (5-min cache), `GET /api/breakout/scan/:ticker`, `GET /api/breakout/alerts`, `GET /api/breakout/watchlist`, `POST /api/breakout/watchlist/add`, `POST /api/breakout/watchlist/remove`
 - **Polygon.io Live Price Injection**: Signal pipeline checks Polygon real-time prices first (if < 2min stale), then Unusual Whales price, then Yahoo Finance as final fallback. Signal candidate tickers are temporarily subscribed to Polygon WebSocket before evaluation. Polygon snapshot polling fallback (every 30s) when WebSocket is silent. WebSocket uses `wss://socket.polygon.io/stocks` with `T.TICKER` (trades) + `Q.TICKER` (quotes) subscriptions

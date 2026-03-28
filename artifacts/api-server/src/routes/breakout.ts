@@ -617,45 +617,47 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   const currentVol = quote.volume || candles[candles.length - 1].volume;
   const volumeRatio = vol20Avg > 0 ? currentVol / vol20Avg : 0;
 
-  let score = 0;
+  let rawScore = 0;
   const reasons: string[] = [];
 
   if (squeeze.squeezeActive) {
-    score += 25 + Math.min(squeeze.squeezeLength * 3, 15);
+    rawScore += 25 + Math.min(squeeze.squeezeLength * 3, 15);
     reasons.push(`Squeeze active (${squeeze.squeezeLength} bars)`);
   } else if (squeeze.bbWidth > 0 && squeeze.kcWidth > 0 && squeeze.bbWidth / squeeze.kcWidth < 1.2) {
-    score += 15;
+    rawScore += 15;
     reasons.push(`Near squeeze (BB/KC ratio ${(squeeze.bbWidth / squeeze.kcWidth).toFixed(2)})`);
   }
 
   if (consolidation.consolidationDays >= 3) {
-    score += 15 + Math.min(consolidation.consolidationDays * 2, 10);
+    rawScore += 15 + Math.min(consolidation.consolidationDays * 2, 10);
     reasons.push(`Consolidating ${consolidation.consolidationDays} days`);
   } else if (consolidation.consolidationDays >= 2) {
-    score += 10;
+    rawScore += 10;
     reasons.push(`Tight range ${consolidation.consolidationDays} days`);
   }
 
   if (volumeRatio >= 2.0) {
-    score += 20;
+    rawScore += 20;
     reasons.push(`Volume spike ${volumeRatio.toFixed(1)}x avg`);
   } else if (volumeRatio >= 1.3) {
-    score += 10;
+    rawScore += 10;
     reasons.push(`Elevated volume ${volumeRatio.toFixed(1)}x avg`);
   }
 
   if (breakout.breakoutTriggered) {
-    score += 30;
+    rawScore += 30;
     reasons.push(`Breakout ${breakout.breakoutDirection} at $${breakout.breakoutPrice?.toFixed(2)}`);
   }
 
   const rangePct = quote.price > 0 ? ((consolidation.rangeHigh - consolidation.rangeLow) / quote.price) * 100 : 0;
   if (rangePct > 0 && rangePct < 3 && consolidation.consolidationDays >= 2) {
-    score += 10;
+    rawScore += 10;
     reasons.push(`Tight ${rangePct.toFixed(1)}% range`);
   }
 
-  if (score < 25) return null;
+  if (rawScore < 25) return null;
+
+  const score = Math.min(100, Math.round((rawScore / 125) * 100));
 
   const distToResistance = consolidation.resistanceLevel > 0
     ? ((consolidation.resistanceLevel - quote.price) / quote.price) * 100 : 99;
@@ -1124,7 +1126,7 @@ function setupBreakoutMonitor() {
 
     const setup = cachedResults.find(s => s.ticker === ticker);
     if (!setup || !setup.resistanceLevel || !setup.supportLevel) return;
-    if (setup.score < 40) return;
+    if (setup.score < 35) return;
 
     const price = data.price;
     const resistanceBuffer = setup.resistanceLevel * 1.002;
