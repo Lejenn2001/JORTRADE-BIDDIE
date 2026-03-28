@@ -2836,24 +2836,19 @@ router.post("/whale/verify-signals", async (_req, res) => {
               outcomePrice = history.lowSince;
             }
           }
-        } else if (refPrice > 0) {
-          if (isBullish && history.highSince >= refPrice * (1 + MIN_MOVE_PCT)) {
-            outcome = "hit";
-            outcomePrice = history.highSince;
-          } else if (!isBullish && history.lowSince <= refPrice * (1 - MIN_MOVE_PCT)) {
-            outcome = "hit";
-            outcomePrice = history.lowSince;
-          }
         }
       }
 
       if (!outcome && !target.low && !target.high && refPrice > 0) {
-        if (isBullish && history.highSince >= refPrice * (1 + MIN_MOVE_PCT)) {
-          outcome = "hit";
-          outcomePrice = history.highSince;
-        } else if (!isBullish && history.lowSince <= refPrice * (1 - MIN_MOVE_PCT)) {
-          outcome = "hit";
-          outcomePrice = history.lowSince;
+        const strikeVal = parseFloat(signal.strike);
+        if (!isNaN(strikeVal) && strikeVal > 0) {
+          if (isBullish && strikeVal > refPrice && history.highSince >= strikeVal) {
+            outcome = "hit";
+            outcomePrice = history.highSince;
+          } else if (!isBullish && strikeVal < refPrice && history.lowSince <= strikeVal) {
+            outcome = "hit";
+            outcomePrice = history.lowSince;
+          }
         }
       }
 
@@ -2946,7 +2941,24 @@ router.post("/whale/fix-targets", async (_req, res) => {
           OR (direction = 'bearish' AND strike < price_at_signal)
         )
     `);
-    res.json({ ok: true, wrongDirectionFixed: r1.rowCount, strikeTargetsApplied: r2.rowCount });
+    const r3 = await dbQuery(`
+      WITH parsed AS (
+        SELECT id, ticker, direction, price_at_signal, max_favorable_price,
+          (regexp_matches(target, '\\$([0-9]+\\.?[0-9]*)'))[1]::numeric as target_price
+        FROM signal_outcomes 
+        WHERE signal_source = 'replit' AND outcome = 'hit' AND price_at_signal IS NOT NULL 
+          AND target IS NOT NULL AND max_favorable_price IS NOT NULL
+      )
+      UPDATE signal_outcomes so
+      SET outcome = 'pending', resolved_at = NULL
+      FROM parsed p
+      WHERE so.id = p.id
+        AND (
+          (p.direction = 'bullish' AND p.max_favorable_price < p.target_price)
+          OR (p.direction = 'bearish' AND p.max_favorable_price > p.target_price)
+        )
+    `);
+    res.json({ ok: true, wrongDirectionFixed: r1.rowCount, strikeTargetsApplied: r2.rowCount, falseHitsReset: r3.rowCount });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
