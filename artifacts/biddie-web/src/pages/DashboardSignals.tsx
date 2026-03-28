@@ -576,6 +576,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
             {signal.priceAtSignal && (
               <span className="flex items-center gap-1 text-xs font-mono">
+                <span className="text-muted-foreground">Entry:</span>
                 <span className="text-foreground font-semibold">${signal.priceAtSignal.toFixed(2)}</span>
               </span>
             )}
