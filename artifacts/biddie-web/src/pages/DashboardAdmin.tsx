@@ -121,43 +121,43 @@ const DashboardAdmin = () => {
 
   const updateUserPlan = async (userId: string, plan: string) => {
     setUpdating(userId);
-    try {
-      const resp = await fetch("/api/whale/admin/update-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": user?.id || "" },
-        body: JSON.stringify({ userId, plan }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        toast.error(data.error || "Failed to update user plan");
-      } else {
-        toast.success(`Plan updated to ${planConfig[plan as keyof typeof planConfig]?.label || plan}`);
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, selected_plan: plan } : u));
-      }
-    } catch {
-      toast.error("Failed to update user plan");
+    const { error } = await supabase
+      .from("profiles")
+      .update({ selected_plan: plan })
+      .eq("id", userId);
+    if (error) {
+      toast.error("Failed to update user plan: " + error.message);
+    } else {
+      toast.success(`Plan updated to ${planConfig[plan as keyof typeof planConfig]?.label || plan}`);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, selected_plan: plan } : u));
     }
     setUpdating(null);
   };
 
   const toggleAdmin = async (userId: string, currentlyAdmin: boolean) => {
     setUpdating(userId);
-    try {
-      const resp = await fetch("/api/whale/admin/toggle-admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": user?.id || "" },
-        body: JSON.stringify({ userId, makeAdmin: !currentlyAdmin }),
-      });
-      if (!resp.ok) {
-        let msg = "Failed to update admin role";
-        try { const data = await resp.json(); msg = data.error || msg; } catch {}
-        toast.error(msg);
+    if (!currentlyAdmin) {
+      const { error } = await supabase
+        .from("user_roles")
+        .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
+      if (error) {
+        toast.error("Failed to grant admin: " + error.message);
       } else {
-        toast.success(currentlyAdmin ? "Admin role removed" : "Admin role granted");
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: !currentlyAdmin } : u));
+        toast.success("Admin role granted");
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: true } : u));
       }
-    } catch (e: any) {
-      toast.error("Network error: " + (e?.message || "Failed to update admin role"));
+    } else {
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", "admin");
+      if (error) {
+        toast.error("Failed to remove admin: " + error.message);
+      } else {
+        toast.success("Admin role removed");
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_admin: false } : u));
+      }
     }
     setUpdating(null);
   };
