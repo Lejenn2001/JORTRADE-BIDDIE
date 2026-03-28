@@ -30,6 +30,8 @@ interface TickerInsight {
   score: string;
   description: string;
   strategyExplanation: string;
+  entryPrice?: string;
+  alertTime?: string;
 }
 
 const defaultInsight: TickerInsight = {
@@ -102,6 +104,8 @@ function generateCandles(isBearish: boolean) {
   return candles;
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const MarketChartPanel = () => {
   const { profile } = useAuth();
   const traderName = profile?.full_name?.split(" ")[0] || "Trader";
@@ -131,12 +135,34 @@ const MarketChartPanel = () => {
     });
 
     try {
-      const { data, error } = await supabase.functions.invoke('ticker-analysis', {
-        body: { ticker, traderName },
-      });
-      if (error) throw error;
-      if (data && data.bias) {
-        setInsight(data as TickerInsight);
+      const [analysisResult, signalResult] = await Promise.all([
+        supabase.functions.invoke('ticker-analysis', {
+          body: { ticker, traderName },
+        }),
+        fetch(`${API_BASE}/api/whale/signals/history?limit=200`).then(r => r.json()).catch(() => ({ signals: [] })),
+      ]);
+
+      if (analysisResult.error) throw analysisResult.error;
+
+      let entryPrice = "";
+      let alertTime = "";
+
+      const tickerSignals = (signalResult?.signals || []).filter(
+        (s: any) => s.ticker?.toUpperCase() === ticker.toUpperCase() && s.signal_source === "replit"
+      );
+      if (tickerSignals.length > 0) {
+        const latest = tickerSignals[0];
+        if (latest.price_at_signal) {
+          entryPrice = `$${Number(latest.price_at_signal).toFixed(2)}`;
+        }
+        if (latest.detected_at) {
+          const d = new Date(latest.detected_at);
+          alertTime = `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+        }
+      }
+
+      if (analysisResult.data && analysisResult.data.bias) {
+        setInsight({ ...(analysisResult.data as TickerInsight), entryPrice, alertTime });
       }
     } catch (e) {
       console.error('Failed to fetch analysis:', e);
@@ -277,6 +303,28 @@ const MarketChartPanel = () => {
             <rect x="150" y="150" width="250" height="30" fill="hsl(var(--destructive))" opacity="0.06" rx="4" />
           )}
 
+          {/* Entry price horizontal line */}
+          {insight.entryPrice && insight.entryPrice !== "—" && (
+            <>
+              <line x1="0" y1="120" x2="500" y2="120"
+                stroke="hsl(45 100% 55%)"
+                strokeWidth="1" strokeDasharray="4 3" opacity="0.6"
+              />
+              <circle cx="30" cy="120" r="3.5" fill="hsl(45 100% 55%)" opacity="0.8" />
+            </>
+          )}
+
+          {/* Alert time vertical marker */}
+          {insight.alertTime && (
+            <>
+              <line x1="30" y1="10" x2="30" y2="190"
+                stroke="hsl(200 80% 60%)"
+                strokeWidth="1" strokeDasharray="3 3" opacity="0.35"
+              />
+              <circle cx="30" cy="120" r="4" fill="none" stroke="hsl(200 80% 60%)" strokeWidth="1.5" opacity="0.6" />
+            </>
+          )}
+
           {/* Candlesticks */}
           {candles.map((c, i) => {
             const top = Math.min(c.o, c.c);
@@ -309,6 +357,22 @@ const MarketChartPanel = () => {
           </div>
         )}
 
+        {/* Entry price label */}
+        {insight.entryPrice && insight.entryPrice !== "—" && (
+          <div className="absolute left-3 z-20 rounded bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 backdrop-blur-sm sm:left-4 sm:text-xs"
+            style={{ top: "55%" }}
+          >
+            Entry {insight.entryPrice}
+          </div>
+        )}
+
+        {/* Alert time label */}
+        {insight.alertTime && (
+          <div className="absolute left-1 bottom-1 z-20 rounded bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 text-[9px] text-sky-400 backdrop-blur-sm sm:left-2 sm:bottom-2 sm:text-[10px]">
+            Alert: {insight.alertTime}
+          </div>
+        )}
+
         {/* Invalidation label */}
         {insight.invalidation !== "—" && (
           <div className={`absolute right-3 z-20 rounded bg-background/80 px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm sm:right-4 sm:text-xs ${
@@ -326,13 +390,21 @@ const MarketChartPanel = () => {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: "Asset", value: activeTicker || "—" },
+            { label: "Entry Price", value: insight.entryPrice || "—", highlight: true },
+            { label: "Alert Time", value: insight.alertTime || "—" },
             { label: "Strategy", value: insight.strategy },
             { label: "Expiration", value: insight.expiration },
             { label: "AI Score", value: insight.score },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-xl border border-border/40 bg-muted/10 p-3 text-left sm:text-center">
+          ].map((stat: any) => (
+            <div key={stat.label} className={`rounded-xl border p-3 text-left sm:text-center ${
+              stat.highlight && stat.value !== "—"
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-border/40 bg-muted/10"
+            }`}>
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{stat.label}</div>
-              <div className="mt-1 text-sm font-bold text-foreground break-words">{stat.value}</div>
+              <div className={`mt-1 text-sm font-bold break-words ${
+                stat.highlight && stat.value !== "—" ? "text-amber-400" : "text-foreground"
+              }`}>{stat.value}</div>
             </div>
           ))}
         </div>
