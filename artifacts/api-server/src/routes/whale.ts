@@ -1688,7 +1688,6 @@ async function runSignalsPipeline() {
     const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
 
     if (optType === "call") {
-      // Entry — condition-based, relative to key levels
       if (pdh && price && price > pdh) {
         entryTrigger = `Confirmed break above PDH at $${pdh.toFixed(2)} with price holding above`;
       } else if (vwap && price && price > vwap) {
@@ -1698,7 +1697,7 @@ async function runSignalsPipeline() {
       } else if (vwap && price) {
         entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (currently below)`;
       } else {
-        entryTrigger = `Above $${strike.toFixed(2)}`;
+        entryTrigger = `Level data not available`;
       }
       target = `$${strike.toFixed(2)}`;
       if (pdh && pdh < strike && pdh > (price || 0)) {
@@ -1713,7 +1712,6 @@ async function runSignalsPipeline() {
         const mid = price + (strike - price) * 0.6;
         targetNear = `$${mid.toFixed(2)}`;
       }
-      // Invalidation — key level that breaks the thesis
       if (pdl) {
         invalidation = `Below PDL at $${pdl.toFixed(2)}`;
       } else if (vwap && price && price > vwap) {
@@ -1721,14 +1719,11 @@ async function runSignalsPipeline() {
       } else if (s1) {
         invalidation = `Below S1 at $${s1.toFixed(2)}`;
       } else {
-        invalidation = `Below $${(price ? price * 0.98 : strike * 0.98).toFixed(2)}`;
+        invalidation = `Level data not available`;
       }
-      // Key level — pivot or VWAP
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
-      // S/R — psychological or structural level
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      // PUT — Entry condition-based
       if (pdl && price && price < pdl) {
         entryTrigger = `Broke below PDL at $${pdl.toFixed(2)} — confirmed`;
       } else if (vwap && price && price < vwap) {
@@ -1738,7 +1733,7 @@ async function runSignalsPipeline() {
       } else if (vwap && price) {
         entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (currently above)`;
       } else {
-        entryTrigger = `Below $${strike.toFixed(2)}`;
+        entryTrigger = `Level data not available`;
       }
       target = `$${strike.toFixed(2)}`;
       if (pdl && pdl > strike && pdl < (price || Infinity)) {
@@ -1753,7 +1748,6 @@ async function runSignalsPipeline() {
         const mid = price - (price - strike) * 0.6;
         targetNear = `$${mid.toFixed(2)}`;
       }
-      // Invalidation — key level that breaks the thesis
       if (pdh) {
         invalidation = `Above PDH at $${pdh.toFixed(2)}`;
       } else if (vwap && price && price < vwap) {
@@ -1761,11 +1755,9 @@ async function runSignalsPipeline() {
       } else if (r1) {
         invalidation = `Above R1 at $${r1.toFixed(2)}`;
       } else {
-        invalidation = `Above $${(price ? price * 1.02 : strike * 1.02).toFixed(2)}`;
+        invalidation = `Level data not available`;
       }
-      // Key level — pivot or VWAP
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
-      // S/R — psychological or structural level
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
