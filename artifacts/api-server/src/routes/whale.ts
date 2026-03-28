@@ -1700,13 +1700,18 @@ async function runSignalsPipeline() {
       } else {
         entryTrigger = `Above $${strike.toFixed(2)}`;
       }
-      // Target — where the money is betting (strike price)
       target = `$${strike.toFixed(2)}`;
-      // Target near — nearest technical level between current price and strike
       if (pdh && pdh < strike && pdh > (price || 0)) {
         targetNear = `$${pdh.toFixed(2)}`;
       } else if (r1 && r1 < strike && r1 > (price || 0)) {
         targetNear = `$${r1.toFixed(2)}`;
+      } else if (pivot && pivot < strike && pivot > (price || 0)) {
+        targetNear = `$${pivot.toFixed(2)}`;
+      } else if (vwap && vwap < strike && vwap > (price || 0)) {
+        targetNear = `$${vwap.toFixed(2)}`;
+      } else if (price && price < strike) {
+        const mid = price + (strike - price) * 0.6;
+        targetNear = `$${mid.toFixed(2)}`;
       }
       // Invalidation — key level that breaks the thesis
       if (pdl) {
@@ -1735,13 +1740,18 @@ async function runSignalsPipeline() {
       } else {
         entryTrigger = `Below $${strike.toFixed(2)}`;
       }
-      // Target — where the money is betting (strike price)
       target = `$${strike.toFixed(2)}`;
-      // Target near — nearest technical level between current price and strike (puts: below price, above strike)
       if (pdl && pdl > strike && pdl < (price || Infinity)) {
         targetNear = `$${pdl.toFixed(2)}`;
       } else if (s1 && s1 > strike && s1 < (price || Infinity)) {
         targetNear = `$${s1.toFixed(2)}`;
+      } else if (pivot && pivot > strike && pivot < (price || Infinity)) {
+        targetNear = `$${pivot.toFixed(2)}`;
+      } else if (vwap && vwap > strike && vwap < (price || Infinity)) {
+        targetNear = `$${vwap.toFixed(2)}`;
+      } else if (price && price > strike) {
+        const mid = price - (price - strike) * 0.6;
+        targetNear = `$${mid.toFixed(2)}`;
       }
       // Invalidation — key level that breaks the thesis
       if (pdh) {

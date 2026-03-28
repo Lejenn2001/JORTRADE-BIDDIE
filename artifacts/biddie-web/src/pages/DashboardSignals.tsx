@@ -118,13 +118,21 @@ function dbRecordToSignal(record: any): MarketSignal {
       const tgtMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
       if (!tgtMatch) return undefined;
       const tgtVal = parseFloat(tgtMatch[1]);
-      const levelSrc = record.sr_level || record.key_level || "";
-      const levelMatch = levelSrc.match(/\$([0-9]+\.?[0-9]*)/);
-      if (!levelMatch) return undefined;
-      const lvl = parseFloat(levelMatch[1]);
       const isBull = putCall === 'call';
-      if (isBull && lvl > priceVal && lvl < tgtVal) return `$${lvl.toFixed(2)}`;
-      if (!isBull && lvl < priceVal && lvl > tgtVal) return `$${lvl.toFixed(2)}`;
+      for (const src of [record.sr_level, record.key_level]) {
+        if (!src) continue;
+        const m = src.match(/\$([0-9]+\.?[0-9]*)/);
+        if (!m) continue;
+        const lvl = parseFloat(m[1]);
+        if (isBull && lvl > priceVal && lvl < tgtVal) return `$${lvl.toFixed(2)}`;
+        if (!isBull && lvl < priceVal && lvl > tgtVal) return `$${lvl.toFixed(2)}`;
+      }
+      if (isBull && priceVal < tgtVal) {
+        return `$${(priceVal + (tgtVal - priceVal) * 0.6).toFixed(2)}`;
+      }
+      if (!isBull && priceVal > tgtVal) {
+        return `$${(priceVal - (priceVal - tgtVal) * 0.6).toFixed(2)}`;
+      }
       return undefined;
     })(),
     spreadDetails: record.spread_details || null,
