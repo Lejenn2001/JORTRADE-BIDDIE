@@ -202,6 +202,16 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                             <Clock className="h-3 w-3" /> PENDING
                           </span>
                         )}
+                        {signal.mfePercent != null && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
+                            signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
+                            signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
+                            "bg-red-400/15 text-red-400"
+                          }`}>
+                            MFE {signal.mfePercent.toFixed(0)}%
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">

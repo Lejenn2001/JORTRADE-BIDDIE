@@ -2570,7 +2570,8 @@ router.get("/whale/signals/export", async (req, res) => {
       `SELECT id, ticker, signal_type, option_type, direction, confidence, conviction_score,
               category, strike, expiry, premium, price_at_signal,
               target, invalidation, entry_trigger, reason,
-              outcome, tags, detected_at, created_at, resolved_at
+              outcome, tags, detected_at, created_at, resolved_at,
+              max_favorable_price, mfe_percent
        FROM signal_outcomes
        WHERE signal_source = 'replit'
        ORDER BY detected_at DESC`
@@ -2883,6 +2884,78 @@ router.post("/whale/verify-signals", async (_req, res) => {
   } catch (err: any) {
     console.error("Verify signals error:", err);
     res.status(500).json({ error: err.message ?? "Verification failed" });
+  }
+});
+
+router.post("/whale/backfill-mfe", async (_req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT * FROM signal_outcomes WHERE signal_source = 'replit' AND price_at_signal IS NOT NULL ORDER BY detected_at DESC`
+    );
+    if (!result || result.rows.length === 0) {
+      res.json({ updated: 0, message: "No signals to backfill" });
+      return;
+    }
+
+    const signals = result.rows;
+    const tickers = [...new Set(signals.map((s: any) => s.ticker))];
+    const priceMap: Record<string, PriceHistory> = {};
+
+    for (const t of tickers) {
+      const oldest = signals
+        .filter((s: any) => s.ticker === t)
+        .reduce((min: string, s: any) => {
+          const d = s.detected_at || s.created_at;
+          return d < min ? d : min;
+        }, signals[0].detected_at || signals[0].created_at);
+      const history = await fetchPriceHistory(t, oldest);
+      if (history) priceMap[t] = history;
+    }
+
+    let updated = 0;
+    const details: any[] = [];
+    for (const signal of signals) {
+      const history = priceMap[signal.ticker];
+      if (!history) continue;
+
+      const signalPrice = parseFloat(signal.price_at_signal);
+      if (!signalPrice || signalPrice <= 0) continue;
+
+      const putCall = (signal.put_call || signal.option_type || "").toUpperCase();
+      const isBullish = putCall === "CALL" ? true : putCall === "PUT" ? false : signal.direction === "bullish";
+
+      const mfPrice = isBullish ? history.highSince : history.lowSince;
+      const prevMfp = signal.max_favorable_price ? parseFloat(signal.max_favorable_price) : null;
+      const newMfp = isBullish
+        ? Math.max(mfPrice, prevMfp ?? -Infinity)
+        : Math.min(mfPrice, prevMfp ?? Infinity);
+
+      const target = parseTargetRange(signal.target_zone || signal.target);
+      let mfePct: number | null = null;
+      if (target.low && target.high) {
+        if (isBullish) {
+          const targetP = target.low;
+          const denom = targetP - signalPrice;
+          if (denom > 0) mfePct = Math.round(((newMfp - signalPrice) / denom) * 10000) / 100;
+        } else {
+          const targetP = target.high;
+          const denom = signalPrice - targetP;
+          if (denom > 0) mfePct = Math.round(((signalPrice - newMfp) / denom) * 10000) / 100;
+        }
+      }
+
+      await dbQuery(
+        `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2 WHERE id = $3`,
+        [newMfp, mfePct, signal.id]
+      );
+      updated++;
+      details.push({ ticker: signal.ticker, direction: signal.direction, entry: signalPrice, mfp: newMfp, mfe: mfePct });
+    }
+
+    res.json({ updated, total: signals.length, details });
+  } catch (err: any) {
+    console.error("Backfill MFE error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -3474,6 +3547,33 @@ async function realtimeVerifySignals() {
         if (isBullish && history.current < (entryPrice || signalPrice || 0)) outcome = "missed";
         else if (!isBullish && history.current > (entryPrice || signalPrice || Infinity)) outcome = "missed";
         else outcome = "expired";
+      }
+
+      const mfPrice = isBullish ? history.highSince : history.lowSince;
+      const prevMfp = signal.max_favorable_price ? parseFloat(signal.max_favorable_price) : null;
+      const newMfp = isBullish
+        ? Math.max(mfPrice, prevMfp ?? -Infinity)
+        : Math.min(mfPrice, prevMfp ?? Infinity);
+      const shouldUpdateMfp = prevMfp === null || (isBullish ? newMfp > prevMfp : newMfp < prevMfp);
+
+      let mfePct: number | null = null;
+      if (refPrice2 > 0 && target_val.low && target_val.high) {
+        if (isBullish) {
+          const targetP = target_val.low;
+          const denom = targetP - refPrice2;
+          if (denom > 0) mfePct = Math.round(((newMfp - refPrice2) / denom) * 10000) / 100;
+        } else {
+          const targetP = target_val.high;
+          const denom = refPrice2 - targetP;
+          if (denom > 0) mfePct = Math.round(((refPrice2 - newMfp) / denom) * 10000) / 100;
+        }
+      }
+
+      if (shouldUpdateMfp) {
+        await dbQuery(
+          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2 WHERE id = $3`,
+          [newMfp, mfePct, signal.id]
+        );
       }
 
       if (outcome) {
