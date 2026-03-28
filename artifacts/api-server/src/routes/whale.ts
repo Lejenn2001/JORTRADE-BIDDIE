@@ -1580,10 +1580,16 @@ async function runSignalsPipeline() {
       }
     }
 
-    // Filter 1: Reject deep OTM (>15% from current price)
+    // Filter 1: Reject deep OTM (>15%) or deep ITM (>5%)
     if (price && strike) {
-      const otmPct = Math.abs(strike - price) / price;
+      const isCall = optType === "call";
+      const otmPct = isCall ? (strike - price) / price : (price - strike) / price;
+      const itmPct = isCall ? (price - strike) / price : (strike - price) / price;
       if (otmPct > 0.15) return null;
+      if (itmPct > 0.05) {
+        console.log(`[signals] REJECTED ${ticker}: $${strike} ${optType} is ${(itmPct * 100).toFixed(1)}% deep ITM at $${price.toFixed(2)} — likely hedge/institutional`);
+        return null;
+      }
     }
 
     // Filter 2: Reject far-out expiries (>45 days) — we want near-term signals
