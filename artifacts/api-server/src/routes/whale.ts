@@ -4186,6 +4186,25 @@ router.delete("/whale/admin/signal/:id", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/sync-signal-fields", async (req, res) => {
+  try {
+    const { adminSecret, updates } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(updates)) return res.status(400).json({ error: "updates must be an array" });
+    let updated = 0;
+    for (const u of updates) {
+      const result = await dbQuery(
+        `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7 WHERE id = $1`,
+        [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation]
+      );
+      if (result?.rowCount) updated++;
+    }
+    res.json({ success: true, updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/cleanup-bad-signals", async (_req, res) => {
   try {
     const result = await dbQuery(
