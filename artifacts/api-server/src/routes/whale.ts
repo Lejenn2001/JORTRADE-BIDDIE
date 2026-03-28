@@ -2300,6 +2300,14 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         }
       }
 
+      if (fixedExpiry) {
+        const expDate = new Date(fixedExpiry);
+        if (!isNaN(expDate.getTime()) && expDate < new Date()) {
+          console.log(`[signals] SKIPPED ${s.ticker}: ${s.option_type} $${s.strike} already expired (${fixedExpiry})`);
+          continue;
+        }
+      }
+
       const existing = await dbQuery(
         `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
         [s.ticker, s.strike, s.option_type, fixedExpiry]
