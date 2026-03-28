@@ -230,10 +230,55 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     const s2 = pivot && prevHigh && prevLow
       ? Math.round((pivot - (prevHigh - prevLow)) * 100) / 100 : null;
 
+    let vah: number | null = null, val: number | null = null, poc: number | null = null;
+    if (intradayBars.length > 5) {
+      const priceVolMap = new Map<number, number>();
+      const step = 0.01;
+      for (const b of intradayBars) {
+        if (b.high && b.low && b.volume && b.volume > 0) {
+          const bucketLow = Math.floor(b.low / step) * step;
+          const bucketHigh = Math.ceil(b.high / step) * step;
+          const buckets = Math.max(1, Math.round((bucketHigh - bucketLow) / step));
+          const volPerBucket = b.volume / buckets;
+          for (let p = bucketLow; p <= bucketHigh; p += step) {
+            const key = Math.round(p * 100) / 100;
+            priceVolMap.set(key, (priceVolMap.get(key) || 0) + volPerBucket);
+          }
+        }
+      }
+      if (priceVolMap.size > 0) {
+        const entries = Array.from(priceVolMap.entries()).sort((a, b) => a[0] - b[0]);
+        let maxVol = 0;
+        for (const [price, vol] of entries) {
+          if (vol > maxVol) { maxVol = vol; poc = price; }
+        }
+        const totalVol = entries.reduce((s, e) => s + e[1], 0);
+        const target70 = totalVol * 0.70;
+        let cumVol2 = 0;
+        const pocIdx = entries.findIndex(e => e[0] === poc);
+        const visited = new Set<number>();
+        let lo = pocIdx, hi = pocIdx;
+        if (pocIdx >= 0) {
+          cumVol2 = entries[pocIdx][1];
+          visited.add(pocIdx);
+          while (cumVol2 < target70 && (lo > 0 || hi < entries.length - 1)) {
+            const loVol = lo > 0 ? entries[lo - 1][1] : -1;
+            const hiVol = hi < entries.length - 1 ? entries[hi + 1][1] : -1;
+            if (loVol >= hiVol && lo > 0) { lo--; cumVol2 += entries[lo][1]; }
+            else if (hi < entries.length - 1) { hi++; cumVol2 += entries[hi][1]; }
+            else break;
+          }
+          val = Math.round(entries[lo][0] * 100) / 100;
+          vah = Math.round(entries[hi][0] * 100) / 100;
+        }
+      }
+    }
+
     return {
       ticker: ticker.toUpperCase(),
       current_price: currentPrice ? Math.round(currentPrice * 100) / 100 : null,
       vwap,
+      vah, val, poc,
       today: {
         open: todayOpen ? Math.round(todayOpen * 100) / 100 : null,
         high: todayHigh ? Math.round(todayHigh * 100) / 100 : null,
@@ -1682,6 +1727,9 @@ async function runSignalsPipeline() {
     const pivot = kl?.pivot_points?.pivot ?? null;
     const r1 = kl?.pivot_points?.r1 ?? null;
     const s1 = kl?.pivot_points?.s1 ?? null;
+    const vah = kl?.vah ?? null;
+    const val_level = kl?.val ?? null;
+    const poc = kl?.poc ?? null;
 
     // Entry/target/invalidation
     let entryTrigger = "";
@@ -1756,10 +1804,10 @@ async function runSignalsPipeline() {
         }
       } else {
         target = `$${strike.toFixed(2)}`;
-        // Extended target for call = above the strike (further upside)
-        const aboveStrikeLevels = [pdh, r1, pivot, vwap].filter((l): l is number => !!l && l > strike);
-        if (aboveStrikeLevels.length > 0) {
-          const nearest = aboveStrikeLevels.sort((a, b) => a - b)[0];
+        // Extended target for call = above the strike using VAH/POC or ATR-based range
+        const extCall = [vah, poc].filter((l): l is number => !!l && l > strike);
+        if (extCall.length > 0) {
+          const nearest = extCall.sort((a, b) => a - b)[0];
           targetNear = `$${nearest.toFixed(2)}`;
         } else {
           targetNear = `$${(strike * 1.02).toFixed(2)}`;
@@ -1822,10 +1870,10 @@ async function runSignalsPipeline() {
         }
       } else {
         target = `$${strike.toFixed(2)}`;
-        // Extended target for put = below the strike (further downside)
-        const belowStrikeLevels = [pdl, s1, pivot, vwap].filter((l): l is number => !!l && l < strike);
-        if (belowStrikeLevels.length > 0) {
-          const nearest = belowStrikeLevels.sort((a, b) => b - a)[0];
+        // Extended target for put = below the strike using VAL/POC or ATR-based range
+        const extPut = [val_level, poc].filter((l): l is number => !!l && l < strike);
+        if (extPut.length > 0) {
+          const nearest = extPut.sort((a, b) => b - a)[0];
           targetNear = `$${nearest.toFixed(2)}`;
         } else {
           targetNear = `$${(strike * 0.98).toFixed(2)}`;
