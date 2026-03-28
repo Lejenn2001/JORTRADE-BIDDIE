@@ -252,7 +252,12 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const all = [...dbSignals, ...liveSignals];
+    const dbKeys = new Set(dbSignals.map(s => `${s.ticker}|${s.strike}|${s.putCall}|${s.expiry}`));
+    const filteredLive = liveSignals.filter(s => {
+      const key = `${s.ticker}|${s.strike}|${s.putCall}|${s.expiry}`;
+      return !dbKeys.has(key);
+    });
+    const all = [...dbSignals, ...filteredLive];
     const seen = new Set<string>();
     const unique: MarketSignal[] = [];
     for (const s of all) {

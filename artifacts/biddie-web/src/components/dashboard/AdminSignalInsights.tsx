@@ -816,8 +816,8 @@ const AdminSignalInsights = () => {
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1.5">
-                          {detected.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-                          {detected.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          {detected.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}{" "}
+                          {detected.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
                           <span className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
                             <ChevronDown className="h-3 w-3 text-muted-foreground/50" />
                           </span>
@@ -904,7 +904,7 @@ const AdminSignalInsights = () => {
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{s.time_at_target ? (() => {
                         const d = new Date(s.time_at_target);
-                        return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+                        return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
                       })() : "—"}</td>
                       <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
                     </tr>
@@ -1089,7 +1089,7 @@ const AdminSignalInsights = () => {
                                         <p className="text-xs text-foreground">
                                           {detail.signal.timeAtTarget ? (() => {
                                             const d = new Date(detail.signal.timeAtTarget);
-                                            return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+                                            return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
                                           })() : "Not reached"}
                                         </p>
                                       </div>
@@ -1104,8 +1104,8 @@ const AdminSignalInsights = () => {
                                         </p>
                                         {s.resolved_at && (
                                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                                            Resolved: {new Date(s.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-                                            {new Date(s.resolved_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                            Resolved: {new Date(s.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}{" "}
+                                            {new Date(s.resolved_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
                                           </p>
                                         )}
                                       </div>
@@ -1149,15 +1149,15 @@ const AdminSignalInsights = () => {
                                                   key={i}
                                                   className={`flex-1 min-w-[2px] max-w-[6px] rounded-t-sm ${isAboveEntry ? "bg-emerald-500/60" : "bg-red-500/60"}`}
                                                   style={{ height: `${Math.max(pct, 5)}%` }}
-                                                  title={`${new Date(bar.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} — $${bar.close.toFixed(2)}`}
+                                                  title={`${new Date(bar.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} — $${bar.close.toFixed(2)}`}
                                                 />
                                               );
                                             });
                                           })()}
                                         </div>
                                         <div className="flex justify-between text-[9px] text-muted-foreground/50 mt-1">
-                                          <span>{new Date(detail.priceHistory.bars[0].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
-                                          <span>{new Date(detail.priceHistory.bars[detail.priceHistory.bars.length - 1].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                                          <span>{new Date(detail.priceHistory.bars[0].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}</span>
+                                          <span>{new Date(detail.priceHistory.bars[detail.priceHistory.bars.length - 1].time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}</span>
                                         </div>
                                       </div>
                                     )}
