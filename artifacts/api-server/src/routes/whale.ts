@@ -2986,7 +2986,9 @@ router.post("/whale/verify-signals", async (_req, res) => {
           const currentlyBreached = isBullish
             ? history.current <= invalidationPrice
             : history.current >= invalidationPrice;
-          if (currentlyBreached || isExpired) {
+          const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
+          const isLongDated = dteHours > 48;
+          if (isExpired) {
             if (isBullish && history.lowSince <= invalidationPrice) {
               outcome = "missed";
               outcomePrice = history.lowSince;
@@ -2994,7 +2996,37 @@ router.post("/whale/verify-signals", async (_req, res) => {
               outcome = "missed";
               outcomePrice = history.highSince;
             }
+          } else if (currentlyBreached && !isLongDated) {
+            if (isBullish && history.lowSince <= invalidationPrice) {
+              outcome = "missed";
+              outcomePrice = history.lowSince;
+            } else if (!isBullish && history.highSince >= invalidationPrice) {
+              outcome = "missed";
+              outcomePrice = history.highSince;
+            }
+          } else if (currentlyBreached && isLongDated) {
+            const breachPct = isBullish
+              ? ((invalidationPrice - history.current) / invalidationPrice) * 100
+              : ((history.current - invalidationPrice) / invalidationPrice) * 100;
+            if (breachPct >= 1.0) {
+              if (isBullish && history.lowSince <= invalidationPrice) {
+                outcome = "missed";
+                outcomePrice = history.lowSince;
+              } else if (!isBullish && history.highSince >= invalidationPrice) {
+                outcome = "missed";
+                outcomePrice = history.highSince;
+              }
+            }
           }
+        }
+      }
+
+      if (!outcome && signal.outcome === "missed" && !isExpired && invalidationPrice && refPrice > 0) {
+        const recovered = isBullish
+          ? history.current > invalidationPrice
+          : history.current < invalidationPrice;
+        if (recovered) {
+          outcome = "pending_revert";
         }
       }
 
@@ -3021,7 +3053,17 @@ router.post("/whale/verify-signals", async (_req, res) => {
         }
       }
 
-      if (outcome) {
+      if (outcome === "pending_revert") {
+        await dbQuery(
+          `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL, trade_status = 'active', status_updated_at = $1 WHERE id = $2`,
+          [now.toISOString(), signal.id]
+        );
+        await dbQuery(
+          `UPDATE user_trades SET signal_outcome = 'pending', resolved_at = NULL WHERE signal_id = $1`,
+          [signal.id]
+        );
+        console.log(`[verify] ${signal.ticker} ${signal.option_type} $${signal.strike}: REVERTED missed → pending (price recovered above invalidation)`);
+      } else if (outcome) {
         const updateResult = await dbQuery(
           `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`,
           [outcome, now.toISOString(), signal.id]
@@ -3733,10 +3775,32 @@ async function realtimeVerifySignals() {
           const currentlyBreached = isBullish
             ? history.current <= invalidationPrice
             : history.current >= invalidationPrice;
-          if (currentlyBreached || isExpired) {
+          const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
+          const isLongDated = dteHours > 48;
+          if (isExpired) {
             if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
             else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+          } else if (currentlyBreached && !isLongDated) {
+            if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
+            else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+          } else if (currentlyBreached && isLongDated) {
+            const breachPct = isBullish
+              ? ((invalidationPrice - history.current) / invalidationPrice) * 100
+              : ((history.current - invalidationPrice) / invalidationPrice) * 100;
+            if (breachPct >= 1.0) {
+              if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
+              else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+            }
           }
+        }
+      }
+
+      if (!outcome && signal.outcome === "missed" && !isExpired && invalidationPrice && refPrice2 > 0) {
+        const recovered = isBullish
+          ? history.current > invalidationPrice
+          : history.current < invalidationPrice;
+        if (recovered) {
+          outcome = "pending_revert";
         }
       }
 
@@ -3848,7 +3912,17 @@ async function realtimeVerifySignals() {
         }
       }
 
-      if (outcome) {
+      if (outcome === "pending_revert") {
+        await dbQuery(
+          `UPDATE signal_outcomes SET outcome = 'pending', resolved_at = NULL, trade_status = 'active', status_updated_at = $1 WHERE id = $2`,
+          [now.toISOString(), signal.id]
+        );
+        await dbQuery(
+          `UPDATE user_trades SET signal_outcome = 'pending', resolved_at = NULL WHERE signal_id = $1`,
+          [signal.id]
+        );
+        console.log(`[auto-verify] ${signal.ticker} ${signal.option_type} $${signal.strike}: REVERTED missed → pending (price recovered above invalidation to $${history.current.toFixed(2)})`);
+      } else if (outcome) {
         const updateFields = timeAtTarget
           ? `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, time_at_target = $3, trade_status = $4, status_updated_at = $5 WHERE id = $6`
           : `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, trade_status = $3, status_updated_at = $4 WHERE id = $5`;
