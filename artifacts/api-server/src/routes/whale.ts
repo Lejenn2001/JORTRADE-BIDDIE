@@ -1693,28 +1693,48 @@ async function runSignalsPipeline() {
     const psych = Math.round(strike / 10) * 10;
     const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
 
+    let actNow = false;
+
     if (optType === "call") {
-      // CALL: invalidation is below (support breaks = wrong), entry near support, target above
-      if (pdl) {
-        invalidation = `Below PDL at $${pdl.toFixed(2)}`;
-      } else if (s1) {
-        invalidation = `Below S1 at $${s1.toFixed(2)}`;
-      } else if (vwap) {
-        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
-      } else {
-        invalidation = `Level data not available`;
-      }
-      // Entry: near invalidation zone — where you get in with tight risk
-      if (vwap && price && price > vwap) {
-        entryTrigger = `Near or above VWAP at $${vwap.toFixed(2)}`;
-      } else if (pdl && price) {
-        entryTrigger = `Near or above PDL at $${pdl.toFixed(2)}`;
-      } else if (s1 && price) {
-        entryTrigger = `Near or above S1 at $${s1.toFixed(2)}`;
+      // CALL: entry near VWAP/support, invalidation = closest support below, target above
+      // Entry logic: VWAP is the anchor
+      if (vwap && price) {
+        const distToVwap = Math.abs(price - vwap) / price;
+        if (price >= vwap && distToVwap < 0.005) {
+          entryTrigger = `At VWAP $${vwap.toFixed(2)}`;
+          actNow = true;
+        } else if (price > vwap) {
+          entryTrigger = `Above VWAP at $${vwap.toFixed(2)}`;
+          actNow = true;
+        } else {
+          entryTrigger = `On bounce from VWAP at $${vwap.toFixed(2)}`;
+        }
       } else if (pivot && price) {
-        entryTrigger = `Near or above Pivot at $${pivot.toFixed(2)}`;
+        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+        if (price >= pivot) actNow = true;
+      } else if (price) {
+        entryTrigger = `At current price $${price.toFixed(2)}`;
+        actNow = true;
       } else {
         entryTrigger = `Level data not available`;
+      }
+      // Invalidation: closest support below current price (tight stop)
+      if (price) {
+        const supportLevels = [
+          vwap ? { level: vwap, name: "VWAP" } : null,
+          pdl ? { level: pdl, name: "PDL" } : null,
+          s1 ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+        supportLevels.sort((a, b) => b.level - a.level);
+        if (supportLevels.length > 0) {
+          const closest = supportLevels[0];
+          invalidation = `Below ${closest.name} at $${closest.level.toFixed(2)}`;
+        } else {
+          invalidation = `Below $${(price * 0.98).toFixed(2)}`;
+        }
+      } else {
+        invalidation = `Level data not available`;
       }
       // Target: strike price — but if price ≈ strike (within 1%), use next resistance above
       const strikeNearPrice = price && Math.abs(strike - price) / price < 0.01;
@@ -1756,27 +1776,45 @@ async function runSignalsPipeline() {
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      // PUT: invalidation is above (resistance holds = wrong), entry near resistance, target below
-      if (pdh) {
-        invalidation = `Above PDH at $${pdh.toFixed(2)}`;
-      } else if (r1) {
-        invalidation = `Above R1 at $${r1.toFixed(2)}`;
-      } else if (vwap) {
-        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
-      } else {
-        invalidation = `Level data not available`;
-      }
-      // Entry: near invalidation zone — where you get in with tight risk
-      if (vwap && price && price < vwap) {
-        entryTrigger = `Near or below VWAP at $${vwap.toFixed(2)}`;
-      } else if (pdh && price) {
-        entryTrigger = `Near or below PDH at $${pdh.toFixed(2)}`;
-      } else if (r1 && price) {
-        entryTrigger = `Near or below R1 at $${r1.toFixed(2)}`;
+      // PUT: entry near VWAP/resistance, invalidation = closest resistance above, target below
+      // Entry logic: VWAP is the anchor
+      if (vwap && price) {
+        const distToVwap = Math.abs(price - vwap) / price;
+        if (price <= vwap && distToVwap < 0.005) {
+          entryTrigger = `At VWAP $${vwap.toFixed(2)}`;
+          actNow = true;
+        } else if (price < vwap) {
+          entryTrigger = `Below VWAP at $${vwap.toFixed(2)}`;
+          actNow = true;
+        } else {
+          entryTrigger = `On rejection from VWAP at $${vwap.toFixed(2)}`;
+        }
       } else if (pivot && price) {
-        entryTrigger = `Near or below Pivot at $${pivot.toFixed(2)}`;
+        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+        if (price <= pivot) actNow = true;
+      } else if (price) {
+        entryTrigger = `At current price $${price.toFixed(2)}`;
+        actNow = true;
       } else {
         entryTrigger = `Level data not available`;
+      }
+      // Invalidation: closest resistance above current price (tight stop)
+      if (price) {
+        const resistanceLevels = [
+          vwap ? { level: vwap, name: "VWAP" } : null,
+          pdh ? { level: pdh, name: "PDH" } : null,
+          r1 ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+        resistanceLevels.sort((a, b) => a.level - b.level);
+        if (resistanceLevels.length > 0) {
+          const closest = resistanceLevels[0];
+          invalidation = `Above ${closest.name} at $${closest.level.toFixed(2)}`;
+        } else {
+          invalidation = `Above $${(price * 1.02).toFixed(2)}`;
+        }
+      } else {
+        invalidation = `Level data not available`;
       }
       // Target: strike price — but if price ≈ strike (within 1%), use next support below
       const putStrikeNearPrice = price && Math.abs(strike - price) / price < 0.01;
@@ -1818,6 +1856,9 @@ async function runSignalsPipeline() {
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
+
+    // Act Now flag — price is at the right level and flow confirms direction
+    if (actNow) tags.push("⚡ Act Now");
 
     // Reason
     const premStr = premium >= 1_000_000 ? `$${(premium / 1_000_000).toFixed(1)}M` : `$${(premium / 1000).toFixed(0)}K`;
