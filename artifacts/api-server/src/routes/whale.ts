@@ -1678,19 +1678,20 @@ async function runSignalsPipeline() {
         entryTrigger = `Above $${strike}`;
       }
       // Target — next resistance ABOVE current price (calls want price to go UP)
-      if (r1 && price && r1 > price) {
-        if (pdh && pdh > price && pdh < r1) {
-          target = `PDH at $${pdh.toFixed(2)}, then R1 at $${r1.toFixed(2)}`;
+      {
+        const aboveLevels: { label: string; val: number }[] = [];
+        if (r1 && price && r1 > price) aboveLevels.push({ label: `R1 at $${r1.toFixed(2)}`, val: r1 });
+        if (pdh && price && pdh > price) aboveLevels.push({ label: `PDH at $${pdh.toFixed(2)}`, val: pdh });
+        if (vwap && price && vwap > price) aboveLevels.push({ label: `VWAP at $${vwap.toFixed(2)}`, val: vwap });
+        aboveLevels.sort((a, b) => a.val - b.val);
+        if (aboveLevels.length >= 2) {
+          target = `${aboveLevels[0].label}, then ${aboveLevels[1].label}`;
+        } else if (aboveLevels.length === 1) {
+          target = aboveLevels[0].label;
         } else {
-          target = `R1 at $${r1.toFixed(2)}`;
+          const pct = price ? price * 1.02 : strike * 1.02;
+          target = `$${pct.toFixed(2)}`;
         }
-      } else if (pdh && price && pdh > price) {
-        target = `PDH at $${pdh.toFixed(2)}`;
-      } else if (vwap && price && vwap > price) {
-        target = `VWAP at $${vwap.toFixed(2)}`;
-      } else {
-        const pct = price ? price * 1.02 : strike * 1.02;
-        target = `$${pct.toFixed(2)}`;
       }
       // Invalidation — next support below
       if (vwap && price && price > vwap && pdl) {
@@ -1721,19 +1722,20 @@ async function runSignalsPipeline() {
         entryTrigger = `Below $${strike}`;
       }
       // Target — next support BELOW current price (puts want price to go DOWN)
-      if (s1 && price && s1 < price) {
-        if (pdl && pdl < price && pdl > s1) {
-          target = `PDL at $${pdl.toFixed(2)}, then S1 at $${s1.toFixed(2)}`;
+      {
+        const belowLevels: { label: string; val: number }[] = [];
+        if (s1 && price && s1 < price) belowLevels.push({ label: `S1 at $${s1.toFixed(2)}`, val: s1 });
+        if (pdl && price && pdl < price) belowLevels.push({ label: `PDL at $${pdl.toFixed(2)}`, val: pdl });
+        if (vwap && price && vwap < price) belowLevels.push({ label: `VWAP at $${vwap.toFixed(2)}`, val: vwap });
+        belowLevels.sort((a, b) => b.val - a.val);
+        if (belowLevels.length >= 2) {
+          target = `${belowLevels[0].label}, then ${belowLevels[1].label}`;
+        } else if (belowLevels.length === 1) {
+          target = belowLevels[0].label;
         } else {
-          target = `S1 at $${s1.toFixed(2)}`;
+          const pct = price ? price * 0.98 : strike * 0.98;
+          target = `$${pct.toFixed(2)}`;
         }
-      } else if (pdl && price && pdl < price) {
-        target = `PDL at $${pdl.toFixed(2)}`;
-      } else if (vwap && price && vwap < price) {
-        target = `VWAP at $${vwap.toFixed(2)}`;
-      } else {
-        const pct = price ? price * 0.98 : strike * 0.98;
-        target = `$${pct.toFixed(2)}`;
       }
       // Invalidation — next resistance above
       if (vwap && price && price < vwap && pdh) {
