@@ -2971,12 +2971,17 @@ router.post("/whale/verify-signals", async (_req, res) => {
           ? invalidationPrice < refPrice
           : invalidationPrice > refPrice;
         if (invMakesDirectionalSense) {
-          if (isBullish && history.lowSince <= invalidationPrice) {
-            outcome = "missed";
-            outcomePrice = history.lowSince;
-          } else if (!isBullish && history.highSince >= invalidationPrice) {
-            outcome = "missed";
-            outcomePrice = history.highSince;
+          const currentlyBreached = isBullish
+            ? history.current <= invalidationPrice
+            : history.current >= invalidationPrice;
+          if (currentlyBreached || isExpired) {
+            if (isBullish && history.lowSince <= invalidationPrice) {
+              outcome = "missed";
+              outcomePrice = history.lowSince;
+            } else if (!isBullish && history.highSince >= invalidationPrice) {
+              outcome = "missed";
+              outcomePrice = history.highSince;
+            }
           }
         }
       }
@@ -3713,8 +3718,13 @@ async function realtimeVerifySignals() {
           ? invalidationPrice < refPrice2
           : invalidationPrice > refPrice2;
         if (invMakesDirectionalSense) {
-          if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
-          else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+          const currentlyBreached = isBullish
+            ? history.current <= invalidationPrice
+            : history.current >= invalidationPrice;
+          if (currentlyBreached || isExpired) {
+            if (isBullish && history.lowSince <= invalidationPrice) outcome = "missed";
+            else if (!isBullish && history.highSince >= invalidationPrice) outcome = "missed";
+          }
         }
       }
 
