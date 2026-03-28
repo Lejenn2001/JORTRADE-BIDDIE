@@ -170,6 +170,7 @@ const DashboardSignals = () => {
   const [dbLoading, setDbLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [showResolved, setShowResolved] = useState(false);
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
 
@@ -254,15 +255,15 @@ const DashboardSignals = () => {
     const dbIds = new Set(dbSignals.map(s => s.id));
     const filteredHistory = (signalHistory || []).filter(s => dbIds.has(s.id));
     const all = [...filteredHistory, ...dbSignals, ...liveSignals];
-    const bestPerKey = new Map<string, MarketSignal>();
+    const seen = new Set<string>();
+    const unique: MarketSignal[] = [];
     for (const s of all) {
-      const key = `${s.ticker}|${s.category || 'algorithm'}|${s.strike || ''}|${s.putCall || ''}`;
-      const existing = bestPerKey.get(key);
-      if (!existing || (s.confidence ?? 0) > (existing.confidence ?? 0)) {
-        bestPerKey.set(key, s);
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        unique.push(s);
       }
     }
-    return Array.from(bestPerKey.values());
+    return unique;
   }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;
@@ -272,6 +273,13 @@ const DashboardSignals = () => {
 
   const filtered = useMemo(() => {
     let list = [...signals];
+
+    if (!showResolved) {
+      list = list.filter((s) => {
+        const o = s.outcome;
+        return !o || o === "pending";
+      });
+    }
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -288,7 +296,11 @@ const DashboardSignals = () => {
     });
 
     return list;
-  }, [signals, search, filterType]);
+  }, [signals, search, filterType, showResolved]);
+
+  const resolvedCount = useMemo(() => {
+    return signals.filter(s => s.outcome && s.outcome !== "pending").length;
+  }, [signals]);
 
   const algorithmSignals = useMemo(() => {
     const algoOnly = filtered.filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'));
@@ -328,7 +340,7 @@ const DashboardSignals = () => {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Today's signal log — {totalCount} signals recorded
+              {showResolved ? `All signals — ${totalCount} total` : `Active signals — ${totalCount - resolvedCount} pending`}
             </p>
           </div>
 
@@ -404,6 +416,17 @@ const DashboardSignals = () => {
                   {f === "all" ? "All" : f === "call" ? "Calls" : "Puts"}
                 </button>
               ))}
+              <span className="w-px h-4 bg-border/40 mx-1" />
+              <button
+                onClick={() => setShowResolved(!showResolved)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  showResolved
+                    ? "bg-muted/50 text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {showResolved ? "Hide Resolved" : `Show Resolved (${resolvedCount})`}
+              </button>
             </div>
           </div>
 
@@ -548,13 +571,14 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
     ? "border-primary/20"
     : "border-destructive/20";
 
-  const isWinner = signal.outcome === "hit" || signal.outcome === "win";
+  const isWinner = signal.outcome === "hit" || signal.outcome === "partial_hit" || signal.outcome === "win";
   const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
-  const isPending = isAI && !isWinner && !isLoser;
+  const isExpired = signal.outcome === "expired";
+  const isPending = isAI && !isWinner && !isLoser && !isExpired;
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-shadow relative ${glowClass} ${
-      isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+      isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isExpired ? "bg-zinc-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
@@ -631,14 +655,16 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             {(() => {
               let ts = signal.tradeStatus || "watching";
               if (ts === "watching") {
-                if (isWinner) ts = "hit";
+                if (signal.outcome === "hit") ts = "hit";
+                else if (signal.outcome === "partial_hit") ts = "partial_hit";
                 else if (isLoser) ts = "miss";
                 else if (signal.outcome === "expired") ts = "expired";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
                 hit: { label: "HIT", desc: "Price reached the target zone", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "PARTIAL HIT", desc: "Significant move in right direction but didn't reach full target", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
                 miss: { label: "MISS", desc: "Price breached invalidation level", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                expired: { label: "EXPIRED", desc: "Time ran out before hitting target or invalidation", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                expired: { label: "EXPIRED", desc: "Time ran out — minimal move in either direction", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "Entry level reached — trade is live", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                 watching: { label: "WATCHING", desc: "Waiting for price to reach entry level", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
               };
