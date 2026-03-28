@@ -1756,27 +1756,13 @@ async function runSignalsPipeline() {
         }
       } else {
         target = `$${strike.toFixed(2)}`;
-        if (pdh && pdh < strike && pdh > (price || 0)) {
-          targetNear = `$${pdh.toFixed(2)}`;
-        } else if (r1 && r1 < strike && r1 > (price || 0)) {
-          targetNear = `$${r1.toFixed(2)}`;
-        } else if (pivot && pivot < strike && pivot > (price || 0)) {
-          targetNear = `$${pivot.toFixed(2)}`;
-        } else if (vwap && vwap < strike && vwap > (price || 0)) {
-          targetNear = `$${vwap.toFixed(2)}`;
-        } else if (price && price < strike) {
-          const mid = price + (strike - price) * 0.6;
-          targetNear = `$${mid.toFixed(2)}`;
-        }
-        if (!targetNear && price) {
-          const aboveLevels = [pdh, r1, pivot, vwap].filter((l): l is number => !!l && l > strike);
-          if (aboveLevels.length > 0) {
-            const nearest = aboveLevels.sort((a, b) => a - b)[0];
-            targetNear = `$${nearest.toFixed(2)}`;
-          } else {
-            const ext = strike + (strike - (price || strike)) * 0.5 + strike * 0.02;
-            targetNear = `$${ext.toFixed(2)}`;
-          }
+        // Extended target for call = above the strike (further upside)
+        const aboveStrikeLevels = [pdh, r1, pivot, vwap].filter((l): l is number => !!l && l > strike);
+        if (aboveStrikeLevels.length > 0) {
+          const nearest = aboveStrikeLevels.sort((a, b) => a - b)[0];
+          targetNear = `$${nearest.toFixed(2)}`;
+        } else {
+          targetNear = `$${(strike * 1.02).toFixed(2)}`;
         }
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
@@ -1836,27 +1822,13 @@ async function runSignalsPipeline() {
         }
       } else {
         target = `$${strike.toFixed(2)}`;
-        if (pdl && pdl > strike && pdl < (price || Infinity)) {
-          targetNear = `$${pdl.toFixed(2)}`;
-        } else if (s1 && s1 > strike && s1 < (price || Infinity)) {
-          targetNear = `$${s1.toFixed(2)}`;
-        } else if (pivot && pivot > strike && pivot < (price || Infinity)) {
-          targetNear = `$${pivot.toFixed(2)}`;
-        } else if (vwap && vwap > strike && vwap < (price || Infinity)) {
-          targetNear = `$${vwap.toFixed(2)}`;
-        } else if (price && price > strike) {
-          const mid = price - (price - strike) * 0.6;
-          targetNear = `$${mid.toFixed(2)}`;
-        }
-        if (!targetNear && price) {
-          const belowLevels = [pdl, s1, pivot, vwap].filter((l): l is number => !!l && l < strike);
-          if (belowLevels.length > 0) {
-            const nearest = belowLevels.sort((a, b) => b - a)[0];
-            targetNear = `$${nearest.toFixed(2)}`;
-          } else {
-            const ext = strike - (((price || strike) - strike) * 0.5 + strike * 0.02);
-            targetNear = `$${ext.toFixed(2)}`;
-          }
+        // Extended target for put = below the strike (further downside)
+        const belowStrikeLevels = [pdl, s1, pivot, vwap].filter((l): l is number => !!l && l < strike);
+        if (belowStrikeLevels.length > 0) {
+          const nearest = belowStrikeLevels.sort((a, b) => b - a)[0];
+          targetNear = `$${nearest.toFixed(2)}`;
+        } else {
+          targetNear = `$${(strike * 0.98).toFixed(2)}`;
         }
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
