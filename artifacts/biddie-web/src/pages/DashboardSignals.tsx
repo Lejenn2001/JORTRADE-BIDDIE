@@ -337,7 +337,7 @@ const DashboardSignals = () => {
           {/* Header */}
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">Live Signals</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">Decision Engine</h1>
               {wsConnected && (
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   <Radio className="h-2.5 w-2.5 animate-pulse" />
