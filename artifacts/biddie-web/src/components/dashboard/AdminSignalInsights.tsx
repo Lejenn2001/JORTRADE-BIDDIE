@@ -24,6 +24,17 @@ interface Signal {
   target_price?: string | null;
   invalidation?: string | null;
   entry_trigger?: string | null;
+  direction?: string;
+  max_favorable_price?: number | null;
+  mfe_percent?: number | null;
+  max_adverse_price?: number | null;
+  entry_price_reached?: boolean;
+  invalidation_breached?: boolean;
+  pct_past_invalidation?: number | null;
+  time_at_target?: string | null;
+  entry_price?: number | null;
+  key_level?: string | null;
+  sr_level?: string | null;
 }
 
 interface SignalDetail {
@@ -36,6 +47,15 @@ interface SignalDetail {
     invalidation: string | null;
     entry_trigger: string | null;
     reason: string | null;
+    alertPrice: number | null;
+    targetPrice: number | null;
+    invalidationPrice: number | null;
+    pctProfitAchieved: number | null;
+    pctToTarget: number | null;
+    entryPriceReached: boolean;
+    invalidationBreached: boolean;
+    pctPastInvalidation: number | null;
+    timeAtTarget: string | null;
   };
   priceHistory: {
     bars: Array<{ time: string; open: number; high: number; low: number; close: number; volume: number }>;
@@ -338,6 +358,45 @@ const AdminSignalInsights = () => {
         case "score": return ((a.confidence || 0) - (b.confidence || 0)) * dir;
         case "source": return (a.category || "").localeCompare(b.category || "") * dir;
         case "entry": return ((a.price_at_signal || 0) - (b.price_at_signal || 0)) * dir;
+        case "target": {
+          const parseP = (t?: string | null) => { const m = t?.match(/\$([0-9]+\.?[0-9]*)/); return m ? parseFloat(m[1]) : 0; };
+          return (parseP(a.target_price) - parseP(b.target_price)) * dir;
+        }
+        case "invalidation": {
+          const parseP = (t?: string | null) => { const m = t?.match(/\$([0-9]+\.?[0-9]*)/); return m ? parseFloat(m[1]) : 0; };
+          return (parseP(a.invalidation) - parseP(b.invalidation)) * dir;
+        }
+        case "pctProfit": {
+          const calcPct = (s: Signal) => {
+            const alert = s.price_at_signal ? Number(s.price_at_signal) : 0;
+            const mfp = s.max_favorable_price ? Number(s.max_favorable_price) : 0;
+            if (!alert || !mfp) return -999;
+            return s.signal_type === "bullish" ? ((mfp - alert) / alert) * 100 : ((alert - mfp) / alert) * 100;
+          };
+          return (calcPct(a) - calcPct(b)) * dir;
+        }
+        case "pctTarget": {
+          const calcTgt = (s: Signal) => {
+            const alert = s.price_at_signal ? Number(s.price_at_signal) : 0;
+            const mfp = s.max_favorable_price ? Number(s.max_favorable_price) : 0;
+            const tgtM = s.target_price?.match(/\$([0-9]+\.?[0-9]*)/);
+            const tgt = tgtM ? parseFloat(tgtM[1]) : 0;
+            if (!alert || !mfp || !tgt) return -999;
+            const dist = Math.abs(tgt - alert);
+            if (dist <= 0) return -999;
+            const fav = s.signal_type === "bullish" ? mfp - alert : alert - mfp;
+            return Math.max(0, (fav / dist) * 100);
+          };
+          return (calcTgt(a) - calcTgt(b)) * dir;
+        }
+        case "reachedEntry": return ((a.entry_price_reached ? 1 : 0) - (b.entry_price_reached ? 1 : 0)) * dir;
+        case "breachedInv": return ((a.invalidation_breached ? 1 : 0) - (b.invalidation_breached ? 1 : 0)) * dir;
+        case "pctPastInv": return ((a.pct_past_invalidation || 0) - (b.pct_past_invalidation || 0)) * dir;
+        case "timeAtTarget": {
+          const at = a.time_at_target ? new Date(a.time_at_target).getTime() : 0;
+          const bt = b.time_at_target ? new Date(b.time_at_target).getTime() : 0;
+          return (at - bt) * dir;
+        }
         case "aipick": {
           const aIsAI = Number(a.confidence) >= 9.5 ? 1 : 0;
           const bIsAI = Number(b.confidence) >= 9.5 ? 1 : 0;
@@ -649,13 +708,17 @@ const AdminSignalInsights = () => {
                   { key: "status", label: "Status" },
                   { key: "detected", label: "Detected" },
                   { key: "ticker", label: "Ticker" },
-                  { key: "direction", label: "Direction" },
-                  { key: "strike", label: "Strike" },
-                  { key: "expiry", label: "Expiration" },
-                  { key: "source", label: "Source" },
-                  { key: "entry", label: "Entry $" },
+                  { key: "direction", label: "Dir" },
+                  { key: "entry", label: "Alert $" },
+                  { key: "target", label: "Target $" },
+                  { key: "invalidation", label: "Inval $" },
+                  { key: "pctProfit", label: "% Profit" },
+                  { key: "pctTarget", label: "% to Tgt" },
+                  { key: "reachedEntry", label: "Entry?" },
+                  { key: "breachedInv", label: "Inval?" },
+                  { key: "pctPastInv", label: "% Past Inv" },
+                  { key: "timeAtTarget", label: "Time @ Tgt" },
                   { key: "score", label: "Score" },
-                  { key: "aipick", label: "Biddie AI Pick" },
                 ].map(col => (
                   <th
                     key={col.key}
@@ -722,25 +785,65 @@ const AdminSignalInsights = () => {
                           </span>
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.strike ? `$${s.strike}` : "—"}</td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.expiry || "—"}</td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{s.category || "—"}</td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{s.price_at_signal ? `$${Number(s.price_at_signal).toFixed(2)}` : "—"}</td>
-                      <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
-                      <td className="px-4 py-2 text-center">
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{(() => {
+                        const m = s.target_price?.match(/\$([0-9]+\.?[0-9]*)/);
+                        return m ? `$${parseFloat(m[1]).toFixed(2)}` : "—";
+                      })()}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{(() => {
+                        const m = s.invalidation?.match(/\$([0-9]+\.?[0-9]*)/);
+                        return m ? `$${parseFloat(m[1]).toFixed(2)}` : "—";
+                      })()}</td>
+                      <td className="px-4 py-2 text-xs font-semibold">{(() => {
+                        const alertP = s.price_at_signal ? Number(s.price_at_signal) : null;
+                        const mfp = s.max_favorable_price ? Number(s.max_favorable_price) : null;
+                        if (!alertP || !mfp || alertP <= 0) return <span className="text-muted-foreground">—</span>;
+                        const isBull = s.signal_type === "bullish";
+                        const pct = isBull ? ((mfp - alertP) / alertP) * 100 : ((alertP - mfp) / alertP) * 100;
+                        return <span className={pct >= 0 ? "text-emerald-400" : "text-destructive"}>{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</span>;
+                      })()}</td>
+                      <td className="px-4 py-2 text-xs font-semibold">{(() => {
+                        const alertP = s.price_at_signal ? Number(s.price_at_signal) : null;
+                        const mfp = s.max_favorable_price ? Number(s.max_favorable_price) : null;
+                        const tgtM = s.target_price?.match(/\$([0-9]+\.?[0-9]*)/);
+                        const tgtP = tgtM ? parseFloat(tgtM[1]) : null;
+                        if (!alertP || !mfp || !tgtP || alertP <= 0) return <span className="text-muted-foreground">—</span>;
+                        const isBull = s.signal_type === "bullish";
+                        const totalDist = Math.abs(tgtP - alertP);
+                        if (totalDist <= 0) return <span className="text-muted-foreground">—</span>;
+                        const favorable = isBull ? mfp - alertP : alertP - mfp;
+                        const pct = Math.min(Math.max((favorable / totalDist) * 100, 0), 999);
+                        return <span className={pct >= 100 ? "text-emerald-400" : pct >= 50 ? "text-amber-400" : "text-muted-foreground"}>{pct.toFixed(0)}%</span>;
+                      })()}</td>
+                      <td className="px-4 py-2 text-xs text-center">
                         <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          Number(s.confidence) >= 9.5
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-400/30"
-                            : "bg-muted/30 text-muted-foreground border border-border/20"
-                        }`}>
-                          {Number(s.confidence) >= 9.5 ? "Y" : "N"}
-                        </span>
+                          s.entry_price_reached
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-muted/30 text-muted-foreground"
+                        }`}>{s.entry_price_reached ? "Y" : "N"}</span>
                       </td>
+                      <td className="px-4 py-2 text-xs text-center">
+                        <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          s.invalidation_breached
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-muted/30 text-muted-foreground"
+                        }`}>{s.invalidation_breached ? "Y" : "N"}</span>
+                      </td>
+                      <td className="px-4 py-2 text-xs font-semibold">
+                        {s.pct_past_invalidation != null ? (
+                          <span className="text-destructive">-{Number(s.pct_past_invalidation).toFixed(2)}%</span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{s.time_at_target ? (() => {
+                        const d = new Date(s.time_at_target);
+                        return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+                      })() : "—"}</td>
+                      <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
                     </tr>
                     <AnimatePresence>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={11} className="p-0">
+                          <td colSpan={15} className="p-0">
                             <motion.div
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
@@ -788,10 +891,30 @@ const AdminSignalInsights = () => {
                                       <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
                                         <div className="flex items-center gap-1.5 mb-1">
                                           <Crosshair className="h-3.5 w-3.5 text-blue-400" />
-                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Entry Price</span>
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Alert Price</span>
                                         </div>
                                         <p className="text-sm font-bold text-foreground">
-                                          {detail.signal.entryPrice ? `$${detail.signal.entryPrice.toFixed(2)}` : "—"}
+                                          {detail.signal.alertPrice ? `$${detail.signal.alertPrice.toFixed(2)}` : "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Target className="h-3.5 w-3.5 text-amber-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Target Price</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-foreground">
+                                          {detail.signal.targetPrice ? `$${detail.signal.targetPrice.toFixed(2)}` : "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <XCircle className="h-3.5 w-3.5 text-red-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Invalidation Price</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-foreground">
+                                          {detail.signal.invalidationPrice ? `$${detail.signal.invalidationPrice.toFixed(2)}` : "—"}
                                         </p>
                                       </div>
 
@@ -804,7 +927,9 @@ const AdminSignalInsights = () => {
                                           {detail.priceHistory?.currentPrice ? `$${detail.priceHistory.currentPrice.toFixed(2)}` : "—"}
                                         </p>
                                       </div>
+                                    </div>
 
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                       <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
                                         <div className="flex items-center gap-1.5 mb-1">
                                           <ArrowUp className="h-3.5 w-3.5 text-emerald-400" />
@@ -834,26 +959,62 @@ const AdminSignalInsights = () => {
                                           </span>
                                         ) : null}
                                       </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                      <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                                      <div className={`rounded-lg p-3 border ${detail.signal.pctProfitAchieved != null && detail.signal.pctProfitAchieved > 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/15 border-border/20"}`}>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">% Profit Achieved</span>
+                                        </div>
+                                        <p className={`text-sm font-bold ${detail.signal.pctProfitAchieved != null && detail.signal.pctProfitAchieved > 0 ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                          {detail.signal.pctProfitAchieved != null ? `${detail.signal.pctProfitAchieved >= 0 ? "+" : ""}${detail.signal.pctProfitAchieved.toFixed(2)}%` : "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className={`rounded-lg p-3 border ${detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 100 ? "bg-emerald-500/10 border-emerald-500/20" : detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-muted/15 border-border/20"}`}>
                                         <div className="flex items-center gap-1.5 mb-1">
                                           <Target className="h-3.5 w-3.5 text-amber-400" />
-                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Target</span>
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">% to Target</span>
                                         </div>
-                                        <p className="text-xs text-foreground leading-relaxed">
-                                          {detail.signal.target || s.target_price || "Not specified"}
+                                        <p className={`text-sm font-bold ${detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 100 ? "text-emerald-400" : detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 50 ? "text-amber-400" : "text-muted-foreground"}`}>
+                                          {detail.signal.pctToTarget != null ? `${detail.signal.pctToTarget.toFixed(1)}%` : "—"}
                                         </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                      <div className={`rounded-lg p-3 border ${detail.signal.entryPriceReached ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/15 border-border/20"}`}>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Crosshair className="h-3.5 w-3.5 text-blue-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Reached Entry?</span>
+                                        </div>
+                                        <p className={`text-sm font-bold ${detail.signal.entryPriceReached ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                          {detail.signal.entryPriceReached ? "YES" : "NO"}
+                                        </p>
+                                      </div>
+
+                                      <div className={`rounded-lg p-3 border ${detail.signal.invalidationBreached ? "bg-red-500/10 border-red-500/20" : "bg-muted/15 border-border/20"}`}>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Breached Invalidation?</span>
+                                        </div>
+                                        <p className={`text-sm font-bold ${detail.signal.invalidationBreached ? "text-destructive" : "text-muted-foreground"}`}>
+                                          {detail.signal.invalidationBreached ? "YES" : "NO"}
+                                        </p>
+                                        {detail.signal.pctPastInvalidation != null && (
+                                          <span className="text-[10px] text-destructive/70">-{detail.signal.pctPastInvalidation.toFixed(2)}% past</span>
+                                        )}
                                       </div>
 
                                       <div className="bg-muted/15 rounded-lg p-3 border border-border/20">
                                         <div className="flex items-center gap-1.5 mb-1">
-                                          <XCircle className="h-3.5 w-3.5 text-red-400" />
-                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Invalidation</span>
+                                          <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Time at Target</span>
                                         </div>
-                                        <p className="text-xs text-foreground leading-relaxed">
-                                          {detail.signal.invalidation || s.invalidation || "Not specified"}
+                                        <p className="text-xs text-foreground">
+                                          {detail.signal.timeAtTarget ? (() => {
+                                            const d = new Date(detail.signal.timeAtTarget);
+                                            return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+                                          })() : "Not reached"}
                                         </p>
                                       </div>
 

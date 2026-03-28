@@ -2375,7 +2375,10 @@ router.get("/whale/signals/calendar", async (req, res) => {
     const result = await dbQuery(
       `SELECT id, ticker, signal_type, option_type AS "put_call", confidence, strike, expiry,
               outcome, created_at, detected_at, resolved_at, category, price_at_signal,
-              target AS target_price, invalidation, entry_trigger
+              target AS target_price, invalidation, entry_trigger, direction,
+              max_favorable_price, mfe_percent, max_adverse_price,
+              entry_price_reached, invalidation_breached, pct_past_invalidation,
+              time_at_target, entry_price, key_level, sr_level
        FROM signal_outcomes
        WHERE signal_source = 'replit'
        ORDER BY detected_at DESC
@@ -2405,7 +2408,10 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
     const result = await dbQuery(
       `SELECT id, ticker, signal_type, option_type, confidence, strike, expiry,
               outcome, created_at, detected_at, resolved_at, category, price_at_signal,
-              target, invalidation, entry_trigger, reason, direction
+              target, invalidation, entry_trigger, reason, direction,
+              max_favorable_price, mfe_percent, max_adverse_price,
+              entry_price_reached, invalidation_breached, pct_past_invalidation,
+              time_at_target, entry_price, key_level, sr_level
        FROM signal_outcomes WHERE id = $1`,
       [id]
     );
@@ -2523,6 +2529,29 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
       explanation = `Signal is still being tracked. ${hoursAlive.toFixed(1)} hours since detection.`;
     }
 
+    const targetPrice = parsePrice(signal.target);
+    const invalidationPriceVal = parsePrice(signal.invalidation);
+    const alertPrice = signal.price_at_signal ? parseFloat(signal.price_at_signal) : null;
+    const mfp = signal.max_favorable_price ? parseFloat(signal.max_favorable_price) : null;
+
+    let pctProfitAchieved: number | null = null;
+    if (alertPrice && mfp && alertPrice > 0) {
+      if (isBullish) {
+        pctProfitAchieved = Math.round(((mfp - alertPrice) / alertPrice) * 10000) / 100;
+      } else {
+        pctProfitAchieved = Math.round(((alertPrice - mfp) / alertPrice) * 10000) / 100;
+      }
+    }
+
+    let pctToTarget: number | null = null;
+    if (alertPrice && targetPrice && alertPrice > 0) {
+      const totalDistance = Math.abs(targetPrice - alertPrice);
+      if (totalDistance > 0 && mfp) {
+        const favorable = isBullish ? mfp - alertPrice : alertPrice - mfp;
+        pctToTarget = Math.min(Math.round((Math.max(0, favorable) / totalDistance) * 10000) / 100, 999);
+      }
+    }
+
     res.json({
       signal: {
         ...signal,
@@ -2530,6 +2559,15 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
         entryPrice,
         timeToResolve: timeToResolve ? `${timeToResolve}h` : null,
         explanation,
+        alertPrice,
+        targetPrice,
+        invalidationPrice: invalidationPriceVal,
+        pctProfitAchieved,
+        pctToTarget,
+        entryPriceReached: signal.entry_price_reached || false,
+        invalidationBreached: signal.invalidation_breached || false,
+        pctPastInvalidation: signal.pct_past_invalidation ? parseFloat(signal.pct_past_invalidation) : null,
+        timeAtTarget: signal.time_at_target || null,
       },
       priceHistory,
     });
@@ -3568,15 +3606,54 @@ async function realtimeVerifySignals() {
         }
       }
 
-      if (shouldUpdateMfp) {
+      const maPrice = isBullish ? history.lowSince : history.highSince;
+      const prevMap = signal.max_adverse_price ? parseFloat(signal.max_adverse_price) : null;
+      const newMap = isBullish
+        ? Math.min(maPrice, prevMap ?? Infinity)
+        : Math.max(maPrice, prevMap ?? -Infinity);
+      const shouldUpdateMap = prevMap === null || (isBullish ? newMap < prevMap : newMap > prevMap);
+
+      const entryPriceVal = entryPrice || signalPrice || 0;
+      let didReachEntry = signal.entry_price_reached || false;
+      if (!didReachEntry && entryPriceVal > 0) {
+        if (isBullish && history.highSince >= entryPriceVal) didReachEntry = true;
+        else if (!isBullish && history.lowSince <= entryPriceVal) didReachEntry = true;
+      }
+
+      let didBreachInvalidation = signal.invalidation_breached || false;
+      let pctPastInv: number | null = signal.pct_past_invalidation ? parseFloat(signal.pct_past_invalidation) : null;
+      if (invalidationPrice && invalidationPrice > 0) {
+        if (isBullish && history.lowSince <= invalidationPrice) {
+          didBreachInvalidation = true;
+          const pct = Math.round(((invalidationPrice - history.lowSince) / invalidationPrice) * 10000) / 100;
+          if (pctPastInv === null || pct > pctPastInv) pctPastInv = pct;
+        } else if (!isBullish && history.highSince >= invalidationPrice) {
+          didBreachInvalidation = true;
+          const pct = Math.round(((history.highSince - invalidationPrice) / invalidationPrice) * 10000) / 100;
+          if (pctPastInv === null || pct > pctPastInv) pctPastInv = pct;
+        }
+      }
+
+      let timeAtTarget = signal.time_at_target || null;
+      if (!timeAtTarget && outcome === "hit" && target_val.low && target_val.high) {
+        timeAtTarget = now.toISOString();
+      }
+
+      if (shouldUpdateMfp || shouldUpdateMap || didReachEntry !== (signal.entry_price_reached || false) || didBreachInvalidation !== (signal.invalidation_breached || false)) {
         await dbQuery(
-          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2 WHERE id = $3`,
-          [newMfp, mfePct, signal.id]
+          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2, max_adverse_price = $3, entry_price_reached = $4, invalidation_breached = $5, pct_past_invalidation = $6, entry_price = $7 WHERE id = $8`,
+          [newMfp, mfePct, newMap, didReachEntry, didBreachInvalidation, pctPastInv, entryPriceVal > 0 ? entryPriceVal : null, signal.id]
         );
       }
 
       if (outcome) {
-        await dbQuery(`UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`, [outcome, now.toISOString(), signal.id]);
+        const updateFields = timeAtTarget
+          ? `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, time_at_target = $3 WHERE id = $4`
+          : `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`;
+        const updateParams = timeAtTarget
+          ? [outcome, now.toISOString(), timeAtTarget, signal.id]
+          : [outcome, now.toISOString(), signal.id];
+        await dbQuery(updateFields, updateParams);
         await dbQuery(
           `UPDATE user_trades SET signal_outcome = $1, resolved_at = $2 WHERE signal_id = $3`,
           [outcome === "expired" ? "missed" : outcome, now.toISOString(), signal.id]

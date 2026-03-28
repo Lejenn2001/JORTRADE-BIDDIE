@@ -31,6 +31,12 @@ export const signalOutcomes = pgTable("signal_outcomes", {
   mfePercent: numeric("mfe_percent", { precision: 8, scale: 2 }),
   keyLevel: text("key_level"),
   srLevel: text("sr_level"),
+  maxAdversePrice: numeric("max_adverse_price", { precision: 12, scale: 2 }),
+  entryPriceReached: boolean("entry_price_reached").default(false),
+  invalidationBreached: boolean("invalidation_breached").default(false),
+  pctPastInvalidation: numeric("pct_past_invalidation", { precision: 8, scale: 2 }),
+  timeAtTarget: timestamp("time_at_target", { withTimezone: true }),
+  entryPrice: numeric("entry_price", { precision: 12, scale: 2 }),
 }, (table) => [
   index("idx_signal_outcomes_ticker").on(table.ticker),
   index("idx_signal_outcomes_category").on(table.category),
