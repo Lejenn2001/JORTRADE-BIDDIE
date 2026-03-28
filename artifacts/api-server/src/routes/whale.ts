@@ -2883,7 +2883,7 @@ RULES:
 - If the market is quiet, be honest. "Not a lot moving pre-market, could be a choppy one — that's okay, patience pays"
 - Keep the whole thing under 350 words
 - This should feel like a friend texting the group chat, NOT a Bloomberg terminal
-- Use emoji naturally but don't overdo it (2-4 max for the whole post)
+- USE EMOJIS THROUGHOUT! 🔥💪👀🚀📈📉💰🤝😤🫡💎🧠⚡️🎯☀️ Sprinkle them in naturally like you're texting your boys. Every section should have some emoji energy
 - Reference actual data numbers, not vibes
 - If gap is > 0.5%, call it out prominently. If gap is > 1%, lead with it`;
 
