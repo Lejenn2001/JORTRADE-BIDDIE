@@ -63,9 +63,14 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
           : convictionScore >= 50
             ? "Moderate Conviction"
             : "Low Conviction",
-    description:
-      record.description || record.reason ||
-      `${putCall === "call" ? "Call" : "Put"} flow on ${record.ticker}${record.strike ? ` at ${record.strike}` : ""}.`,
+    description: (() => {
+      let desc = record.description || record.reason ||
+        `${putCall === "call" ? "Call" : "Put"} flow on ${record.ticker}${record.strike ? ` at ${record.strike}` : ""}.`;
+      if (record.price_at_signal && !desc.includes('Price at $')) {
+        desc += ` Price at $${Number(record.price_at_signal).toFixed(2)}.`;
+      }
+      return desc;
+    })(),
     timestamp: formatRelativeTimestamp(createdAt),
     tags,
     strike: record.strike ?? undefined,
@@ -80,6 +85,9 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     reason: record.reason,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
+    keyLevel: record.key_level,
+    srLevel: record.sr_level,
+    targetNear: record.target_near || undefined,
     aiEvaluated: true,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
