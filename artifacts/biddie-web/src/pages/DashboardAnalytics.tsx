@@ -513,19 +513,27 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
                 const priceInfo = getPrice(trade.ticker);
                 const currentPrice = priceInfo?.price ?? null;
                 const isBullish = (trade.signal_type || trade.direction) === "bullish";
-                const showProgress = trade.signal_outcome !== "hit" && trade.signal_outcome !== "missed" && targetPrice && entryPrice && currentPrice;
+                const isPending = trade.signal_outcome !== "hit" && trade.signal_outcome !== "missed";
+                const hasEntryAndLive = entryPrice && currentPrice;
+                const showProgress = hasEntryAndLive;
 
                 let pct = 0;
                 let barColor = "bg-orange-400";
-                let label = "0% to Target";
+                let label = "Tracking...";
                 let currentMove = 0;
 
                 if (showProgress) {
-                  pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
-                  const pctRounded = Math.round(pct);
-                  barColor = pct >= 100 ? "bg-emerald-400" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-400" : pct >= 25 ? "bg-amber-400" : "bg-orange-400";
-                  label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
                   currentMove = isBullish ? currentPrice! - entryPrice! : entryPrice! - currentPrice!;
+                  if (targetPrice) {
+                    pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
+                    const pctRounded = Math.round(pct);
+                    barColor = pct >= 100 ? "bg-emerald-400" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-400" : pct >= 25 ? "bg-amber-400" : "bg-orange-400";
+                    label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
+                  } else {
+                    barColor = currentMove >= 0 ? "bg-emerald-400" : "bg-red-400";
+                    label = currentMove >= 0 ? "In Profit" : "Underwater";
+                    pct = 50 + Math.min(Math.max(currentMove / (entryPrice! * 0.05) * 50, -50), 50);
+                  }
                 }
 
                 return (
@@ -583,9 +591,9 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
                           />
                         </div>
                         <div className="flex justify-between text-[9px] text-muted-foreground">
-                          <span>Entry: ${entryPrice!.toFixed(2)}</span>
-                          <span className="text-foreground font-medium">${currentPrice!.toFixed(2)}</span>
-                          <span>Target: ${targetPrice!.toFixed(2)}</span>
+                          <span>Signal: ${entryPrice!.toFixed(2)}</span>
+                          <span className="text-foreground font-medium">Now: ${currentPrice!.toFixed(2)}</span>
+                          {targetPrice ? <span>Target: ${targetPrice.toFixed(2)}</span> : <span />}
                         </div>
                       </div>
                     )}
