@@ -59,6 +59,16 @@ const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
 
 const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] || "";
 const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
+const SUPABASE_SERVICE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] || SUPABASE_KEY;
+
+function supabaseAdminHeaders() {
+  return {
+    apikey: SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+  };
+}
 
 const pool = new pg.Pool({ connectionString: process.env["DATABASE_URL"] });
 
@@ -3746,10 +3756,16 @@ router.post("/whale/admin/update-plan", async (req, res) => {
     if (!userId || !plan) return res.status(400).json({ error: "userId and plan required" });
     if (!["starter", "active", "pro"].includes(plan)) return res.status(400).json({ error: "Invalid plan" });
 
-    await dbQuery(`UPDATE profiles SET selected_plan = $1 WHERE id = $2`, [plan, userId]);
+    const sbRes = await axios.patch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`,
+      { selected_plan: plan },
+      { headers: supabaseAdminHeaders(), timeout: 5000 }
+    );
+    console.log(`[admin] Updated plan for ${userId} to ${plan} (status: ${sbRes.status})`);
     res.json({ success: true, userId, plan });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error("[admin] update-plan error:", e.response?.data || e.message);
+    res.status(500).json({ error: e.response?.data?.message || e.message });
   }
 });
 
@@ -3763,16 +3779,22 @@ router.post("/whale/admin/toggle-admin", async (req, res) => {
     if (!userId) return res.status(400).json({ error: "userId required" });
 
     if (makeAdmin) {
-      await dbQuery(
-        `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT (user_id, role) DO NOTHING`,
-        [userId]
+      await axios.post(
+        `${SUPABASE_URL}/rest/v1/user_roles`,
+        { user_id: userId, role: "admin" },
+        { headers: { ...supabaseAdminHeaders(), Prefer: "resolution=ignore-duplicates,return=minimal" }, timeout: 5000 }
       );
     } else {
-      await dbQuery(`DELETE FROM user_roles WHERE user_id = $1 AND role = 'admin'`, [userId]);
+      await axios.delete(
+        `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&role=eq.admin`,
+        { headers: supabaseAdminHeaders(), timeout: 5000 }
+      );
     }
+    console.log(`[admin] Toggle admin for ${userId}: ${makeAdmin}`);
     res.json({ success: true, userId, isAdmin: !!makeAdmin });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    console.error("[admin] toggle-admin error:", e.response?.data || e.message);
+    res.status(500).json({ error: e.response?.data?.message || e.message });
   }
 });
 
