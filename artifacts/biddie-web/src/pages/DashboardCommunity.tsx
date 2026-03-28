@@ -95,11 +95,7 @@ const DashboardCommunity = () => {
   }, [session?.user?.id, firstName]);
 
   const shouldBiddieRespond = (text: string): boolean => {
-    const lower = text.toLowerCase();
-    if (/\b(biddie|@biddie)\b/i.test(lower)) return true;
-    const tradingWords = ["play", "trade", "call", "put", "flow", "ticker", "setup", "entry", "strike", "sweep", "whale", "breakout", "signal", "what's the move", "any plays", "premarket", "news", "market", "spy", "qqq", "options"];
-    if (tradingWords.some(w => lower.includes(w))) return true;
-    return false;
+    return /\b(biddie|@biddie)\b/i.test(text.toLowerCase());
   };
 
   const triggerBiddie = async (userMessage: string) => {

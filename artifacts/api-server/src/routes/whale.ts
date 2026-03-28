@@ -3029,6 +3029,24 @@ let lastBiddiePost = 0;
 const MIN_POST_GAP_MS = 20 * 60 * 1000;
 let flowMonitorStarted = false;
 
+async function postBiddieToChat(content: string): Promise<boolean> {
+  try {
+    await axios.post(
+      `${SUPABASE_URL}/rest/v1/chat_messages`,
+      { user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content },
+      { headers: { ...supabaseAdminHeaders(), Prefer: "return=minimal" }, timeout: 5000 }
+    );
+    return true;
+  } catch (e: any) {
+    console.error("[Biddie] Supabase insert failed, falling back to local:", e.message);
+    const r = await dbQuery(
+      `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+      [BIDDIE_USER_ID, "assistant", content, "Biddie AI"]
+    );
+    return !!r;
+  }
+}
+
 const FLOW_WATCH_SYSTEM = `You are Biddie AI — the trading homie for the JORTRADE community. You're watching the tape and just spotted something the crew needs to know about.
 
 YOUR PERSONALITY: You're that sharp friend in the group chat who only speaks up when something real is happening. When you talk, people pay attention because you don't waste their time. You're excited when you spot heat, cautious when something looks sketchy, and always keep it 100. Casual, confident, real — like texting your trading friends.
@@ -3091,11 +3109,19 @@ function startFlowMonitor() {
     if (hour !== 7 || minute < 0 || minute > 15) return;
 
     const today = new Date().toISOString().split("T")[0];
-    const existingResult = await dbQuery(
-      `SELECT id FROM chat_messages WHERE user_id = $1 AND created_at >= $2 LIMIT 1`,
-      [BIDDIE_USER_ID, `${today}T00:00:00Z`]
-    );
-    if (existingResult && existingResult.rows.length > 0) return;
+    try {
+      const existCheck = await axios.get(
+        `${SUPABASE_URL}/rest/v1/chat_messages?user_id=eq.${BIDDIE_USER_ID}&created_at=gte.${today}T00:00:00Z&limit=1`,
+        { headers: supabaseAdminHeaders(), timeout: 5000 }
+      );
+      if (existCheck.data?.length > 0) return;
+    } catch {
+      const existingResult = await dbQuery(
+        `SELECT id FROM chat_messages WHERE user_id = $1 AND created_at >= $2 LIMIT 1`,
+        [BIDDIE_USER_ID, `${today}T00:00:00Z`]
+      );
+      if (existingResult && existingResult.rows.length > 0) return;
+    }
 
     try {
       const { now, dateContext, context } = await buildMorningContext();
@@ -3107,15 +3133,12 @@ function startFlowMonitor() {
         messages: [{ role: "user", content: `Say good morning to the JORTRADE chat and drop the morning outlook. Start with a genuine, warm greeting to the community — make people feel welcome and hyped for the day. Then get into the market read.\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${dateContext}\n\n--- PRE-MARKET PRICES (LIVE) ---\n${Object.entries(context.gap_summary).map(([t, s]) => `${t}: ${s}`).join("\n") || "No pre-market data available yet"}\n\n--- FULL MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\`\n\nUse the actual pre-market prices above — those are live. Remember: GM to the chat FIRST, then the market read.` }],
       });
       const content = response.content[0].type === "text" ? response.content[0].text : "";
-      const insertRes = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
-        [BIDDIE_USER_ID, "assistant", content, "Biddie AI"]
-      );
-      if (!insertRes) {
-        console.error(`[Biddie morning] Insert failed`);
-      } else {
+      const posted = await postBiddieToChat(content);
+      if (posted) {
         lastBiddiePost = Date.now();
         console.log(`[Biddie morning] Posted at ${now}`);
+      } else {
+        console.error(`[Biddie morning] Insert failed`);
       }
     } catch (err) { console.error("[Biddie morning] Failed:", err); }
   }, 60000);
@@ -3183,15 +3206,12 @@ function startFlowMonitor() {
 
       if (content.includes("NOTHING_NOTABLE") || content.trim().length < 20) return;
 
-      const flowInsert = await dbQuery(
-        `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
-        [BIDDIE_USER_ID, "assistant", content, "Biddie AI"]
-      );
-      if (!flowInsert) {
-        console.error(`[Biddie flow alert] Insert failed`);
-      } else {
+      const posted = await postBiddieToChat(content);
+      if (posted) {
         lastBiddiePost = Date.now();
         console.log(`[Biddie flow alert] Posted at ${now}`);
+      } else {
+        console.error(`[Biddie flow alert] Insert failed`);
       }
     } catch (err) { console.error("[Biddie flow monitor] Failed:", err); }
   }, 5 * 60 * 1000);
