@@ -2909,6 +2909,33 @@ router.post("/whale/verify-signals", async (_req, res) => {
   }
 });
 
+router.post("/whale/fix-targets", async (_req, res) => {
+  try {
+    const result = await dbQuery(`
+      WITH parsed AS (
+        SELECT id, ticker, direction, price_at_signal, target,
+          (regexp_matches(target, '\\$([0-9]+\\.?[0-9]*)'))[1]::numeric as first_target_price
+        FROM signal_outcomes 
+        WHERE signal_source = 'replit' AND price_at_signal IS NOT NULL AND target IS NOT NULL
+      )
+      UPDATE signal_outcomes so
+      SET target = CASE
+        WHEN p.direction = 'bullish' THEN '$' || ROUND(p.price_at_signal * 1.02, 2)::text
+        WHEN p.direction = 'bearish' THEN '$' || ROUND(p.price_at_signal * 0.98, 2)::text
+      END
+      FROM parsed p
+      WHERE so.id = p.id
+        AND (
+          (p.direction = 'bullish' AND p.first_target_price < p.price_at_signal)
+          OR (p.direction = 'bearish' AND p.first_target_price > p.price_at_signal)
+        )
+    `);
+    res.json({ ok: true, rowCount: result.rowCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/whale/backfill-mfe", async (_req, res) => {
   try {
     const result = await dbQuery(
