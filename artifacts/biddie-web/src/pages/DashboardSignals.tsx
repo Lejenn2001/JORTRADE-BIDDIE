@@ -621,7 +621,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
               <TrendingUp className="h-3 w-3 text-primary mt-0.5 shrink-0" />
               <div className="min-w-0">
-                <span className="text-muted-foreground">Entry: </span>
+                <span className="text-muted-foreground">Trigger: </span>
                 <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
               </div>
             </div>
