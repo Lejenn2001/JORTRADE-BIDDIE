@@ -216,7 +216,9 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const all = [...(signalHistory || []), ...dbSignals, ...liveSignals];
+    const dbIds = new Set(dbSignals.map(s => s.id));
+    const filteredHistory = (signalHistory || []).filter(s => dbIds.has(s.id));
+    const all = [...filteredHistory, ...dbSignals, ...liveSignals];
     const bestPerTickerCategory = new Map<string, MarketSignal>();
     for (const s of all) {
       const key = `${s.ticker}|${s.category || 'algorithm'}`;
