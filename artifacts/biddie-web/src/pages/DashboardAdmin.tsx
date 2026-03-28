@@ -637,6 +637,118 @@ const DashboardAdmin = () => {
                   </div>
                 </div>
 
+                {/* Signal Card UI Legend */}
+                <div className="glass-panel rounded-xl p-6 border-border/40">
+                  <h3 className="text-lg font-bold text-foreground mb-4">Signal Card UI Legend</h3>
+                  <p className="text-xs text-muted-foreground mb-4">What every icon, label, and badge means on a signal card.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-muted-foreground text-xs font-mono">Alert: $XXX.XX</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">The stock price at the exact moment Biddie detected the signal. This is the price when the alert fired — NOT when you entered the trade.</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center gap-1 text-xs font-mono"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" /> $XXX.XX</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Live price from the Polygon.io websocket feed. Updates in real-time during market hours. The pulsing green dot means the feed is active.</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">CALL</span>
+                        <span className="bg-destructive/20 text-destructive text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">PUT</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">The direction of the options flow. CALL = bullish bet (price going up). PUT = bearish bet (price going down).</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-amber-500/20 text-amber-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">0DTE</span>
+                        <span className="bg-blue-500/20 text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Swing</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">0DTE = same-day expiration (day trade). Swing = multi-day hold (1-5+ days). Determines the urgency and time horizon of the trade.</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-blue-500/20 text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Whale</span>
+                        <span className="bg-violet-500/20 text-violet-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Spread</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Whale = large institutional order ($100K+ premium). Spread = multi-leg strategy (debit spreads, butterflies). No badge = Algorithm play (standard single-leg).</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-emerald-500/30 text-emerald-300 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border border-emerald-400/30">AI</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Biddie AI evaluated this signal. Claude analyzed the flow, checked for hedges, and assigned the confidence score. All dashboard signals have this.</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-8 h-8 rounded-full border-2 border-emerald-400 flex items-center justify-center text-[10px] font-bold text-emerald-400">85</div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Conviction Score Ring — the circular gauge on each card. Score from 0-100 based on premium, aggression, sweep status, volume, and AI analysis. Higher = stronger signal.</p>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-muted-foreground">▼ / ▲ chevron</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Click anywhere on the card to expand/collapse details. Shows trade setup, entry trigger, target, invalidation, key levels, gamma zone, and the "I Took This Trade" button.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* My Trades / Progress Bar Legend */}
+                <div className="glass-panel rounded-xl p-6 border-border/40">
+                  <h3 className="text-lg font-bold text-foreground mb-4">My Trades — Progress Bar</h3>
+                  <p className="text-xs text-muted-foreground mb-4">When you click "I Took This Trade," the trade appears in your My Trades tab with a progress bar tracking it toward the target.</p>
+                  <div className="space-y-3">
+                    <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                      <p className="text-sm font-semibold text-foreground mb-2">How the progress bar works:</p>
+                      <div className="w-full h-3 bg-muted/40 rounded-full overflow-hidden mb-2">
+                        <div className="h-full rounded-full bg-blue-400" style={{ width: "50%" }} />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground mb-3">
+                        <span>Entry: $570.00</span>
+                        <span className="text-foreground font-medium">$575.00</span>
+                        <span>Target: $580.00</span>
+                      </div>
+                      <ul className="text-xs text-muted-foreground space-y-1.5">
+                        <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> <strong>Entry (left):</strong> The stock price when YOU clicked "I Took This Trade" — your actual entry point</li>
+                        <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> <strong>Current price (middle):</strong> The live stock price right now. Its position on the bar shows how far you are toward the target</li>
+                        <li className="flex items-start gap-2"><span className="text-primary mt-0.5">&#9679;</span> <strong>Target (right):</strong> The price target Biddie set for the signal (based on R1, S1, VWAP, PDH/PDL)</li>
+                        <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> <strong>% to Target:</strong> How much of the move from entry to target has been achieved (50% = halfway there)</li>
+                        <li className="flex items-start gap-2"><span className="text-foreground mt-0.5">&#9679;</span> <strong>+/- Dollar amount:</strong> How much the stock has moved in your favor (or against you) since entry</li>
+                      </ul>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                      <p className="text-sm font-semibold text-foreground mb-2">Bar colors:</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                        <div className="flex items-center gap-2"><span className="w-4 h-2 rounded bg-orange-400" /> 0-24%</div>
+                        <div className="flex items-center gap-2"><span className="w-4 h-2 rounded bg-amber-400" /> 25-49%</div>
+                        <div className="flex items-center gap-2"><span className="w-4 h-2 rounded bg-blue-400" /> 50-74%</div>
+                        <div className="flex items-center gap-2"><span className="w-4 h-2 rounded bg-emerald-500" /> 75-99%</div>
+                        <div className="flex items-center gap-2"><span className="w-4 h-2 rounded bg-emerald-400" /> 100% Hit!</div>
+                      </div>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                      <p className="text-sm font-semibold text-foreground mb-2">Trade outcomes:</p>
+                      <div className="flex flex-wrap gap-3 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-md">WIN</span>
+                          <span className="text-muted-foreground">Price hit the target zone</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-red-500/20 text-red-400 font-bold px-2 py-0.5 rounded-md">LOSS</span>
+                          <span className="text-muted-foreground">Price hit invalidation or expired</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-yellow-500/20 text-yellow-400 font-bold px-2 py-0.5 rounded-md">PENDING</span>
+                          <span className="text-muted-foreground">Still active — tracking toward target</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Conviction Scoring */}
                 <div className="glass-panel rounded-xl p-6 border-border/40">
                   <h3 className="text-lg font-bold text-foreground mb-4">Conviction Scoring (0-100)</h3>
