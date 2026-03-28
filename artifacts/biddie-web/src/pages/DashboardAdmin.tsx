@@ -67,7 +67,7 @@ const DashboardAdmin = () => {
   const [chatCount, setChatCount] = useState(0);
   const [apiUsageToday, setApiUsageToday] = useState(0);
   const [apiUsageMinute, setApiUsageMinute] = useState(0);
-  const [systemHealth, setSystemHealth] = useState<{ name: string; status: string; details: string; url: string }[]>([]);
+  const [systemHealth, setSystemHealth] = useState<{ name: string; description: string; status: string; details: string; url: string; usage?: string }[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthChecked, setHealthChecked] = useState(false);
 
@@ -375,48 +375,6 @@ const DashboardAdmin = () => {
                   <StatCard icon={MessageSquare} label="Chat Messages" value={chatCount} color="bg-amber-500" />
                 </div>
 
-                <div className="glass-panel rounded-xl p-5 border-border/40">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Anchor className="h-4 w-4 text-primary" />
-                    <h2 className="text-sm font-semibold text-foreground">Unusual Whales API Usage</h2>
-                  </div>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-muted/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Per Minute</p>
-                      </div>
-                      <p className="text-xl font-bold text-foreground">{apiUsageMinute} <span className="text-sm font-normal text-muted-foreground">/ 120</span></p>
-                      <div className="mt-2 h-1.5 bg-muted/30 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${apiUsageMinute > 100 ? "bg-destructive" : apiUsageMinute > 60 ? "bg-amber-500" : "bg-emerald-500"}`}
-                          style={{ width: `${Math.min((apiUsageMinute / 120) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-muted/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Today</p>
-                      </div>
-                      <p className="text-xl font-bold text-foreground">{apiUsageToday.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ 15,000</span></p>
-                      <div className="mt-2 h-1.5 bg-muted/30 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${apiUsageToday > 12000 ? "bg-destructive" : apiUsageToday > 7500 ? "bg-amber-500" : "bg-emerald-500"}`}
-                          style={{ width: `${Math.min((apiUsageToday / 15000) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-muted/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Remaining Today</p>
-                      </div>
-                      <p className="text-xl font-bold text-foreground">{(15000 - apiUsageToday).toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground mt-1">requests left</p>
-                    </div>
-                  </div>
-                </div>
               </>
             );
           })()}
@@ -429,7 +387,7 @@ const DashboardAdmin = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Server className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-bold text-foreground">System Health</h3>
+                <h3 className="text-lg font-bold text-foreground">System Health & Services</h3>
               </div>
               <Button
                 size="sm"
@@ -443,45 +401,57 @@ const DashboardAdmin = () => {
               </Button>
             </div>
             {!healthChecked && !healthLoading ? (
-              <p className="text-sm text-muted-foreground">Loading health checks...</p>
+              <p className="text-sm text-muted-foreground">Checking all services...</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {systemHealth.map((svc) => (
                   <div
                     key={svc.name}
-                    className={`flex items-center justify-between rounded-lg px-4 py-3 ${
-                      svc.status === 'ok' ? 'bg-emerald-500/10 border border-emerald-500/20' :
-                      svc.status === 'warning' ? 'bg-amber-500/10 border border-amber-500/20' :
-                      'bg-red-500/10 border border-red-500/20'
+                    className={`rounded-xl overflow-hidden border ${
+                      svc.status === 'ok' ? 'border-emerald-500/20' :
+                      svc.status === 'warning' ? 'border-amber-500/20' :
+                      'border-red-500/20'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      {svc.status === 'ok' ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-                      ) : svc.status === 'warning' ? (
-                        <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-400 shrink-0" />
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{svc.name}</p>
-                        <p className={`text-xs ${
-                          svc.status === 'ok' ? 'text-emerald-400' :
-                          svc.status === 'warning' ? 'text-amber-400' :
-                          'text-red-400'
-                        }`}>{svc.details}</p>
+                    <div className={`flex items-center justify-between px-4 py-3 ${
+                      svc.status === 'ok' ? 'bg-emerald-500/10' :
+                      svc.status === 'warning' ? 'bg-amber-500/10' :
+                      'bg-red-500/10'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        {svc.status === 'ok' ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                        ) : svc.status === 'warning' ? (
+                          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-400 shrink-0" />
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-foreground">{svc.name}</p>
+                          <p className={`text-xs ${
+                            svc.status === 'ok' ? 'text-emerald-400' :
+                            svc.status === 'warning' ? 'text-amber-400' :
+                            'text-red-400'
+                          }`}>{svc.details}</p>
+                        </div>
                       </div>
+                      {svc.url && (
+                        <a
+                          href={svc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
+                        >
+                          Manage <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                     </div>
-                    {svc.url && (
-                      <a
-                        href={svc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Manage <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
+                    <div className="px-4 py-2.5 bg-muted/10 flex items-center justify-between">
+                      <p className="text-[11px] text-muted-foreground">{svc.description}</p>
+                      {svc.usage && (
+                        <p className="text-[11px] text-foreground/60 font-medium shrink-0 ml-4">{svc.usage}</p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

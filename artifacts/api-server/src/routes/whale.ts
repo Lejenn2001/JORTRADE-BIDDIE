@@ -4193,7 +4193,7 @@ router.get("/whale/admin/system-health", async (req, res) => {
       return res.status(403).json({ error: "Admin only" });
     }
 
-    const services: { name: string; status: string; details: string; url: string }[] = [];
+    const services: { name: string; description: string; status: string; details: string; url: string; usage?: string }[] = [];
 
     try {
       const r = await axios.get("https://api.polygon.io/v2/aggs/ticker/SPY/prev", {
@@ -4201,10 +4201,17 @@ router.get("/whale/admin/system-health", async (req, res) => {
         timeout: 5000,
       });
       const price = r.data?.results?.[0]?.c;
-      services.push({ name: "Polygon.io", status: "ok", details: price ? `Connected — SPY $${price}` : "Connected but no data", url: "https://polygon.io/dashboard" });
+      services.push({
+        name: "Polygon.io",
+        description: "All stock prices, charts, VWAP, pivot points, historical data",
+        status: "ok",
+        details: price ? `Connected — SPY $${price}` : "Connected but no data",
+        url: "https://polygon.io/dashboard",
+        usage: "Unlimited (paid plan)",
+      });
     } catch (e: any) {
       const msg = e.response?.status === 403 ? "Invalid or expired API key" : e.response?.status === 429 ? "Rate limited — may need higher plan" : e.message;
-      services.push({ name: "Polygon.io", status: "error", details: msg, url: "https://polygon.io/dashboard" });
+      services.push({ name: "Polygon.io", description: "All stock prices, charts, VWAP, pivot points, historical data", status: "error", details: msg, url: "https://polygon.io/dashboard" });
     }
 
     try {
@@ -4216,39 +4223,95 @@ router.get("/whale/admin/system-health", async (req, res) => {
         headers: { "x-api-key": process.env["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
         timeout: 10000,
       });
-      services.push({ name: "Anthropic (Claude AI)", status: "ok", details: "Connected — AI signal pipeline active", url: "https://console.anthropic.com" });
+      services.push({
+        name: "Anthropic (Claude AI)",
+        description: "AI brain — evaluates options flow and generates trade signals",
+        status: "ok",
+        details: "Connected — AI signal pipeline active",
+        url: "https://console.anthropic.com",
+        usage: "Pay-per-use credits",
+      });
     } catch (e: any) {
       const body = e.response?.data?.error?.message || "";
       let msg = "Unknown error";
       if (body.includes("credit balance")) msg = "Out of credits — add funds to resume AI signals";
       else if (e.response?.status === 401) msg = "Invalid API key";
       else if (body) msg = body;
-      services.push({ name: "Anthropic (Claude AI)", status: "error", details: msg, url: "https://console.anthropic.com" });
+      services.push({ name: "Anthropic (Claude AI)", description: "AI brain — evaluates options flow and generates trade signals", status: "error", details: msg, url: "https://console.anthropic.com" });
     }
 
+    let uwUsageMinute = 0;
+    let uwUsageToday = 0;
     try {
       const r = await axios.get("https://api.unusualwhales.com/api/stock/SPY/options-volume", {
         headers: { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"]}` },
         timeout: 5000,
       });
-      services.push({ name: "Unusual Whales", status: "ok", details: "Connected — options flow active", url: "https://unusualwhales.com/account" });
+      const uwHeaders = r.headers || {};
+      uwUsageMinute = parseInt(uwHeaders["x-ratelimit-remaining"] || "0");
+      uwUsageToday = parseInt(uwHeaders["x-ratelimit-daily-remaining"] || "0");
+      services.push({
+        name: "Unusual Whales",
+        description: "Options flow data — sweeps, premium, volume, open interest",
+        status: "ok",
+        details: "Connected — options flow active",
+        url: "https://unusualwhales.com/account",
+        usage: `120/min · 15,000/day`,
+      });
     } catch (e: any) {
       const msg = e.response?.status === 401 ? "Invalid or expired API key" : e.response?.status === 403 ? "Subscription expired" : e.message;
-      services.push({ name: "Unusual Whales", status: "error", details: msg, url: "https://unusualwhales.com/account" });
+      services.push({ name: "Unusual Whales", description: "Options flow data — sweeps, premium, volume, open interest", status: "error", details: msg, url: "https://unusualwhales.com/account" });
+    }
+
+    try {
+      const supabaseUrl = process.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"] || "";
+      const supabaseKey = process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
+      if (supabaseUrl && supabaseKey) {
+        const r = await axios.get(`${supabaseUrl}/rest/v1/profiles?select=id&limit=1`, {
+          headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+          timeout: 5000,
+        });
+        services.push({
+          name: "Supabase (Auth)",
+          description: "User login, accounts, profiles, session management",
+          status: "ok",
+          details: "Connected — authentication active",
+          url: "https://supabase.com/dashboard",
+          usage: "Free tier — 50,000 monthly active users",
+        });
+      } else {
+        services.push({ name: "Supabase (Auth)", description: "User login, accounts, profiles, session management", status: "warning", details: "Not configured", url: "https://supabase.com/dashboard" });
+      }
+    } catch (e: any) {
+      services.push({ name: "Supabase (Auth)", description: "User login, accounts, profiles, session management", status: "error", details: e.response?.status === 401 ? "Invalid service role key" : e.message, url: "https://supabase.com/dashboard" });
     }
 
     try {
       const dbResult = await dbQuery("SELECT COUNT(*) as count FROM signal_outcomes");
       const count = dbResult?.rows?.[0]?.count || 0;
-      services.push({ name: "Database", status: "ok", details: `Connected — ${count} total signals`, url: "" });
+      services.push({
+        name: "Replit Database",
+        description: "Stores all signals, trades, outcomes, and app data",
+        status: "ok",
+        details: `Connected — ${count} total signals stored`,
+        url: "",
+        usage: "Included with Replit — no extra cost",
+      });
     } catch (e: any) {
-      services.push({ name: "Database", status: "error", details: e.message, url: "" });
+      services.push({ name: "Replit Database", description: "Stores all signals, trades, outcomes, and app data", status: "error", details: e.message, url: "" });
     }
 
     if (process.env["DISCORD_WEBHOOK_URL"]) {
-      services.push({ name: "Discord Webhook", status: "ok", details: "Configured", url: "https://discord.com" });
+      services.push({
+        name: "Discord Webhook",
+        description: "Sends signal alerts to your Discord channel",
+        status: "ok",
+        details: "Configured",
+        url: "https://discord.com",
+        usage: "Free — unlimited messages",
+      });
     } else {
-      services.push({ name: "Discord Webhook", status: "warning", details: "Not configured", url: "" });
+      services.push({ name: "Discord Webhook", description: "Sends signal alerts to your Discord channel", status: "warning", details: "Not configured", url: "" });
     }
 
     res.json({ services });
