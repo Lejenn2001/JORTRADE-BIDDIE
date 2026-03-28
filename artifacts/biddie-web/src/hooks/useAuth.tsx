@@ -47,13 +47,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setProfile({ full_name: data.full_name, selected_plan: plan });
     }
 
-    const { data: roleData } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    setIsAdmin(!!roleData);
+    try {
+      const adminResp = await fetch(`/api/whale/admin/check?userId=${userId}`);
+      const adminData = await adminResp.json();
+      setIsAdmin(!!adminData?.isAdmin);
+    } catch {
+      setIsAdmin(false);
+    }
   };
 
   const refreshProfile = async () => {
