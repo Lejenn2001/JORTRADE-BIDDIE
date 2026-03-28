@@ -2486,6 +2486,8 @@ Respond in this exact JSON format:
 });
 
 router.get("/whale/signals/calendar", async (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("ETag", `W/"cal-${Date.now()}"`);
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
     const result = await dbQuery(
@@ -2748,6 +2750,8 @@ router.get("/whale/signals/export", async (req, res) => {
 });
 
 router.get("/whale/signals/history", async (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("ETag", `W/"hist-${Date.now()}"`);
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
