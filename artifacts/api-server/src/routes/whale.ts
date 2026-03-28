@@ -2904,15 +2904,12 @@ router.post("/whale/verify-signals", async (_req, res) => {
       return;
     }
 
-    const tickers = [...new Set(pending.map((s: any) => s.ticker))];
-    const priceMap: Record<string, PriceHistory> = {};
+    const signalPriceMap: Record<string, PriceHistory> = {};
     await Promise.all(
-      tickers.map(async (t) => {
-        const oldest = pending
-          .filter((s: any) => s.ticker === t)
-          .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
-        const history = await fetchPriceHistory(t, oldest);
-        if (history) priceMap[t] = history;
+      pending.map(async (s: any) => {
+        const sinceDate = s.detected_at || s.created_at;
+        const history = await fetchPriceHistory(s.ticker, sinceDate);
+        if (history) signalPriceMap[s.id] = history;
       })
     );
 
@@ -2920,7 +2917,7 @@ router.post("/whale/verify-signals", async (_req, res) => {
     const now = new Date();
 
     for (const signal of pending) {
-      const history = priceMap[signal.ticker];
+      const history = signalPriceMap[signal.id];
       if (!history) continue;
 
       const target = parseTargetRange(signal.target_zone || signal.target);
@@ -3688,34 +3685,18 @@ async function realtimeVerifySignals() {
     let hits = 0, partialHits = 0, misses = 0, expired = 0;
 
     const tickers = [...new Set(pending.map((s: any) => s.ticker))];
-    const priceMap: Record<string, PriceHistory> = {};
+    const signalPriceMap: Record<string, PriceHistory> = {};
 
-    for (const t of tickers) {
-      const rtData = priceMonitor.getPrice(t);
-      if (rtData && Date.now() - rtData.lastUpdate < 60000) {
-        priceMap[t] = {
-          current: rtData.price,
-          highSince: rtData.high,
-          lowSince: rtData.low,
-        };
-      }
-    }
-
-    const tickersNeedingFetch = tickers.filter(t => !priceMap[t]);
-    if (tickersNeedingFetch.length > 0) {
-      await Promise.all(
-        tickersNeedingFetch.map(async (t) => {
-          const oldest = pending
-            .filter((s: any) => s.ticker === t)
-            .reduce((min: string, s: any) => s.created_at < min ? s.created_at : min, pending[0].created_at);
-          const history = await fetchPriceHistory(t, oldest);
-          if (history) priceMap[t] = history;
-        })
-      );
-    }
+    await Promise.all(
+      pending.map(async (s: any) => {
+        const sinceDate = s.detected_at || s.created_at;
+        const history = await fetchPriceHistory(s.ticker, sinceDate);
+        if (history) signalPriceMap[s.id] = history;
+      })
+    );
 
     for (const signal of pending) {
-      const history = priceMap[signal.ticker];
+      const history = signalPriceMap[signal.id];
       if (!history) continue;
       const target_val = parseTargetRange(signal.target_zone || signal.target);
       const invalidationPrice = parsePrice(signal.invalidation);
