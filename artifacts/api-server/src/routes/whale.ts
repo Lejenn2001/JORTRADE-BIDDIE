@@ -1771,8 +1771,12 @@ async function runSignalsPipeline() {
 
     // Reason
     const premStr = premium >= 1_000_000 ? `$${(premium / 1_000_000).toFixed(1)}M` : `$${(premium / 1000).toFixed(0)}K`;
-    let reason = `${premStr} premium ${hasSweep ? "sweep" : "flow"} at $${strike} ${optType}s with ${aggression.toFixed(0)}% ask aggression.`;
-    if (vwap && price) reason += ` Price at $${price.toFixed(2)} ${price > vwap ? "above" : "below"} VWAP ($${vwap.toFixed(2)}).`;
+    let reason = `${premStr} ${optType} ${hasSweep ? "sweep" : "flow"} at $${strike} strike with ${aggression.toFixed(0)}% ask aggression.`;
+    if (price && vwap) {
+      reason += ` Price at $${price.toFixed(2)} ${price > vwap ? "above" : "below"} VWAP ($${vwap.toFixed(2)}).`;
+    } else if (price) {
+      reason += ` Price at $${price.toFixed(2)}.`;
+    }
     if (confirmation?.gamma_zone === "negative") reason += " Negative gamma zone — moves will be amplified.";
     if (confirmation?.confirmed) reason += ` Price action confirmed: ${confirmation.pattern}.`;
 
