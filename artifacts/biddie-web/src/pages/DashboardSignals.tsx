@@ -163,7 +163,7 @@ function formatTimestamp(isoStr: string): string {
 }
 
 const DashboardSignals = () => {
-  const { signals: liveSignals, signalHistory, loading: liveLoading } = useMarketData();
+  const { signals: liveSignals, loading: liveLoading } = useMarketData();
   const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
   const { user } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
@@ -252,9 +252,7 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const dbIds = new Set(dbSignals.map(s => s.id));
-    const filteredHistory = (signalHistory || []).filter(s => dbIds.has(s.id));
-    const all = [...filteredHistory, ...dbSignals, ...liveSignals];
+    const all = [...dbSignals, ...liveSignals];
     const seen = new Set<string>();
     const unique: MarketSignal[] = [];
     for (const s of all) {
@@ -264,7 +262,7 @@ const DashboardSignals = () => {
       }
     }
     return unique;
-  }, [liveSignals, dbSignals, signalHistory]);
+  }, [liveSignals, dbSignals]);
 
   const loading = liveLoading && dbLoading;
   const signals = allSignals;
