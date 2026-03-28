@@ -90,7 +90,7 @@ const AdminSignalInsights = () => {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllSignals, setShowAllSignals] = useState(false);
-  const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "missed" | "pending">("all");
+  const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "partial_hit" | "missed" | "expired" | "pending">("all");
   const [fetchError, setFetchError] = useState(false);
   const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
   const [signalDetails, setSignalDetails] = useState<Record<string, SignalDetail>>({});
@@ -144,14 +144,17 @@ const AdminSignalInsights = () => {
   }, []);
 
   const stats = useMemo(() => {
-    let hits = 0, misses = 0, pending = 0;
+    let hits = 0, partialHits = 0, misses = 0, expired = 0, pending = 0;
     for (const s of signals) {
       if (s.outcome === "hit") hits++;
+      else if (s.outcome === "partial_hit") partialHits++;
       else if (s.outcome === "missed") misses++;
+      else if (s.outcome === "expired") expired++;
       else pending++;
     }
-    const resolved = hits + misses;
-    return { hits, misses, pending, total: signals.length, resolved, winRate: resolved > 0 ? (hits / resolved) * 100 : null };
+    const resolved = hits + partialHits + misses + expired;
+    const successRate = resolved > 0 ? ((hits + partialHits) / resolved) * 100 : null;
+    return { hits, partialHits, misses, expired, pending, total: signals.length, resolved, winRate: successRate };
   }, [signals]);
 
   const tickerPatterns = useMemo(() => {
@@ -165,7 +168,7 @@ const AdminSignalInsights = () => {
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       const cat = s.category || "algorithm";
       if (!tp.categories[cat]) tp.categories[cat] = { hits: 0, misses: 0 };
-      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "missed" ? "missed" : "pending";
+      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "partial_hit" ? "hit" : s.outcome === "missed" ? "missed" : s.outcome === "expired" ? "missed" : "pending";
 
       if (outcome === "hit") {
         tp.hits++;
@@ -190,9 +193,8 @@ const AdminSignalInsights = () => {
     let callHits = 0, callMisses = 0, putHits = 0, putMisses = 0;
     for (const s of signals) {
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
-      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "missed" ? "missed" : "pending";
-      if (outcome === "hit") { if (isCall) callHits++; else putHits++; }
-      else if (outcome === "missed") { if (isCall) callMisses++; else putMisses++; }
+      if (s.outcome === "hit" || s.outcome === "partial_hit") { if (isCall) callHits++; else putHits++; }
+      else if (s.outcome === "missed" || s.outcome === "expired") { if (isCall) callMisses++; else putMisses++; }
     }
     const callResolved = callHits + callMisses;
     const putResolved = putHits + putMisses;
@@ -209,8 +211,8 @@ const AdminSignalInsights = () => {
       const cat = s.category || "algorithm";
       if (!map[cat]) map[cat] = { hits: 0, misses: 0, pending: 0, total: 0 };
       map[cat].total++;
-      if (s.outcome === "hit") map[cat].hits++;
-      else if (s.outcome === "missed") map[cat].misses++;
+      if (s.outcome === "hit" || s.outcome === "partial_hit") map[cat].hits++;
+      else if (s.outcome === "missed" || s.outcome === "expired") map[cat].misses++;
       else map[cat].pending++;
     }
     return map;
@@ -312,8 +314,7 @@ const AdminSignalInsights = () => {
 
   const filteredSignals = useMemo(() => {
     let list = filterOutcome === "all" ? [...signals] : signals.filter(s => {
-      const normalized = s.outcome === "hit" ? "hit" : s.outcome === "missed" ? "missed" : "pending";
-      return normalized === filterOutcome;
+      return s.outcome === filterOutcome || (!s.outcome && filterOutcome === "pending");
     });
 
     const parseExpiryDate = (expiry: string | null): number => {
@@ -334,9 +335,9 @@ const AdminSignalInsights = () => {
       const dir = sortDir === "asc" ? 1 : -1;
       switch (sortCol) {
         case "status": {
-          const order = { hit: 0, missed: 1, pending: 2 };
-          const ao = order[(a.outcome === "hit" ? "hit" : a.outcome === "missed" ? "missed" : "pending") as keyof typeof order];
-          const bo = order[(b.outcome === "hit" ? "hit" : b.outcome === "missed" ? "missed" : "pending") as keyof typeof order];
+          const order: Record<string, number> = { hit: 0, partial_hit: 1, pending: 2, expired: 3, missed: 4 };
+          const ao = order[a.outcome || "pending"] ?? 2;
+          const bo = order[b.outcome || "pending"] ?? 2;
           return (ao - bo) * dir;
         }
         case "ticker": return a.ticker.localeCompare(b.ticker) * dir;
@@ -453,22 +454,30 @@ const AdminSignalInsights = () => {
           <span className="text-[10px] text-muted-foreground ml-auto">{stats.total} total signals</span>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 p-4">
-          <div className="bg-muted/20 rounded-lg p-3 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Win Rate</p>
+        <div className="grid grid-cols-3 lg:grid-cols-8 gap-3 p-4">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Success rate: (Hits + Partial Hits) / All Resolved">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Success Rate</p>
             <p className={`text-2xl font-bold ${stats.winRate !== null && stats.winRate >= 50 ? "text-emerald-400" : stats.winRate !== null ? "text-destructive" : "text-foreground"}`}>
               {stats.winRate !== null ? `${stats.winRate.toFixed(1)}%` : "—"}
             </p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Target price was reached">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Hits</p>
             <p className="text-2xl font-bold text-emerald-400">{stats.hits}</p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Expired with significant favorable move (50%+ to target or 1%+ price move)">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Partial Hits</p>
+            <p className="text-2xl font-bold text-blue-400">{stats.partialHits}</p>
+          </div>
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Invalidation level was breached — thesis was wrong">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Misses</p>
             <p className="text-2xl font-bold text-destructive">{stats.misses}</p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Expired without hitting target or invalidation, minimal favorable move">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Expired</p>
+            <p className="text-2xl font-bold text-muted-foreground">{stats.expired}</p>
+          </div>
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Still active — not expired, not invalidated">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pending</p>
             <p className="text-2xl font-bold text-amber-400">{stats.pending}</p>
           </div>
@@ -522,27 +531,41 @@ const AdminSignalInsights = () => {
               <p>Every pending signal is checked on a regular interval against live Polygon.io price data. The verifier pulls the stock's price history since the signal was detected, including the current price, the highest price since detection, and the lowest price since detection.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-emerald-400 uppercase">HIT (Checked First)</span>
+                  <span className="text-xs font-bold text-emerald-400 uppercase">HIT</span>
                 </div>
-                <p className="text-xs leading-relaxed">Price reached the target zone. For <span className="text-emerald-400 font-semibold">bullish/CALL</span> signals: the high since detection reached the target price. For <span className="text-red-400 font-semibold">bearish/PUT</span> signals: the low since detection dropped to the target price. <span className="text-foreground font-semibold">Directional move fallback:</span> If the parsed target is invalid or in the wrong direction, the signal is still a HIT if price moved at least 0.5% in the correct direction (up for bullish, down for bearish).</p>
+                <p className="text-xs leading-relaxed">Price reached the target zone. Bullish/CALL: high reached target. Bearish/PUT: low dropped to target. Also counts if price moved 0.5%+ in the correct direction when target parsing is invalid.</p>
+              </div>
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-4 w-4 text-blue-400" />
+                  <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL HIT</span>
+                </div>
+                <p className="text-xs leading-relaxed">Expired without hitting the target, but price made a significant favorable move — either 50%+ of the way to target, or 1%+ price move in the correct direction. Counts as a success in win rate.</p>
+              </div>
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-400 uppercase">PENDING</span>
+                </div>
+                <p className="text-xs leading-relaxed">Signal is still active — hasn't expired, target not hit, and invalidation not breached. Excluded from win rate calculations until resolved.</p>
+              </div>
+              <div className="rounded-lg bg-zinc-500/10 border border-zinc-500/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-zinc-400" />
+                  <span className="text-xs font-bold text-zinc-400 uppercase">EXPIRED</span>
+                </div>
+                <p className="text-xs leading-relaxed">Time ran out without hitting target or invalidation, and price had minimal favorable movement (less than 50% to target and less than 1% move). Not counted as a win.</p>
               </div>
               <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <XCircle className="h-4 w-4 text-red-400" />
-                  <span className="text-xs font-bold text-red-400 uppercase">MISS (Checked Second)</span>
+                  <span className="text-xs font-bold text-red-400 uppercase">MISSED</span>
                 </div>
-                <p className="text-xs leading-relaxed">Price breached the invalidation level <span className="text-foreground font-semibold">after 2+ hours</span> of being active. For <span className="text-emerald-400 font-semibold">bullish</span>: current price fell to or below invalidation. For <span className="text-red-400 font-semibold">bearish</span>: current price rose to or above invalidation. Invalidation must be on the correct side (below entry for bullish, above entry for bearish) or it is ignored.</p>
-              </div>
-              <div className="rounded-lg bg-muted/20 border border-border/40 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-4 w-4 text-amber-400" />
-                  <span className="text-xs font-bold text-amber-400 uppercase">EXPIRED</span>
-                </div>
-                <p className="text-xs leading-relaxed">The signal's expiry date passed without hitting target or invalidation. If the current price is on the <span className="text-foreground font-semibold">wrong side of entry</span> at expiry, it becomes a MISS. If price is flat or favorable but didn't reach the target, it's marked EXPIRED (not counted in win rate).</p>
+                <p className="text-xs leading-relaxed">Invalidation level was actually breached — the thesis was wrong. Bullish: price fell to/below invalidation. Bearish: price rose to/above invalidation. Only marked after 2+ hour grace period.</p>
               </div>
             </div>
 
@@ -551,7 +574,7 @@ const AdminSignalInsights = () => {
               <ul className="space-y-1.5 text-xs">
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-0.5">1.</span>
-                  <span><span className="text-foreground font-semibold">Priority order:</span> HIT is checked before MISS every cycle. If price touched the target at any point — even if it later hit invalidation — it's a HIT.</span>
+                  <span><span className="text-foreground font-semibold">Priority order:</span> HIT is checked first, then MISS (invalidation breach), then PARTIAL HIT / EXPIRED at expiry. If price touched the target at any point — it's a HIT.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-0.5">2.</span>
@@ -563,7 +586,7 @@ const AdminSignalInsights = () => {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-0.5">4.</span>
-                  <span><span className="text-foreground font-semibold">Win Rate formula:</span> Hits ÷ (Hits + Misses). Pending and Expired signals are excluded from the calculation.</span>
+                  <span><span className="text-foreground font-semibold">Success Rate formula:</span> (Hits + Partial Hits) ÷ (Hits + Partial Hits + Misses + Expired). Pending signals are excluded from the calculation.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-0.5">5.</span>
@@ -677,23 +700,36 @@ const AdminSignalInsights = () => {
             <h2 className="text-lg font-bold text-foreground">Full Signal Log</h2>
             <span className="text-[10px] text-muted-foreground">({filteredSignals.length} signals)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            {(["all", "hit", "missed", "pending"] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterOutcome(f)}
-                className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all ${
-                  filterOutcome === f
-                    ? f === "hit" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                    : f === "missed" ? "bg-red-500/20 text-red-400 border border-red-500/40"
-                    : f === "pending" ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
-                    : "bg-primary/20 text-primary border border-primary/40"
-                    : "bg-muted/20 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {f === "all" ? "All" : f === "hit" ? `Hits (${stats.hits})` : f === "missed" ? `Misses (${stats.misses})` : `Pending (${stats.pending})`}
-              </button>
-            ))}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(["all", "hit", "partial_hit", "missed", "expired", "pending"] as const).map(f => {
+              const colors: Record<string, string> = {
+                all: "bg-primary/20 text-primary border border-primary/40",
+                hit: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+                partial_hit: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
+                missed: "bg-red-500/20 text-red-400 border border-red-500/40",
+                expired: "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
+                pending: "bg-amber-500/20 text-amber-400 border border-amber-500/40",
+              };
+              const labels: Record<string, string> = {
+                all: "All",
+                hit: `Hits (${stats.hits})`,
+                partial_hit: `Partial (${stats.partialHits})`,
+                missed: `Misses (${stats.misses})`,
+                expired: `Expired (${stats.expired})`,
+                pending: `Pending (${stats.pending})`,
+              };
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilterOutcome(f)}
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all ${
+                    filterOutcome === f ? colors[f] : "bg-muted/20 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {labels[f]}
+                </button>
+              );
+            })}
             <button
               onClick={() => setShowAllSignals(!showAllSignals)}
               className="text-[10px] text-muted-foreground hover:text-foreground ml-2 flex items-center gap-1"
@@ -760,9 +796,17 @@ const AdminSignalInsights = () => {
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
                             <CheckCircle className="h-3 w-3" /> HIT
                           </span>
+                        ) : s.outcome === "partial_hit" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle className="h-3 w-3" /> PARTIAL
+                          </span>
                         ) : s.outcome === "missed" ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
                             <XCircle className="h-3 w-3" /> MISS
+                          </span>
+                        ) : s.outcome === "expired" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-400 bg-zinc-400/10 px-2 py-0.5 rounded-full">
+                            <Clock className="h-3 w-3" /> EXPIRED
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
@@ -885,23 +929,31 @@ const AdminSignalInsights = () => {
                                   <div className="space-y-4">
                                     <div className={`rounded-lg p-3 border ${
                                       s.outcome === "hit" ? "bg-emerald-500/5 border-emerald-500/20" :
+                                      s.outcome === "partial_hit" ? "bg-blue-500/5 border-blue-500/20" :
                                       s.outcome === "missed" ? "bg-red-500/5 border-red-500/20" :
+                                      s.outcome === "expired" ? "bg-zinc-500/5 border-zinc-500/20" :
                                       "bg-amber-500/5 border-amber-500/20"
                                     }`}>
                                       <div className="flex items-start gap-2">
                                         <Info className={`h-4 w-4 mt-0.5 shrink-0 ${
                                           s.outcome === "hit" ? "text-emerald-400" :
+                                          s.outcome === "partial_hit" ? "text-blue-400" :
                                           s.outcome === "missed" ? "text-destructive" :
+                                          s.outcome === "expired" ? "text-zinc-400" :
                                           "text-amber-400"
                                         }`} />
                                         <div>
                                           <p className={`text-sm font-semibold ${
                                             s.outcome === "hit" ? "text-emerald-400" :
+                                            s.outcome === "partial_hit" ? "text-blue-400" :
                                             s.outcome === "missed" ? "text-destructive" :
+                                            s.outcome === "expired" ? "text-zinc-400" :
                                             "text-amber-400"
                                           }`}>
                                             {s.outcome === "hit" ? "How this was scored a HIT" :
+                                             s.outcome === "partial_hit" ? "How this was scored a PARTIAL HIT" :
                                              s.outcome === "missed" ? "How this was scored a MISS" :
+                                             s.outcome === "expired" ? "Why this EXPIRED" :
                                              "Signal Still Being Tracked"}
                                           </p>
                                           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
