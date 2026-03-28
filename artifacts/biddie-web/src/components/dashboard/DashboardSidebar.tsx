@@ -24,10 +24,10 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Users, label: "Jortrade Chat", path: "/dashboard/community" },
   { icon: Activity, label: "Signals", path: "/dashboard/signals" },
+  { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
   { icon: BarChart3, label: "Market View", path: "/dashboard/market" },
   { icon: Wallet, label: "P&L Calendar", path: "/dashboard/pnl" },
   { icon: PieChart, label: "Analytics", path: "/dashboard/analytics" },
-  { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
   { icon: Megaphone, label: "Trump Feed", path: "/dashboard/trump" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
 ];
