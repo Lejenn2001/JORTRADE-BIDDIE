@@ -1708,6 +1708,8 @@ async function runSignalsPipeline() {
           target = `${aboveLevels[0].label}, then ${aboveLevels[1].label}`;
         } else if (aboveLevels.length === 1) {
           target = aboveLevels[0].label;
+        } else if (strike > (price || 0)) {
+          target = `$${strike.toFixed(2)}`;
         } else {
           const pct = price ? price * 1.02 : strike * 1.02;
           target = `$${pct.toFixed(2)}`;
@@ -1718,9 +1720,8 @@ async function runSignalsPipeline() {
         const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
         if (tMatch) {
           const tVal = parseFloat(tMatch[1]);
-          if (tVal < price) {
-            const pct = price * 1.02;
-            target = `$${pct.toFixed(2)}`;
+          if (tVal <= price) {
+            target = strike > price ? `$${strike.toFixed(2)}` : `$${(price * 1.02).toFixed(2)}`;
           }
         }
       }
@@ -1763,6 +1764,8 @@ async function runSignalsPipeline() {
           target = `${belowLevels[0].label}, then ${belowLevels[1].label}`;
         } else if (belowLevels.length === 1) {
           target = belowLevels[0].label;
+        } else if (strike < (price || Infinity)) {
+          target = `$${strike.toFixed(2)}`;
         } else {
           const pct = price ? price * 0.98 : strike * 0.98;
           target = `$${pct.toFixed(2)}`;
@@ -1773,9 +1776,8 @@ async function runSignalsPipeline() {
         const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
         if (tMatch) {
           const tVal = parseFloat(tMatch[1]);
-          if (tVal > price) {
-            const pct = price * 0.98;
-            target = `$${pct.toFixed(2)}`;
+          if (tVal >= price) {
+            target = strike < price ? `$${strike.toFixed(2)}` : `$${(price * 0.98).toFixed(2)}`;
           }
         }
       }
@@ -2911,16 +2913,18 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
 router.post("/whale/fix-targets", async (_req, res) => {
   try {
-    const result = await dbQuery(`
+    const r1 = await dbQuery(`
       WITH parsed AS (
-        SELECT id, ticker, direction, price_at_signal, target,
+        SELECT id, ticker, direction, price_at_signal, strike, target,
           (regexp_matches(target, '\\$([0-9]+\\.?[0-9]*)'))[1]::numeric as first_target_price
         FROM signal_outcomes 
         WHERE signal_source = 'replit' AND price_at_signal IS NOT NULL AND target IS NOT NULL
       )
       UPDATE signal_outcomes so
       SET target = CASE
+        WHEN p.direction = 'bullish' AND p.strike IS NOT NULL AND p.strike > p.price_at_signal THEN '$' || ROUND(p.strike, 2)::text
         WHEN p.direction = 'bullish' THEN '$' || ROUND(p.price_at_signal * 1.02, 2)::text
+        WHEN p.direction = 'bearish' AND p.strike IS NOT NULL AND p.strike < p.price_at_signal THEN '$' || ROUND(p.strike, 2)::text
         WHEN p.direction = 'bearish' THEN '$' || ROUND(p.price_at_signal * 0.98, 2)::text
       END
       FROM parsed p
@@ -2930,7 +2934,19 @@ router.post("/whale/fix-targets", async (_req, res) => {
           OR (p.direction = 'bearish' AND p.first_target_price > p.price_at_signal)
         )
     `);
-    res.json({ ok: true, rowCount: result.rowCount });
+    const r2 = await dbQuery(`
+      UPDATE signal_outcomes
+      SET target = '$' || ROUND(strike, 2)::text
+      WHERE signal_source = 'replit'
+        AND price_at_signal IS NOT NULL
+        AND strike IS NOT NULL
+        AND target ~ '^\\$[0-9]+\\.?[0-9]*$'
+        AND (
+          (direction = 'bullish' AND strike > price_at_signal)
+          OR (direction = 'bearish' AND strike < price_at_signal)
+        )
+    `);
+    res.json({ ok: true, wrongDirectionFixed: r1.rowCount, strikeTargetsApplied: r2.rowCount });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
