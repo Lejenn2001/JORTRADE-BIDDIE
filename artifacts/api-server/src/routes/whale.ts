@@ -3654,11 +3654,16 @@ router.get("/whale/presence/online", (_req, res) => {
 });
 
 router.get("/whale/admin/check", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
   try {
     const userId = req.query.userId as string;
     if (!userId) return res.json({ isAdmin: false });
-    res.json({ isAdmin: await isAdminUser(userId) });
-  } catch {
+    const result = await isAdminUser(userId);
+    console.log(`[admin-check] userId=${userId} isAdmin=${result}`);
+    res.json({ isAdmin: result });
+  } catch (e: any) {
+    console.error(`[admin-check] error:`, e.message);
     res.json({ isAdmin: false });
   }
 });
