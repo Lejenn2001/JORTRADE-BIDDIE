@@ -230,7 +230,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   {signal.entryTrigger && (
                     <div className="flex items-center gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
                       <Crosshair className="h-3 w-3 text-primary shrink-0" />
-                      <span className="text-muted-foreground">Entry:</span>
+                      <span className="text-muted-foreground">Trigger:</span>
                       <span className="text-foreground font-medium">{signal.entryTrigger}</span>
                     </div>
                   )}
