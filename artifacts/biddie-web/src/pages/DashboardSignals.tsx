@@ -649,7 +649,19 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
         </div>
 
         <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
-          {signal.description}
+          {(() => {
+            const desc = signal.description || "";
+            const priceMatch = desc.match(/Price at \$[\d,.]+/);
+            if (!priceMatch) return desc;
+            const idx = desc.indexOf(priceMatch[0]);
+            return (
+              <>
+                {desc.slice(0, idx)}
+                <span className="font-bold text-amber-400">{priceMatch[0]}</span>
+                {desc.slice(idx + priceMatch[0].length)}
+              </>
+            );
+          })()}
         </p>
 
         <div className="relative grid grid-cols-1 gap-1.5 text-[11px] sm:text-xs">

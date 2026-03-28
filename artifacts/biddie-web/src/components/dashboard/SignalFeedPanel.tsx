@@ -208,8 +208,20 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         )}
                       </div>
 
-                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                        {signal.description}
+                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                        {(() => {
+                          const desc = signal.description || "";
+                          const priceMatch = desc.match(/Price at \$[\d,.]+/);
+                          if (!priceMatch) return desc;
+                          const idx = desc.indexOf(priceMatch[0]);
+                          return (
+                            <>
+                              {desc.slice(0, idx)}
+                              <span className="font-bold text-amber-400">{priceMatch[0]}</span>
+                              {desc.slice(idx + priceMatch[0].length)}
+                            </>
+                          );
+                        })()}
                       </p>
                     </div>
 
