@@ -1556,9 +1556,29 @@ async function runSignalsPipeline() {
     const hasSweep = !!c.has_sweep;
     const optType = c.type === "call" ? "call" : "put";
     const direction = optType === "call" ? "bullish" : "bearish";
-    const price = kl?.current_price ?? parseFloat(c.underlying_price) ?? null;
+    const klPrice = kl?.current_price ?? null;
+    const uwPrice = parseFloat(c.underlying_price) || null;
+    const price = klPrice ?? uwPrice;
 
     // ── Hard filters: reject signals that aren't actionable ──
+
+    // Filter 0a: Cross-validate price sources — reject if key levels and UW price diverge >20%
+    if (klPrice && uwPrice && uwPrice > 0) {
+      const priceDivergence = Math.abs(klPrice - uwPrice) / uwPrice;
+      if (priceDivergence > 0.20) {
+        console.log(`[signals] REJECTED ${ticker}: key levels price $${klPrice.toFixed(2)} vs UW price $${uwPrice.toFixed(2)} — ${(priceDivergence * 100).toFixed(0)}% divergence (bad data)`);
+        return null;
+      }
+    }
+
+    // Filter 0b: Reject signals where strike is absurdly far from price (bad data)
+    if (price && strike) {
+      const ratio = strike / price;
+      if (ratio > 3 || ratio < 0.33) {
+        console.log(`[signals] REJECTED ${ticker}: strike $${strike} vs price $${price} — ratio ${ratio.toFixed(2)} (bad data)`);
+        return null;
+      }
+    }
 
     // Filter 1: Reject deep OTM (>15% from current price)
     if (price && strike) {
@@ -3854,6 +3874,38 @@ router.post("/whale/admin/fix-expiry", async (req, res) => {
     }
     console.log(`[admin] Fixed expiry dates:`, fixes);
     res.json({ success: true, fixes });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete("/whale/admin/signal/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await dbQuery(`DELETE FROM signal_outcomes WHERE id = $1`, [id]);
+    await dbQuery(`DELETE FROM user_trades WHERE signal_id = $1`, [id]);
+    res.json({ success: true, deleted: result?.rowCount || 0 });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/cleanup-bad-signals", async (_req, res) => {
+  try {
+    const result = await dbQuery(
+      `DELETE FROM signal_outcomes
+       WHERE signal_source = 'replit'
+       AND price_at_signal IS NOT NULL
+       AND strike IS NOT NULL
+       AND (
+         CAST(strike AS NUMERIC) / CAST(price_at_signal AS NUMERIC) > 3
+         OR CAST(strike AS NUMERIC) / CAST(price_at_signal AS NUMERIC) < 0.33
+         OR CAST(price_at_signal AS NUMERIC) > CAST(strike AS NUMERIC) * 5
+       )`
+    );
+    const count = result?.rowCount || 0;
+    console.log(`[admin] Cleaned up ${count} bad-data signals`);
+    res.json({ success: true, removed: count });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
