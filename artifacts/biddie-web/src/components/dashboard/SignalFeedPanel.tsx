@@ -246,7 +246,19 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
                         <MapPin className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Target:</span>
-                        <span className="text-primary font-semibold">{signal.targetZone}</span>
+                        {signal.targetNear && signal.targetNear !== signal.targetZone ? (
+                          <>
+                            <span className="text-primary font-semibold">{signal.targetNear} – {signal.targetZone}</span>
+                            <span className="relative group">
+                              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-primary/20 text-primary text-[8px] font-bold cursor-help">i</span>
+                              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                {signal.targetNear}: Near-term level · {signal.targetZone}: Strike target
+                              </span>
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-primary font-semibold">{signal.targetZone}</span>
+                        )}
                       </div>
                     )}
                     {signal.invalidation && (

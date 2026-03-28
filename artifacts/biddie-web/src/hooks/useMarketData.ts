@@ -40,6 +40,7 @@ export interface MarketSignal {
   keyLevel?: string;
   srLevel?: string;
   targetZone?: string;
+  targetNear?: string;
   createdAt?: string;
   detectedAtMs?: number;
   timeframe?: SignalTimeframe;
@@ -515,6 +516,7 @@ export function useMarketData() {
               keyLevel: s.key_level,
               srLevel: s.sr_level,
               targetZone: s.target,
+              targetNear: s.target_near || "",
               source: "live",
               timeframe,
               detectedAtMs: Date.now(),

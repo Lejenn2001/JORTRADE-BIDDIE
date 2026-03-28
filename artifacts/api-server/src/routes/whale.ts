@@ -1674,6 +1674,7 @@ async function runSignalsPipeline() {
     // Entry/target/invalidation
     let entryTrigger = "";
     let target = "";
+    let targetNear = "";
     let invalidation = "";
     let keyLevel = "";
 
@@ -1701,6 +1702,12 @@ async function runSignalsPipeline() {
       }
       // Target — where the money is betting (strike price)
       target = `$${strike.toFixed(2)}`;
+      // Target near — nearest technical level between current price and strike
+      if (pdh && pdh < strike && pdh > (price || 0)) {
+        targetNear = `$${pdh.toFixed(2)}`;
+      } else if (r1 && r1 < strike && r1 > (price || 0)) {
+        targetNear = `$${r1.toFixed(2)}`;
+      }
       // Invalidation — key level that breaks the thesis
       if (pdl) {
         invalidation = `Below PDL at $${pdl.toFixed(2)}`;
@@ -1730,6 +1737,12 @@ async function runSignalsPipeline() {
       }
       // Target — where the money is betting (strike price)
       target = `$${strike.toFixed(2)}`;
+      // Target near — nearest technical level between current price and strike (puts: below price, above strike)
+      if (pdl && pdl > strike && pdl < (price || Infinity)) {
+        targetNear = `$${pdl.toFixed(2)}`;
+      } else if (s1 && s1 > strike && s1 < (price || Infinity)) {
+        targetNear = `$${s1.toFixed(2)}`;
+      }
       // Invalidation — key level that breaks the thesis
       if (pdh) {
         invalidation = `Above PDH at $${pdh.toFixed(2)}`;
@@ -1792,7 +1805,7 @@ async function runSignalsPipeline() {
       ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
       current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
       pivot, r1, s1,
-      entry_trigger: entryTrigger, key_level: keyLevel, sr_level: srLevel, target, invalidation,
+      entry_trigger: entryTrigger, key_level: keyLevel, sr_level: srLevel, target, target_near: targetNear, invalidation,
       reason, confidence, tags,
       created_at: c.created_at || null,
       detected_at: getNowEastern(),
