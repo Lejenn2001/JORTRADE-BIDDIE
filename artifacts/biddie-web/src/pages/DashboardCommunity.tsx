@@ -97,8 +97,7 @@ const DashboardCommunity = () => {
   const shouldBiddieRespond = (text: string): boolean => {
     const lower = text.toLowerCase();
     if (/\b(biddie|@biddie)\b/i.test(lower)) return true;
-    if (/\?$/.test(text.trim())) return true;
-    const tradingWords = ["play", "trade", "call", "put", "flow", "ticker", "setup", "entry", "strike", "sweep", "whale", "breakout", "signal", "what's the move", "any plays", "premarket", "news"];
+    const tradingWords = ["play", "trade", "call", "put", "flow", "ticker", "setup", "entry", "strike", "sweep", "whale", "breakout", "signal", "what's the move", "any plays", "premarket", "news", "market", "spy", "qqq", "options"];
     if (tradingWords.some(w => lower.includes(w))) return true;
     return false;
   };
