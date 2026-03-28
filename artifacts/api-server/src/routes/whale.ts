@@ -2544,6 +2544,50 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
   }
 });
 
+router.get("/whale/signals/export", async (req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT id, ticker, signal_type, option_type, direction, confidence, conviction_score,
+              category, strike, expiry, premium, price_at_signal,
+              target, invalidation, entry_trigger, reason,
+              outcome, tags, detected_at, created_at, resolved_at
+       FROM signal_outcomes
+       WHERE signal_source = 'replit'
+       ORDER BY detected_at DESC`
+    );
+
+    const parseTargetPrice = (t: string | null): string => {
+      if (!t) return "";
+      const m = t.match(/\$([0-9]+\.?[0-9]*)/);
+      return m ? m[1] : "";
+    };
+    const parseInvalidationPrice = (inv: string | null): string => {
+      if (!inv) return "";
+      const m = inv.match(/\$([0-9]+\.?[0-9]*)/);
+      return m ? m[1] : "";
+    };
+
+    const rows = (result?.rows || []).map((r: any) => {
+      const targetVal = parseFloat(parseTargetPrice(r.target));
+      const alertPrice = r.price_at_signal ? parseFloat(r.price_at_signal) : null;
+      let pctToTarget = "";
+      if (targetVal && alertPrice && alertPrice > 0) {
+        pctToTarget = (((targetVal - alertPrice) / alertPrice) * 100).toFixed(2);
+      }
+      return {
+        ...r,
+        target_price_numeric: targetVal || "",
+        invalidation_price_numeric: parseInvalidationPrice(r.invalidation),
+        pct_to_target: pctToTarget,
+      };
+    });
+
+    res.json({ signals: rows, count: rows.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);

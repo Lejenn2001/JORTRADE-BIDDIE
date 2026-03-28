@@ -210,6 +210,68 @@ const DashboardAdmin = () => {
     toast.success("Users exported");
   };
 
+  const [exportingSignals, setExportingSignals] = useState(false);
+
+  const exportSignalsCSV = async () => {
+    setExportingSignals(true);
+    try {
+      const resp = await fetch("/api/whale/signals/export");
+      const data = await resp.json();
+      if (!data.signals || data.signals.length === 0) {
+        toast.error("No signals found to export");
+        setExportingSignals(false);
+        return;
+      }
+      const fmtDate = (d: string | null) => {
+        if (!d) return "";
+        try {
+          return new Date(d).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+        } catch { return d; }
+      };
+
+      const headers = [
+        "Date (ET)", "Ticker", "Direction", "Option Type", "Category",
+        "Strike", "Expiry", "Premium", "Alert Price", "Target", "Target Price",
+        "Invalidation", "Invalidation Price", "% to Target", "Conviction Score",
+        "Confidence", "Entry Trigger", "Reason", "Outcome", "Tags"
+      ];
+      const rows = data.signals.map((s: any) => [
+        fmtDate(s.detected_at || s.created_at),
+        s.ticker || "",
+        s.direction || "",
+        (s.option_type || "").toUpperCase(),
+        s.category || "",
+        s.strike ? `$${s.strike}` : "",
+        s.expiry || "",
+        s.premium || "",
+        s.price_at_signal ? `$${parseFloat(s.price_at_signal).toFixed(2)}` : "",
+        s.target || "",
+        s.target_price_numeric ? `$${parseFloat(s.target_price_numeric).toFixed(2)}` : "",
+        s.invalidation || "",
+        s.invalidation_price_numeric ? `$${parseFloat(s.invalidation_price_numeric).toFixed(2)}` : "",
+        s.pct_to_target ? `${s.pct_to_target}%` : "",
+        s.conviction_score ?? "",
+        s.confidence ? `${Math.round(s.confidence * 100)}%` : "",
+        s.entry_trigger || "",
+        (s.reason || "").replace(/"/g, "'"),
+        s.outcome || "pending",
+        Array.isArray(s.tags) ? s.tags.join(", ") : "",
+      ]);
+      const csv = [headers, ...rows].map(r => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `jortrade-signals-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${data.signals.length} signals`);
+    } catch (err) {
+      toast.error("Failed to export signals");
+    }
+    setExportingSignals(false);
+  };
+
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase();
     return !q || u.email?.toLowerCase().includes(q) || u.full_name?.toLowerCase().includes(q);
@@ -256,12 +318,22 @@ const DashboardAdmin = () => {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={exportSignalsCSV}
+                disabled={exportingSignals}
+                className="text-xs border-border/50 gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exportingSignals ? "Exporting..." : "Export Signals Log"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={exportCSV}
                 disabled={users.length === 0}
                 className="text-xs border-border/50 gap-1.5"
               >
                 <Download className="h-3.5 w-3.5" />
-                Export CSV
+                Export Users
               </Button>
             </div>
           </div>
