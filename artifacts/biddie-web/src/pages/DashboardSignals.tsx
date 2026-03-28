@@ -234,15 +234,19 @@ const DashboardSignals = () => {
         const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
         const resp = await fetch('/api/whale/signals/history?limit=100');
+        console.log('[SIGNALS-PAGE] history fetch status:', resp.status);
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
+        console.log('[SIGNALS-PAGE] history loaded:', result.signals?.length, 'signals');
 
         if (result.signals && result.signals.length > 0) {
           const mapped = result.signals.map(dbRecordToSignal);
+          const pending = mapped.filter((s: any) => !s.outcome || s.outcome === 'pending');
+          console.log('[SIGNALS-PAGE] mapped:', mapped.length, 'pending:', pending.length, 'tickers:', pending.map((s: any) => s.ticker).join(','));
           setDbSignals(mapped);
         }
       } catch (e) {
-        console.warn('Failed to load recent signals from DB:', e);
+        console.warn('[SIGNALS-PAGE] Failed to load recent signals from DB:', e);
       } finally {
         setDbLoading(false);
       }
@@ -326,6 +330,9 @@ const DashboardSignals = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4">
+          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded p-2 text-[10px] text-yellow-300 font-mono">
+            DB:{dbSignals.length} | Live:{liveSignals.length} | All:{signals.length} | Filtered:{filtered.length} | BuyNow:{algorithmSignals.buy_now.length} | ShortTerm:{algorithmSignals.short_term.length} | SLV:{filtered.filter(s => s.ticker === 'SLV').map(s => `${s.timeframe}/${s.outcome}`).join(',')}
+          </div>
           {/* Header */}
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3">
