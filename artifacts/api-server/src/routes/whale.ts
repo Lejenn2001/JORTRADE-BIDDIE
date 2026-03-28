@@ -2206,14 +2206,15 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (existing && existing.rows.length > 0) continue;
 
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, detected_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, detected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
-          s.current_price || null, s.key_level || null, s.sr_level || null
+          s.current_price || null, s.key_level || null, s.sr_level || null,
+          s.target_near || null
         ]
       );
     } catch {}

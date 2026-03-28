@@ -111,6 +111,22 @@ function dbRecordToSignal(record: any): MarketSignal {
     invalidation: record.invalidation,
     keyLevel: record.key_level,
     srLevel: record.sr_level,
+    targetNear: record.target_near || (() => {
+      const target = record.target_zone || record.target;
+      const priceVal = record.price_at_signal ? Number(record.price_at_signal) : 0;
+      if (!target || !priceVal) return undefined;
+      const tgtMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
+      if (!tgtMatch) return undefined;
+      const tgtVal = parseFloat(tgtMatch[1]);
+      const levelSrc = record.sr_level || record.key_level || "";
+      const levelMatch = levelSrc.match(/\$([0-9]+\.?[0-9]*)/);
+      if (!levelMatch) return undefined;
+      const lvl = parseFloat(levelMatch[1]);
+      const isBull = putCall === 'call';
+      if (isBull && lvl > priceVal && lvl < tgtVal) return `$${lvl.toFixed(2)}`;
+      if (!isBull && lvl < priceVal && lvl > tgtVal) return `$${lvl.toFixed(2)}`;
+      return undefined;
+    })(),
     spreadDetails: record.spread_details || null,
   };
 }

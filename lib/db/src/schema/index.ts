@@ -31,6 +31,7 @@ export const signalOutcomes = pgTable("signal_outcomes", {
   mfePercent: numeric("mfe_percent", { precision: 8, scale: 2 }),
   keyLevel: text("key_level"),
   srLevel: text("sr_level"),
+  targetNear: text("target_near"),
   maxAdversePrice: numeric("max_adverse_price", { precision: 12, scale: 2 }),
   entryPriceReached: boolean("entry_price_reached").default(false),
   invalidationBreached: boolean("invalidation_breached").default(false),
