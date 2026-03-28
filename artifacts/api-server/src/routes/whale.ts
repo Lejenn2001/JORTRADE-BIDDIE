@@ -3779,11 +3779,17 @@ router.post("/whale/admin/toggle-admin", async (req, res) => {
     if (!userId) return res.status(400).json({ error: "userId required" });
 
     if (makeAdmin) {
-      await axios.post(
-        `${SUPABASE_URL}/rest/v1/user_roles`,
-        { user_id: userId, role: "admin" },
-        { headers: { ...supabaseAdminHeaders(), Prefer: "resolution=ignore-duplicates,return=minimal" }, timeout: 5000 }
+      const existing = await axios.get(
+        `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&role=eq.admin&limit=1`,
+        { headers: supabaseAdminHeaders(), timeout: 5000 }
       );
+      if (!existing.data?.length) {
+        await axios.post(
+          `${SUPABASE_URL}/rest/v1/user_roles`,
+          { user_id: userId, role: "admin" },
+          { headers: supabaseAdminHeaders(), timeout: 5000 }
+        );
+      }
     } else {
       await axios.delete(
         `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&role=eq.admin`,
