@@ -1688,17 +1688,29 @@ async function runSignalsPipeline() {
     const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
 
     if (optType === "call") {
-      if (pdh && price && price > pdh) {
-        entryTrigger = `Confirmed break above PDH at $${pdh.toFixed(2)} with price holding above`;
-      } else if (vwap && price && price > vwap) {
-        entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed`;
-      } else if (pdh && price) {
-        entryTrigger = `Break above PDH at $${pdh.toFixed(2)}`;
-      } else if (vwap && price) {
-        entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (currently below)`;
+      // CALL: invalidation is below (support breaks = wrong), entry near support, target above
+      if (pdl) {
+        invalidation = `Below PDL at $${pdl.toFixed(2)}`;
+      } else if (s1) {
+        invalidation = `Below S1 at $${s1.toFixed(2)}`;
+      } else if (vwap) {
+        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
+      } else {
+        invalidation = `Level data not available`;
+      }
+      // Entry: near invalidation zone — where you get in with tight risk
+      if (vwap && price && price > vwap) {
+        entryTrigger = `Near or above VWAP at $${vwap.toFixed(2)}`;
+      } else if (pdl && price) {
+        entryTrigger = `Near or above PDL at $${pdl.toFixed(2)}`;
+      } else if (s1 && price) {
+        entryTrigger = `Near or above S1 at $${s1.toFixed(2)}`;
+      } else if (pivot && price) {
+        entryTrigger = `Near or above Pivot at $${pivot.toFixed(2)}`;
       } else {
         entryTrigger = `Level data not available`;
       }
+      // Target: strike price (where the money is betting)
       target = `$${strike.toFixed(2)}`;
       if (pdh && pdh < strike && pdh > (price || 0)) {
         targetNear = `$${pdh.toFixed(2)}`;
@@ -1712,29 +1724,32 @@ async function runSignalsPipeline() {
         const mid = price + (strike - price) * 0.6;
         targetNear = `$${mid.toFixed(2)}`;
       }
-      if (pdl) {
-        invalidation = `Below PDL at $${pdl.toFixed(2)}`;
-      } else if (vwap && price && price > vwap) {
-        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
-      } else if (s1) {
-        invalidation = `Below S1 at $${s1.toFixed(2)}`;
-      } else {
-        invalidation = `Level data not available`;
-      }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      if (pdl && price && price < pdl) {
-        entryTrigger = `Broke below PDL at $${pdl.toFixed(2)} — confirmed`;
-      } else if (vwap && price && price < vwap) {
-        entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed`;
-      } else if (pdl && price) {
-        entryTrigger = `Break below PDL at $${pdl.toFixed(2)}`;
-      } else if (vwap && price) {
-        entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (currently above)`;
+      // PUT: invalidation is above (resistance holds = wrong), entry near resistance, target below
+      if (pdh) {
+        invalidation = `Above PDH at $${pdh.toFixed(2)}`;
+      } else if (r1) {
+        invalidation = `Above R1 at $${r1.toFixed(2)}`;
+      } else if (vwap) {
+        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
+      } else {
+        invalidation = `Level data not available`;
+      }
+      // Entry: near invalidation zone — where you get in with tight risk
+      if (vwap && price && price < vwap) {
+        entryTrigger = `Near or below VWAP at $${vwap.toFixed(2)}`;
+      } else if (pdh && price) {
+        entryTrigger = `Near or below PDH at $${pdh.toFixed(2)}`;
+      } else if (r1 && price) {
+        entryTrigger = `Near or below R1 at $${r1.toFixed(2)}`;
+      } else if (pivot && price) {
+        entryTrigger = `Near or below Pivot at $${pivot.toFixed(2)}`;
       } else {
         entryTrigger = `Level data not available`;
       }
+      // Target: strike price (where the money is betting)
       target = `$${strike.toFixed(2)}`;
       if (pdl && pdl > strike && pdl < (price || Infinity)) {
         targetNear = `$${pdl.toFixed(2)}`;
@@ -1747,15 +1762,6 @@ async function runSignalsPipeline() {
       } else if (price && price > strike) {
         const mid = price - (price - strike) * 0.6;
         targetNear = `$${mid.toFixed(2)}`;
-      }
-      if (pdh) {
-        invalidation = `Above PDH at $${pdh.toFixed(2)}`;
-      } else if (vwap && price && price < vwap) {
-        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
-      } else if (r1) {
-        invalidation = `Above R1 at $${r1.toFixed(2)}`;
-      } else {
-        invalidation = `Level data not available`;
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
