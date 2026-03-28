@@ -1321,8 +1321,17 @@ router.post("/whale/community-chat", async (req, res) => {
   }
 
   const now = getNowEastern();
-  const needs = detectNeeds(message);
   const lower = message.toLowerCase();
+
+  const casualPatterns = [
+    /^(hey|hi|hello|yo|sup|what'?s up|what'?s good|how are you|you there|you here|gm|good morning|good evening|good afternoon|what'?s crackin|how'?s it going|wassup|wsg)/,
+    /^(biddie|@biddie)\s*(you there|you here|what'?s up|what'?s good|hey|hi|yo|sup|how are you|how'?s it going|you around|wya|where you at|talk to me|say something)/i,
+    /^(lol|lmao|facts|bet|true|word|fr|real|nice|dope|fire|damn|sheesh|ong|no cap|cap|haha|😂|🔥|💪|🤝)/,
+    /^(thanks|thank you|appreciate|good looks|thx|ty|tysm)/,
+  ];
+  const isCasual = casualPatterns.some(p => p.test(lower.replace(/^@?biddie\s*/i, "").trim()) || p.test(lower));
+
+  const needs = detectNeeds(message);
   const tradingPhrases = [
     "any plays", "what's the move", "what's the play", "what plays",
     "flow on", "pull up", "break it down", "full analysis", "what's happening with",
@@ -1335,9 +1344,11 @@ router.post("/whale/community-chat", async (req, res) => {
     "expir", "premium", "sweep", "whale", "breakout", "scalp",
     "squeeze", "vwap", "delta", "gamma", "theta", "otm", "itm",
   ];
-  const isTradingQ = needs.tickers.length > 0 || needs.signal || needs.darkpool ||
+  const isTradingQ = !isCasual && (
+    needs.tickers.length > 0 || needs.signal || needs.darkpool ||
     tradingPhrases.some(p => lower.includes(p)) ||
-    tradingWords.some(w => lower.includes(w));
+    tradingWords.some(w => lower.includes(w))
+  );
 
   let dataStr = "";
   if (isTradingQ) {
@@ -1382,6 +1393,7 @@ router.post("/whale/community-chat", async (req, res) => {
     dataStr = `\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
   }
 
+  console.log(`[community-chat] msg="${message.slice(0,50)}" isCasual=${isCasual} isTradingQ=${isTradingQ} hasData=${!!dataStr}`);
   const chatInstruction = `User says: ${message}${dataStr}`;
 
   try {
