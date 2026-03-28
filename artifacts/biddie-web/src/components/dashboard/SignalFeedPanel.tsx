@@ -277,10 +277,13 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           const tn = signal.targetNear;
                           const tz = signal.targetZone;
                           if (!tn || tn === tz) return <span className="text-primary font-semibold">{tz}</span>;
-                          const first = tz;
-                          const second = tn;
-                          const firstLabel = "Strike target";
-                          const secondLabel = "Extended target";
+                          const tzVal = parseFloat((tz || '').replace(/[^0-9.]/g, '')) || 0;
+                          const tnVal = parseFloat((tn || '').replace(/[^0-9.]/g, '')) || 0;
+                          const isCall = signal.putCall === 'call' || signal.type === 'bullish';
+                          const first = isCall ? (tzVal < tnVal ? tz : tn) : (tzVal > tnVal ? tz : tn);
+                          const second = isCall ? (tzVal < tnVal ? tn : tz) : (tzVal > tnVal ? tn : tz);
+                          const firstLabel = first === tz ? "Strike target" : "Extended target";
+                          const secondLabel = second === tz ? "Strike target" : "Extended target";
                           return (
                             <>
                               <span className="text-primary font-semibold">{first} – {second}</span>
