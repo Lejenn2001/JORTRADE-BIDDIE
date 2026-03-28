@@ -4186,6 +4186,77 @@ router.delete("/whale/admin/signal/:id", async (req, res) => {
   }
 });
 
+router.get("/whale/admin/system-health", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId || !(await isAdminUser(adminUserId))) {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const services: { name: string; status: string; details: string; url: string }[] = [];
+
+    try {
+      const r = await axios.get("https://api.polygon.io/v2/aggs/ticker/SPY/prev", {
+        params: { apiKey: process.env["POLYGON_API_KEY"] },
+        timeout: 5000,
+      });
+      const price = r.data?.results?.[0]?.c;
+      services.push({ name: "Polygon.io", status: "ok", details: price ? `Connected — SPY $${price}` : "Connected but no data", url: "https://polygon.io/dashboard" });
+    } catch (e: any) {
+      const msg = e.response?.status === 403 ? "Invalid or expired API key" : e.response?.status === 429 ? "Rate limited — may need higher plan" : e.message;
+      services.push({ name: "Polygon.io", status: "error", details: msg, url: "https://polygon.io/dashboard" });
+    }
+
+    try {
+      const r = await axios.post("https://api.anthropic.com/v1/messages", {
+        model: "claude-sonnet-4-6",
+        max_tokens: 5,
+        messages: [{ role: "user", content: "hi" }],
+      }, {
+        headers: { "x-api-key": process.env["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        timeout: 10000,
+      });
+      services.push({ name: "Anthropic (Claude AI)", status: "ok", details: "Connected — AI signal pipeline active", url: "https://console.anthropic.com" });
+    } catch (e: any) {
+      const body = e.response?.data?.error?.message || "";
+      let msg = "Unknown error";
+      if (body.includes("credit balance")) msg = "Out of credits — add funds to resume AI signals";
+      else if (e.response?.status === 401) msg = "Invalid API key";
+      else if (body) msg = body;
+      services.push({ name: "Anthropic (Claude AI)", status: "error", details: msg, url: "https://console.anthropic.com" });
+    }
+
+    try {
+      const r = await axios.get("https://api.unusualwhales.com/api/stock/SPY/options-volume", {
+        headers: { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"]}` },
+        timeout: 5000,
+      });
+      services.push({ name: "Unusual Whales", status: "ok", details: "Connected — options flow active", url: "https://unusualwhales.com/account" });
+    } catch (e: any) {
+      const msg = e.response?.status === 401 ? "Invalid or expired API key" : e.response?.status === 403 ? "Subscription expired" : e.message;
+      services.push({ name: "Unusual Whales", status: "error", details: msg, url: "https://unusualwhales.com/account" });
+    }
+
+    try {
+      const dbResult = await dbQuery("SELECT COUNT(*) as count FROM signal_outcomes");
+      const count = dbResult?.rows?.[0]?.count || 0;
+      services.push({ name: "Database", status: "ok", details: `Connected — ${count} total signals`, url: "" });
+    } catch (e: any) {
+      services.push({ name: "Database", status: "error", details: e.message, url: "" });
+    }
+
+    if (process.env["DISCORD_WEBHOOK_URL"]) {
+      services.push({ name: "Discord Webhook", status: "ok", details: "Configured", url: "https://discord.com" });
+    } else {
+      services.push({ name: "Discord Webhook", status: "warning", details: "Not configured", url: "" });
+    }
+
+    res.json({ services });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/sync-signal-fields", async (req, res) => {
   try {
     const { adminSecret, updates } = req.body;

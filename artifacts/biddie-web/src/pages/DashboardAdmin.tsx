@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server } from "lucide-react";
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import { Link } from "react-router-dom";
 
@@ -67,10 +67,29 @@ const DashboardAdmin = () => {
   const [chatCount, setChatCount] = useState(0);
   const [apiUsageToday, setApiUsageToday] = useState(0);
   const [apiUsageMinute, setApiUsageMinute] = useState(0);
+  const [systemHealth, setSystemHealth] = useState<{ name: string; status: string; details: string; url: string }[]>([]);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthChecked, setHealthChecked] = useState(false);
+
+  const fetchSystemHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const resp = await fetch("/api/whale/admin/system-health", {
+        headers: { "x-user-id": user?.id || "" },
+      });
+      const data = await resp.json();
+      setSystemHealth(data.services || []);
+      setHealthChecked(true);
+    } catch {
+      toast.error("Failed to check system health");
+    }
+    setHealthLoading(false);
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
     fetchUsers();
+    fetchSystemHealth();
   }, [isAdmin]);
 
   const fetchUsers = async () => {
@@ -401,6 +420,73 @@ const DashboardAdmin = () => {
               </>
             );
           })()}
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-panel rounded-xl p-6 border-border/40"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Server className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-bold text-foreground">System Health</h3>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchSystemHealth}
+                disabled={healthLoading}
+                className="gap-1.5"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${healthLoading ? 'animate-spin' : ''}`} />
+                {healthLoading ? 'Checking...' : 'Refresh'}
+              </Button>
+            </div>
+            {!healthChecked && !healthLoading ? (
+              <p className="text-sm text-muted-foreground">Loading health checks...</p>
+            ) : (
+              <div className="space-y-2">
+                {systemHealth.map((svc) => (
+                  <div
+                    key={svc.name}
+                    className={`flex items-center justify-between rounded-lg px-4 py-3 ${
+                      svc.status === 'ok' ? 'bg-emerald-500/10 border border-emerald-500/20' :
+                      svc.status === 'warning' ? 'bg-amber-500/10 border border-amber-500/20' :
+                      'bg-red-500/10 border border-red-500/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {svc.status === 'ok' ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                      ) : svc.status === 'warning' ? (
+                        <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-400 shrink-0" />
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{svc.name}</p>
+                        <p className={`text-xs ${
+                          svc.status === 'ok' ? 'text-emerald-400' :
+                          svc.status === 'warning' ? 'text-amber-400' :
+                          'text-red-400'
+                        }`}>{svc.details}</p>
+                      </div>
+                    </div>
+                    {svc.url && (
+                      <a
+                        href={svc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Manage <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
 
           <AdminSignalInsights />
 
