@@ -509,7 +509,8 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
               {userTrades.slice(0, 20).map(trade => {
                 const targetPrice = parseTargetPrice(trade.target);
-                const entryPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
+                const alertPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
+                const entryPrice = trade.entry_price ? Number(trade.entry_price) : alertPrice;
                 const priceInfo = getPrice(trade.ticker);
                 const currentPrice = priceInfo?.price ?? null;
                 const isBullish = (trade.signal_type || trade.direction) === "bullish";

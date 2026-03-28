@@ -3649,7 +3649,7 @@ router.get("/whale/market-pulse", async (_req, res) => {
 
 router.post("/whale/trades", async (req, res) => {
   try {
-    const { userId, signalId, ticker, direction, category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore } = req.body;
+    const { userId, signalId, ticker, direction, category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore, entryPrice } = req.body;
     if (!userId || !signalId || !ticker) {
       return res.status(400).json({ error: "userId, signalId, and ticker are required" });
     }
@@ -3660,10 +3660,11 @@ router.post("/whale/trades", async (req, res) => {
     if (existing && existing.rows.length > 0) {
       return res.status(409).json({ error: "Trade already taken", tradeId: existing.rows[0].id });
     }
+    await dbQuery(`ALTER TABLE user_trades ADD COLUMN IF NOT EXISTS entry_price NUMERIC`, []);
     const result = await dbQuery(
-      `INSERT INTO user_trades (user_id, signal_id, ticker, direction, category, strike, expiry, option_type, entry_trigger, target, invalidation, conviction_score)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-      [userId, signalId, ticker, direction || "bullish", category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore]
+      `INSERT INTO user_trades (user_id, signal_id, ticker, direction, category, strike, expiry, option_type, entry_trigger, target, invalidation, conviction_score, entry_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [userId, signalId, ticker, direction || "bullish", category, strike, expiry, optionType, entryTrigger, target, invalidation, convictionScore, entryPrice || null]
     );
     if (!result) return res.status(500).json({ error: "Failed to save trade" });
     res.json({ success: true, trade: result.rows[0] });
@@ -3691,7 +3692,7 @@ router.get("/whale/trades", async (req, res) => {
     const userId = req.query.userId as string;
     if (!userId) return res.status(400).json({ error: "userId required" });
     const result = await dbQuery(
-      `SELECT ut.*, so.outcome as signal_outcome, so.resolved_at as signal_resolved_at, so.price_at_signal, so.signal_type
+      `SELECT ut.*, ut.entry_price, so.outcome as signal_outcome, so.resolved_at as signal_resolved_at, so.price_at_signal, so.signal_type
        FROM user_trades ut
        LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
        WHERE ut.user_id = $1

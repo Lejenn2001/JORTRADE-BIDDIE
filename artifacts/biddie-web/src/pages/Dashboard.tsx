@@ -142,6 +142,7 @@ const Dashboard = () => {
         await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
         setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
       } else {
+        const livePrice = getPrice(signal.ticker);
         await fetch("/api/whale/trades", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -158,6 +159,7 @@ const Dashboard = () => {
             target: signal.targetZone,
             invalidation: signal.invalidation,
             convictionScore: signal.convictionScore ?? Math.round(signal.confidence * 10),
+            entryPrice: livePrice?.price || signal.priceAtSignal || null,
           }),
         });
         setTakenSignalIds(prev => new Set(prev).add(signal.id));

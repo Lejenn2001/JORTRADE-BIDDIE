@@ -159,6 +159,7 @@ const DashboardSignals = () => {
         await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
         setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
       } else {
+        const livePrice = getPrice?.(signal.ticker);
         await fetch("/api/whale/trades", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -175,6 +176,7 @@ const DashboardSignals = () => {
             target: signal.targetZone,
             invalidation: signal.invalidation,
             convictionScore: signal.convictionScore,
+            entryPrice: livePrice?.price || signal.priceAtSignal || null,
           }),
         });
         setTakenSignalIds(prev => new Set(prev).add(signal.id));
@@ -576,7 +578,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
             {signal.priceAtSignal && (
               <span className="flex items-center gap-1 text-xs font-mono">
-                <span className="text-muted-foreground">Entry:</span>
+                <span className="text-muted-foreground">Alert:</span>
                 <span className="text-foreground font-semibold">${signal.priceAtSignal.toFixed(2)}</span>
               </span>
             )}
