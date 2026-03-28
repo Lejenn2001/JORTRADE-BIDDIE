@@ -710,26 +710,27 @@ const AdminSignalInsights = () => {
               <tr className="border-b border-border/30">
                 <th className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase">#</th>
                 {[
-                  { key: "status", label: "Status" },
-                  { key: "detected", label: "Detected" },
-                  { key: "ticker", label: "Ticker" },
-                  { key: "option", label: "Option" },
-                  { key: "direction", label: "Dir" },
-                  { key: "entry", label: "Alert $" },
-                  { key: "target", label: "Target $" },
-                  { key: "invalidation", label: "Inval $" },
-                  { key: "pctProfit", label: "% Profit" },
-                  { key: "pctTarget", label: "% to Tgt" },
-                  { key: "reachedEntry", label: "Entry?" },
-                  { key: "breachedInv", label: "Inval?" },
-                  { key: "pctPastInv", label: "% Past Inv" },
-                  { key: "timeAtTarget", label: "Time @ Tgt" },
-                  { key: "score", label: "Score" },
+                  { key: "status", label: "Status", tip: "Signal outcome: Hit (target reached), Missed (invalidated), or Pending (still active)" },
+                  { key: "detected", label: "Detected", tip: "Date and time the signal was first detected and delivered" },
+                  { key: "ticker", label: "Ticker", tip: "Stock or ETF symbol" },
+                  { key: "option", label: "Option", tip: "Option contract details: CALL/PUT, strike price, and expiration date" },
+                  { key: "direction", label: "Dir", tip: "Bullish (expecting price to rise) or Bearish (expecting price to fall)" },
+                  { key: "entry", label: "Alert $", tip: "Underlying stock price when the signal was generated" },
+                  { key: "target", label: "Target $", tip: "Price target — the level the signal expects the stock to reach" },
+                  { key: "invalidation", label: "Inval $", tip: "Invalidation level — if price crosses this, the signal thesis is broken" },
+                  { key: "pctProfit", label: "MFE %", tip: "Maximum Favorable Excursion — the best % move in the signal's direction since alert" },
+                  { key: "pctTarget", label: "% to Tgt", tip: "How far price moved toward the target as a percentage of total distance" },
+                  { key: "reachedEntry", label: "Entry?", tip: "Whether the suggested entry price level was reached" },
+                  { key: "breachedInv", label: "Inval?", tip: "Whether the invalidation level was breached" },
+                  { key: "pctPastInv", label: "% Past Inv", tip: "How far past the invalidation level price moved (adverse excursion)" },
+                  { key: "timeAtTarget", label: "Time @ Tgt", tip: "Date and time the target price was first reached" },
+                  { key: "score", label: "Score", tip: "AI confidence score (1-10) based on flow quality, price action, and key levels" },
                 ].map(col => (
                   <th
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
                     className="text-left px-4 py-2.5 text-[10px] font-medium text-muted-foreground uppercase cursor-pointer hover:text-foreground transition-colors select-none"
+                    title={col.tip}
                   >
                     <span className="inline-flex items-center gap-1">
                       {col.label}
@@ -814,6 +815,10 @@ const AdminSignalInsights = () => {
                         return m ? `$${parseFloat(m[1]).toFixed(2)}` : "—";
                       })()}</td>
                       <td className="px-4 py-2 text-xs font-semibold">{(() => {
+                        if (s.mfe_percent != null && Number(s.mfe_percent) !== 0) {
+                          const pct = Number(s.mfe_percent);
+                          return <span className={pct >= 0 ? "text-emerald-400" : "text-destructive"}>{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</span>;
+                        }
                         const alertP = s.price_at_signal ? Number(s.price_at_signal) : null;
                         const mfp = s.max_favorable_price ? Number(s.max_favorable_price) : null;
                         if (!alertP || !mfp || alertP <= 0) return <span className="text-muted-foreground">—</span>;
