@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
+import SignalLegend from "@/components/dashboard/SignalLegend";
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
@@ -434,6 +435,8 @@ const DashboardSignals = () => {
               </button>
             </div>
           </div>
+
+          <SignalLegend />
 
           {loading && signals.length === 0 && (
             <div className="space-y-3">

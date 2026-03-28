@@ -12,6 +12,13 @@ const terms = [
   { label: "ATM", desc: "At-The-Money — the option strike is near the current stock price" },
 ];
 
+const mfeColors = [
+  { color: "bg-emerald-400", text: "text-emerald-400", label: "MFE 100%+", desc: "Price fully reached the target zone" },
+  { color: "bg-blue-400", text: "text-blue-400", label: "MFE 50–99%", desc: "Price moved at least halfway to target" },
+  { color: "bg-yellow-400", text: "text-yellow-400", label: "MFE 1–49%", desc: "Price moved toward target but less than halfway" },
+  { color: "bg-red-400", text: "text-red-400", label: "MFE 0%", desc: "Price moved against the trade direction" },
+];
+
 const SignalLegend = () => {
   const [open, setOpen] = useState(false);
 
@@ -28,13 +35,30 @@ const SignalLegend = () => {
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </button>
       {open && (
-        <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {terms.map((t) => (
-            <div key={t.label} className="text-[11px] leading-snug">
-              <span className="font-semibold text-primary">{t.label}</span>
-              <span className="text-muted-foreground"> — {t.desc}</span>
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {terms.map((t) => (
+              <div key={t.label} className="text-[11px] leading-snug">
+                <span className="font-semibold text-primary">{t.label}</span>
+                <span className="text-muted-foreground"> — {t.desc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-muted/30 pt-2.5">
+            <p className="text-[11px] font-semibold text-foreground mb-1.5">MFE (Max Favorable Excursion)</p>
+            <p className="text-[10px] text-muted-foreground mb-2">How far the price moved toward the target zone after signal detection.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {mfeColors.map((m) => (
+                <div key={m.label} className="flex items-center gap-1.5 text-[10px]">
+                  <span className={`w-2 h-2 rounded-full ${m.color} shrink-0`} />
+                  <span>
+                    <span className={`font-semibold ${m.text}`}>{m.label}</span>
+                    <span className="text-muted-foreground block leading-tight">{m.desc}</span>
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>
