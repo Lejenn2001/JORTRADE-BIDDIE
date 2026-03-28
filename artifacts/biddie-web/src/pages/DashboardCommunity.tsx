@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Trash2, Bot, Lock, ArrowUpRight } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Trash2, Bot, Lock, ArrowUpRight, Smile } from "lucide-react";
 import { Link } from "react-router-dom";
 import biddieRobot from "@/assets/biddie-robot.png";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -30,6 +30,30 @@ const DashboardCommunity = () => {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [biddieThinking, setBiddieThinking] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
+  const EMOJI_LIST = [
+    "🔥","💪","👀","🚀","📈","📉","💰","🤝","😤","😏",
+    "🫡","💎","🧠","⚡","🎯","☀️","🍞","😂","💀","🤣",
+    "❤️","👏","🙏","😎","🤑","😈","👑","✅","❌","⚠️",
+    "🐂","🐻","🦅","🔴","🟢","💸","📊","🏆","😴","🤔",
+  ];
+
+  const insertEmoji = useCallback((emoji: string) => {
+    setInput((prev) => prev + emoji);
+    setShowEmojis(false);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojis(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [onlineCount, setOnlineCount] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -304,7 +328,34 @@ const DashboardCommunity = () => {
           </div>
 
           {/* Input */}
-          <div className="glass-panel rounded-xl p-1.5 sm:p-2.5 flex gap-1.5 sm:gap-2 border-glow-blue shrink-0">
+          <div className="glass-panel rounded-xl p-1.5 sm:p-2.5 flex gap-1.5 sm:gap-2 border-glow-blue shrink-0 relative">
+            <div className="relative" ref={emojiRef}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-xl h-9 w-9 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowEmojis((v) => !v)}
+              >
+                <Smile className="h-4 w-4" />
+              </Button>
+              {showEmojis && (
+                <div className="absolute bottom-11 left-0 z-50 glass-panel rounded-xl border border-border/60 p-2 w-[280px] shadow-xl">
+                  <div className="grid grid-cols-10 gap-0.5">
+                    {EMOJI_LIST.map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => insertEmoji(e)}
+                        className="w-6 h-6 flex items-center justify-center text-base hover:bg-muted/60 rounded transition-colors cursor-pointer"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
