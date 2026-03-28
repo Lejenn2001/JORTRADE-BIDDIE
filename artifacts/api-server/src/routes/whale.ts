@@ -71,6 +71,34 @@ async function dbQuery(text: string, params?: any[]): Promise<any> {
   }
 }
 
+const SEED_ADMIN_IDS = [
+  "6e8cffca-7c06-4896-b67f-478965ac6556",
+  "5845af78-f880-431b-b2c0-56a9923e6835",
+];
+
+(async () => {
+  try {
+    await dbQuery(
+      `CREATE TABLE IF NOT EXISTS user_roles (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, role)
+      )`
+    );
+    for (const uid of SEED_ADMIN_IDS) {
+      await dbQuery(
+        `INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin') ON CONFLICT (user_id, role) DO NOTHING`,
+        [uid]
+      );
+    }
+    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles`);
+  } catch (e: any) {
+    console.error("[admin-seed] Failed:", e.message);
+  }
+})();
+
 async function isAdminUser(userId: string): Promise<boolean> {
   const localCheck = await dbQuery(
     `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1`,
