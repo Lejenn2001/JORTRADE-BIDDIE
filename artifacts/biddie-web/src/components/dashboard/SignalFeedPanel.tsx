@@ -92,7 +92,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
             const priceInfo = getPrice?.(signal.ticker);
             const categoryLabel = signal.category === "whale" ? "WHALE PLAY" : signal.category === "spread" ? "SPREAD PLAY" : "TOP SIGNAL";
             const catColor = signal.category === "whale" ? "text-blue-400" : signal.category === "spread" ? "text-violet-400" : "text-emerald-400";
-            const hasDetails = signal.pricePattern || signal.gammaZone || signal.gammaLevelLabel || signal.keyLevel || signal.spreadDetails;
+            const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
 
             return (
               <motion.div
@@ -227,11 +227,19 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 gap-1.5">
                     {signal.suggestedTrade && (
                       <div className="flex items-center gap-1.5 bg-muted/30 rounded-lg px-3 py-1.5 text-xs">
                         <Target className="h-3 w-3 text-primary shrink-0" />
-                        <span className="text-foreground font-medium">{signal.suggestedTrade}</span>
+                        <span className="text-muted-foreground">Trade:</span>
+                        <span className="text-foreground font-semibold">{signal.suggestedTrade}</span>
+                      </div>
+                    )}
+                    {signal.entryTrigger && (
+                      <div className="flex items-center gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
+                        <TrendingUp className="h-3 w-3 text-primary shrink-0" />
+                        <span className="text-muted-foreground">Entry:</span>
+                        <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
                       </div>
                     )}
                     {signal.targetZone && (
@@ -244,19 +252,25 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     {signal.invalidation && (
                       <div className="flex items-center gap-1.5 bg-destructive/10 rounded-lg px-3 py-1.5 text-xs">
                         <ShieldX className="h-3 w-3 text-destructive shrink-0" />
-                        <span className="text-muted-foreground">Stop:</span>
+                        <span className="text-muted-foreground">Invalidation:</span>
                         <span className="text-destructive font-semibold">{signal.invalidation}</span>
                       </div>
                     )}
+                    {signal.keyLevel && (
+                      <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
+                        <Crosshair className="h-3 w-3 text-primary shrink-0" />
+                        <span className="text-muted-foreground">Key level:</span>
+                        <span className="text-primary font-semibold">{signal.keyLevel}</span>
+                      </div>
+                    )}
+                    {signal.srLevel && (
+                      <div className="flex items-center gap-1.5 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
+                        <Gauge className="h-3 w-3 text-accent shrink-0" />
+                        <span className="text-muted-foreground">S/R:</span>
+                        <span className="text-accent font-semibold">{signal.srLevel}</span>
+                      </div>
+                    )}
                   </div>
-
-                  {signal.entryTrigger && (
-                    <div className="flex items-center gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
-                      <Crosshair className="h-3 w-3 text-primary shrink-0" />
-                      <span className="text-muted-foreground">Trigger:</span>
-                      <span className="text-foreground font-medium">{signal.entryTrigger}</span>
-                    </div>
-                  )}
 
                   {hasDetails && (
                     <>
@@ -323,21 +337,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                               </div>
                             )}
 
-                            {signal.gammaLevelLabel && (!signal.gammaZone || signal.gammaZone === 'neutral') && (
-                              <div className="flex items-start gap-2 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
-                                <Gauge className="h-3 w-3 text-accent mt-0.5 shrink-0" />
-                                <span className="text-muted-foreground">S/R: </span>
-                                <span className="text-accent font-semibold">{signal.gammaLevelLabel}</span>
-                              </div>
-                            )}
-
-                            {signal.keyLevel && (
-                              <div className="flex items-start gap-2 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
-                                <Crosshair className="h-3 w-3 text-primary mt-0.5 shrink-0" />
-                                <span className="text-muted-foreground">Key level: </span>
-                                <span className="text-primary font-semibold">{signal.keyLevel}</span>
-                              </div>
-                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>

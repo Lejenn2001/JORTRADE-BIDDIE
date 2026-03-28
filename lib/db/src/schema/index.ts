@@ -29,6 +29,8 @@ export const signalOutcomes = pgTable("signal_outcomes", {
   pricePattern: text("price_pattern"),
   maxFavorablePrice: numeric("max_favorable_price", { precision: 12, scale: 2 }),
   mfePercent: numeric("mfe_percent", { precision: 8, scale: 2 }),
+  keyLevel: text("key_level"),
+  srLevel: text("sr_level"),
 }, (table) => [
   index("idx_signal_outcomes_ticker").on(table.ticker),
   index("idx_signal_outcomes_category").on(table.category),

@@ -38,6 +38,7 @@ export interface MarketSignal {
   entryTrigger?: string;
   invalidation?: string;
   keyLevel?: string;
+  srLevel?: string;
   targetZone?: string;
   createdAt?: string;
   detectedAtMs?: number;
@@ -512,6 +513,7 @@ export function useMarketData() {
               entryTrigger: s.entry_trigger,
               invalidation: s.invalidation,
               keyLevel: s.key_level,
+              srLevel: s.sr_level,
               targetZone: s.target,
               source: "live",
               timeframe,

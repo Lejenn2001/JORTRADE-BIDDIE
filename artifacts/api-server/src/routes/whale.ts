@@ -1682,118 +1682,68 @@ async function runSignalsPipeline() {
     const belowPdl = price && pdl ? price < pdl : null;
     const abovePivot = price && pivot ? price > pivot : null;
 
+    let srLevel = "";
+    const psych = Math.round(strike / 10) * 10;
+    const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
+
     if (optType === "call") {
-      // Entry trigger — context-aware based on where price actually is
-      if (vwap && price) {
-        if (price > vwap) {
-          entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed`;
-        } else {
-          entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (currently below)`;
-        }
-      } else if (pdh) {
-        entryTrigger = price && price > pdh
-          ? `Broke above PDH at $${pdh.toFixed(2)} — confirmed`
-          : `Break above PDH at $${pdh.toFixed(2)}`;
+      // Entry — condition-based, relative to key levels
+      if (pdh && price && price > pdh) {
+        entryTrigger = `Confirmed break above PDH at $${pdh.toFixed(2)} with price holding above`;
+      } else if (vwap && price && price > vwap) {
+        entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed`;
+      } else if (pdh && price) {
+        entryTrigger = `Break above PDH at $${pdh.toFixed(2)}`;
+      } else if (vwap && price) {
+        entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (currently below)`;
       } else {
-        entryTrigger = `Above $${strike}`;
+        entryTrigger = `Above $${strike.toFixed(2)}`;
       }
-      // Target — next resistance ABOVE current price (calls want price to go UP)
-      {
-        const aboveLevels: { label: string; val: number }[] = [];
-        if (r1 && price && r1 > price) aboveLevels.push({ label: `R1 at $${r1.toFixed(2)}`, val: r1 });
-        if (pdh && price && pdh > price) aboveLevels.push({ label: `PDH at $${pdh.toFixed(2)}`, val: pdh });
-        if (vwap && price && vwap > price) aboveLevels.push({ label: `VWAP at $${vwap.toFixed(2)}`, val: vwap });
-        aboveLevels.sort((a, b) => a.val - b.val);
-        if (aboveLevels.length >= 2) {
-          target = `${aboveLevels[0].label}, then ${aboveLevels[1].label}`;
-        } else if (aboveLevels.length === 1) {
-          target = aboveLevels[0].label;
-        } else if (strike > (price || 0)) {
-          target = `$${strike.toFixed(2)}`;
-        } else {
-          const pct = price ? price * 1.02 : strike * 1.02;
-          target = `$${pct.toFixed(2)}`;
-        }
-      }
-      // Final validation: ensure call target is above entry
-      if (target && price) {
-        const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
-        if (tMatch) {
-          const tVal = parseFloat(tMatch[1]);
-          if (tVal <= price) {
-            target = strike > price ? `$${strike.toFixed(2)}` : `$${(price * 1.02).toFixed(2)}`;
-          }
-        }
-      }
-      // Invalidation — next support below
-      if (vwap && price && price > vwap && pdl) {
-        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
-      } else if (pdl) {
+      // Target — where the money is betting (strike price)
+      target = `$${strike.toFixed(2)}`;
+      // Invalidation — key level that breaks the thesis
+      if (pdl) {
         invalidation = `Below PDL at $${pdl.toFixed(2)}`;
+      } else if (vwap && price && price > vwap) {
+        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
       } else if (s1) {
         invalidation = `Below S1 at $${s1.toFixed(2)}`;
-      } else if (vwap) {
-        invalidation = `Below VWAP at $${vwap.toFixed(2)}`;
       } else {
-        invalidation = `Below $${(strike * 0.98).toFixed(2)}`;
+        invalidation = `Below $${(price ? price * 0.98 : strike * 0.98).toFixed(2)}`;
       }
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : `$${strike}`);
+      // Key level — pivot or VWAP
+      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+      // S/R — psychological or structural level
+      srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      // PUT — Entry trigger context-aware
-      if (vwap && price) {
-        if (price < vwap) {
-          entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed`;
-        } else {
-          entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (currently above)`;
-        }
-      } else if (pdl) {
-        entryTrigger = price && price < pdl
-          ? `Broke below PDL at $${pdl.toFixed(2)} — confirmed`
-          : `Break below PDL at $${pdl.toFixed(2)}`;
+      // PUT — Entry condition-based
+      if (pdl && price && price < pdl) {
+        entryTrigger = `Broke below PDL at $${pdl.toFixed(2)} — confirmed`;
+      } else if (vwap && price && price < vwap) {
+        entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed`;
+      } else if (pdl && price) {
+        entryTrigger = `Break below PDL at $${pdl.toFixed(2)}`;
+      } else if (vwap && price) {
+        entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (currently above)`;
       } else {
-        entryTrigger = `Below $${strike}`;
+        entryTrigger = `Below $${strike.toFixed(2)}`;
       }
-      // Target — next support BELOW current price (puts want price to go DOWN)
-      {
-        const belowLevels: { label: string; val: number }[] = [];
-        if (s1 && price && s1 < price) belowLevels.push({ label: `S1 at $${s1.toFixed(2)}`, val: s1 });
-        if (pdl && price && pdl < price) belowLevels.push({ label: `PDL at $${pdl.toFixed(2)}`, val: pdl });
-        if (vwap && price && vwap < price) belowLevels.push({ label: `VWAP at $${vwap.toFixed(2)}`, val: vwap });
-        belowLevels.sort((a, b) => b.val - a.val);
-        if (belowLevels.length >= 2) {
-          target = `${belowLevels[0].label}, then ${belowLevels[1].label}`;
-        } else if (belowLevels.length === 1) {
-          target = belowLevels[0].label;
-        } else if (strike < (price || Infinity)) {
-          target = `$${strike.toFixed(2)}`;
-        } else {
-          const pct = price ? price * 0.98 : strike * 0.98;
-          target = `$${pct.toFixed(2)}`;
-        }
-      }
-      // Final validation: ensure put target is below entry
-      if (target && price) {
-        const tMatch = target.match(/\$([0-9]+\.?[0-9]*)/);
-        if (tMatch) {
-          const tVal = parseFloat(tMatch[1]);
-          if (tVal >= price) {
-            target = strike < price ? `$${strike.toFixed(2)}` : `$${(price * 0.98).toFixed(2)}`;
-          }
-        }
-      }
-      // Invalidation — next resistance above
-      if (vwap && price && price < vwap && pdh) {
-        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
-      } else if (pdh) {
+      // Target — where the money is betting (strike price)
+      target = `$${strike.toFixed(2)}`;
+      // Invalidation — key level that breaks the thesis
+      if (pdh) {
         invalidation = `Above PDH at $${pdh.toFixed(2)}`;
+      } else if (vwap && price && price < vwap) {
+        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
       } else if (r1) {
         invalidation = `Above R1 at $${r1.toFixed(2)}`;
-      } else if (vwap) {
-        invalidation = `Above VWAP at $${vwap.toFixed(2)}`;
       } else {
-        invalidation = `Above $${(strike * 1.02).toFixed(2)}`;
+        invalidation = `Above $${(price ? price * 1.02 : strike * 1.02).toFixed(2)}`;
       }
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : `$${strike}`);
+      // Key level — pivot or VWAP
+      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+      // S/R — psychological or structural level
+      srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
     // Reason
@@ -1842,7 +1792,7 @@ async function runSignalsPipeline() {
       ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
       current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
       pivot, r1, s1,
-      entry_trigger: entryTrigger, key_level: keyLevel, target, invalidation,
+      entry_trigger: entryTrigger, key_level: keyLevel, sr_level: srLevel, target, invalidation,
       reason, confidence, tags,
       created_at: c.created_at || null,
       detected_at: getNowEastern(),
@@ -2243,14 +2193,14 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (existing && existing.rows.length > 0) continue;
 
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, detected_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, detected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
-          s.current_price || null
+          s.current_price || null, s.key_level || null, s.sr_level || null
         ]
       );
     } catch {}
@@ -2909,39 +2859,11 @@ router.post("/whale/verify-signals", async (_req, res) => {
 router.post("/whale/fix-targets", async (_req, res) => {
   try {
     const r1 = await dbQuery(`
-      WITH parsed AS (
-        SELECT id, ticker, direction, price_at_signal, strike, target,
-          (regexp_matches(target, '\\$([0-9]+\\.?[0-9]*)'))[1]::numeric as first_target_price
-        FROM signal_outcomes 
-        WHERE signal_source = 'replit' AND price_at_signal IS NOT NULL AND target IS NOT NULL
-      )
-      UPDATE signal_outcomes so
-      SET target = CASE
-        WHEN p.direction = 'bullish' AND p.strike IS NOT NULL AND p.strike > p.price_at_signal THEN '$' || ROUND(p.strike, 2)::text
-        WHEN p.direction = 'bullish' THEN '$' || ROUND(p.price_at_signal * 1.02, 2)::text
-        WHEN p.direction = 'bearish' AND p.strike IS NOT NULL AND p.strike < p.price_at_signal THEN '$' || ROUND(p.strike, 2)::text
-        WHEN p.direction = 'bearish' THEN '$' || ROUND(p.price_at_signal * 0.98, 2)::text
-      END
-      FROM parsed p
-      WHERE so.id = p.id
-        AND (
-          (p.direction = 'bullish' AND p.first_target_price < p.price_at_signal)
-          OR (p.direction = 'bearish' AND p.first_target_price > p.price_at_signal)
-        )
+      UPDATE signal_outcomes 
+      SET target = '$' || ROUND(strike, 2)::text
+      WHERE signal_source = 'replit' AND strike IS NOT NULL
     `);
     const r2 = await dbQuery(`
-      UPDATE signal_outcomes
-      SET target = '$' || ROUND(strike, 2)::text
-      WHERE signal_source = 'replit'
-        AND price_at_signal IS NOT NULL
-        AND strike IS NOT NULL
-        AND target ~ '^\\$[0-9]+\\.?[0-9]*$'
-        AND (
-          (direction = 'bullish' AND strike > price_at_signal)
-          OR (direction = 'bearish' AND strike < price_at_signal)
-        )
-    `);
-    const r3 = await dbQuery(`
       WITH parsed AS (
         SELECT id, ticker, direction, price_at_signal, max_favorable_price,
           (regexp_matches(target, '\\$([0-9]+\\.?[0-9]*)'))[1]::numeric as target_price
@@ -2958,7 +2880,7 @@ router.post("/whale/fix-targets", async (_req, res) => {
           OR (p.direction = 'bearish' AND p.max_favorable_price > p.target_price)
         )
     `);
-    res.json({ ok: true, wrongDirectionFixed: r1.rowCount, strikeTargetsApplied: r2.rowCount, falseHitsReset: r3.rowCount });
+    res.json({ ok: true, targetsSetToStrike: r1.rowCount, falseHitsReset: r2.rowCount });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -109,6 +109,8 @@ function dbRecordToSignal(record: any): MarketSignal {
     maxFavorablePrice: record.max_favorable_price != null ? Number(record.max_favorable_price) : null,
     entryTrigger: record.entry_trigger,
     invalidation: record.invalidation,
+    keyLevel: record.key_level,
+    srLevel: record.sr_level,
     spreadDetails: record.spread_details || null,
   };
 }
@@ -646,58 +648,8 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
               <TrendingUp className="h-3 w-3 text-primary mt-0.5 shrink-0" />
               <div className="min-w-0">
-                <span className="text-muted-foreground">Trigger: </span>
+                <span className="text-muted-foreground">Entry: </span>
                 <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
-              </div>
-            </div>
-          )}
-          {signal.pricePattern && (
-            <div className="flex items-start gap-2 bg-emerald-500/10 rounded-lg px-2.5 py-1.5">
-              <CheckCircle2 className="h-3 w-3 text-emerald-400 mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Price pattern: </span>
-                <span className="text-emerald-400 font-semibold">{signal.pricePattern}</span>
-              </div>
-            </div>
-          )}
-          {signal.spreadDetails && (
-            <div className="bg-violet-500/10 rounded-lg px-2.5 py-2 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Target className="h-3 w-3 text-violet-400 shrink-0" />
-                <span className="text-violet-400 font-semibold text-xs">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-              </div>
-              {signal.spreadDetails.legs && (
-                <div className="flex items-start gap-2 pl-5">
-                  <span className="text-foreground font-medium text-[11px]">{signal.spreadDetails.legs}</span>
-                </div>
-              )}
-              {(signal.spreadDetails.max_profit != null || signal.spreadDetails.max_loss != null || signal.spreadDetails.risk_reward) && (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 pl-5 text-[10px]">
-                  {signal.spreadDetails.max_profit != null && (
-                    <span><span className="text-muted-foreground">Max Profit: </span><span className="text-emerald-400 font-semibold">${signal.spreadDetails.max_profit}</span></span>
-                  )}
-                  {signal.spreadDetails.max_loss != null && (
-                    <span><span className="text-muted-foreground">Max Loss: </span><span className="text-red-400 font-semibold">${signal.spreadDetails.max_loss}</span></span>
-                  )}
-                  {signal.spreadDetails.risk_reward && (
-                    <span><span className="text-muted-foreground">R/R: </span><span className="text-violet-400 font-semibold">{signal.spreadDetails.risk_reward}</span></span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {signal.gammaZone && signal.gammaZone !== 'neutral' && (
-            <div className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 ${
-              signal.gammaZone === 'negative' ? 'bg-orange-500/10' : 'bg-blue-500/10'
-            }`}>
-              <Gauge className={`h-3 w-3 mt-0.5 shrink-0 ${
-                signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
-              }`} />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Gamma: </span>
-                <span className={`font-semibold ${
-                  signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
-                }`}>{signal.gammaDescription}</span>
               </div>
             </div>
           )}
@@ -728,12 +680,12 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
               </div>
             </div>
           )}
-          {signal.gammaLevelLabel && (!signal.gammaZone || signal.gammaZone === 'neutral') && (
+          {(signal.srLevel || signal.gammaLevelLabel) && (
             <div className="flex items-start gap-2 bg-accent/10 rounded-lg px-2.5 py-1.5">
               <Gauge className="h-3 w-3 text-accent mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <span className="text-muted-foreground">S/R: </span>
-                <span className="text-accent font-semibold">{signal.gammaLevelLabel}</span>
+                <span className="text-accent font-semibold">{signal.srLevel || signal.gammaLevelLabel}</span>
               </div>
             </div>
           )}
