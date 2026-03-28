@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, Radio, ChevronDown, ChevronUp } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, Radio, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
 import type { PriceInfo } from "@/hooks/useRealtimePrices";
@@ -189,6 +189,19 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         ) : signal.timeframe === "swing" ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing</span>
                         ) : null}
+                        {signal.outcome === "hit" || signal.outcome === "win" ? (
+                          <span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle2 className="h-3 w-3" /> HIT
+                          </span>
+                        ) : signal.outcome === "missed" || signal.outcome === "miss" || signal.outcome === "loss" ? (
+                          <span className="flex items-center gap-0.5 text-[9px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full">
+                            <XCircle className="h-3 w-3" /> MISS
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5 text-[9px] font-bold text-yellow-400 bg-yellow-400/15 px-1.5 py-0.5 rounded-full">
+                            <Clock className="h-3 w-3" /> PENDING
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">

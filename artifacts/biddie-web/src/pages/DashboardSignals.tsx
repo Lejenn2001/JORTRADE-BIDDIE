@@ -599,6 +599,19 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
+            {signal.outcome === "hit" || signal.outcome === "win" ? (
+              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full">
+                <CheckCircle2 className="h-3 w-3" /> HIT
+              </span>
+            ) : signal.outcome === "missed" || signal.outcome === "miss" || signal.outcome === "loss" ? (
+              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full">
+                <XCircle className="h-3 w-3" /> MISS
+              </span>
+            ) : (
+              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-yellow-400 bg-yellow-400/15 px-1.5 py-0.5 rounded-full">
+                <Clock className="h-3 w-3" /> PENDING
+              </span>
+            )}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
