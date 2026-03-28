@@ -163,12 +163,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           <TrendingDown className="h-5 w-5 text-destructive" />
                         )}
                         <span className="font-bold text-foreground text-lg tracking-tight">{signal.ticker}</span>
-                        {signal.priceAtSignal && (
-                          <span className="flex items-center gap-1 text-xs font-mono">
-                            <span className="text-muted-foreground">Entry:</span>
-                            <span className="text-foreground font-semibold">${signal.priceAtSignal.toFixed(2)}</span>
-                          </span>
-                        )}
                         {priceInfo && (
                           <span className="flex items-center gap-1 text-xs font-mono">
                             <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />

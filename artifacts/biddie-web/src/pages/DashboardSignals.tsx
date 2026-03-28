@@ -606,12 +606,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
               <TrendingDown className="h-4 w-4 text-destructive" />
             )}
             <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
-            {signal.priceAtSignal && (
-              <span className="flex items-center gap-1 text-xs font-mono">
-                <span className="text-muted-foreground">Entry:</span>
-                <span className="text-foreground font-semibold">${signal.priceAtSignal.toFixed(2)}</span>
-              </span>
-            )}
             {(() => {
               const priceInfo = getPrice?.(signal.ticker);
               if (!priceInfo) return null;
