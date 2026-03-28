@@ -662,12 +662,20 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
               </div>
             </div>
           )}
-          {signal.entryTrigger && (
+          {(signal.entryTrigger || signal.priceAtSignal) && (
             <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
               <TrendingUp className="h-3 w-3 text-primary mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <span className="text-muted-foreground">Entry: </span>
-                <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
+                {signal.priceAtSignal && (
+                  <span className="text-amber-400 font-semibold">Price at ${signal.priceAtSignal.toFixed(2)}</span>
+                )}
+                {signal.priceAtSignal && signal.entryTrigger && (
+                  <span className="text-muted-foreground"> · </span>
+                )}
+                {signal.entryTrigger && (
+                  <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
+                )}
               </div>
             </div>
           )}
