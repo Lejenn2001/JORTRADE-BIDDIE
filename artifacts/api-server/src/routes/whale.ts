@@ -103,6 +103,16 @@ const SEED_ADMIN_IDS = [
         [uid]
       );
     }
+    await dbQuery(
+      `CREATE TABLE IF NOT EXISTS chat_reactions (
+        id SERIAL PRIMARY KEY,
+        message_id UUID NOT NULL,
+        user_id TEXT NOT NULL,
+        emoji TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(message_id, user_id, emoji)
+      )`
+    );
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles`);
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
@@ -3836,6 +3846,65 @@ router.post("/whale/admin/toggle-admin", async (req, res) => {
   } catch (e: any) {
     console.error("[admin] toggle-admin error:", e.response?.data || e.message);
     res.status(500).json({ error: e.response?.data?.message || e.message });
+  }
+});
+
+router.post("/whale/chat/react", async (req, res) => {
+  try {
+    const { messageId, emoji, userId } = req.body;
+    if (!messageId || !emoji || !userId) return res.status(400).json({ error: "messageId, emoji, userId required" });
+
+    const existing = await dbQuery(
+      `SELECT id FROM chat_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
+      [messageId, userId, emoji]
+    );
+
+    if (existing && existing.rows.length > 0) {
+      await dbQuery(`DELETE FROM chat_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`, [messageId, userId, emoji]);
+    } else {
+      await dbQuery(`INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [messageId, userId, emoji]);
+    }
+
+    const allReactions = await dbQuery(
+      `SELECT emoji, array_agg(user_id) as user_ids FROM chat_reactions WHERE message_id = $1 GROUP BY emoji`,
+      [messageId]
+    );
+
+    const reactions: Record<string, string[]> = {};
+    if (allReactions?.rows) {
+      for (const row of allReactions.rows) {
+        reactions[row.emoji] = row.user_ids;
+      }
+    }
+
+    res.json({ success: true, reactions });
+  } catch (e: any) {
+    console.error("[chat react] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/whale/chat/reactions", async (req, res) => {
+  try {
+    const messageIds = (req.query.ids as string || "").split(",").filter(Boolean);
+    if (!messageIds.length) return res.json({});
+
+    const placeholders = messageIds.map((_, i) => `$${i + 1}`).join(",");
+    const result = await dbQuery(
+      `SELECT message_id, emoji, array_agg(user_id) as user_ids FROM chat_reactions WHERE message_id IN (${placeholders}) GROUP BY message_id, emoji`,
+      messageIds
+    );
+
+    const out: Record<string, Record<string, string[]>> = {};
+    if (result?.rows) {
+      for (const row of result.rows) {
+        if (!out[row.message_id]) out[row.message_id] = {};
+        out[row.message_id][row.emoji] = row.user_ids;
+      }
+    }
+    res.json(out);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

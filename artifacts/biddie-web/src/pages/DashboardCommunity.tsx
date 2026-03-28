@@ -21,6 +21,12 @@ interface ChatMessage {
   created_at: string;
 }
 
+type ReactionsMap = Record<string, Record<string, string[]>>;
+
+const REACTION_EMOJIS = ["👍","🔥","💯","😂","👀","🚀","💰","❤️"];
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const BIDDIE_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 const DashboardCommunity = () => {
@@ -30,6 +36,8 @@ const DashboardCommunity = () => {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [biddieThinking, setBiddieThinking] = useState(false);
+  const [reactions, setReactions] = useState<ReactionsMap>({});
+  const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [showEmojis, setShowEmojis] = useState(false);
   const emojiRef = useRef<HTMLDivElement>(null);
 
@@ -45,10 +53,41 @@ const DashboardCommunity = () => {
     setShowEmojis(false);
   }, []);
 
+  const fetchReactions = useCallback(async (msgIds: string[]) => {
+    if (!msgIds.length) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/whale/chat/reactions?ids=${msgIds.join(",")}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReactions((prev) => ({ ...prev, ...data }));
+      }
+    } catch {}
+  }, []);
+
+  const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!session?.user?.id) return;
+    setReactingTo(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/whale/chat/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, emoji, userId: session.user.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReactions((prev) => ({ ...prev, [messageId]: data.reactions }));
+      }
+    } catch {}
+  }, [session?.user?.id]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
         setShowEmojis(false);
+      }
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-reaction-picker]")) {
+        setReactingTo(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -74,10 +113,12 @@ const DashboardCommunity = () => {
       if (data) {
         setMessages(data as ChatMessage[]);
         scrollToBottom();
+        const ids = data.map((m: any) => m.id);
+        if (ids.length) fetchReactions(ids);
       }
     };
     load();
-  }, []);
+  }, [fetchReactions]);
 
   // Realtime subscription
   useEffect(() => {
@@ -287,17 +328,61 @@ const DashboardCommunity = () => {
                         <p className="text-xs text-foreground break-words leading-relaxed">{msg.content}</p>
                       )}
                       <p className="text-[9px] text-muted-foreground/60 mt-0.5">{formatTime(msg.created_at)}</p>
+
+                      {/* Reactions display */}
+                      {reactions[msg.id] && Object.keys(reactions[msg.id]).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {Object.entries(reactions[msg.id]).map(([emoji, userIds]) => (
+                            <button
+                              key={emoji}
+                              onClick={() => toggleReaction(msg.id, emoji)}
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] border transition-colors cursor-pointer ${
+                                userIds.includes(session?.user?.id || "")
+                                  ? "bg-primary/20 border-primary/40 text-primary"
+                                  : "bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/50"
+                              }`}
+                            >
+                              <span>{emoji}</span>
+                              <span className="text-[10px]">{userIds.length}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Delete button */}
-                    {(isOwn || isAdmin) && (
-                      <button
-                        onClick={() => deleteMessage(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity self-center p-1 rounded hover:bg-destructive/20"
-                      >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </button>
-                    )}
+                    {/* Reaction + Delete buttons */}
+                    <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center relative">
+                      <div className="relative" data-reaction-picker>
+                        <button
+                          onClick={() => setReactingTo(reactingTo === msg.id ? null : msg.id)}
+                          className="p-1 rounded hover:bg-muted/40"
+                          title="React"
+                        >
+                          <Smile className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                        {reactingTo === msg.id && (
+                          <div className={`absolute bottom-7 ${isOwn ? "right-0" : "left-0"} z-50 glass-panel rounded-lg border border-border/60 p-1 shadow-xl flex gap-0.5`} data-reaction-picker>
+                            {REACTION_EMOJIS.map((e) => (
+                              <button
+                                key={e}
+                                onClick={() => toggleReaction(msg.id, e)}
+                                className="w-7 h-7 flex items-center justify-center text-sm hover:bg-muted/60 rounded transition-colors cursor-pointer"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {(isOwn || isAdmin) && (
+                        <button
+                          onClick={() => deleteMessage(msg.id)}
+                          className="p-1 rounded hover:bg-destructive/20"
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </button>
+                      )}
+                    </div>
                   </motion.div>
                 );
               })}
