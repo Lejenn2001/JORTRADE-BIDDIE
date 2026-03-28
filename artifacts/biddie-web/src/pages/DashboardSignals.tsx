@@ -254,15 +254,15 @@ const DashboardSignals = () => {
     const dbIds = new Set(dbSignals.map(s => s.id));
     const filteredHistory = (signalHistory || []).filter(s => dbIds.has(s.id));
     const all = [...filteredHistory, ...dbSignals, ...liveSignals];
-    const bestPerTickerCategory = new Map<string, MarketSignal>();
+    const bestPerKey = new Map<string, MarketSignal>();
     for (const s of all) {
-      const key = `${s.ticker}|${s.category || 'algorithm'}`;
-      const existing = bestPerTickerCategory.get(key);
+      const key = `${s.ticker}|${s.category || 'algorithm'}|${s.strike || ''}|${s.putCall || ''}`;
+      const existing = bestPerKey.get(key);
       if (!existing || (s.confidence ?? 0) > (existing.confidence ?? 0)) {
-        bestPerTickerCategory.set(key, s);
+        bestPerKey.set(key, s);
       }
     }
-    return Array.from(bestPerTickerCategory.values());
+    return Array.from(bestPerKey.values());
   }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;

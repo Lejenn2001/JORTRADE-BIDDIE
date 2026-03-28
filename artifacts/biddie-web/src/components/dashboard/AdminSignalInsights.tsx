@@ -340,6 +340,11 @@ const AdminSignalInsights = () => {
           return (ao - bo) * dir;
         }
         case "ticker": return a.ticker.localeCompare(b.ticker) * dir;
+        case "option": {
+          const ao = `${a.put_call || ""} ${a.strike || ""} ${a.expiry || ""}`;
+          const bo = `${b.put_call || ""} ${b.strike || ""} ${b.expiry || ""}`;
+          return ao.localeCompare(bo) * dir;
+        }
         case "direction": {
           const ad = a.put_call || a.signal_type;
           const bd = b.put_call || b.signal_type;
@@ -708,6 +713,7 @@ const AdminSignalInsights = () => {
                   { key: "status", label: "Status" },
                   { key: "detected", label: "Detected" },
                   { key: "ticker", label: "Ticker" },
+                  { key: "option", label: "Option" },
                   { key: "direction", label: "Dir" },
                   { key: "entry", label: "Alert $" },
                   { key: "target", label: "Target $" },
@@ -774,6 +780,19 @@ const AdminSignalInsights = () => {
                       </td>
                       <td className="px-4 py-2 font-bold text-foreground">{s.ticker}</td>
                       <td className="px-4 py-2">
+                        <span className="text-xs font-medium text-foreground whitespace-nowrap">
+                          {(() => {
+                            const type = (s.put_call || "").toUpperCase() || (s.signal_type === "bullish" ? "CALL" : "PUT");
+                            const strike = s.strike ? `$${Number(s.strike).toFixed(0)}` : "";
+                            const exp = s.expiry ? (() => {
+                              const d = new Date(s.expiry);
+                              return !isNaN(d.getTime()) ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : s.expiry.replace(/,?\s*\d{4}$/, "");
+                            })() : "";
+                            return [type, strike, exp].filter(Boolean).join(" ");
+                          })()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
                         <span className="flex items-center gap-1 text-xs">
                           {s.signal_type === "bullish" ? (
                             <TrendingUp className="h-3 w-3 text-emerald-400" />
@@ -781,7 +800,7 @@ const AdminSignalInsights = () => {
                             <TrendingDown className="h-3 w-3 text-destructive" />
                           )}
                           <span className={s.signal_type === "bullish" ? "text-emerald-400" : "text-destructive"}>
-                            {s.put_call?.toUpperCase() || s.signal_type.toUpperCase()}
+                            {s.signal_type === "bullish" ? "BULLISH" : "BEARISH"}
                           </span>
                         </span>
                       </td>
@@ -843,7 +862,7 @@ const AdminSignalInsights = () => {
                     <AnimatePresence>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={15} className="p-0">
+                          <td colSpan={16} className="p-0">
                             <motion.div
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}

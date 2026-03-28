@@ -2273,11 +2273,11 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signals.sort((a, b) => b.confidence - a.confidence);
 
   const dedupedSignals: typeof signals = [];
-  const seenTickerCategory = new Set<string>();
+  const seenKeys = new Set<string>();
   for (const s of signals) {
-    const key = `${s.ticker}|${s.category}`;
-    if (seenTickerCategory.has(key)) continue;
-    seenTickerCategory.add(key);
+    const key = `${s.ticker}|${s.category}|${s.strike || ''}|${s.option_type || ''}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
     dedupedSignals.push(s);
   }
   signals = dedupedSignals;
@@ -2301,7 +2301,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       }
 
       const existing = await dbQuery(
-        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND strike = $2 AND option_type = $3 AND expiry = $4 AND signal_source = 'replit' LIMIT 1`,
+        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
         [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
       if (existing && existing.rows.length > 0) continue;
@@ -2742,9 +2742,9 @@ router.get("/whale/signals/history", async (req, res) => {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
       `SELECT * FROM (
-        SELECT DISTINCT ON (ticker, category) * FROM signal_outcomes
+        SELECT DISTINCT ON (ticker, category, strike, option_type) * FROM signal_outcomes
         WHERE signal_source = 'replit'
-        ORDER BY ticker, category, confidence DESC, detected_at DESC
+        ORDER BY ticker, category, strike, option_type, confidence DESC, detected_at DESC
       ) deduped ORDER BY detected_at DESC LIMIT $1`,
       [limit]
     );
