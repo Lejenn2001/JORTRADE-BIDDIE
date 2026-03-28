@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, XCircle, Clock, TrendingUp, TrendingDown,
   BarChart3, AlertTriangle, Lightbulb, ChevronDown, ChevronUp,
   Target, Activity, Zap, BookOpen, Info, Loader2,
-  ArrowUp, ArrowDown, Timer, Crosshair
+  ArrowUp, ArrowDown, Timer, Crosshair, ExternalLink
 } from "lucide-react";
 
 interface Signal {
@@ -87,6 +88,7 @@ interface PatternInsight {
 }
 
 const AdminSignalInsights = () => {
+  const navigate = useNavigate();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllSignals, setShowAllSignals] = useState(false);
@@ -792,27 +794,40 @@ const AdminSignalInsights = () => {
                     >
                       <td className="px-4 py-2 text-xs text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-2">
-                        {s.outcome === "hit" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                            <CheckCircle className="h-3 w-3" /> HIT
-                          </span>
-                        ) : s.outcome === "partial_hit" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
-                            <CheckCircle className="h-3 w-3" /> PARTIAL
-                          </span>
-                        ) : s.outcome === "missed" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
-                            <XCircle className="h-3 w-3" /> MISS
-                          </span>
-                        ) : s.outcome === "expired" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-400 bg-zinc-400/10 px-2 py-0.5 rounded-full">
-                            <Clock className="h-3 w-3" /> EXPIRED
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                            <Clock className="h-3 w-3" /> PENDING
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {s.outcome === "hit" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+                              <CheckCircle className="h-3 w-3" /> HIT
+                            </span>
+                          ) : s.outcome === "partial_hit" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                              <CheckCircle className="h-3 w-3" /> PARTIAL
+                            </span>
+                          ) : s.outcome === "missed" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
+                              <XCircle className="h-3 w-3" /> MISS
+                            </span>
+                          ) : s.outcome === "expired" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-400 bg-zinc-400/10 px-2 py-0.5 rounded-full">
+                              <Clock className="h-3 w-3" /> EXPIRED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                              <Clock className="h-3 w-3" /> PENDING
+                            </span>
+                          )}
+                          <button
+                            title="View signal card"
+                            className="text-[9px] text-primary/60 hover:text-primary transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const resolved = s.outcome !== "pending" ? "true" : "false";
+                              navigate(`/dashboard/signals?search=${encodeURIComponent(s.ticker)}&resolved=${resolved}`);
+                            }}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1.5">

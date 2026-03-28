@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -168,9 +169,10 @@ const DashboardSignals = () => {
   const { user } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [filterType, setFilterType] = useState<FilterType>("all");
-  const [showResolved, setShowResolved] = useState(false);
+  const [showResolved, setShowResolved] = useState(searchParams.get("resolved") === "true");
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
 
