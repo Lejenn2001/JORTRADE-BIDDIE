@@ -57,6 +57,9 @@ export interface MarketSignal {
   priceAtSignal?: number;
   outcome?: "hit" | "win" | "missed" | "loss" | "pending" | null;
   tradeStatus?: "watching" | "active" | "hit" | "miss" | "expired" | null;
+  vah?: number | null;
+  val?: number | null;
+  poc?: number | null;
   mfePercent?: number | null;
   maxFavorablePrice?: number | null;
   spreadDetails?: {
@@ -518,6 +521,9 @@ export function useMarketData() {
               srLevel: s.sr_level,
               targetZone: s.target,
               targetNear: s.target_near || "",
+              vah: s.vah ?? null,
+              val: s.val ?? null,
+              poc: s.poc ?? null,
               source: "live",
               timeframe,
               detectedAtMs: Date.now(),
