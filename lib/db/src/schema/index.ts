@@ -1,20 +1,97 @@
-// Export your models here. Add one export per file
-// export * from "./posts";
-//
-// Each model/table should ideally be split into different files.
-// Each model/table should define a Drizzle table, insert schema, and types:
-//
-//   import { pgTable, text, serial } from "drizzle-orm/pg-core";
-//   import { createInsertSchema } from "drizzle-zod";
-//   import { z } from "zod/v4";
-//
-//   export const postsTable = pgTable("posts", {
-//     id: serial("id").primaryKey(),
-//     title: text("title").notNull(),
-//   });
-//
-//   export const insertPostSchema = createInsertSchema(postsTable).omit({ id: true });
-//   export type InsertPost = z.infer<typeof insertPostSchema>;
-//   export type Post = typeof postsTable.$inferSelect;
+import { pgTable, uuid, text, varchar, numeric, integer, boolean, timestamp, jsonb, serial, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
-export {}
+export const signalOutcomes = pgTable("signal_outcomes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticker: varchar("ticker", { length: 20 }).notNull(),
+  signalType: varchar("signal_type", { length: 50 }),
+  signalSource: varchar("signal_source", { length: 50 }).default("replit"),
+  strike: numeric("strike", { precision: 10, scale: 2 }),
+  expiry: varchar("expiry", { length: 50 }),
+  premium: numeric("premium", { precision: 15, scale: 2 }),
+  optionType: varchar("option_type", { length: 10 }),
+  direction: varchar("direction", { length: 20 }),
+  confidence: numeric("confidence", { precision: 5, scale: 2 }),
+  convictionScore: integer("conviction_score"),
+  category: varchar("category", { length: 50 }),
+  reason: text("reason"),
+  entryTrigger: text("entry_trigger"),
+  target: text("target"),
+  invalidation: text("invalidation"),
+  outcome: varchar("outcome", { length: 20 }).default("pending"),
+  detectedAt: timestamp("detected_at", { withTimezone: true }).default(sql`now()`),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  spreadDetails: jsonb("spread_details"),
+  tags: text("tags").array(),
+  priceAtSignal: numeric("price_at_signal", { precision: 12, scale: 2 }),
+  suggestedTrade: text("suggested_trade"),
+  pricePattern: text("price_pattern"),
+  maxFavorablePrice: numeric("max_favorable_price", { precision: 12, scale: 2 }),
+  mfePercent: numeric("mfe_percent", { precision: 8, scale: 2 }),
+}, (table) => [
+  index("idx_signal_outcomes_ticker").on(table.ticker),
+  index("idx_signal_outcomes_category").on(table.category),
+  index("idx_signal_outcomes_created").on(table.createdAt),
+]);
+
+export const signalAlerts = pgTable("signal_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticker: varchar("ticker", { length: 20 }).notNull(),
+  alertType: varchar("alert_type", { length: 50 }),
+  message: text("message"),
+  signalId: uuid("signal_id").references(() => signalOutcomes.id),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }),
+  role: varchar("role", { length: 20 }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  userName: varchar("user_name", { length: 255 }),
+}, (table) => [
+  index("idx_chat_messages_created").on(table.createdAt),
+]);
+
+export const chatReactions = pgTable("chat_reactions", {
+  id: serial("id").primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  userId: text("user_id").notNull(),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => [
+  uniqueIndex("chat_reactions_message_id_user_id_emoji_key").on(table.messageId, table.userId, table.emoji),
+]);
+
+export const userRoles = pgTable("user_roles", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  role: text("role").notNull().default("user"),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => [
+  uniqueIndex("user_roles_user_id_role_key").on(table.userId, table.role),
+]);
+
+export const userTrades = pgTable("user_trades", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
+  signalId: text("signal_id").notNull(),
+  ticker: text("ticker").notNull(),
+  direction: text("direction").notNull(),
+  category: text("category"),
+  strike: text("strike"),
+  expiry: text("expiry"),
+  optionType: text("option_type"),
+  entryTrigger: text("entry_trigger"),
+  target: text("target"),
+  invalidation: text("invalidation"),
+  convictionScore: integer("conviction_score"),
+  takenAt: timestamp("taken_at", { withTimezone: true }).default(sql`now()`),
+  signalOutcome: text("signal_outcome").default("pending"),
+  outcomePrice: numeric("outcome_price"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  entryPrice: numeric("entry_price"),
+});
