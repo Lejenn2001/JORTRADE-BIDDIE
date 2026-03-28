@@ -184,7 +184,12 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing</span>
                         ) : null}
                         {(() => {
-                          const ts = signal.tradeStatus || (signal.outcome === "hit" || signal.outcome === "win" ? "hit" : signal.outcome === "missed" || signal.outcome === "loss" ? "miss" : "watching");
+                          let ts = signal.tradeStatus || "watching";
+                          if (ts === "watching") {
+                            if (signal.outcome === "hit" || signal.outcome === "win") ts = "hit";
+                            else if (signal.outcome === "missed" || signal.outcome === "loss") ts = "miss";
+                            else if (signal.outcome === "expired") ts = "expired";
+                          }
                           if (ts === "hit") return <span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> HIT</span>;
                           if (ts === "miss" || ts === "expired") return <span className="flex items-center gap-0.5 text-[9px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full"><XCircle className="h-3 w-3" /> {ts === "expired" ? "EXPIRED" : "MISS"}</span>;
                           if (ts === "active") return <span className="flex items-center gap-0.5 text-[9px] font-bold text-cyan-400 bg-cyan-400/15 px-1.5 py-0.5 rounded-full animate-pulse"><Zap className="h-3 w-3" /> ACTIVE</span>;

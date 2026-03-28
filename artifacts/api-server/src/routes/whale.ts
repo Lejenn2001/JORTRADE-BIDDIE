@@ -1580,6 +1580,12 @@ async function runSignalsPipeline() {
       }
     }
 
+    // Filter 0c: Reject signals with no live price — can't set entry/invalidation levels
+    if (!price) {
+      console.log(`[signals] REJECTED ${ticker}: no live price available — cannot set entry/invalidation levels`);
+      return null;
+    }
+
     // Filter 1: Reject deep OTM (>15%) or deep ITM (>5%)
     if (price && strike) {
       const isCall = optType === "call";
@@ -3762,12 +3768,21 @@ async function realtimeVerifySignals() {
       // Trade status lifecycle: watching → active → hit/miss/expired
       const prevStatus = signal.trade_status || "watching";
       let newStatus = prevStatus;
-      if (prevStatus === "watching" && didReachEntry) {
-        newStatus = "active";
+      const hasNoLevels = (signal.entry_trigger || "").includes("Level data not available");
+      if (hasNoLevels) {
+        if (outcome === "hit") newStatus = "hit";
+        else if (outcome === "missed") newStatus = "miss";
+        else if (outcome === "expired") newStatus = "expired";
+        else if (signal.outcome === "missed") newStatus = "miss";
+        else if (signal.outcome === "hit" || signal.outcome === "win") newStatus = "hit";
+      } else {
+        if (prevStatus === "watching" && didReachEntry) {
+          newStatus = "active";
+        }
+        if (outcome === "hit") newStatus = "hit";
+        else if (outcome === "missed") newStatus = "miss";
+        else if (outcome === "expired") newStatus = "expired";
       }
-      if (outcome === "hit") newStatus = "hit";
-      else if (outcome === "missed") newStatus = "miss";
-      else if (outcome === "expired") newStatus = "expired";
 
       const statusChanged = newStatus !== prevStatus;
 

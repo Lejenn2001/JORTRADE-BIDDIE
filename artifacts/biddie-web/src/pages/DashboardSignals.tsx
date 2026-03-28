@@ -629,7 +629,12 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
             {(() => {
-              const ts = signal.tradeStatus || (isWinner ? "hit" : isLoser ? "miss" : "watching");
+              let ts = signal.tradeStatus || "watching";
+              if (ts === "watching") {
+                if (isWinner) ts = "hit";
+                else if (isLoser) ts = "miss";
+                else if (signal.outcome === "expired") ts = "expired";
+              }
               if (ts === "hit") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> HIT</span>;
               if (ts === "miss" || ts === "expired") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full"><XCircle className="h-3 w-3" /> {ts === "expired" ? "EXPIRED" : "MISS"}</span>;
               if (ts === "active") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-cyan-400 bg-cyan-400/15 px-1.5 py-0.5 rounded-full animate-pulse"><Zap className="h-3 w-3" /> ACTIVE</span>;
