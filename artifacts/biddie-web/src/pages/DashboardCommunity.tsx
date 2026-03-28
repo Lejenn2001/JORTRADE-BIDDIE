@@ -160,7 +160,18 @@ const DashboardCommunity = () => {
   }, [session?.user?.id, firstName]);
 
   const shouldBiddieRespond = (text: string): boolean => {
-    return /\b(biddie|@biddie)\b/i.test(text.toLowerCase());
+    const lower = text.toLowerCase();
+    if (/\b(biddie|@biddie)\b/i.test(lower)) return true;
+    const chatTriggers = [
+      "spy", "qqq", "nvda", "tsla", "aapl", "amzn", "meta", "amd", "msft",
+      "googl", "nflx", "coin", "pltr", "sofi", "iwm",
+      "calls", "puts", "sweep", "flow", "play", "setup",
+      "bullish", "bearish", "moon", "drilling", "ripping", "tanking",
+      "green", "red", "pump", "dump", "squeeze", "breakout",
+      "what a day", "crazy day", "wild", "insane", "sheesh",
+      "let's go", "we eating", "printing", "money", "bread",
+    ];
+    return chatTriggers.some(w => lower.includes(w));
   };
 
   const triggerBiddie = async (userMessage: string) => {
