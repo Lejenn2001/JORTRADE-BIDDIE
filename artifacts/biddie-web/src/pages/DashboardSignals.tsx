@@ -86,7 +86,13 @@ function dbRecordToSignal(record: any): MarketSignal {
     confidence,
     convictionScore,
     convictionLabel,
-    description: record.description || record.reason || `${putCall || ''} flow on ${record.ticker} at ${record.strike || 'N/A'} strike.`,
+    description: (() => {
+      let desc = record.description || record.reason || `${putCall || ''} flow on ${record.ticker} at ${record.strike || 'N/A'} strike.`;
+      if (record.price_at_signal && !desc.includes('Price at $')) {
+        desc += ` Price at $${Number(record.price_at_signal).toFixed(2)}.`;
+      }
+      return desc;
+    })(),
     timestamp,
     tags,
     strike: record.strike || undefined,
