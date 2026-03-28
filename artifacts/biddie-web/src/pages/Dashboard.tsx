@@ -88,6 +88,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     keyLevel: record.key_level,
     srLevel: record.sr_level,
     targetNear: record.target_near || undefined,
+    tradeStatus: record.trade_status || null,
     aiEvaluated: true,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,

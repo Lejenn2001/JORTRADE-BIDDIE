@@ -2310,16 +2310,17 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       );
       if (existing && existing.rows.length > 0) continue;
 
+      const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, detected_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
           s.current_price || null, s.key_level || null, s.sr_level || null,
-          s.target_near || null
+          s.target_near || null, initialStatus
         ]
       );
     } catch {}
@@ -3758,20 +3759,35 @@ async function realtimeVerifySignals() {
         timeAtTarget = now.toISOString();
       }
 
-      if (shouldUpdateMfp || shouldUpdateMap || didReachEntry !== (signal.entry_price_reached || false) || didBreachInvalidation !== (signal.invalidation_breached || false)) {
+      // Trade status lifecycle: watching → active → hit/miss/expired
+      const prevStatus = signal.trade_status || "watching";
+      let newStatus = prevStatus;
+      if (prevStatus === "watching" && didReachEntry) {
+        newStatus = "active";
+      }
+      if (outcome === "hit") newStatus = "hit";
+      else if (outcome === "missed") newStatus = "miss";
+      else if (outcome === "expired") newStatus = "expired";
+
+      const statusChanged = newStatus !== prevStatus;
+
+      if (shouldUpdateMfp || shouldUpdateMap || didReachEntry !== (signal.entry_price_reached || false) || didBreachInvalidation !== (signal.invalidation_breached || false) || statusChanged) {
         await dbQuery(
-          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2, max_adverse_price = $3, entry_price_reached = $4, invalidation_breached = $5, pct_past_invalidation = $6, entry_price = $7 WHERE id = $8`,
-          [newMfp, mfePct, newMap, didReachEntry, didBreachInvalidation, pctPastInv, entryPriceVal > 0 ? entryPriceVal : null, signal.id]
+          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2, max_adverse_price = $3, entry_price_reached = $4, invalidation_breached = $5, pct_past_invalidation = $6, entry_price = $7, trade_status = $8, status_updated_at = $9${newStatus === "active" && prevStatus === "watching" ? ", entry_hit_at = $9" : ""} WHERE id = $10`,
+          [newMfp, mfePct, newMap, didReachEntry, didBreachInvalidation, pctPastInv, entryPriceVal > 0 ? entryPriceVal : null, newStatus, now.toISOString(), signal.id]
         );
+        if (statusChanged) {
+          console.log(`[auto-verify] ${signal.ticker} ${signal.option_type}: ${prevStatus} → ${newStatus} (price: $${history.current.toFixed(2)})`);
+        }
       }
 
       if (outcome) {
         const updateFields = timeAtTarget
-          ? `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, time_at_target = $3 WHERE id = $4`
-          : `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`;
+          ? `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, time_at_target = $3, trade_status = $4, status_updated_at = $5 WHERE id = $6`
+          : `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, trade_status = $3, status_updated_at = $4 WHERE id = $5`;
         const updateParams = timeAtTarget
-          ? [outcome, now.toISOString(), timeAtTarget, signal.id]
-          : [outcome, now.toISOString(), signal.id];
+          ? [outcome, now.toISOString(), timeAtTarget, newStatus, now.toISOString(), signal.id]
+          : [outcome, now.toISOString(), newStatus, now.toISOString(), signal.id];
         await dbQuery(updateFields, updateParams);
         await dbQuery(
           `UPDATE user_trades SET signal_outcome = $1, resolved_at = $2 WHERE signal_id = $3`,

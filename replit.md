@@ -96,6 +96,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Methodology Explainer**: Collapsible "How are signals scored?" section in Signal Accuracy Panel explains HIT (target reached), MISSED (invalidation breached after 2hr minimum hold), EXPIRED (time ran out, may have been profitable), PENDING (still active).
 - **Win Rate Formula**: Hits / (Hits + Misses). Pending and expired excluded.
 - **Signal Verification**: Auto-verifies every 5 min during market hours, 30 min after hours. 2-hour minimum hold before miss. Hits checked first. Uses current price for invalidation (not intraday extremes).
+- **Trade Status Lifecycle**: Each signal has a `trade_status` column: `watching` (default) → `active` (entry price reached) → `hit`/`miss`/`expired` (resolved). New signals with "⚡ Act Now" tag start as `active`. Frontend badges: WATCHING (yellow Clock), ACTIVE (cyan pulsing Zap), HIT (green CheckCircle2), MISS/EXPIRED (red XCircle). Status transitions happen in `realtimeVerifySignals()` auto-verify loop. Schema columns: `trade_status`, `status_updated_at`, `entry_hit_at`.
 - **Admin Signal Insights** (`AdminSignalInsights.tsx`): On the Admin tab — shows overall win rate, CALL/PUT split, per-source stats, ticker performance grid with hit/miss bars, pattern analysis (auto-detects weak/strong tickers, directional bias, underperforming sources), and full signal log with status filters.
 
 ## Market Pulse & Trending Tickers

@@ -38,6 +38,9 @@ export const signalOutcomes = pgTable("signal_outcomes", {
   pctPastInvalidation: numeric("pct_past_invalidation", { precision: 8, scale: 2 }),
   timeAtTarget: timestamp("time_at_target", { withTimezone: true }),
   entryPrice: numeric("entry_price", { precision: 12, scale: 2 }),
+  tradeStatus: varchar("trade_status", { length: 20 }).default("watching"),
+  statusUpdatedAt: timestamp("status_updated_at", { withTimezone: true }),
+  entryHitAt: timestamp("entry_hit_at", { withTimezone: true }),
 }, (table) => [
   index("idx_signal_outcomes_ticker").on(table.ticker),
   index("idx_signal_outcomes_category").on(table.category),

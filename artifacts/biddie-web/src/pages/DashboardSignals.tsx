@@ -111,6 +111,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     aiEvaluated: true,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
+    tradeStatus: record.trade_status || null,
     mfePercent: record.mfe_percent != null ? Number(record.mfe_percent) : null,
     maxFavorablePrice: record.max_favorable_price != null ? Number(record.max_favorable_price) : null,
     entryTrigger: record.entry_trigger,
@@ -627,19 +628,13 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
             </span>
-            {signal.outcome === "hit" || signal.outcome === "win" ? (
-              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full">
-                <CheckCircle2 className="h-3 w-3" /> HIT
-              </span>
-            ) : signal.outcome === "missed" || signal.outcome === "miss" || signal.outcome === "loss" ? (
-              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full">
-                <XCircle className="h-3 w-3" /> MISS
-              </span>
-            ) : (
-              <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-yellow-400 bg-yellow-400/15 px-1.5 py-0.5 rounded-full">
-                <Clock className="h-3 w-3" /> PENDING
-              </span>
-            )}
+            {(() => {
+              const ts = signal.tradeStatus || (isWinner ? "hit" : isLoser ? "miss" : "watching");
+              if (ts === "hit") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-400 bg-emerald-400/15 px-1.5 py-0.5 rounded-full"><CheckCircle2 className="h-3 w-3" /> HIT</span>;
+              if (ts === "miss" || ts === "expired") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-red-400 bg-red-400/15 px-1.5 py-0.5 rounded-full"><XCircle className="h-3 w-3" /> {ts === "expired" ? "EXPIRED" : "MISS"}</span>;
+              if (ts === "active") return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-cyan-400 bg-cyan-400/15 px-1.5 py-0.5 rounded-full animate-pulse"><Zap className="h-3 w-3" /> ACTIVE</span>;
+              return <span className="flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold text-yellow-400 bg-yellow-400/15 px-1.5 py-0.5 rounded-full"><Clock className="h-3 w-3" /> WATCHING</span>;
+            })()}
             {signal.mfePercent != null && (
               <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :

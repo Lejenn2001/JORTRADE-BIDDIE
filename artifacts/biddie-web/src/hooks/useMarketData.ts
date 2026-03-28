@@ -56,6 +56,7 @@ export interface MarketSignal {
   aiEvaluated?: boolean;
   priceAtSignal?: number;
   outcome?: "hit" | "win" | "missed" | "loss" | "pending" | null;
+  tradeStatus?: "watching" | "active" | "hit" | "miss" | "expired" | null;
   mfePercent?: number | null;
   maxFavorablePrice?: number | null;
   spreadDetails?: {
