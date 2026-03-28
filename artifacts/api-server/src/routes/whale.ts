@@ -1751,7 +1751,7 @@ async function runSignalsPipeline() {
 
     if (optType === "call") {
       // CALL: entry near VWAP/support, invalidation = closest support below, target above
-      // Entry logic: VWAP is the anchor
+      // Entry logic: VWAP is the anchor, then support levels below price
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price >= vwap && distToVwap < 0.005) {
@@ -1763,12 +1763,23 @@ async function runSignalsPipeline() {
         } else {
           entryTrigger = `On bounce from VWAP at $${vwap.toFixed(2)}`;
         }
-      } else if (pivot && price) {
-        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-        if (price >= pivot) actNow = true;
       } else if (price) {
-        entryTrigger = `At current price $${price.toFixed(2)}`;
-        actNow = true;
+        const supportBelow = [
+          pdl ? { level: pdl, name: "PDL" } : null,
+          s1 ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+        supportBelow.sort((a, b) => b.level - a.level);
+        if (supportBelow.length > 0) {
+          const nearest = supportBelow[0];
+          entryTrigger = `On bounce from ${nearest.name} at $${nearest.level.toFixed(2)}`;
+        } else if (pivot) {
+          entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+          if (price >= pivot) actNow = true;
+        } else {
+          entryTrigger = `On strength above $${price.toFixed(2)}`;
+          actNow = true;
+        }
       } else {
         entryTrigger = `Level data not available`;
       }
@@ -1831,7 +1842,7 @@ async function runSignalsPipeline() {
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
       // PUT: entry near VWAP/resistance, invalidation = closest resistance above, target below
-      // Entry logic: VWAP is the anchor
+      // Entry logic: VWAP is the anchor, then resistance levels above price
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price <= vwap && distToVwap < 0.005) {
@@ -1843,12 +1854,23 @@ async function runSignalsPipeline() {
         } else {
           entryTrigger = `On rejection from VWAP at $${vwap.toFixed(2)}`;
         }
-      } else if (pivot && price) {
-        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-        if (price <= pivot) actNow = true;
       } else if (price) {
-        entryTrigger = `At current price $${price.toFixed(2)}`;
-        actNow = true;
+        const resistanceAbove = [
+          pdh ? { level: pdh, name: "PDH" } : null,
+          r1 ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+        resistanceAbove.sort((a, b) => a.level - b.level);
+        if (resistanceAbove.length > 0) {
+          const nearest = resistanceAbove[0];
+          entryTrigger = `On rejection from ${nearest.name} at $${nearest.level.toFixed(2)}`;
+        } else if (pivot) {
+          entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
+          if (price <= pivot) actNow = true;
+        } else {
+          entryTrigger = `On weakness below $${price.toFixed(2)}`;
+          actNow = true;
+        }
       } else {
         entryTrigger = `Level data not available`;
       }
