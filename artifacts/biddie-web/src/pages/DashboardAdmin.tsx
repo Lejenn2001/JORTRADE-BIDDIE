@@ -85,11 +85,18 @@ const DashboardAdmin = () => {
       return;
     }
 
-    const { data: adminRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin");
-    const adminIds = new Set((adminRoles || []).map(r => r.user_id));
+    const adminChecks = await Promise.all(
+      (profiles || []).map(async (p) => {
+        try {
+          const resp = await fetch(`/api/whale/admin/check?userId=${p.id}`);
+          const data = await resp.json();
+          return { id: p.id, isAdmin: !!data?.isAdmin };
+        } catch {
+          return { id: p.id, isAdmin: false };
+        }
+      })
+    );
+    const adminIds = new Set(adminChecks.filter(c => c.isAdmin).map(c => c.id));
 
     setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id) })));
 
