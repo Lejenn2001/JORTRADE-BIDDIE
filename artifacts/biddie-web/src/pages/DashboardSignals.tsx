@@ -721,11 +721,10 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
                   const tn = signal.targetNear;
                   const tz = signal.targetZone;
                   if (!tn || tn === tz) return <span className="text-primary font-semibold">{tz}</span>;
-                  const isPut = signal.putCall === 'put';
-                  const first = isPut ? tz : tn;
-                  const second = isPut ? tn : tz;
-                  const firstLabel = isPut ? "Near-term strike" : "Near-term level";
-                  const secondLabel = isPut ? "Extended target" : "Strike target";
+                  const first = tz;
+                  const second = tn;
+                  const firstLabel = "Strike target";
+                  const secondLabel = "Extended target";
                   return (
                     <>
                       <span className="text-primary font-semibold">{first} – {second}</span>
