@@ -114,12 +114,17 @@ function dbRecordToSignal(record: any): MarketSignal {
 function formatTimestamp(isoStr: string): string {
   const date = new Date(isoStr);
   if (isNaN(date.getTime())) return 'Today';
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  if (isToday) return time;
-  const day = date.toLocaleDateString('en-US', { weekday: 'short' });
-  return `${day} ${time}`;
+  const eastern = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const month = eastern.getMonth() + 1;
+  const day = eastern.getDate();
+  const year = eastern.getFullYear();
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "America/New_York",
+  });
+  return `${month}/${day}/${year} ${time}`;
 }
 
 const DashboardSignals = () => {

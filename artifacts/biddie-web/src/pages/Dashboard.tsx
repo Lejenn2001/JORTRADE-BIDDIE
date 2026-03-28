@@ -19,20 +19,17 @@ const formatRelativeTimestamp = (isoString: string) => {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return "Today";
 
-  const now = Date.now();
-  const diffMinutes = Math.floor((now - date.getTime()) / 60000);
-
-  if (diffMinutes < 1) return "just now";
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 12) return `${diffHours}h ago`;
-
-  return date.toLocaleTimeString("en-US", {
+  const eastern = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const month = eastern.getMonth() + 1;
+  const day = eastern.getDate();
+  const year = eastern.getFullYear();
+  const time = date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "America/New_York",
   });
+  return `${month}/${day}/${year} ${time}`;
 };
 
 const recordToDashboardSignal = (record: any): MarketSignal => {
@@ -204,10 +201,9 @@ const Dashboard = () => {
 
   const sortSignals = (list: MarketSignal[]) => {
     return [...list].sort((a, b) => {
-      const aIs0DTE = a.timeframe === 'buy_now' || a.timeframe === 'short_term' ? 0 : 1;
-      const bIs0DTE = b.timeframe === 'buy_now' || b.timeframe === 'short_term' ? 0 : 1;
-      if (aIs0DTE !== bIs0DTE) return aIs0DTE - bIs0DTE;
-      return getSignalScore(b) - getSignalScore(a);
+      const timeA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const timeB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return timeB - timeA;
     });
   };
 
