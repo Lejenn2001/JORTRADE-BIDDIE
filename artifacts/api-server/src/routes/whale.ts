@@ -2612,9 +2612,11 @@ router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
-      `SELECT * FROM signal_outcomes
-       WHERE signal_source = 'replit'
-       ORDER BY detected_at DESC LIMIT $1`,
+      `SELECT * FROM (
+        SELECT DISTINCT ON (ticker, category) * FROM signal_outcomes
+        WHERE signal_source = 'replit'
+        ORDER BY ticker, category, confidence DESC, detected_at DESC
+      ) deduped ORDER BY detected_at DESC LIMIT $1`,
       [limit]
     );
     const countResult = await dbQuery(

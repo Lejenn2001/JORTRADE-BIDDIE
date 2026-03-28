@@ -216,16 +216,18 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const seen = new Set<string>();
-    const result: MarketSignal[] = [];
-    for (const s of [...dbSignals, ...liveSignals, ...(signalHistory || [])]) {
-      const key = s.id || `${s.ticker}|${s.category}|${s.detectedAtMs}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(s);
+    const dbIds = new Set(dbSignals.map(s => s.id));
+    const filteredHistory = (signalHistory || []).filter(s => dbIds.has(s.id));
+    const all = [...filteredHistory, ...dbSignals, ...liveSignals];
+    const bestPerTickerCategory = new Map<string, MarketSignal>();
+    for (const s of all) {
+      const key = `${s.ticker}|${s.category || 'algorithm'}`;
+      const existing = bestPerTickerCategory.get(key);
+      if (!existing || (s.confidence ?? 0) > (existing.confidence ?? 0)) {
+        bestPerTickerCategory.set(key, s);
       }
     }
-    return result;
+    return Array.from(bestPerTickerCategory.values());
   }, [liveSignals, dbSignals, signalHistory]);
 
   const loading = liveLoading && dbLoading;
