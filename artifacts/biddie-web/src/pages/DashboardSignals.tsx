@@ -855,7 +855,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               };
               const info = statusInfo[ts] || statusInfo.watching;
               return (
-                <span className="relative group">
+                <span className="relative group inline-flex">
                   <span className={`inline-flex items-center gap-0.5 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${info.color}`}>
                     {info.icon} {info.label}
                   </span>
@@ -866,7 +866,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               );
             })()}
             {signal.mfePercent != null && (
-              <span className="relative group">
+              <span className="relative group inline-flex">
                 <span className={`inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
                   signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
                   signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
