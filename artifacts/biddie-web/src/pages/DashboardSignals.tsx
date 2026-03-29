@@ -397,18 +397,17 @@ const DashboardSignals = () => {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4">
           <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
             <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
-              {[1, 2, 3, 4, 5].map(ring => (
-                <circle key={ring} cx="400" cy="100" r={ring * 35} fill="none" stroke="hsl(142,71%,45%)" strokeWidth="0.8" opacity={0.5 - ring * 0.08} />
-              ))}
-              {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => {
-                const rad = (angle * Math.PI) / 180;
-                return <line key={angle} x1="400" y1="100" x2={400 + Math.cos(rad) * 175} y2={100 + Math.sin(rad) * 175} stroke="hsl(142,71%,45%)" strokeWidth="0.4" opacity="0.2" />;
+              {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
+                const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
+                const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
+                const green = i % 3 !== 0;
+                return (
+                  <g key={i}>
+                    <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#22c55e" : "#10b981"} strokeWidth="1" />
+                    <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#22c55e" : "#10b981"} rx="1" />
+                  </g>
+                );
               })}
-              <circle cx="400" cy="100" r="4" fill="hsl(142,71%,45%)" opacity="0.8" />
-              <circle cx="400" cy="100" r="12" fill="none" stroke="hsl(142,71%,45%)" strokeWidth="1.5" opacity="0.4" />
-              {[{ x: 280, y: 65 }, { x: 520, y: 45 }, { x: 340, y: 140 }, { x: 500, y: 130 }, { x: 250, y: 110 }, { x: 560, y: 90 }].map((dot, i) => (
-                <circle key={i} cx={dot.x} cy={dot.y} r="3" fill="hsl(142,71%,45%)" opacity={0.4 + i * 0.05} />
-              ))}
             </svg>
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/15 via-transparent to-cyan-900/10" />
             <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />

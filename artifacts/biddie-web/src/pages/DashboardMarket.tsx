@@ -379,27 +379,17 @@ const DashboardMarket = () => {
 
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
               <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
-                {[
-                  { cx: 100, cy: 80 }, { cx: 250, cy: 50 }, { cx: 400, cy: 100 }, { cx: 550, cy: 60 },
-                  { cx: 700, cy: 90 }, { cx: 175, cy: 140 }, { cx: 325, cy: 30 }, { cx: 475, cy: 150 },
-                  { cx: 625, cy: 40 }, { cx: 50, cy: 120 }, { cx: 750, cy: 130 }, { cx: 300, cy: 110 },
-                ].map((dot, i) => (
-                  <g key={i}>
-                    <circle cx={dot.cx} cy={dot.cy} r="2" fill="hsl(200,90%,55%)" opacity={0.3 + (i % 4) * 0.1} />
-                  </g>
-                ))}
-                {[
-                  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 7], [1, 6], [6, 2], [3, 8], [4, 10],
-                  [5, 9], [7, 11], [6, 11], [8, 4], [9, 5],
-                ].map(([a, b], i) => {
-                  const dots = [
-                    { cx: 100, cy: 80 }, { cx: 250, cy: 50 }, { cx: 400, cy: 100 }, { cx: 550, cy: 60 },
-                    { cx: 700, cy: 90 }, { cx: 175, cy: 140 }, { cx: 325, cy: 30 }, { cx: 475, cy: 150 },
-                    { cx: 625, cy: 40 }, { cx: 50, cy: 120 }, { cx: 750, cy: 130 }, { cx: 300, cy: 110 },
-                  ];
-                  return <line key={i} x1={dots[a].cx} y1={dots[a].cy} x2={dots[b].cx} y2={dots[b].cy} stroke="hsl(200,90%,55%)" strokeWidth="0.6" opacity="0.25" />;
+                {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
+                  const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
+                  const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
+                  const green = i % 3 !== 0;
+                  return (
+                    <g key={i}>
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "hsl(200,90%,55%)" : "hsl(230,85%,60%)"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "hsl(200,90%,55%)" : "hsl(230,85%,60%)"} rx="1" />
+                    </g>
+                  );
                 })}
-                <ellipse cx="400" cy="100" rx="350" ry="80" fill="none" stroke="hsl(200,90%,55%)" strokeWidth="0.5" opacity="0.15" />
               </svg>
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/12 via-transparent to-blue-900/12" />
               <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />

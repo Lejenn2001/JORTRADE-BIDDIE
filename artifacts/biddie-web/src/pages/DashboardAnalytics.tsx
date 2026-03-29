@@ -489,22 +489,17 @@ const DashboardAnalytics = () => {
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
               <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="equityCurveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="hsl(270,75%,60%)" />
-                    <stop offset="100%" stopColor="hsl(230,85%,60%)" />
-                  </linearGradient>
-                  <linearGradient id="equityFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="hsl(250,80%,60%)" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="hsl(250,80%,60%)" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {[0, 1, 2, 3, 4].map(i => (
-                  <line key={i} x1="0" y1={40 + i * 35} x2="800" y2={40 + i * 35} stroke="white" strokeWidth="0.5" opacity="0.15" />
-                ))}
-                <path d="M0,160 Q50,155 100,140 T200,120 T300,100 T400,85 T500,70 T600,55 T700,35 T800,20" fill="none" stroke="url(#equityCurveGrad)" strokeWidth="2.5" />
-                <path d="M0,160 Q50,155 100,140 T200,120 T300,100 T400,85 T500,70 T600,55 T700,35 T800,20 L800,200 L0,200 Z" fill="url(#equityFill)" />
-                <path d="M0,165 Q80,160 160,155 T320,145 T480,130 T640,110 T800,95" fill="none" stroke="hsl(270,75%,60%)" strokeWidth="1" opacity="0.4" strokeDasharray="4,4" />
+                {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
+                  const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
+                  const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
+                  const green = i % 3 !== 0;
+                  return (
+                    <g key={i}>
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "hsl(270,75%,60%)" : "hsl(230,85%,60%)"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "hsl(270,75%,60%)" : "hsl(230,85%,60%)"} rx="1" />
+                    </g>
+                  );
+                })}
               </svg>
               <div className="absolute inset-0 bg-gradient-to-r from-purple-900/15 via-transparent to-blue-900/15" />
               <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />

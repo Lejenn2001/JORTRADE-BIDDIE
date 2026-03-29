@@ -410,16 +410,17 @@ const DashboardBreakout = () => {
 
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
               <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
-                <line x1="0" y1="130" x2="800" y2="130" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
-                <line x1="0" y1="70" x2="800" y2="70" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
-                <text x="15" y="65" fill="hsl(38,92%,50%)" fontSize="8" opacity="0.5" fontFamily="monospace">RESISTANCE</text>
-                <text x="15" y="145" fill="hsl(38,92%,50%)" fontSize="8" opacity="0.5" fontFamily="monospace">SUPPORT</text>
-                <path d="M50,135 L150,128 L250,132 L350,125 L400,130 L420,120 L440,90 L460,60 L500,40 L550,35 L600,30" fill="none" stroke="hsl(142,71%,45%)" strokeWidth="2" />
-                <polygon points="595,25 610,30 595,35" fill="hsl(142,71%,45%)" opacity="0.8" />
-                <path d="M50,135 L150,128 L250,132 L350,125 L400,130" fill="none" stroke="hsl(38,92%,50%)" strokeWidth="1.5" opacity="0.5" />
-                {[{ x: 100, y: 128 }, { x: 200, y: 132 }, { x: 300, y: 125 }, { x: 350, y: 130 }, { x: 450, y: 80 }, { x: 550, y: 33 }].map((d, i) => (
-                  <circle key={i} cx={d.x} cy={d.y} r="2.5" fill={i >= 4 ? "hsl(142,71%,45%)" : "hsl(38,92%,50%)"} opacity="0.7" />
-                ))}
+                {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
+                  const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
+                  const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
+                  const green = i % 3 !== 0;
+                  return (
+                    <g key={i}>
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "hsl(38,92%,50%)" : "hsl(142,71%,45%)"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "hsl(38,92%,50%)" : "hsl(142,71%,45%)"} rx="1" />
+                    </g>
+                  );
+                })}
               </svg>
               <div className="absolute inset-0 bg-gradient-to-r from-amber-900/12 via-transparent to-emerald-900/10" />
               <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
