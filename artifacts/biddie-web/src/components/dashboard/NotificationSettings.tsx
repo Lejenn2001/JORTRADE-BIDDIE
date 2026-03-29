@@ -18,6 +18,11 @@ const NotificationSettings = () => {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [alertSignals, setAlertSignals] = useState(true);
   const [alertWhales, setAlertWhales] = useState(true);
+  const [alertBiddiePicks, setAlertBiddiePicks] = useState(true);
+  const [alertBreakouts, setAlertBreakouts] = useState(true);
+  const [alertZeroDTE, setAlertZeroDTE] = useState(false);
+  const [alertMarketPulse, setAlertMarketPulse] = useState(false);
+  const [alertOutcomes, setAlertOutcomes] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -41,6 +46,18 @@ const NotificationSettings = () => {
         setPushEnabled(data.push_enabled);
         setAlertSignals(data.alert_signals);
         setAlertWhales(data.alert_whales);
+      }
+
+      const stored = localStorage.getItem(`alert_prefs_${user!.id}`);
+      if (stored) {
+        try {
+          const extra = JSON.parse(stored);
+          setAlertBiddiePicks(extra.alertBiddiePicks ?? true);
+          setAlertBreakouts(extra.alertBreakouts ?? true);
+          setAlertZeroDTE(extra.alertZeroDTE ?? false);
+          setAlertMarketPulse(extra.alertMarketPulse ?? false);
+          setAlertOutcomes(extra.alertOutcomes ?? true);
+        } catch {}
       }
     } catch (err) {
       console.error("Failed to load preferences:", err);
@@ -66,6 +83,14 @@ const NotificationSettings = () => {
       const { error } = await supabase
         .from("user_alert_preferences")
         .upsert(prefs, { onConflict: "user_id" });
+
+      localStorage.setItem(`alert_prefs_${user.id}`, JSON.stringify({
+        alertBiddiePicks,
+        alertBreakouts,
+        alertZeroDTE,
+        alertMarketPulse,
+        alertOutcomes,
+      }));
 
       if (error) throw error;
       toast.success("Alert preferences saved!");
@@ -190,7 +215,8 @@ const NotificationSettings = () => {
                     setPushEnabled(true);
                     toast.success("Push notifications enabled!");
                   } else {
-                    toast.error("Please allow notifications in your browser settings");
+                    setPushEnabled(false);
+                    toast.error("Notifications blocked — see instructions below to enable them");
                   }
                 });
               } else {
@@ -202,8 +228,17 @@ const NotificationSettings = () => {
         </div>
         {pushEnabled && (
           <p className="text-xs text-muted-foreground pt-2 border-t border-border/40">
-            ✅ Browser notifications are enabled. You'll receive alerts when the dashboard is open.
+            You'll receive alerts when the dashboard is open.
           </p>
+        )}
+        {!pushEnabled && (
+          <div className="text-xs text-muted-foreground pt-2 border-t border-border/40 space-y-1.5">
+            <p className="font-medium text-foreground">How to enable notifications:</p>
+            <p><span className="font-medium text-foreground">Chrome/Edge:</span> Click the lock icon next to the URL bar, then set Notifications to "Allow"</p>
+            <p><span className="font-medium text-foreground">Safari:</span> Go to Safari {">"} Settings {">"} Websites {">"} Notifications, find this site and select "Allow"</p>
+            <p><span className="font-medium text-foreground">Firefox:</span> Click the lock icon next to the URL bar, then click "More Information" and allow notifications</p>
+            <p><span className="font-medium text-foreground">Mobile:</span> Open browser settings {">"} Site Settings {">"} Notifications {">"} find this site and allow</p>
+          </div>
         )}
       </div>
 
@@ -222,8 +257,15 @@ const NotificationSettings = () => {
         <div className="space-y-3 pt-2 border-t border-border/40">
           <div className="flex items-center justify-between">
             <div>
+              <p className="text-sm font-medium text-foreground">Biddie Picks</p>
+              <p className="text-xs text-muted-foreground">Top AI-curated signals with highest conviction</p>
+            </div>
+            <Switch checked={alertBiddiePicks} onCheckedChange={setAlertBiddiePicks} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm font-medium text-foreground">High-Conviction Signals</p>
-              <p className="text-xs text-muted-foreground">Unusual options activity with strong Vol/OI</p>
+              <p className="text-xs text-muted-foreground">Strong setups with price action confirmation</p>
             </div>
             <Switch checked={alertSignals} onCheckedChange={setAlertSignals} />
           </div>
@@ -233,6 +275,34 @@ const NotificationSettings = () => {
               <p className="text-xs text-muted-foreground">Large premium trades ($500K+)</p>
             </div>
             <Switch checked={alertWhales} onCheckedChange={setAlertWhales} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Breakout Alerts</p>
+              <p className="text-xs text-muted-foreground">Real-time breakout detection on key levels</p>
+            </div>
+            <Switch checked={alertBreakouts} onCheckedChange={setAlertBreakouts} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">0DTE Plays</p>
+              <p className="text-xs text-muted-foreground">Same-day expiry trades for quick movers</p>
+            </div>
+            <Switch checked={alertZeroDTE} onCheckedChange={setAlertZeroDTE} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Market Pulse Updates</p>
+              <p className="text-xs text-muted-foreground">Big market-wide moves and sentiment shifts</p>
+            </div>
+            <Switch checked={alertMarketPulse} onCheckedChange={setAlertMarketPulse} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Signal Outcomes</p>
+              <p className="text-xs text-muted-foreground">Get notified when a signal hits or misses its target</p>
+            </div>
+            <Switch checked={alertOutcomes} onCheckedChange={setAlertOutcomes} />
           </div>
         </div>
       </div>
