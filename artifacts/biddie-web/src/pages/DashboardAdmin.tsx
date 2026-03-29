@@ -628,7 +628,8 @@ const DashboardAdmin = () => {
                 className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
               >
                 <Shield className="h-5 w-5 text-indigo-400" />
-                <h2 className="text-lg font-bold text-foreground">Signal System Reference</h2>
+                <h2 className="text-lg font-bold text-foreground">Signal System</h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold">REFERENCE</span>
                 {showReference ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
               </button>
 
