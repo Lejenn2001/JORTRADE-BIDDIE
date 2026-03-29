@@ -4432,23 +4432,18 @@ router.get("/whale/admin/system-health", async (req, res) => {
       services.push({ name: "Anthropic (Claude AI)", description: "AI brain — evaluates options flow and generates trade signals", status: "error", details: msg, url: "https://console.anthropic.com" });
     }
 
-    let uwUsageMinute = 0;
-    let uwUsageToday = 0;
     try {
       const r = await axios.get("https://api.unusualwhales.com/api/stock/SPY/options-volume", {
         headers: { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"]}` },
         timeout: 5000,
       });
-      const uwHeaders = r.headers || {};
-      uwUsageMinute = parseInt(uwHeaders["x-ratelimit-remaining"] || "0");
-      uwUsageToday = parseInt(uwHeaders["x-ratelimit-daily-remaining"] || "0");
       services.push({
         name: "Unusual Whales",
         description: "Options flow data — sweeps, premium, volume, open interest",
         status: "ok",
         details: "Connected — options flow active",
         url: "https://unusualwhales.com/account",
-        usage: `120/min · 15,000/day`,
+        usage: `120 / min · 15,000 / day`,
       });
     } catch (e: any) {
       const msg = e.response?.status === 401 ? "Invalid or expired API key" : e.response?.status === 403 ? "Subscription expired" : e.message;
