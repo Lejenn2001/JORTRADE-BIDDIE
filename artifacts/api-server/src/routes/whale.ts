@@ -5434,6 +5434,60 @@ router.post("/whale/weekly-stats/backfill", async (_req, res) => {
   }
 });
 
+router.post("/whale/admin/fix-signal-prices", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] as string;
+    if (userId !== "5845af78-f880-431b-b2c0-56a9923e6835") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const signals = await dbQuery(
+      `SELECT id, ticker, detected_at, price_at_signal FROM signal_outcomes WHERE signal_source = 'replit' AND detected_at IS NOT NULL ORDER BY detected_at DESC LIMIT 200`
+    );
+
+    const key = process.env.POLYGON_API_KEY;
+    if (!key) return res.status(500).json({ error: "No Polygon key" });
+
+    let updated = 0;
+    const fixes: any[] = [];
+
+    for (const sig of (signals?.rows || [])) {
+      const detected = new Date(sig.detected_at);
+      const dateStr = detected.toISOString().slice(0, 10);
+      try {
+        const url = `https://api.polygon.io/v2/aggs/ticker/${sig.ticker}/range/5/minute/${dateStr}/${dateStr}?adjusted=true&sort=asc&limit=5000&apiKey=${key}`;
+        const resp = await fetch(url);
+        const data = await resp.json() as any;
+        if (!data.results || data.results.length === 0) continue;
+
+        const targetMs = detected.getTime();
+        let closest = data.results[0];
+        for (const bar of data.results) {
+          if (bar.t <= targetMs) closest = bar;
+        }
+
+        const newPrice = Math.round(closest.c * 100) / 100;
+        const oldPrice = sig.price_at_signal ? parseFloat(sig.price_at_signal) : null;
+
+        if (oldPrice && Math.abs(newPrice - oldPrice) < 0.01) continue;
+
+        await dbQuery(
+          `UPDATE signal_outcomes SET price_at_signal = $1 WHERE id = $2`,
+          [newPrice.toString(), sig.id]
+        );
+        fixes.push({ ticker: sig.ticker, old: oldPrice, new: newPrice });
+        updated++;
+
+        await new Promise(resolve => setTimeout(resolve, 250));
+      } catch {}
+    }
+
+    res.json({ ok: true, updated, fixes });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/whale/weekly-stats/cleanup", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] as string;
