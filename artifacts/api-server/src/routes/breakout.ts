@@ -1,5 +1,7 @@
 import { Router } from "express";
 import axios from "axios";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
 import { priceMonitor } from "../lib/priceMonitor";
 
 const router = Router();
@@ -728,16 +730,6 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
   const thesisConfidence = Math.min(absThesis, 100);
 
   let targetPrice: number | null = null;
-  const effectiveDir = breakout.breakoutTriggered ? breakout.breakoutDirection : thesisDirection;
-  if (effectiveDir === "bullish" && consolidation.resistanceLevel > 0) {
-    targetPrice = Math.round((consolidation.resistanceLevel + atr) * 100) / 100;
-  } else if (effectiveDir === "bearish" && consolidation.supportLevel > 0) {
-    targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
-  } else if (proximityDir === "bullish" && consolidation.resistanceLevel > 0) {
-    targetPrice = Math.round((consolidation.resistanceLevel + atr) * 100) / 100;
-  } else if (consolidation.supportLevel > 0) {
-    targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
-  }
 
   let imminenceScore = 0;
   if (closerDist <= 0.2) imminenceScore += 40;
@@ -806,6 +798,17 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
       directionContext = `Technical-driven: ${reasons.join(", ")}`;
     }
   }
+
+  if (effectiveDir2 === "bullish" && consolidation.resistanceLevel > 0) {
+    targetPrice = Math.round((consolidation.resistanceLevel + atr) * 100) / 100;
+  } else if (effectiveDir2 === "bearish" && consolidation.supportLevel > 0) {
+    targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
+  } else if (consolidation.resistanceLevel > 0) {
+    targetPrice = Math.round((consolidation.resistanceLevel + atr) * 100) / 100;
+  } else if (consolidation.supportLevel > 0) {
+    targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
+  }
+
   const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
 
   return {
@@ -849,7 +852,27 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
 let cachedResults: SqueezeResult[] = [];
 let lastScanTime = 0;
 const SCAN_INTERVAL = 5 * 60 * 1000;
-const squeezeFirstSeen: Map<string, string> = new Map();
+const SQUEEZE_FILE = join(process.cwd(), ".squeeze-tracking.json");
+
+function loadSqueezeTracking(): Map<string, string> {
+  try {
+    if (existsSync(SQUEEZE_FILE)) {
+      const data = JSON.parse(readFileSync(SQUEEZE_FILE, "utf-8"));
+      return new Map(Object.entries(data));
+    }
+  } catch {}
+  return new Map();
+}
+
+function saveSqueezeTracking(map: Map<string, string>): void {
+  try {
+    writeFileSync(SQUEEZE_FILE, JSON.stringify(Object.fromEntries(map), null, 2));
+  } catch (e) {
+    console.error("[breakout] Failed to save squeeze tracking:", e);
+  }
+}
+
+const squeezeFirstSeen: Map<string, string> = loadSqueezeTracking();
 
 async function runFullScan(): Promise<SqueezeResult[]> {
   const now = Date.now();
@@ -903,6 +926,7 @@ async function runFullScan(): Promise<SqueezeResult[]> {
       squeezeFirstSeen.delete(ticker);
     }
   }
+  saveSqueezeTracking(squeezeFirstSeen);
 
   cachedResults = results;
   lastScanTime = Date.now();
