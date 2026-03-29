@@ -39,7 +39,7 @@ const PerformanceSnapshot = () => {
 
         let winStreak = 0;
         for (const d of data) {
-          if (d.outcome === "hit" || d.outcome === "win") winStreak++;
+          if (d.outcome === "hit" || d.outcome === "win" || d.outcome === "partial_hit") winStreak++;
           else if (d.outcome !== "pending" && d.outcome !== null && d.outcome !== undefined) break;
         }
 
