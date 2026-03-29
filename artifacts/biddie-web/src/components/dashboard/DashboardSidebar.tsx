@@ -89,7 +89,7 @@ const DashboardSidebar = () => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs transition-colors ${
                   isActive
                     ? "bg-primary/15 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
