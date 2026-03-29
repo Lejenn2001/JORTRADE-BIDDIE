@@ -115,10 +115,18 @@ export function simplifySignalDescription(signal: SignalInfo): string {
 
   if (aggressionMatch) {
     const pct = parseInt(aggressionMatch[1]);
-    if (pct >= 90) {
-      chunks.push("They paid full asking price. Very urgent, no negotiating");
+    if (pct === 100) {
+      chunks.push(`${pct}% ask aggression — They paid full asking price, no negotiating at all. Maximum urgency. This trader wanted in immediately and didn't care about saving a penny`);
+    } else if (pct >= 90) {
+      chunks.push(`${pct}% ask aggression — Almost full asking price. Extremely urgent. They barely tried to get a better deal, which shows high confidence`);
+    } else if (pct >= 80) {
+      chunks.push(`${pct}% ask aggression — Very aggressive. They paid close to the asking price, showing strong conviction but left a tiny bit of room to negotiate`);
     } else if (pct >= 70) {
-      chunks.push("They paid a high price to get in quick. Shows urgency");
+      chunks.push(`${pct}% ask aggression — Fairly aggressive. They leaned toward the asking price, which shows they wanted in quickly but weren't in a total rush`);
+    } else if (pct >= 50) {
+      chunks.push(`${pct}% ask aggression — Moderate. They split the difference between the bid and ask, not in a huge hurry but still leaning toward buying`);
+    } else {
+      chunks.push(`${pct}% ask aggression — Low urgency. They mostly paid closer to the bid (the lower price), meaning they were patient and negotiated for a better deal`);
     }
   }
 
