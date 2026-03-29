@@ -753,13 +753,9 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
           <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
               {sortedWeeks.map((week) => {
-                const wr = week.biddie_pick_win_rate ? parseFloat(week.biddie_pick_win_rate) : parseFloat(week.win_rate);
-                const pickTotal = week.biddie_pick_total ?? week.total_signals;
-                const pickHits = week.biddie_pick_hits ?? (week.hits + week.partial_hits);
+                const wr = parseFloat(week.win_rate);
+                const totalWins = week.hits + week.partial_hits;
                 const isSelected = selectedWeek?.week_start === week.week_start;
-                const now = new Date();
-                const ws = new Date(week.week_start);
-                const isCurrentWeek = ws <= now && new Date(week.week_end) > now;
 
                 return (
                   <button
@@ -768,14 +764,14 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                     className={`relative rounded-xl p-3 border text-left transition-all hover:scale-[1.02] cursor-pointer ${
                       isSelected
                         ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30"
-                        : getWeekColor(wr, pickTotal)
+                        : getWeekColor(wr, week.total_signals)
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[10px] text-muted-foreground">
                         {formatWeekLabel(week.week_start)} – {formatWeekLabel(week.week_end)}
                       </span>
-                      <span className="text-xs">{getWinRateEmoji(wr, pickTotal)}</span>
+                      <span className="text-xs">{getWinRateEmoji(wr, week.total_signals)}</span>
                     </div>
                     <div className={`text-xl font-black ${
                       wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
@@ -783,7 +779,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                       {wr.toFixed(0)}%
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {pickTotal} signals · {pickHits}W / {week.misses}L
+                      {week.total_signals} signals · {totalWins}W / {week.misses}L
                     </div>
                     <div className="mt-1.5 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                       <div
@@ -886,7 +882,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                         : wr >= 40
                         ? "⚠️ Mixed week — some hits, some misses. Every week teaches you something new!"
                         : "📉 Tough week — the market didn't cooperate. Even the best traders have off weeks. The key is staying disciplined!"}
-                      {" "}This week had {w.biddie_pick_total ?? w.total_signals} Biddie pick signals with an average conviction of {avgConv.toFixed(0)}/100.
+                      {" "}This week had {w.total_signals} signals with an average conviction of {avgConv.toFixed(0)}/100.
                     </p>
                   </div>
                 </motion.div>
