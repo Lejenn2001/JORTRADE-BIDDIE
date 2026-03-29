@@ -236,17 +236,8 @@ const MarketPulse = () => {
           </button>
           <div className="px-3 py-1.5 rounded-lg bg-muted/10">
             <p className="text-[10px] text-foreground/70 leading-relaxed">
-              {data.sentiment.description}
+              {data.sentiment.description} The ratio measures total premium (dollars) — ${formatPremium(data.sentiment.totalPutPremium)} in puts vs ${formatPremium(data.sentiment.totalCallPremium)} in calls. Sweeps measure urgency (how many aggressive orders) — {data.sentiment.sweepCount} total ({data.sentiment.callSweeps} bullish, {data.sentiment.putSweeps} bearish). Premium and sweeps can tell different stories.
             </p>
-            <div className="flex gap-3 mt-1 text-[9px]">
-              <span className="text-emerald-400">Calls: {formatPremium(data.sentiment.totalCallPremium)}</span>
-              <span className="text-red-400">Puts: {formatPremium(data.sentiment.totalPutPremium)}</span>
-            </div>
-            <div className="flex gap-3 mt-0.5 text-[9px]">
-              <span className="text-amber-400">{data.sentiment.sweepCount} sweeps</span>
-              <span className="text-emerald-400">{data.sentiment.callSweeps} bullish</span>
-              <span className="text-red-400">{data.sentiment.putSweeps} bearish</span>
-            </div>
           </div>
           <AnimatePresence>
             {expandedTip === "sentiment" && (
@@ -269,6 +260,11 @@ const MarketPulse = () => {
                       <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More puts than calls — traders are getting cautious and hedging.</span></p>
                       <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Way more puts — heavy fear, everyone is buying protection.</span></p>
                     </div>
+                  </div>
+                  <div className="border-t border-primary/10 pt-1.5 space-y-1">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      <span className="text-primary font-bold">Premium vs Sweeps:</span> Premium tells you where the most MONEY is going. Sweeps tell you where the most URGENCY is. Sometimes big hedges inflate put premium, but aggressive traders are still sweeping calls — that's why they can tell different stories.
+                    </p>
                   </div>
                   <div className="border-t border-primary/10 pt-1.5">
                     <p className="text-[10px] text-foreground/80 leading-relaxed">
