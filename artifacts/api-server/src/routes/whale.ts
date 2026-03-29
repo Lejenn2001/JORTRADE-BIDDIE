@@ -4033,19 +4033,19 @@ router.get("/whale/market-pulse", async (_req, res) => {
     if (vixPrice != null) {
       if (vixPrice < 25) {
         vixLevel = "Low";
-        vixDescription = "Markets are calm with low expected volatility. Good conditions for selling options premium or taking directional trades with tighter stops.";
+        vixDescription = "Think of the VIX like a scared-o-meter for the stock market. Right now it's LOW — the market is like a calm lake, barely any waves. Traders feel safe, prices move in small steps, and it's a chill time to trade.";
       } else if (vixPrice < 35) {
         vixLevel = "Normal";
-        vixDescription = "Volatility is at typical levels. Standard trading conditions — options are fairly priced and moves are predictable.";
+        vixDescription = "The scared-o-meter is at NORMAL — like a regular day at the playground. Some ups, some downs, nothing crazy. The market is doing its usual thing, and options are fairly priced.";
       } else if (vixPrice < 45) {
         vixLevel = "Elevated";
-        vixDescription = "Traders are getting nervous. Options premiums are higher, meaning bigger potential moves. Consider wider stops and smaller position sizes.";
+        vixDescription = "The scared-o-meter is getting ELEVATED — like thunder rumbling in the distance. Traders are getting a little nervous, prices can swing bigger than usual. Time to be careful and maybe size down your trades.";
       } else if (vixPrice < 55) {
         vixLevel = "High";
-        vixDescription = "Significant fear in the market. Expect sharp swings in both directions. Options are expensive — great for sellers, risky for buyers.";
+        vixDescription = "The scared-o-meter is HIGH — like a roller coaster that keeps going faster. Big swings up and down, traders are fearful. Options are expensive because everyone wants protection. Stay sharp and keep positions small.";
       } else {
         vixLevel = "Extreme";
-        vixDescription = "Panic-level volatility. Markets can move 2-5% in a single day. Only experienced traders should be active. Cash is a position too.";
+        vixDescription = "The scared-o-meter is SCREAMING — like a fire alarm going off! The market is panicking, prices can move 2-5% in a single day. It's okay to sit this one out. Cash is a position too, and sometimes the smartest trade is no trade.";
       }
     }
 

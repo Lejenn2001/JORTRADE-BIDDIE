@@ -191,7 +191,7 @@ const MarketPulse = () => {
               >
                 <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    <span className="text-primary font-bold">What is VIXY?</span> VIXY tracks the VIX "fear gauge" — it measures how much the market expects stocks to move. When VIXY rises, it means traders expect bigger price swings ahead.
+                    <span className="text-primary font-bold">What is VIXY?</span> Think of it like a scared-o-meter for the stock market! VIXY goes UP when traders are scared and expect big price swings. When it's LOW, the market is calm like a quiet lake.
                   </p>
                   <p className="text-[10px] text-foreground/80 mt-1 leading-relaxed">
                     {data.vix.description}
