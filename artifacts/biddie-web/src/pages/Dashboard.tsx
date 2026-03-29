@@ -10,7 +10,6 @@ import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
 import { useRealtimePrices } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
 import MarketPulse from "@/components/dashboard/MarketPulse";
-import SessionBanner from "@/components/dashboard/SessionBanner";
 
 const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
   signal.convictionScore ?? Math.round(signal.confidence * 10);
@@ -275,7 +274,6 @@ const Dashboard = () => {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-6">
           <MarketStatusSign />
-          <SessionBanner />
           <MarketPulse />
 
           <div className="grid lg:grid-cols-5 gap-4 lg:gap-6">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
+import { Globe, Building2, Landmark } from "lucide-react";
 
 function getETNow() {
-  // Get the current ET time components reliably
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -23,20 +23,17 @@ function getETNow() {
 function getMarketState() {
   const { now, weekday, hour, minute, second } = getETNow();
   const totalSec = hour * 3600 + minute * 60 + second;
-  const futuresSundaySec = 18 * 3600;       // 6:00 PM ET (Sunday futures open)
-  const premarketSec = 4 * 3600;           // 4:00 AM ET
-  const openSec = 9 * 3600 + 30 * 60;      // 9:30 AM ET
-  const closeSec = 16 * 3600;              // 4:00 PM ET
-  const afterHoursEnd = 20 * 3600;          // 8:00 PM ET
+  const futuresSundaySec = 18 * 3600;
+  const premarketSec = 4 * 3600;
+  const openSec = 9 * 3600 + 30 * 60;
+  const closeSec = 16 * 3600;
+  const afterHoursEnd = 20 * 3600;
 
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const isWeekday = weekdays.includes(weekday);
   const isSunday = weekday === "Sun";
-
-  // Sunday evening futures session (6 PM ET onward)
   const isSundayFutures = isSunday && totalSec >= futuresSundaySec;
 
-  // Determine session
   const isPremarket = isWeekday && totalSec >= premarketSec && totalSec < openSec;
   const isOpen = isWeekday && totalSec >= openSec && totalSec < closeSec;
   const isAfterHours = isWeekday && totalSec >= closeSec && totalSec < afterHoursEnd;
@@ -48,58 +45,47 @@ function getMarketState() {
 
   if (isOpen) {
     status = "open";
-    targetLabel = "Closes at";
+    targetLabel = "MARKET CLOSES AT";
     targetTime = "4:00 PM ET";
     remainingSec = closeSec - totalSec;
   } else if (isPremarket) {
     status = "premarket";
-    targetLabel = "Market opens at";
+    targetLabel = "MARKET OPENS AT";
     targetTime = "9:30 AM ET";
     remainingSec = openSec - totalSec;
   } else if (isSundayFutures) {
     status = "futures";
-    targetLabel = "Pre-market opens at";
+    targetLabel = "PRE-MARKET OPENS AT";
     targetTime = "4:00 AM ET";
-    // Seconds left Sunday + 4 hours into Monday
     remainingSec = (86400 - totalSec) + premarketSec;
   } else if (isAfterHours) {
     status = "afterhours";
-    targetLabel = "After-hours end at";
+    targetLabel = "AFTER-HOURS END AT";
     targetTime = "8:00 PM ET";
     remainingSec = afterHoursEnd - totalSec;
   } else {
     status = "closed";
-
     const secLeftToday = 86400 - totalSec;
 
     if (isSunday && totalSec < futuresSundaySec) {
-      // Sunday before futures open
-      targetLabel = "Futures open at";
+      targetLabel = "FUTURES OPEN AT";
       targetTime = "6:00 PM ET";
       remainingSec = futuresSundaySec - totalSec;
     } else if (isWeekday && totalSec < premarketSec) {
-      // Before premarket on a weekday
-      targetLabel = "Pre-market opens at";
+      targetLabel = "PRE-MARKET OPENS AT";
       targetTime = "4:00 AM ET";
       remainingSec = premarketSec - totalSec;
     } else {
-      // After all sessions or Saturday — find next session
-      const dayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const dayIdx = dayOrder.indexOf(weekday);
-
       if (weekday === "Fri" && totalSec >= afterHoursEnd) {
-        // Friday after hours ended — next is Sunday 6 PM
-        targetLabel = "Futures open at";
-        targetTime = "6:00 PM ET";
-        remainingSec = secLeftToday + 86400 + futuresSundaySec; // Sat + part of Sun
+        targetLabel = "FUTURES OPEN AT";
+        targetTime = "SUN 6:00 PM ET";
+        remainingSec = secLeftToday + 86400 + futuresSundaySec;
       } else if (weekday === "Sat") {
-        // Saturday — next is Sunday 6 PM
-        targetLabel = "Futures open at";
-        targetTime = "6:00 PM ET";
+        targetLabel = "FUTURES OPEN AT";
+        targetTime = "SUN 6:00 PM ET";
         remainingSec = secLeftToday + futuresSundaySec;
       } else {
-        // Weekday after 8 PM — next premarket tomorrow
-        targetLabel = "Pre-market opens at";
+        targetLabel = "PRE-MARKET OPENS AT";
         targetTime = "4:00 AM ET";
         remainingSec = secLeftToday + premarketSec;
       }
@@ -110,14 +96,66 @@ function getMarketState() {
   const h = Math.floor(remainingSec / 3600);
   const m = Math.floor((remainingSec % 3600) / 60);
   const s = remainingSec % 60;
-  const parts: string[] = [];
-  if (h > 0) parts.push(`${h}h`);
-  parts.push(`${m}m`);
-  parts.push(`${s}s`);
-  const countdown = parts.join(" ");
+  const countdown = `${h}h  ${String(m).padStart(2, "0")}m  ${String(s).padStart(2, "0")}s`;
 
-  return { status, isOpen: status === "open", countdown, targetLabel, targetTime };
+  const utcH = now.getUTCHours();
+  const utcM = now.getUTCMinutes();
+  const utcT = utcH * 60 + utcM;
+
+  const asiaActive = utcT >= 0 && utcT < 480 || utcT >= 1380;
+  const londonActive = utcT >= 480 && utcT < 1020;
+  const nyActive = isWeekday && totalSec >= openSec && totalSec < closeSec;
+
+  return { status, isOpen: status === "open", countdown, targetLabel, targetTime, asiaActive, londonActive, nyActive };
 }
+
+const statusConfig = {
+  open: {
+    label: "MARKET OPEN",
+    dotClass: "bg-green-500",
+    pingClass: "bg-green-500/60",
+    textClass: "text-green-400",
+    textShadow: "0 0 7px hsl(142 71% 45% / 0.8), 0 0 20px hsl(142 71% 45% / 0.4), 0 0 40px hsl(142 71% 45% / 0.2)",
+    bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(142_71%_45%/0.12),transparent_70%)]",
+    borderGlow: "border-emerald-500/30 shadow-[0_0_20px_hsl(142,71%,45%,0.1),inset_0_0_20px_hsl(142,71%,45%,0.03)]",
+  },
+  premarket: {
+    label: "PRE-MARKET",
+    dotClass: "bg-amber-400",
+    pingClass: "bg-amber-400/60",
+    textClass: "text-amber-400",
+    textShadow: "0 0 7px hsl(45 93% 47% / 0.8), 0 0 20px hsl(45 93% 47% / 0.4)",
+    bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(45_93%_47%/0.1),transparent_70%)]",
+    borderGlow: "border-amber-500/30 shadow-[0_0_20px_hsl(45,93%,47%,0.1),inset_0_0_20px_hsl(45,93%,47%,0.03)]",
+  },
+  afterhours: {
+    label: "AFTER-HOURS",
+    dotClass: "bg-purple-400",
+    pingClass: "bg-purple-400/60",
+    textClass: "text-purple-400",
+    textShadow: "0 0 7px hsl(270 70% 60% / 0.8), 0 0 20px hsl(270 70% 60% / 0.4)",
+    bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(270_70%_60%/0.1),transparent_70%)]",
+    borderGlow: "border-purple-500/30 shadow-[0_0_20px_hsl(270,70%,60%,0.1),inset_0_0_20px_hsl(270,70%,60%,0.03)]",
+  },
+  futures: {
+    label: "FUTURES OPEN",
+    dotClass: "bg-cyan-400",
+    pingClass: "bg-cyan-400/60",
+    textClass: "text-cyan-400",
+    textShadow: "0 0 5px hsl(190 80% 55% / 0.4), 0 0 12px hsl(190 80% 55% / 0.15)",
+    bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(190_80%_55%/0.06),transparent_70%)]",
+    borderGlow: "border-cyan-500/30 shadow-[0_0_20px_hsl(190,80%,55%,0.1),inset_0_0_20px_hsl(190,80%,55%,0.03)]",
+  },
+  closed: {
+    label: "MARKET CLOSED",
+    dotClass: "bg-destructive",
+    pingClass: "bg-destructive/40",
+    textClass: "text-destructive",
+    textShadow: "0 0 7px hsl(0 72% 51% / 0.6), 0 0 20px hsl(0 72% 51% / 0.3)",
+    bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(0_72%_51%/0.08),transparent_70%)]",
+    borderGlow: "border-red-500/20 shadow-[0_0_20px_hsl(0,72%,51%,0.08),inset_0_0_20px_hsl(0,72%,51%,0.02)]",
+  },
+};
 
 const MarketStatusSign = () => {
   const [state, setState] = useState(getMarketState);
@@ -127,81 +165,98 @@ const MarketStatusSign = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const statusConfig = {
-    open: {
-      label: "Market Open",
-      dotClass: "bg-green-500",
-      pingClass: "bg-green-500/60",
-      textClass: "text-green-400 drop-shadow-[0_0_8px_hsl(142_71%_45%/0.8)] drop-shadow-[0_0_20px_hsl(142_71%_45%/0.4)]",
-      textShadow: "0 0 7px hsl(142 71% 45% / 0.8), 0 0 20px hsl(142 71% 45% / 0.4), 0 0 40px hsl(142 71% 45% / 0.2)",
-      bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(142_71%_45%/0.15),transparent_70%)]",
-      countdownClass: "text-green-400",
-    },
-    premarket: {
-      label: "Pre-Market Open",
-      dotClass: "bg-amber-400",
-      pingClass: "bg-amber-400/60",
-      textClass: "text-amber-400 drop-shadow-[0_0_8px_hsl(45_93%_47%/0.8)] drop-shadow-[0_0_20px_hsl(45_93%_47%/0.4)]",
-      textShadow: "0 0 7px hsl(45 93% 47% / 0.8), 0 0 20px hsl(45 93% 47% / 0.4), 0 0 40px hsl(45 93% 47% / 0.2)",
-      bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(45_93%_47%/0.12),transparent_70%)]",
-      countdownClass: "text-amber-400",
-    },
-    afterhours: {
-      label: "After-Hours",
-      dotClass: "bg-purple-400",
-      pingClass: "bg-purple-400/60",
-      textClass: "text-purple-400 drop-shadow-[0_0_8px_hsl(270_70%_60%/0.8)] drop-shadow-[0_0_20px_hsl(270_70%_60%/0.4)]",
-      textShadow: "0 0 7px hsl(270 70% 60% / 0.8), 0 0 20px hsl(270 70% 60% / 0.4)",
-      bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(270_70%_60%/0.12),transparent_70%)]",
-      countdownClass: "text-purple-400",
-    },
-    futures: {
-      label: "Futures Open",
-      dotClass: "bg-cyan-400",
-      pingClass: "bg-cyan-400/60",
-      textClass: "text-cyan-400 drop-shadow-[0_0_6px_hsl(190_80%_55%/0.5)]",
-      textShadow: "0 0 5px hsl(190 80% 55% / 0.4), 0 0 12px hsl(190 80% 55% / 0.15)",
-      bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(190_80%_55%/0.06),transparent_70%)]",
-      countdownClass: "text-cyan-400",
-    },
-    closed: {
-      label: "Market Closed",
-      dotClass: "bg-destructive",
-      pingClass: "bg-destructive/40",
-      textClass: "text-destructive drop-shadow-[0_0_8px_hsl(0_72%_51%/0.6)]",
-      textShadow: "0 0 7px hsl(0 72% 51% / 0.6), 0 0 20px hsl(0 72% 51% / 0.3)",
-      bgGlow: "bg-[radial-gradient(ellipse_at_center,hsl(0_72%_51%/0.1),transparent_70%)]",
-      countdownClass: "text-muted-foreground",
-    },
-  };
-
   const cfg = statusConfig[state.status];
 
+  const sessions = [
+    {
+      name: "Asia",
+      hours: "7 PM – 4 AM ET",
+      icon: <Globe className="h-4 w-4" />,
+      active: state.asiaActive,
+      activeColor: "text-cyan-400",
+      activeBorder: "border-cyan-400/50",
+      activeBg: "bg-cyan-500/[0.07]",
+      activeGlow: "shadow-[0_0_15px_hsl(180,80%,50%,0.2),inset_0_0_15px_hsl(180,80%,50%,0.04)]",
+      dotColor: "bg-cyan-400",
+    },
+    {
+      name: "London",
+      hours: "3 AM – 12 PM ET",
+      icon: <Landmark className="h-4 w-4" />,
+      active: state.londonActive,
+      activeColor: "text-amber-400",
+      activeBorder: "border-amber-400/50",
+      activeBg: "bg-amber-500/[0.07]",
+      activeGlow: "shadow-[0_0_15px_hsl(38,92%,50%,0.2),inset_0_0_15px_hsl(38,92%,50%,0.04)]",
+      dotColor: "bg-amber-400",
+    },
+    {
+      name: "New York",
+      hours: "9:30 AM – 4 PM ET",
+      icon: <Building2 className="h-4 w-4" />,
+      active: state.nyActive,
+      activeColor: "text-emerald-400",
+      activeBorder: "border-emerald-400/50",
+      activeBg: "bg-emerald-500/[0.07]",
+      activeGlow: "shadow-[0_0_15px_hsl(142,71%,45%,0.2),inset_0_0_15px_hsl(142,71%,45%,0.04)]",
+      dotColor: "bg-emerald-400",
+    },
+  ];
+
   return (
-    <div className="glass-panel rounded-xl p-4 border-glow-purple relative overflow-hidden">
+    <div className={`relative overflow-hidden rounded-xl border ${cfg.borderGlow} bg-[hsl(232,30%,7%,0.95)] backdrop-blur-md`}>
       <div className={`absolute inset-0 rounded-xl transition-all duration-1000 ${cfg.bgGlow}`} />
 
-      <div className="relative flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className={`w-3 h-3 rounded-full ${cfg.dotClass}`} />
-            <div className={`absolute inset-0 w-3 h-3 rounded-full animate-ping ${cfg.pingClass}`} />
+      <div className="relative p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className={`w-3 h-3 rounded-full ${cfg.dotClass}`} />
+              <div className={`absolute inset-0 w-3 h-3 rounded-full animate-ping ${cfg.pingClass}`} />
+            </div>
+            <span
+              className={`text-xl sm:text-2xl font-black tracking-[0.2em] uppercase ${cfg.textClass}`}
+              style={{ textShadow: cfg.textShadow }}
+            >
+              {cfg.label}
+            </span>
           </div>
-          <span
-            className={`text-lg font-black tracking-[0.25em] uppercase ${cfg.textClass}`}
-            style={{ textShadow: cfg.textShadow }}
-          >
-            {cfg.label}
-          </span>
+
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              {state.targetLabel} <span className="text-foreground font-bold">{state.targetTime}</span>
+            </div>
+            <div className="text-base sm:text-lg font-mono font-bold tracking-wider text-muted-foreground mt-0.5">
+              {state.countdown}
+            </div>
+          </div>
         </div>
 
-        <div className="text-right">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-            {state.targetLabel} <span className="text-foreground font-medium">{state.targetTime}</span>
-          </div>
-          <div className={`text-sm font-mono font-bold tracking-wider ${cfg.countdownClass}`}>
-            {state.countdown}
-          </div>
+        <div className="grid grid-cols-3 gap-3">
+          {sessions.map((s) => (
+            <div
+              key={s.name}
+              className={`relative rounded-xl border px-4 py-3 text-center transition-all duration-500 ${
+                s.active
+                  ? `${s.activeBorder} ${s.activeBg} ${s.activeGlow}`
+                  : "border-white/[0.06] bg-white/[0.02]"
+              }`}
+            >
+              <div className={`absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full border-2 border-[hsl(232,30%,7%)] ${
+                s.active ? `${s.dotColor} animate-pulse` : "bg-white/15"
+              }`} />
+
+              <div className={`flex items-center justify-center gap-1.5 mb-1 ${s.active ? s.activeColor : "text-muted-foreground/50"}`}>
+                {s.icon}
+                <span className={`text-sm font-bold ${s.active ? s.activeColor : "text-muted-foreground/50"}`}>
+                  {s.name}
+                </span>
+              </div>
+              <div className={`text-[11px] font-medium ${s.active ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                {s.hours}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
