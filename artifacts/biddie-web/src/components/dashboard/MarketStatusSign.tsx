@@ -102,6 +102,14 @@ function getMarketState() {
   const h12 = hour % 12 || 12;
   const currentTime = `${h12}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${ampm} ET`;
 
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const dateStr = dateFormatter.format(now);
+
   const etMins = hour * 60 + minute;
 
   const isSat = weekday === "Sat";
@@ -124,7 +132,7 @@ function getMarketState() {
 
   const nyActive = isWeekday && totalSec >= openSec && totalSec < closeSec;
 
-  return { status, isOpen: status === "open", countdown, currentTime, targetLabel, targetTime, asiaActive, londonActive, nyActive };
+  return { status, isOpen: status === "open", countdown, currentTime, dateStr, targetLabel, targetTime, asiaActive, londonActive, nyActive };
 }
 
 const statusConfig = {
@@ -239,8 +247,11 @@ const MarketStatusSign = () => {
               >
                 {cfg.label}
               </span>
-              <div className="text-xs font-mono font-semibold text-muted-foreground tracking-wide mt-0.5">
+              <div className="text-xs font-semibold text-foreground tracking-wide mt-0.5">
                 {state.currentTime}
+              </div>
+              <div className="text-[9px] text-muted-foreground mt-0.5">
+                {state.dateStr} EST
               </div>
             </div>
           </div>
