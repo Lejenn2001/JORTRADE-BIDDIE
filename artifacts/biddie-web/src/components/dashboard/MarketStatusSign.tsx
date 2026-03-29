@@ -98,6 +98,10 @@ function getMarketState() {
   const s = remainingSec % 60;
   const countdown = `${h}h  ${String(m).padStart(2, "0")}m  ${String(s).padStart(2, "0")}s`;
 
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const h12 = hour % 12 || 12;
+  const currentTime = `${h12}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")} ${ampm} ET`;
+
   const etMins = hour * 60 + minute;
 
   const isSat = weekday === "Sat";
@@ -120,7 +124,7 @@ function getMarketState() {
 
   const nyActive = isWeekday && totalSec >= openSec && totalSec < closeSec;
 
-  return { status, isOpen: status === "open", countdown, targetLabel, targetTime, asiaActive, londonActive, nyActive };
+  return { status, isOpen: status === "open", countdown, currentTime, targetLabel, targetTime, asiaActive, londonActive, nyActive };
 }
 
 const statusConfig = {
@@ -228,12 +232,17 @@ const MarketStatusSign = () => {
               <div className={`w-3 h-3 rounded-full ${cfg.dotClass}`} />
               <div className={`absolute inset-0 w-3 h-3 rounded-full animate-ping ${cfg.pingClass}`} />
             </div>
-            <span
-              className={`text-xl sm:text-2xl font-black tracking-[0.2em] uppercase ${cfg.textClass}`}
-              style={{ textShadow: cfg.textShadow }}
-            >
-              {cfg.label}
-            </span>
+            <div>
+              <span
+                className={`text-xl sm:text-2xl font-black tracking-[0.2em] uppercase ${cfg.textClass}`}
+                style={{ textShadow: cfg.textShadow }}
+              >
+                {cfg.label}
+              </span>
+              <div className="text-xs font-mono font-semibold text-muted-foreground tracking-wide mt-0.5">
+                {state.currentTime}
+              </div>
+            </div>
           </div>
 
           <div className="text-right">
