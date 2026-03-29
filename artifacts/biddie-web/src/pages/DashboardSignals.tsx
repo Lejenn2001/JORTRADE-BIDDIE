@@ -500,14 +500,24 @@ const DashboardSignals = () => {
               ))}
               <span className="w-px h-4 bg-border/40 mx-1" />
               <button
-                onClick={() => setShowResolved(!showResolved)}
+                onClick={() => { if (showResolved) setShowResolved(false); }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  !showResolved
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => { if (!showResolved) setShowResolved(true); }}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                   showResolved
                     ? "bg-muted/50 text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                {showResolved ? "Hide Resolved" : `Pending · Show Resolved (${resolvedCount})`}
+                Show Resolved ({resolvedCount})
               </button>
             </div>
           </div>
