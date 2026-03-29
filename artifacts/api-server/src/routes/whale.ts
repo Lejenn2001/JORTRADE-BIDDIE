@@ -1285,14 +1285,43 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
 
 // ── User Settings (Chat Alias) ──────────────────────────────────────────────────
 
+function generateReferralCode(name: string): string {
+  const clean = (name || "JORT").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5);
+  const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${clean}${suffix}`;
+}
+
 router.get("/whale/user-settings", async (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) { res.status(400).json({ error: "userId required" }); return; }
   try {
-    const result = await dbQuery("SELECT chat_alias FROM user_settings WHERE user_id = $1", [userId]);
-    res.json({ chat_alias: result?.rows?.[0]?.chat_alias || null });
-  } catch {
-    res.json({ chat_alias: null });
+    const result = await dbQuery("SELECT chat_alias, referral_code, referred_by FROM user_settings WHERE user_id = $1", [userId]);
+    const row = result?.rows?.[0];
+    let referralCode = row?.referral_code || null;
+    if (!referralCode && row) {
+      const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
+      const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
+      referralCode = generateReferralCode(name);
+      await dbQuery("UPDATE user_settings SET referral_code = $1 WHERE user_id = $2", [referralCode, userId]);
+    } else if (!row) {
+      const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
+      const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
+      referralCode = generateReferralCode(name);
+      await dbQuery("INSERT INTO user_settings (user_id, referral_code) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET referral_code = $2", [userId, referralCode]);
+    }
+
+    const referralCount = await dbQuery("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = $1", [userId]);
+    const count = parseInt(referralCount?.rows?.[0]?.count || "0", 10);
+
+    res.json({
+      chat_alias: row?.chat_alias || null,
+      referral_code: referralCode,
+      referred_by: row?.referred_by || null,
+      referral_count: count,
+    });
+  } catch (err: any) {
+    console.error("user-settings error:", err.message);
+    res.json({ chat_alias: null, referral_code: null, referral_count: 0 });
   }
 });
 
@@ -1309,6 +1338,57 @@ router.post("/whale/user-settings", async (req, res) => {
     res.json({ ok: true, chat_alias: alias });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/referral/apply", async (req, res) => {
+  const { userId, referralCode, userName } = req.body as { userId?: string; referralCode?: string; userName?: string };
+  if (!userId || !referralCode) { res.status(400).json({ error: "userId and referralCode required" }); return; }
+  try {
+    const existing = await dbQuery("SELECT referred_by FROM user_settings WHERE user_id = $1", [userId]);
+    if (existing?.rows?.[0]?.referred_by) {
+      res.status(400).json({ error: "You've already used a referral code" });
+      return;
+    }
+
+    const referrer = await dbQuery("SELECT user_id FROM user_settings WHERE referral_code = $1", [referralCode.toUpperCase()]);
+    if (!referrer?.rows?.[0]) {
+      res.status(404).json({ error: "Invalid referral code" });
+      return;
+    }
+    const referrerId = referrer.rows[0].user_id;
+    if (referrerId === userId) {
+      res.status(400).json({ error: "You can't use your own referral code" });
+      return;
+    }
+
+    await dbQuery(
+      `INSERT INTO user_settings (user_id, referred_by, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET referred_by = $2, updated_at = NOW()`,
+      [userId, referralCode.toUpperCase()]
+    );
+    await dbQuery(
+      `INSERT INTO referrals (referrer_id, referred_id, referred_name) VALUES ($1, $2, $3)
+       ON CONFLICT (referred_id) DO NOTHING`,
+      [referrerId, userId, userName || "Trader"]
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/whale/referrals", async (req, res) => {
+  const userId = req.query.userId as string;
+  if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+  try {
+    const result = await dbQuery(
+      "SELECT referred_name, created_at FROM referrals WHERE referrer_id = $1 ORDER BY created_at DESC LIMIT 50",
+      [userId]
+    );
+    res.json({ referrals: result?.rows || [] });
+  } catch {
+    res.json({ referrals: [] });
   }
 });
 
