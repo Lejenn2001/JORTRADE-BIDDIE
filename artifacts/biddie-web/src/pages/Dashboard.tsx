@@ -296,7 +296,7 @@ const Dashboard = () => {
                   <div className="w-1.5 h-10 rounded-full bg-gradient-to-b from-[hsl(var(--glow-blue))] via-[hsl(var(--glow-purple))] to-[hsl(var(--glow-cyan))]" />
                   <div>
                     <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent">
-                      COMMAND CENTER
+                      DECISION ENGINE
                     </h1>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--glow-blue))]/80 font-semibold mt-0.5">
                       Live Signals · AI Analysis · Market Intelligence
