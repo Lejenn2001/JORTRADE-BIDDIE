@@ -5212,12 +5212,15 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
   const scores = rows.filter((r: any) => r.conviction_score).map((r: any) => r.conviction_score);
   const avgConviction = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(2) : "0";
 
-  const tickerCounts: Record<string, { hits: number; total: number }> = {};
+  const tickerCounts: Record<string, { hits: number; misses: number; pending: number; total: number }> = {};
   for (const r of rows) {
     const tk = (r as any).ticker;
-    if (!tickerCounts[tk]) tickerCounts[tk] = { hits: 0, total: 0 };
+    const outcome = (r as any).outcome;
+    if (!tickerCounts[tk]) tickerCounts[tk] = { hits: 0, misses: 0, pending: 0, total: 0 };
     tickerCounts[tk].total++;
-    if ((r as any).outcome === "hit" || (r as any).outcome === "partial_hit") tickerCounts[tk].hits++;
+    if (outcome === "hit" || outcome === "partial_hit") tickerCounts[tk].hits++;
+    else if (outcome === "missed") tickerCounts[tk].misses++;
+    else tickerCounts[tk].pending++;
   }
   const topTickers = Object.entries(tickerCounts)
     .sort((a, b) => b[1].total - a[1].total)

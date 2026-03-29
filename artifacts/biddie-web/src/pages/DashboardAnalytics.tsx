@@ -56,7 +56,7 @@ interface WeeklyStats {
   pending: number;
   win_rate: string;
   avg_conviction: string;
-  top_tickers: { ticker: string; hits: number; total: number }[];
+  top_tickers: { ticker: string; hits: number; misses: number; pending: number; total: number }[];
   biddie_pick_hits: number;
   biddie_pick_total: number;
   biddie_pick_win_rate: string;
@@ -892,7 +892,9 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                         {w.top_tickers.map((t) => (
                           <span key={t.ticker} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-muted/20 border border-white/5">
                             <span className="text-foreground">{t.ticker}</span>
-                            <span className="text-muted-foreground ml-1">{t.hits}/{t.total}</span>
+                            <span className="text-emerald-400 ml-1.5">{t.hits}W</span>
+                            <span className="text-red-400 ml-1">{t.misses || 0}L</span>
+                            {(t.pending || 0) > 0 && <span className="text-yellow-400 ml-1">{t.pending}P</span>}
                           </span>
                         ))}
                       </div>
