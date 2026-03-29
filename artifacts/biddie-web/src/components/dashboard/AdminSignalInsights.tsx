@@ -844,7 +844,7 @@ const AdminSignalInsights = () => {
                         <span className="flex items-center gap-1.5">
                           {s.ticker}
                           {s.is_biddie_pick && (
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">Pick</span>
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">Biddie Pick</span>
                           )}
                         </span>
                       </td>
@@ -930,7 +930,15 @@ const AdminSignalInsights = () => {
                         const d = new Date(s.time_at_target);
                         return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}`;
                       })() : "—"}</td>
-                      <td className="px-4 py-2 text-xs font-semibold text-foreground">{s.confidence}</td>
+                      <td className="px-4 py-2 text-xs font-semibold text-foreground">{(() => {
+                        const c = Number(s.confidence) || 0;
+                        let cs = Math.round(c * 10);
+                        if (c >= 9) cs = Math.max(cs, 92);
+                        else if (c >= 8) cs = Math.max(cs, 85);
+                        else if (c >= 7) cs = Math.max(cs, 78);
+                        else if (c >= 6) cs = Math.max(cs, 70);
+                        return cs;
+                      })()}</td>
                     </tr>
                     <AnimatePresence>
                       {isExpanded && (
