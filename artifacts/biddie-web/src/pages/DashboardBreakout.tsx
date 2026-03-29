@@ -365,7 +365,7 @@ const DashboardBreakout = () => {
     fetchAlerts();
     fetchCustomTickers();
     fetchUserAlerts();
-    alertPollRef.current = setInterval(fetchAlerts, 15000);
+    alertPollRef.current = setInterval(() => { fetchAlerts(); fetchUserAlerts(); }, 15000);
 
     if (user) {
       fetch(`/api/whale/trades?userId=${user.id}`)
