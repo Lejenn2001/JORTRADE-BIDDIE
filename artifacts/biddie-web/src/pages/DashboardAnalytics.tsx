@@ -442,7 +442,6 @@ const DashboardAnalytics = () => {
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "pnl">("overview");
-  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1225,6 +1224,7 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
   allSignals: HistoricalSignal[];
 }) {
   const navigate = useNavigate();
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
   const insights = useMemo(() => computeLearningInsights(userTrades, userTopTickers), [userTrades, userTopTickers]);
 
   return (
