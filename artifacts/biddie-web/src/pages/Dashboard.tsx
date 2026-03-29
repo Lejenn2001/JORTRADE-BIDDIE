@@ -102,7 +102,8 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
 const Dashboard = () => {
   const { signals, loading } = useMarketData();
   const { getPrice, connected: wsConnected } = useRealtimePrices();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const firstName = profile?.full_name?.split(" ")[0] || "Trader";
   const [persistedSignals, setPersistedSignals] = useState<MarketSignal[]>([]);
   const [persistedLoading, setPersistedLoading] = useState(true);
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
@@ -343,7 +344,7 @@ const Dashboard = () => {
                   <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10" />
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-indigo-400" />
-                    <span className="text-sm font-bold text-foreground">Welcome to JORTRADE!</span>
+                    <span className="text-sm font-bold text-foreground">Welcome to JORTRADE, {firstName}!</span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
                     Great to have you! This dashboard is filled with goodies. Real-time whale flow, AI signals, alerts, and so much more.
