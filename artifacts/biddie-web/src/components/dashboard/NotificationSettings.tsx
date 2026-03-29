@@ -149,7 +149,7 @@ const NotificationSettings = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       {/* Telegram Alerts */}
       <div className="rounded-xl border border-border/60 bg-card p-6 space-y-4">
         <div className="flex items-center gap-3">

@@ -446,8 +446,10 @@ const DashboardSettings = () => {
             </div>
           </div>
           <ProfileSection />
-          <ReferralSection />
-          <NotificationSettings />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <ReferralSection />
+            <NotificationSettings />
+          </div>
         </main>
       </div>
     </div>
