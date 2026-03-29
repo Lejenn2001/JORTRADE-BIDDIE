@@ -877,9 +877,10 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
                   const priceInfo = getPrice(trade.ticker);
                   const currentPrice = priceInfo?.price ?? null;
                   const isBullish = (trade.signal_type || trade.direction) === "bullish";
-                  const showProgress = entryPrice && currentPrice && targetPrice;
                   const isWin = trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit";
                   const isLoss = trade.signal_outcome === "missed";
+                  const isPending = !isWin && !isLoss;
+                  const showProgress = isPending && entryPrice && currentPrice && targetPrice;
 
                   let pct = 0;
                   let label = "0% to Target";
