@@ -787,9 +787,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 70) ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
           ) : null}
-          {signal.source === "live" ? (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
-          ) : null}
           {isAI && (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
           )}
