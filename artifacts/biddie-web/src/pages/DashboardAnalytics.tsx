@@ -585,37 +585,6 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          label="Biddie Pick Win Rate"
-          value={signalStats ? `${signalStats.winRate}%` : "—"}
-          sub={signalStats ? `${signalStats.hits + signalStats.misses} resolved` : undefined}
-          icon={<Target className="h-5 w-5 text-emerald-400" />}
-          color="border-emerald-500/20"
-        />
-        <StatCard
-          label="Your Win Rate"
-          value={userStats ? `${userStats.winRate}%` : "—"}
-          sub={userStats && userStats.total > 0 ? `${userStats.hits} wins / ${userStats.hits + userStats.misses} resolved` : "Take signals to track"}
-          icon={<Trophy className="h-5 w-5 text-yellow-400" />}
-          color="border-yellow-500/20"
-        />
-        <StatCard
-          label="Your Trades"
-          value={userStats?.total || 0}
-          sub={userStats && userStats.streak >= 3 ? `${userStats.streak} win streak!` : userStats && userStats.pending > 0 ? `${userStats.pending} pending` : undefined}
-          icon={<Activity className="h-5 w-5 text-blue-400" />}
-          color="border-blue-500/20"
-        />
-        <StatCard
-          label="Pending"
-          value={userStats?.pending || 0}
-          sub={signalStats && signalStats.pending > 0 ? `${signalStats.pending} Biddie Picks pending` : undefined}
-          icon={<Zap className="h-5 w-5 text-primary" />}
-          color="border-primary/20"
-        />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
