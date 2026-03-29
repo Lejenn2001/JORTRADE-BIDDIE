@@ -129,6 +129,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
   const [showTickerBreakdown, setShowTickerBreakdown] = useState(false);
   const [showPatternAnalysis, setShowPatternAnalysis] = useState(false);
   const [logPage, setLogPage] = useState(0);
+  const [showSignalLog, setShowSignalLog] = useState(false);
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -631,53 +632,59 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       </div>
 
       <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold text-foreground">Full Signal Log</h2>
-            <span className="text-[10px] text-muted-foreground">({filteredSignals.length} signals)</span>
-            {onExport && (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowSignalLog(!showSignalLog)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowSignalLog(!showSignalLog); }}
+          className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors cursor-pointer"
+        >
+          <Zap className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold text-foreground">Full Signal Log</h2>
+          <span className="text-[10px] text-muted-foreground">({filteredSignals.length} signals)</span>
+          {onExport && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onExport(); }}
+              disabled={exporting}
+              className="ml-2 inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            >
+              <Download className="h-3 w-3" />
+              {exporting ? "Exporting..." : "Export CSV"}
+            </button>
+          )}
+          {showSignalLog ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+        </div>
+        {showSignalLog && (<>
+        <div className="px-4 py-2 border-t border-border/30 flex items-center gap-1.5 flex-wrap">
+          {(["all", "hit", "partial_hit", "missed", "expired", "pending"] as const).map(f => {
+            const colors: Record<string, string> = {
+              all: "bg-primary/20 text-primary border border-primary/40",
+              hit: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+              partial_hit: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
+              missed: "bg-red-500/20 text-red-400 border border-red-500/40",
+              expired: "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
+              pending: "bg-amber-500/20 text-amber-400 border border-amber-500/40",
+            };
+            const labels: Record<string, string> = {
+              all: "All",
+              hit: `Hits (${stats.hits})`,
+              partial_hit: `Partial (${stats.partialHits})`,
+              missed: `Misses (${stats.misses})`,
+              expired: `Expired (${stats.expired})`,
+              pending: `Pending (${stats.pending})`,
+            };
+            return (
               <button
-                onClick={(e) => { e.stopPropagation(); onExport(); }}
-                disabled={exporting}
-                className="ml-2 inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                key={f}
+                onClick={() => { setFilterOutcome(f); setLogPage(0); }}
+                className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all ${
+                  filterOutcome === f ? colors[f] : "bg-muted/20 text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <Download className="h-3 w-3" />
-                {exporting ? "Exporting..." : "Export CSV"}
+                {labels[f]}
               </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(["all", "hit", "partial_hit", "missed", "expired", "pending"] as const).map(f => {
-              const colors: Record<string, string> = {
-                all: "bg-primary/20 text-primary border border-primary/40",
-                hit: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
-                partial_hit: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
-                missed: "bg-red-500/20 text-red-400 border border-red-500/40",
-                expired: "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
-                pending: "bg-amber-500/20 text-amber-400 border border-amber-500/40",
-              };
-              const labels: Record<string, string> = {
-                all: "All",
-                hit: `Hits (${stats.hits})`,
-                partial_hit: `Partial (${stats.partialHits})`,
-                missed: `Misses (${stats.misses})`,
-                expired: `Expired (${stats.expired})`,
-                pending: `Pending (${stats.pending})`,
-              };
-              return (
-                <button
-                  key={f}
-                  onClick={() => { setFilterOutcome(f); setLogPage(0); }}
-                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all ${
-                    filterOutcome === f ? colors[f] : "bg-muted/20 text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {labels[f]}
-                </button>
-              );
-            })}
-          </div>
+            );
+          })}
         </div>
 
         {(() => {
@@ -981,6 +988,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
             </>
           );
         })()}
+        </>)}
       </div>
     </div>
   );
