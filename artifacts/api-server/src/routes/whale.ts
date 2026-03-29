@@ -4682,8 +4682,13 @@ router.get("/whale/trades/stats", async (req, res) => {
       if ((t as any).outcome === "hit") byCategory[cat].hits++;
     }
 
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= weekAgo);
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - daysSinceMonday);
+    monday.setHours(0, 0, 0, 0);
+    const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= monday);
     const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
     const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit").length;
     const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
