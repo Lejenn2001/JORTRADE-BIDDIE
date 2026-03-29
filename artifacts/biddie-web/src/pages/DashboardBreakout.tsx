@@ -390,39 +390,6 @@ const DashboardBreakout = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 flex-1 min-w-[180px] rounded-xl border border-white/[0.06] bg-muted/10 px-3 py-2">
-                <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  value={customTickerInput}
-                  onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5))}
-                  onKeyDown={(e) => { if (e.key === "Enter") addCustomTicker(); }}
-                  placeholder="Add ticker (e.g. HOOD)"
-                  maxLength={5}
-                  className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none w-full"
-                />
-                <button
-                  onClick={addCustomTicker}
-                  disabled={addingTicker || !customTickerInput.trim()}
-                  className="px-3 py-1 rounded-lg bg-primary/15 hover:bg-primary/25 text-primary text-xs font-bold transition-all disabled:opacity-30 shrink-0"
-                >
-                  {addingTicker ? "..." : "Add"}
-                </button>
-              </div>
-              {customTickers.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {customTickers.map(t => (
-                    <span key={t} className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
-                      {t}
-                      <button onClick={() => removeCustomTicker(t)} className="hover:text-red-400 transition-colors">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
             {tickerMessage && (
               <p className={`text-xs font-medium ${tickerMessage.type === "error" ? "text-red-400" : "text-emerald-400"}`}>
                 {tickerMessage.text}
