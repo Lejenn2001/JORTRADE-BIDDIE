@@ -1569,14 +1569,25 @@ router.post("/whale/admin/backfill-biddie-picks", async (req, res) => {
       const r = stats?.rows?.[0];
       if (!r || parseInt(r.total) === 0) continue;
 
-      const denom = parseInt(r.bp_hits) + (parseInt(r.bp_total) - parseInt(r.bp_hits) - parseInt(r.pending || '0'));
-      const bpWinRate = denom > 0 ? (parseInt(r.bp_hits) / denom * 100) : 0;
+      const bpMisses = await dbQuery(
+        `SELECT COUNT(*) as cnt FROM signal_outcomes WHERE detected_at >= $1 AND detected_at < $2 AND is_biddie_pick = true AND outcome = 'missed'`,
+        [ws.toISOString(), we.toISOString()]
+      );
+      const bpPending = await dbQuery(
+        `SELECT COUNT(*) as cnt FROM signal_outcomes WHERE detected_at >= $1 AND detected_at < $2 AND is_biddie_pick = true AND (outcome IS NULL OR outcome = 'pending')`,
+        [ws.toISOString(), we.toISOString()]
+      );
+      const bpMissCount = parseInt(bpMisses?.rows?.[0]?.cnt || '0');
+      const bpPendCount = parseInt(bpPending?.rows?.[0]?.cnt || '0');
+      const bpResolved = parseInt(r.bp_hits) + bpMissCount;
+      const bpWinRate = bpResolved > 0 ? (parseInt(r.bp_hits) / bpResolved * 100) : 0;
 
       await dbQuery(
         `UPDATE weekly_signal_stats SET 
-          biddie_pick_hits = $1, biddie_pick_total = $2, biddie_pick_win_rate = $3
+          biddie_pick_hits = $1, biddie_pick_total = $2, biddie_pick_win_rate = $3,
+          biddie_pick_misses = $5, biddie_pick_pending = $6
          WHERE week_start::date = $4::date`,
-        [parseInt(r.bp_hits), parseInt(r.bp_total), bpWinRate.toFixed(2), ws.toISOString()]
+        [parseInt(r.bp_hits), parseInt(r.bp_total), bpWinRate.toFixed(2), ws.toISOString(), bpMissCount, bpPendCount]
       );
       statsUpdated++;
     }
@@ -5216,6 +5227,8 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
   const biddiePicks = rows.filter((r: any) => r.is_biddie_pick);
   const biddieResolved = biddiePicks.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit" || r.outcome === "missed");
   const biddieHits = biddieResolved.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit").length;
+  const biddieMisses = biddieResolved.filter((r: any) => r.outcome === "missed").length;
+  const biddiePending = biddiePicks.filter((r: any) => !r.outcome || r.outcome === "pending").length;
   const biddieWinRate = biddieResolved.length > 0 ? ((biddieHits / biddieResolved.length) * 100).toFixed(2) : "0";
 
   const statsRow = {
@@ -5233,6 +5246,8 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
     biddiePickHits: biddieHits,
     biddiePickTotal: biddiePicks.length,
     biddiePickWinRate: biddieWinRate,
+    biddiePickMisses: biddieMisses,
+    biddiePickPending: biddiePending,
   };
 
   if (existing?.rows?.length) {
@@ -5241,22 +5256,24 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
         total_signals = $1, hits = $2, misses = $3, partial_hits = $4,
         expired = $5, pending = $6, win_rate = $7, avg_conviction = $8,
         top_tickers = $9, biddie_pick_hits = $10, biddie_pick_total = $11,
-        biddie_pick_win_rate = $12, week_end = $13
+        biddie_pick_win_rate = $12, week_end = $13,
+        biddie_pick_misses = $15, biddie_pick_pending = $16
        WHERE week_start = $14`,
       [total, hits, misses, partialHits, expired, pending, winRate, avgConviction,
        statsRow.topTickers, biddieHits, biddiePicks.length, biddieWinRate,
-       weekEnd.toISOString(), weekStart.toISOString()]
+       weekEnd.toISOString(), weekStart.toISOString(), biddieMisses, biddiePending]
     );
   } else {
     await dbQuery(
       `INSERT INTO weekly_signal_stats
         (week_start, week_end, total_signals, hits, misses, partial_hits,
          expired, pending, win_rate, avg_conviction, top_tickers,
-         biddie_pick_hits, biddie_pick_total, biddie_pick_win_rate)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+         biddie_pick_hits, biddie_pick_total, biddie_pick_win_rate,
+         biddie_pick_misses, biddie_pick_pending)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [weekStart.toISOString(), weekEnd.toISOString(), total, hits, misses, partialHits,
        expired, pending, winRate, avgConviction, statsRow.topTickers,
-       biddieHits, biddiePicks.length, biddieWinRate]
+       biddieHits, biddiePicks.length, biddieWinRate, biddieMisses, biddiePending]
     );
   }
 

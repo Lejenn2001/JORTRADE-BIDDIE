@@ -60,6 +60,8 @@ interface WeeklyStats {
   biddie_pick_hits: number;
   biddie_pick_total: number;
   biddie_pick_win_rate: string;
+  biddie_pick_misses: number;
+  biddie_pick_pending: number;
 }
 
 interface UserTrade {
@@ -800,7 +802,8 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
               const avgConv = parseFloat(w.avg_conviction);
               const biddieWr = parseFloat(w.biddie_pick_win_rate);
               const biddieWins = w.biddie_pick_hits || 0;
-              const biddieMisses = (w.biddie_pick_total || 0) - biddieWins;
+              const biddieMisses = w.biddie_pick_misses || 0;
+              const biddiePending = w.biddie_pick_pending || 0;
 
               return (
                 <motion.div
@@ -862,7 +865,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                           {biddieWr.toFixed(0)}%
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
                           <div className="text-base font-black text-emerald-400">{biddieWins}</div>
@@ -870,8 +873,13 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                         </div>
                         <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-center">
                           <XCircle className="h-3.5 w-3.5 text-red-400 mx-auto mb-0.5" />
-                          <div className="text-base font-black text-red-400">{biddieMisses >= 0 ? biddieMisses : 0}</div>
+                          <div className="text-base font-black text-red-400">{biddieMisses}</div>
                           <div className="text-[9px] text-muted-foreground">Losses</div>
+                        </div>
+                        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2 text-center">
+                          <Clock className="h-3.5 w-3.5 text-yellow-400 mx-auto mb-0.5" />
+                          <div className="text-base font-black text-yellow-400">{biddiePending}</div>
+                          <div className="text-[9px] text-muted-foreground">Pending</div>
                         </div>
                       </div>
                     </div>
