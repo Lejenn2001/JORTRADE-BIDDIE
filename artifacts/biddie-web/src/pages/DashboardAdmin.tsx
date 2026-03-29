@@ -622,27 +622,21 @@ const DashboardAdmin = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <AdminSignalInsights onExport={exportSignalsCSV} exporting={exportingSignals} />
 
+              <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
               <button
                 onClick={() => setShowReference(!showReference)}
-                className="w-full flex items-center justify-between glass-panel rounded-xl p-5 border-border/40 hover:border-primary/30 transition-colors"
+                className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                    <BookOpen className="h-5 w-5 text-indigo-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-foreground">Signal System Reference</p>
-                    <p className="text-xs text-muted-foreground">Criteria, tags, scoring, and how each feature works</p>
-                  </div>
-                </div>
-                {showReference ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+                <Shield className="h-5 w-5 text-indigo-400" />
+                <h2 className="text-lg font-bold text-foreground">Signal System Reference</h2>
+                {showReference ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
               </button>
 
               {showReference && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
-                  className="space-y-6"
+                  className="p-5 space-y-6 border-t border-border/40"
                 >
                   <div className="glass-panel rounded-xl p-6 border-border/40">
                     <h3 className="text-lg font-bold text-foreground mb-4">Signal Verification Methodology</h3>
@@ -826,6 +820,7 @@ const DashboardAdmin = () => {
                   </div>
                 </motion.div>
               )}
+              </div>
             </motion.div>
           )}
 
