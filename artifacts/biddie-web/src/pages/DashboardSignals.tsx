@@ -432,7 +432,7 @@ const DashboardSignals = () => {
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setViewTab("algorithm")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -475,6 +475,9 @@ const DashboardSignals = () => {
                 viewTab === "spread" ? "bg-violet-500/30" : "bg-muted/50"
               }`}>{spreadCount}</span>
             </button>
+            <span className="ml-auto text-xs text-muted-foreground font-semibold">
+              Total: <span className="text-foreground">{totalCount}</span>
+            </span>
           </div>
 
           {/* Filters */}
