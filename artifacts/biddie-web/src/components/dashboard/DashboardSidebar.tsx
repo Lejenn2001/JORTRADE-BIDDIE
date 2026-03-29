@@ -76,7 +76,7 @@ const DashboardSidebar = () => {
           <X className="h-5 w-5 text-muted-foreground" />
         </button>
 
-        <Link to="/" className="flex items-center px-2 mb-8">
+        <Link to="/" className="flex items-center px-2 mb-4">
           <img src={jortradeLogo} alt="JORTRADE" className="h-20 w-auto" />
         </Link>
 
