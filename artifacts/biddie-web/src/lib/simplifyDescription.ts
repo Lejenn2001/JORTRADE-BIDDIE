@@ -60,9 +60,9 @@ export function compactDescription(signal: SignalInfo): string {
   const priceAtMatch = desc.match(/Price at \$([\d,.]+)/i);
   const vwapMatch = desc.match(/(above|below)\s*VWAP\s*\(?\$?([\d,.]+)\)?/i);
   if (priceAtMatch && vwapMatch) {
-    parts.push(`$${priceAtMatch[1]} ${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
+    parts.push(`Price @ $${priceAtMatch[1]} — ${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
   } else if (priceAtMatch) {
-    parts.push(`Price at $${priceAtMatch[1]}`);
+    parts.push(`Price @ $${priceAtMatch[1]}`);
   } else if (vwapMatch) {
     parts.push(`${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
   }
