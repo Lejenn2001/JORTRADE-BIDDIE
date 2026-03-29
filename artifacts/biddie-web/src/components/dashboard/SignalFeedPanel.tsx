@@ -39,12 +39,12 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
   const headerIcon = isWhale
     ? <Waves className="h-4 w-4 text-blue-400" />
     : isSpread
-    ? <Target className="h-4 w-4 text-purple-400" />
+    ? <Target className="h-4 w-4 text-violet-400" />
     : isAlgo
-    ? <Zap className="h-4 w-4 text-cyan-400" />
-    : <Activity className="h-4 w-4 text-cyan-400" />;
-  const accentColor = isWhale ? "text-blue-400" : isSpread ? "text-purple-400" : isAlgo ? "text-cyan-400" : "text-cyan-400";
-  const accentBg = isWhale ? "bg-blue-400/20" : isSpread ? "bg-purple-400/20" : isAlgo ? "bg-cyan-400/20" : "bg-cyan-400/20";
+    ? <Zap className="h-4 w-4 text-emerald-400" />
+    : <Activity className="h-4 w-4 text-primary" />;
+  const accentColor = isWhale ? "text-blue-400" : isSpread ? "text-violet-400" : isAlgo ? "text-emerald-400" : "text-primary";
+  const accentBg = isWhale ? "bg-blue-400/20" : isSpread ? "bg-violet-400/20" : isAlgo ? "bg-emerald-400/20" : "bg-primary/20";
 
   const toggleExpanded = (id: string) => {
     setExpandedIds(prev => {
@@ -56,14 +56,14 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
   };
 
   return (
-    <div className={`glass-panel rounded-xl p-5 ${isWhale ? "border-blue-500/20 border" : isSpread ? "border-purple-500/20 border" : isAlgo ? "border-cyan-500/20 border" : "border-cyan-500/20 border"}`}>
+    <div className={`glass-panel rounded-xl p-5 ${isWhale ? "border-blue-500/30 border" : isSpread ? "border-violet-500/30 border" : isAlgo ? "border-emerald-500/30 border" : "border-glow-blue"}`}>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           {headerIcon}
           <span className={`font-semibold text-sm ${accentColor}`}>{headerTitle}</span>
         </div>
         <span className={`text-xs ${accentBg} ${accentColor} px-2.5 py-0.5 rounded-full flex items-center gap-1`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isWhale ? "bg-blue-400" : isSpread ? "bg-purple-400" : isAlgo ? "bg-cyan-400" : "bg-cyan-400"} animate-pulse`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${isWhale ? "bg-blue-400" : isSpread ? "bg-violet-400" : isAlgo ? "bg-emerald-400" : "bg-primary"} animate-pulse`} />
           {displaySignals.length} Active
         </span>
       </div>
@@ -93,7 +93,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
             const isExpanded = expandedIds.has(signal.id);
             const priceInfo = getPrice?.(signal.ticker);
             const categoryLabel = signal.category === "whale" ? "WHALE PLAY" : signal.category === "spread" ? "SPREAD PLAY" : "TOP SIGNAL";
-            const catColor = signal.category === "whale" ? "text-blue-400" : signal.category === "spread" ? "text-purple-400" : "text-cyan-400";
+            const catColor = signal.category === "whale" ? "text-blue-400" : signal.category === "spread" ? "text-violet-400" : "text-emerald-400";
             const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
 
             return (
@@ -105,9 +105,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 variants={cardVariants}
                 className={`rounded-xl border overflow-hidden transition-all ${
                   signal.type === "bullish"
-                    ? "border-cyan-500/15 bg-gradient-to-br from-cyan-500/5 to-transparent"
+                    ? "border-primary/20 bg-gradient-to-br from-primary/5 to-transparent"
                     : signal.type === "bearish"
-                    ? "border-orange-500/15 bg-gradient-to-br from-orange-500/5 to-transparent"
+                    ? "border-destructive/20 bg-gradient-to-br from-destructive/5 to-transparent"
                     : "border-muted bg-muted/30"
                 }`}
               >
@@ -134,9 +134,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       {signal.category === "whale" ? (
                         <Waves className="h-3.5 w-3.5 text-blue-400" />
                       ) : signal.category === "spread" ? (
-                        <Target className="h-3.5 w-3.5 text-purple-400" />
+                        <Target className="h-3.5 w-3.5 text-violet-400" />
                       ) : (
-                        <Zap className="h-3.5 w-3.5 text-cyan-400" />
+                        <Zap className="h-3.5 w-3.5 text-emerald-400" />
                       )}
                       <span className={`text-[10px] font-bold tracking-widest uppercase ${catColor}`}>
                         {categoryLabel}
@@ -160,9 +160,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5 mb-1.5">
                         {signal.type === "bullish" ? (
-                          <TrendingUp className="h-5 w-5 text-cyan-400" />
+                          <TrendingUp className="h-5 w-5 text-primary" />
                         ) : (
-                          <TrendingDown className="h-5 w-5 text-orange-400" />
+                          <TrendingDown className="h-5 w-5 text-destructive" />
                         )}
                         <span className="font-bold text-foreground text-lg tracking-tight">{signal.ticker}</span>
                         {priceInfo && (
@@ -174,8 +174,8 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         <span
                           className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                             signal.putCall === "put"
-                              ? "bg-orange-500/20 text-orange-400"
-                              : "bg-cyan-400/20 text-cyan-400"
+                              ? "bg-destructive/20 text-destructive"
+                              : "bg-primary/20 text-primary"
                           }`}
                         >
                           {signal.putCall === "call" ? "CALL" : signal.putCall === "put" ? "PUT" : signal.type?.toUpperCase()}
@@ -260,25 +260,25 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   <div className="grid grid-cols-1 gap-1.5">
                     {signal.suggestedTrade && (
                       <div className="flex items-center gap-1.5 bg-muted/30 rounded-lg px-3 py-1.5 text-xs">
-                        <Target className="h-3 w-3 text-cyan-400 shrink-0" />
+                        <Target className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Trade:</span>
                         <span className="text-foreground font-semibold">{signal.suggestedTrade}</span>
                       </div>
                     )}
                     <div className="flex items-start gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
-                        <TrendingUp className="h-3 w-3 text-cyan-400 shrink-0 mt-0.5" />
+                        <TrendingUp className="h-3 w-3 text-primary shrink-0 mt-0.5" />
                         <div className="min-w-0">
                           <span className="text-muted-foreground">Entry: </span>
                           <span className={`font-semibold ${signal.entryTrigger ? 'text-foreground' : 'text-muted-foreground/60 italic'}`}>{signal.entryTrigger || 'Level data not available'}</span>
                         </div>
                       </div>
-                    <div className="flex items-center gap-1.5 bg-cyan-400/10 rounded-lg px-3 py-1.5 text-xs">
-                        <MapPin className="h-3 w-3 text-cyan-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
+                        <MapPin className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Target:</span>
                         {signal.targetZone ? (() => {
                           const tn = signal.targetNear;
                           const tz = signal.targetZone;
-                          if (!tn || tn === tz) return <span className="text-cyan-400 font-semibold">{tz}</span>;
+                          if (!tn || tn === tz) return <span className="text-primary font-semibold">{tz}</span>;
                           const tzVal = parseFloat((tz || '').replace(/[^0-9.]/g, '')) || 0;
                           const tnVal = parseFloat((tn || '').replace(/[^0-9.]/g, '')) || 0;
                           const isCall = signal.putCall === 'call' || signal.type === 'bullish';
@@ -288,9 +288,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           const secondLabel = second === tz ? "Strike target" : "Extended target";
                           return (
                             <>
-                              <span className="text-cyan-400 font-semibold">{first} – {second}</span>
+                              <span className="text-primary font-semibold">{first} – {second}</span>
                               <span className="relative group">
-                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-cyan-400/20 text-cyan-400 text-[8px] font-bold cursor-help">i</span>
+                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-primary/20 text-primary text-[8px] font-bold cursor-help">i</span>
                                 <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
                                   {first}: {firstLabel} · {second}: {secondLabel}
                                 </span>
@@ -304,15 +304,15 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         <span className="text-muted-foreground">Invalidation:</span>
                         <span className={`font-semibold ${signal.invalidation ? 'text-destructive' : 'text-muted-foreground/60 italic'}`}>{signal.invalidation || 'Level data not available'}</span>
                       </div>
-                    <div className="flex items-center gap-1.5 bg-cyan-400/10 rounded-lg px-3 py-1.5 text-xs">
-                        <Crosshair className="h-3 w-3 text-cyan-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
+                        <Crosshair className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Key level:</span>
-                        <span className={`font-semibold ${signal.keyLevel ? 'text-cyan-400' : 'text-muted-foreground/60 italic'}`}>{signal.keyLevel || 'Level data not available'}</span>
+                        <span className={`font-semibold ${signal.keyLevel ? 'text-primary' : 'text-muted-foreground/60 italic'}`}>{signal.keyLevel || 'Level data not available'}</span>
                       </div>
-                    <div className="flex items-center gap-1.5 bg-purple-400/10 rounded-lg px-3 py-1.5 text-xs">
-                        <Gauge className="h-3 w-3 text-purple-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
+                        <Gauge className="h-3 w-3 text-accent shrink-0" />
                         <span className="text-muted-foreground">S/R:</span>
-                        <span className={`font-semibold ${signal.srLevel ? 'text-purple-400' : 'text-muted-foreground/60 italic'}`}>{signal.srLevel || 'Level data not available'}</span>
+                        <span className={`font-semibold ${signal.srLevel ? 'text-accent' : 'text-muted-foreground/60 italic'}`}>{signal.srLevel || 'Level data not available'}</span>
                       </div>
                   </div>
 
@@ -344,11 +344,11 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                             )}
 
                             {signal.spreadDetails && (
-                              <div className="flex items-start gap-2 bg-purple-500/10 rounded-lg px-3 py-1.5 text-xs">
-                                <Target className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
+                              <div className="flex items-start gap-2 bg-violet-500/10 rounded-lg px-3 py-1.5 text-xs">
+                                <Target className="h-3 w-3 text-violet-400 mt-0.5 shrink-0" />
                                 <div>
                                   <span className="text-muted-foreground">Strategy: </span>
-                                  <span className="text-purple-400 font-semibold">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                  <span className="text-violet-400 font-semibold">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
                                   {signal.spreadDetails.legs && (
                                     <span className="text-muted-foreground text-[10px] block mt-0.5">{signal.spreadDetails.legs}</span>
                                   )}
@@ -422,7 +422,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all shrink-0 ${
                           takenSignalIds?.has(signal.id)
                             ? "bg-emerald-500/20 text-emerald-400 hover:bg-red-500/20 hover:text-red-400"
-                            : "bg-muted/30 text-muted-foreground hover:bg-cyan-400/20 hover:text-cyan-400"
+                            : "bg-muted/30 text-muted-foreground hover:bg-primary/20 hover:text-primary"
                         } disabled:opacity-50`}
                       >
                         {takingId === signal.id ? (

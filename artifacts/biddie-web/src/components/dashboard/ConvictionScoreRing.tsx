@@ -11,8 +11,8 @@ interface Props {
 
 const getScoreColor = (score: number) => {
   if (score >= 90) return { stroke: "hsl(0 72% 51%)", glow: "hsl(0 72% 51% / 0.5)", text: "text-destructive", label: "Ultra" };
-  if (score >= 75) return { stroke: "hsl(270 75% 60%)", glow: "hsl(270 75% 60% / 0.4)", text: "text-purple-400", label: "Very High" };
-  if (score >= 60) return { stroke: "hsl(187 92% 69%)", glow: "hsl(187 92% 69% / 0.3)", text: "text-cyan-400", label: "High" };
+  if (score >= 75) return { stroke: "hsl(270 75% 60%)", glow: "hsl(270 75% 60% / 0.4)", text: "text-accent", label: "Very High" };
+  if (score >= 60) return { stroke: "hsl(230 85% 60%)", glow: "hsl(230 85% 60% / 0.3)", text: "text-primary", label: "High" };
   return { stroke: "hsl(225 15% 50%)", glow: "hsl(225 15% 50% / 0.2)", text: "text-muted-foreground", label: "Moderate" };
 };
 

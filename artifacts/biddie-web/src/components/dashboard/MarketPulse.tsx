@@ -94,10 +94,10 @@ const MarketPulse = () => {
 
   if (loading) {
     return (
-      <div className="glass-panel rounded-xl p-4 border border-cyan-500/10">
+      <div className="glass-panel rounded-xl p-4 border border-white/10">
         <div className="flex items-center gap-2 mb-3">
-          <Activity className="h-4 w-4 text-cyan-400 animate-pulse" />
-          <span className="text-sm font-semibold text-cyan-400">Market Pulse</span>
+          <Activity className="h-4 w-4 text-primary animate-pulse" />
+          <span className="text-sm font-semibold text-primary">Market Pulse</span>
         </div>
         <div className="flex items-center justify-center py-6">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -108,10 +108,10 @@ const MarketPulse = () => {
 
   if (error && !data) {
     return (
-      <div className="glass-panel rounded-xl p-4 border border-cyan-500/10">
+      <div className="glass-panel rounded-xl p-4 border border-white/10">
         <div className="flex items-center gap-2 mb-2">
-          <Activity className="h-4 w-4 text-cyan-400" />
-          <span className="text-sm font-semibold text-cyan-400">Market Pulse</span>
+          <Activity className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-primary">Market Pulse</span>
         </div>
         <p className="text-xs text-muted-foreground">Unable to load market data. Will retry automatically.</p>
       </div>
@@ -125,11 +125,11 @@ const MarketPulse = () => {
   };
 
   return (
-    <div className="glass-panel rounded-xl p-4 border border-cyan-500/10 space-y-3">
+    <div className="glass-panel rounded-xl p-4 border border-white/10 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-cyan-400" />
-          <span className="text-sm font-semibold text-cyan-400">Market Pulse</span>
+          <Activity className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-primary">Market Pulse</span>
         </div>
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${data.marketOpen ? "bg-emerald-500/20 text-emerald-400" : "bg-muted/30 text-muted-foreground"}`}>
           {data.marketOpen ? "Market Open" : "After Hours"}
@@ -195,7 +195,7 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-cyan-400/5 rounded-lg border border-cyan-500/10 space-y-1.5">
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
                   <p className="text-[10px] text-foreground/80 leading-relaxed">
                     The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.
                   </p>
@@ -247,7 +247,7 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-cyan-400/5 rounded-lg border border-cyan-500/10 space-y-2">
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-2">
                   <div className="space-y-1">
                     <p className="text-[10px] text-foreground/80 leading-relaxed">
                       Imagine a classroom voting. Calls = kids voting "prices go UP!" and Puts = kids voting "prices go DOWN!" The Put/Call Ratio tells you which side has more votes.
@@ -260,12 +260,12 @@ const MarketPulse = () => {
                       <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Almost everyone is voting DOWN — the class is scared!</span></p>
                     </div>
                   </div>
-                  <div className="border-t border-cyan-500/10 pt-1.5 space-y-1">
+                  <div className="border-t border-primary/10 pt-1.5 space-y-1">
                     <p className="text-[10px] text-foreground/80 leading-relaxed">
-                      <span className="text-cyan-400 font-bold">Money vs Rush Orders:</span> Think of it like this — the MONEY (premium) shows you who brought the most lunch money to bet. The SWEEPS show you who is running to place their bet first. Sometimes the kid with the most money bets DOWN, but the kids rushing to the front are all betting UP — that's why you watch both!
+                      <span className="text-primary font-bold">Money vs Rush Orders:</span> Think of it like this — the MONEY (premium) shows you who brought the most lunch money to bet. The SWEEPS show you who is running to place their bet first. Sometimes the kid with the most money bets DOWN, but the kids rushing to the front are all betting UP — that's why you watch both!
                     </p>
                   </div>
-                  <div className="border-t border-cyan-500/10 pt-1.5">
+                  <div className="border-t border-primary/10 pt-1.5">
                     <p className="text-[10px] text-foreground/80 leading-relaxed">
                       <span className="text-amber-400 font-bold">What are sweeps?</span> Imagine a kid who wants ALL the candy at every store in the mall at the same time. A sweep is when a big trader sends orders to every exchange at once because they want in RIGHT NOW. It means someone with a lot of money is in a hurry!
                     </p>
