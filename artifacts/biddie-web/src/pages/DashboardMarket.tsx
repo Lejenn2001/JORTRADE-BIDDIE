@@ -746,6 +746,11 @@ const DashboardMarket = () => {
                         <Eye className="h-4 w-4 text-amber-400" />
                         <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Dark Pool</h3>
                       </div>
+                      <div className="rounded-lg px-3 py-2 bg-amber-500/[0.05] border border-amber-500/15 mb-3">
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          <span className="font-bold text-amber-400">What is a Dark Pool?</span> Dark pools are private exchanges where large institutions (hedge funds, banks, pension funds) trade huge blocks of shares away from public markets. These trades don't show up on the regular stock exchange until after they're done — so you can't see them in real-time. When we detect heavy dark pool activity, it tells us where the big money is quietly positioning before a move happens.
+                        </p>
+                      </div>
                       <p className="text-sm text-muted-foreground leading-relaxed mb-3">{result.analysis.dark_pool_analysis}</p>
                       <div className="flex gap-2 flex-wrap">
                         <span className="text-[10px] font-bold px-2 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
