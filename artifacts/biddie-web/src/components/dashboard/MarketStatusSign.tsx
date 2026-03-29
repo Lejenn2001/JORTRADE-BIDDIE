@@ -249,10 +249,10 @@ const MarketStatusSign = () => {
               >
                 {cfg.label}
               </span>
-              <div className="text-xs font-semibold text-foreground tracking-wide mt-0.5">
+              <div className="text-[11px] font-mono font-semibold text-foreground tracking-wider mt-0.5">
                 {state.currentTime}
               </div>
-              <div className="text-[9px] text-muted-foreground mt-0.5">
+              <div className="text-[9px] font-mono text-muted-foreground tracking-wider mt-0.5">
                 {state.dateStr} EST
               </div>
             </div>
