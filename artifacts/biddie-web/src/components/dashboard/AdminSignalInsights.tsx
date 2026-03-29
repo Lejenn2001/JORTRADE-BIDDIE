@@ -457,7 +457,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
         <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold text-foreground">Signal Performance Insights</h2>
+          <h2 className="text-lg font-bold text-foreground">Signal Analysis</h2>
           <span className="text-[10px] text-muted-foreground ml-auto">{stats.total} total signals</span>
         </div>
 
