@@ -854,6 +854,7 @@ let cachedResults: SqueezeResult[] = [];
 let lastScanTime = 0;
 const SCAN_INTERVAL = 5 * 60 * 1000;
 const SQUEEZE_FILE = join(process.cwd(), ".squeeze-tracking.json");
+const FIRST_DETECTED_FILE = join(process.cwd(), ".first-detected-tracking.json");
 
 function loadSqueezeTracking(): Map<string, string> {
   try {
@@ -873,7 +874,26 @@ function saveSqueezeTracking(map: Map<string, string>): void {
   }
 }
 
+function loadFirstDetected(): Map<string, string> {
+  try {
+    if (existsSync(FIRST_DETECTED_FILE)) {
+      const data = JSON.parse(readFileSync(FIRST_DETECTED_FILE, "utf-8"));
+      return new Map(Object.entries(data));
+    }
+  } catch {}
+  return new Map();
+}
+
+function saveFirstDetected(map: Map<string, string>): void {
+  try {
+    writeFileSync(FIRST_DETECTED_FILE, JSON.stringify(Object.fromEntries(map), null, 2));
+  } catch (e) {
+    console.error("[breakout] Failed to save first-detected tracking:", e);
+  }
+}
+
 const squeezeFirstSeen: Map<string, string> = loadSqueezeTracking();
+const firstDetectedMap: Map<string, string> = loadFirstDetected();
 
 async function runFullScan(): Promise<SqueezeResult[]> {
   const now = Date.now();
@@ -913,7 +933,13 @@ async function runFullScan(): Promise<SqueezeResult[]> {
   results.sort((a, b) => b.score - a.score);
 
   const activeSqueezeTickers = new Set<string>();
+  const activeSetupTickers = new Set<string>();
   for (const r of results) {
+    activeSetupTickers.add(r.ticker);
+    if (!firstDetectedMap.has(r.ticker)) {
+      firstDetectedMap.set(r.ticker, new Date().toISOString());
+    }
+    (r as any).firstDetected = firstDetectedMap.get(r.ticker);
     if (r.squeezeActive) {
       activeSqueezeTickers.add(r.ticker);
       if (!squeezeFirstSeen.has(r.ticker)) {
@@ -927,7 +953,13 @@ async function runFullScan(): Promise<SqueezeResult[]> {
       squeezeFirstSeen.delete(ticker);
     }
   }
+  for (const [ticker] of firstDetectedMap) {
+    if (!activeSetupTickers.has(ticker)) {
+      firstDetectedMap.delete(ticker);
+    }
+  }
   saveSqueezeTracking(squeezeFirstSeen);
+  saveFirstDetected(firstDetectedMap);
 
   cachedResults = results;
   lastScanTime = Date.now();

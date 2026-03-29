@@ -54,6 +54,7 @@ interface BreakoutSetup {
   directionContext?: string | null;
   scannedAt?: string;
   squeezeFirstSeen?: string;
+  firstDetected?: string;
   thesis?: BreakoutThesis;
   contract?: {
     type: "CALL" | "PUT";
@@ -817,81 +818,75 @@ function SetupCard({
       }`}
       onClick={onToggle}
     >
-      <div className="px-3 sm:px-4 py-3 flex items-center gap-3">
-        <ConvictionScoreRing score={setup.score} size="sm" />
+      <div className="px-3 sm:px-4 py-3">
+        <div className="flex items-start gap-3">
+          <ConvictionScoreRing score={setup.score} size="sm" />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-extrabold text-foreground">{setup.ticker}</span>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${tag.colors} ${tag.pulse ? "animate-pulse" : ""}`}>
-              {tag.label}
-            </span>
-            {dir !== "neutral" && (
-              <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                isBullish ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-red-500/10 text-red-400 border-red-500/25"
-              }`}>
-                {isBullish ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
-                {isBullish ? "CALLS" : "PUTS"}
-              </span>
-            )}
-            {setup.contract && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                setup.contract.expiryLabel === "0DTE"
-                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
-                  : setup.contract.expiryLabel === "1DTE"
-                    ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
-                    : "bg-blue-500/15 text-blue-400 border-blue-500/30"
-              }`}>{setup.contract.expiryLabel}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-            {setup.contract ? (
-              <span className={`font-bold ${setup.contract.type === "CALL" ? "text-emerald-400/80" : "text-red-400/80"}`}>
-                ${setup.contract.strike} {setup.contract.type}
-              </span>
-            ) : (
-              <span className="truncate max-w-[200px]">{setup.reason.split(". ")[0]}</span>
-            )}
-            {setup.targetPrice && (
-              <>
-                <span className="text-border">→</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base font-extrabold text-foreground">{setup.ticker}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${tag.colors} ${tag.pulse ? "animate-pulse" : ""}`}>
+                  {tag.label}
+                </span>
+                {dir !== "neutral" && (
+                  <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                    isBullish ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-red-500/10 text-red-400 border-red-500/25"
+                  }`}>
+                    {isBullish ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+                    {isBullish ? "CALLS" : "PUTS"}
+                  </span>
+                )}
+                {setup.contract && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                    setup.contract.expiryLabel === "0DTE"
+                      ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+                      : setup.contract.expiryLabel === "1DTE"
+                        ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                        : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                  }`}>{setup.contract.expiryLabel}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="text-right">
+                  <p className="text-sm font-bold text-foreground">${setup.currentPrice.toFixed(2)}</p>
+                </div>
+                <button
+                  onClick={onWatch}
+                  className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all border ${
+                    watched
+                      ? "bg-primary/20 border-primary/50 text-primary"
+                      : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
+                  }`}
+                  title={watched ? "Stop watching" : "Watch for breakout"}
+                >
+                  <Bell className={`h-3 w-3 ${watched ? "fill-current" : ""}`} />
+                </button>
+                <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mt-1.5 text-[11px]">
+              {setup.contract && (
+                <span className={`font-bold ${setup.contract.type === "CALL" ? "text-emerald-400/80" : "text-red-400/80"}`}>
+                  ${setup.contract.strike} {setup.contract.type}
+                </span>
+              )}
+              {setup.targetPrice && (
                 <span className="font-semibold text-primary">Target ${setup.targetPrice.toFixed(2)}</span>
-              </>
-            )}
-            {setup.squeezeFirstSeen && (
-              <>
-                <span className="text-border">|</span>
-                <span className="text-muted-foreground/70">Squeeze since {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-              </>
-            )}
-            {setup.scannedAt && (
-              <>
-                <span className="text-border">|</span>
-                <span className="text-muted-foreground/70">Posted {new Date(setup.scannedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(setup.scannedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })}</span>
-              </>
-            )}
+              )}
+              {setup.squeezeFirstSeen && (
+                <span className="text-muted-foreground/60">Squeeze {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+              )}
+              <span className="ml-auto flex items-center gap-1 text-muted-foreground/50">
+                <Clock className="h-2.5 w-2.5" />
+                {setup.firstDetected
+                  ? new Date(setup.firstDetected).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(setup.firstDetected).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })
+                  : fresh.label || "Just now"
+                }
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-bold text-foreground">${setup.currentPrice.toFixed(2)}</p>
-            {fresh.label && (
-              <p className={`text-[10px] ${fresh.color}`}>{fresh.label}</p>
-            )}
-          </div>
-          <button
-            onClick={onWatch}
-            className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all border ${
-              watched
-                ? "bg-primary/20 border-primary/50 text-primary"
-                : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
-            }`}
-            title={watched ? "Stop watching" : "Watch for breakout"}
-          >
-            <Bell className={`h-3.5 w-3.5 ${watched ? "fill-current" : ""}`} />
-          </button>
-          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
         </div>
       </div>
 
