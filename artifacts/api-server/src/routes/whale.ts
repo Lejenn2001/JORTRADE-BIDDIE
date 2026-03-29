@@ -2127,10 +2127,10 @@ async function runSignalsPipeline() {
       callTargetCandidates.sort((a, b) => a.level - b.level);
 
       if (callTargetCandidates.length >= 2) {
-        target = `$${callTargetCandidates[0].level.toFixed(2)}`;
-        targetNear = `$${callTargetCandidates[1].level.toFixed(2)}`;
+        target = `${callTargetCandidates[0].name} at $${callTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `${callTargetCandidates[1].name} at $${callTargetCandidates[1].level.toFixed(2)}`;
       } else if (callTargetCandidates.length === 1) {
-        target = `$${callTargetCandidates[0].level.toFixed(2)}`;
+        target = `${callTargetCandidates[0].name} at $${callTargetCandidates[0].level.toFixed(2)}`;
         targetNear = `$${(callTargetCandidates[0].level * 1.02).toFixed(2)}`;
       } else if (hasKeyLevels && price) {
         target = `$${(price * 1.02).toFixed(2)}`;
@@ -2190,10 +2190,10 @@ async function runSignalsPipeline() {
       putTargetCandidates.sort((a, b) => b.level - a.level);
 
       if (putTargetCandidates.length >= 2) {
-        target = `$${putTargetCandidates[0].level.toFixed(2)}`;
-        targetNear = `$${putTargetCandidates[1].level.toFixed(2)}`;
+        target = `${putTargetCandidates[0].name} at $${putTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `${putTargetCandidates[1].name} at $${putTargetCandidates[1].level.toFixed(2)}`;
       } else if (putTargetCandidates.length === 1) {
-        target = `$${putTargetCandidates[0].level.toFixed(2)}`;
+        target = `${putTargetCandidates[0].name} at $${putTargetCandidates[0].level.toFixed(2)}`;
         targetNear = `$${(putTargetCandidates[0].level * 0.98).toFixed(2)}`;
       } else if (hasKeyLevels && price) {
         target = `$${(price * 0.98).toFixed(2)}`;

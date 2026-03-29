@@ -937,8 +937,8 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                   const tnVal = parseFloat((tn || '').replace(/[^0-9.]/g, '')) || 0;
                   const first = isCall ? (tzVal < tnVal ? tz : tn) : (tzVal > tnVal ? tn : tz);
                   const second = isCall ? (tzVal < tnVal ? tn : tz) : (tzVal > tnVal ? tz : tn);
-                  const firstLabel = first === tz ? "Strike target" : "Extended target";
-                  const secondLabel = second === tz ? "Strike target" : "Extended target";
+                  const firstLabel = "Nearest target";
+                  const secondLabel = "Extended target";
                   return (
                     <>
                       <span className="text-primary font-semibold">{first} – {second}</span>
