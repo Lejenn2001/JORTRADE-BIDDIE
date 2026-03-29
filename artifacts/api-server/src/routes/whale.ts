@@ -1398,6 +1398,63 @@ router.get("/whale/referrals", async (req, res) => {
   }
 });
 
+router.get("/whale/admin/referrals", async (req, res) => {
+  try {
+    const allReferrers = await dbQuery(`
+      SELECT us.user_id, us.referral_code, us.chat_alias,
+        (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) as referral_count
+      FROM user_settings us
+      WHERE us.referral_code IS NOT NULL
+      ORDER BY (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) DESC
+    `);
+
+    const allReferrals = await dbQuery(`
+      SELECT r.referrer_id, r.referred_id, r.referred_name, r.created_at,
+        us_referrer.referral_code as referrer_code, us_referrer.chat_alias as referrer_alias
+      FROM referrals r
+      LEFT JOIN user_settings us_referrer ON us_referrer.user_id = r.referrer_id
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `);
+
+    const totalReferrals = allReferrals?.rows?.length || 0;
+    const totalReferrers = (allReferrers?.rows || []).filter((r: any) => parseInt(r.referral_count) > 0).length;
+    const totalCodes = allReferrers?.rows?.length || 0;
+
+    const tierBreakdown = { launch: 0, bronze: 0, silver: 0, gold: 0 };
+    for (const r of allReferrers?.rows || []) {
+      const count = parseInt(r.referral_count);
+      if (count >= 10) tierBreakdown.gold++;
+      else if (count >= 5) tierBreakdown.silver++;
+      else if (count >= 3) tierBreakdown.bronze++;
+      else if (count >= 1) tierBreakdown.launch++;
+    }
+
+    res.json({
+      totalReferrals,
+      totalReferrers,
+      totalCodes,
+      tierBreakdown,
+      topReferrers: (allReferrers?.rows || []).slice(0, 20).map((r: any) => ({
+        userId: r.user_id,
+        code: r.referral_code,
+        alias: r.chat_alias,
+        count: parseInt(r.referral_count),
+      })),
+      recentReferrals: (allReferrals?.rows || []).map((r: any) => ({
+        referrerId: r.referrer_id,
+        referrerCode: r.referrer_code,
+        referrerAlias: r.referrer_alias,
+        referredName: r.referred_name,
+        createdAt: r.created_at,
+      })),
+    });
+  } catch (err: any) {
+    console.error("admin referrals error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Community Chat Endpoint ──────────────────────────────────────────────────────
 
 const COMMUNITY_SYSTEM = `You are Biddie AI — a friend hanging out in the JORTRADE group chat. You're part of the crew. You are NOT a trading terminal or analysis bot here. You're a homie who happens to know trading.

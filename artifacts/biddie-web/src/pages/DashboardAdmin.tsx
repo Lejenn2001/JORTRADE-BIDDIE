@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban, Gift, Copy, Check } from "lucide-react";
 
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import { Link } from "react-router-dom";
@@ -57,6 +57,136 @@ const planConfig = {
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+const getTierLabel = (count: number) => {
+  if (count >= 10) return { label: "🥇 Gold", color: "text-yellow-400 bg-yellow-500/15" };
+  if (count >= 5) return { label: "🥈 Silver", color: "text-slate-300 bg-slate-400/15" };
+  if (count >= 3) return { label: "🥉 Bronze", color: "text-amber-400 bg-amber-500/15" };
+  if (count >= 1) return { label: "🚀 Launch", color: "text-blue-400 bg-blue-500/15" };
+  return { label: "—", color: "text-muted-foreground" };
+};
+
+const AdminReferralsTab = () => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = () => {
+    setLoading(true);
+    fetch("/api/whale/admin/referrals")
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  if (loading || !data) {
+    return <div className="text-center text-muted-foreground py-12">Loading referral data...</div>;
+  }
+
+  const { totalReferrals, totalReferrers, totalCodes, tierBreakdown, topReferrers, recentReferrals } = data;
+
+  const tierColors: Record<string, string> = {
+    launch: "bg-blue-500/15 text-blue-400",
+    bronze: "bg-amber-500/15 text-amber-400",
+    silver: "bg-slate-400/15 text-slate-300",
+    gold: "bg-yellow-500/15 text-yellow-400",
+  };
+  const tierLabels: Record<string, string> = {
+    launch: "🚀 Launch",
+    bronze: "🥉 Bronze",
+    silver: "🥈 Silver",
+    gold: "🥇 Gold",
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard icon={Gift} label="Total Referrals" value={totalReferrals} color="bg-emerald-600" />
+        <StatCard icon={Users} label="Active Referrers" value={totalReferrers} subtitle={`${totalCodes} codes generated`} color="bg-blue-600" />
+        <StatCard icon={TrendingUp} label="Conversion Rate" value={totalCodes > 0 ? `${Math.round((totalReferrers / totalCodes) * 100)}%` : "0%"} subtitle="Referrers with 1+ referral" color="bg-purple-600" />
+        <StatCard icon={Crown} label="Highest Tier" value={tierBreakdown.gold > 0 ? "Gold" : tierBreakdown.silver > 0 ? "Silver" : tierBreakdown.bronze > 0 ? "Bronze" : tierBreakdown.launch > 0 ? "Launch" : "None"} color="bg-yellow-600" />
+      </div>
+
+      <div className="rounded-xl border border-border/30 bg-card/50 p-5">
+        <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+          <Crown className="w-4 h-4 text-yellow-400" /> Tier Breakdown
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Object.entries(tierBreakdown).map(([key, count]) => (
+            <div key={key} className={`rounded-lg border border-white/[0.06] p-3 text-center ${tierColors[key]}`}>
+              <div className="text-lg font-bold">{count as number}</div>
+              <div className="text-xs font-medium">{tierLabels[key]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/30 bg-card/50 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-400" /> Top Referrers
+          </h3>
+          <button
+            onClick={fetchData}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" /> Refresh
+          </button>
+        </div>
+        {topReferrers.filter((r: any) => r.count > 0).length === 0 ? (
+          <div className="text-center text-muted-foreground/50 py-6 text-xs">No referrals yet</div>
+        ) : (
+          <div className="rounded-lg border border-white/[0.04] overflow-hidden">
+            <div className="grid grid-cols-4 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+              <span>User</span>
+              <span>Code</span>
+              <span>Referrals</span>
+              <span>Tier</span>
+            </div>
+            {topReferrers.filter((r: any) => r.count > 0).map((r: any) => {
+              const tier = getTierLabel(r.count);
+              return (
+                <div key={r.userId} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
+                  <span className="text-foreground/70 truncate">{r.alias || r.userId.slice(0, 8) + "..."}</span>
+                  <span className="text-muted-foreground font-mono text-[10px]">{r.code}</span>
+                  <span className="text-foreground font-bold">{r.count}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${tier.color}`}>{tier.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border/30 bg-card/50 p-5">
+        <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+          <UserPlus className="w-4 h-4 text-blue-400" /> Recent Referrals
+        </h3>
+        {recentReferrals.length === 0 ? (
+          <div className="text-center text-muted-foreground/50 py-6 text-xs">No referrals yet</div>
+        ) : (
+          <div className="rounded-lg border border-white/[0.04] overflow-hidden">
+            <div className="grid grid-cols-3 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+              <span>Referred By</span>
+              <span>New User</span>
+              <span>Date</span>
+            </div>
+            {recentReferrals.map((r: any, i: number) => (
+              <div key={i} className="grid grid-cols-3 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors">
+                <span className="text-foreground/70 truncate">{r.referrerAlias || r.referrerCode || "Unknown"}</span>
+                <span className="text-foreground/60 truncate">{r.referredName}</span>
+                <span className="text-muted-foreground/60">
+                  {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
 const DashboardAdmin = () => {
   const { isAdmin, user } = useAuth();
   const onlineUsers = usePresenceTracker();
@@ -68,7 +198,7 @@ const DashboardAdmin = () => {
   const [showReference, setShowReference] = useState(false);
   const [showTiers, setShowTiers] = useState(false);
   const [chatCount, setChatCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users' | 'referrals'>('overview');
   const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
   const [replitCredits, setReplitCredits] = useState("242.89");
   const [replitCreditsDate, setReplitCreditsDate] = useState("3/29");
@@ -386,6 +516,7 @@ const DashboardAdmin = () => {
               { id: 'health' as const, label: 'System Health', icon: Server },
               { id: 'signals' as const, label: 'Signal Insights', icon: Zap },
               { id: 'users' as const, label: 'Users', icon: Users },
+              { id: 'referrals' as const, label: 'Referrals', icon: Gift },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -1080,6 +1211,10 @@ const DashboardAdmin = () => {
               </div>
 
             </motion.div>
+          )}
+
+          {activeTab === 'referrals' && (
+            <AdminReferralsTab />
           )}
 
         </main>
