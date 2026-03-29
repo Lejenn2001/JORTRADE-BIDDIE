@@ -179,10 +179,11 @@ const DashboardCommunity = () => {
     setBiddieThinking(true);
     scrollToBottom();
     try {
+      const senderName = profile?.full_name?.split(" ")[0] || "fam";
       await fetch('/api/whale/community-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, userName: senderName }),
       });
     } catch (e) {
       console.error("Biddie community chat error:", e);

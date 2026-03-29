@@ -1330,7 +1330,7 @@ NON-NEGOTIABLE:
 - Never say you're "just a bot" or "can't do X"`;
 
 router.post("/whale/community-chat", async (req, res) => {
-  const { message } = req.body as { message?: string };
+  const { message, userName } = req.body as { message?: string; userName?: string };
   if (!message?.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
@@ -1345,7 +1345,9 @@ router.post("/whale/community-chat", async (req, res) => {
     /^(lol|lmao|facts|bet|true|word|fr|real|nice|dope|fire|damn|sheesh|ong|no cap|cap|haha|😂|🔥|💪|🤝)/,
     /^(thanks|thank you|appreciate|good looks|thx|ty|tysm)/,
   ];
-  const isCasual = casualPatterns.some(p => p.test(lower.replace(/^@?biddie\s*/i, "").trim()) || p.test(lower));
+  const strippedMsg = lower.replace(/^@?biddie\s*/i, "").trim();
+  const greetingStart = /^(hey|hi|hello|yo|sup|what'?s up|what'?s good|gm|good morning|good evening|good afternoon|wassup|wsg)/i;
+  const isCasual = casualPatterns.some(p => p.test(strippedMsg) || p.test(lower)) || greetingStart.test(strippedMsg);
 
   const needs = detectNeeds(message);
   const tradingPhrases = [
@@ -1409,14 +1411,15 @@ router.post("/whale/community-chat", async (req, res) => {
     dataStr = `\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
   }
 
-  console.log(`[community-chat] msg="${message.slice(0,50)}" isCasual=${isCasual} isTradingQ=${isTradingQ} hasData=${!!dataStr}`);
+  console.log(`[community-chat] msg="${message.slice(0,50)}" isCasual=${isCasual} isTradingQ=${isTradingQ} hasData=${!!dataStr} user=${userName || "unknown"}`);
+  const nameCtx = userName ? `\nThe person talking to you is ${userName}. Use their name naturally when greeting them.` : "";
   const chatInstruction = `User says: ${message}${dataStr}`;
 
   try {
     const response = await claude.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 600,
-      system: COMMUNITY_SYSTEM,
+      system: COMMUNITY_SYSTEM + nameCtx,
       messages: [{ role: "user", content: chatInstruction }],
     });
 
