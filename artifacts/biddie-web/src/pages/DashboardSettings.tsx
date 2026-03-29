@@ -3,14 +3,53 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import NotificationSettings from "@/components/dashboard/NotificationSettings";
 import { useAuth } from "@/hooks/useAuth";
-import { User, MessageSquare, Check, Copy, Gift, Trophy, Star, Crown, Zap, Users, ExternalLink } from "lucide-react";
+import { User, MessageSquare, Check, Copy, Gift, Star, Crown, Zap, Users, ExternalLink, Share2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 const TIERS = [
-  { key: "launch", label: "Launch Special", icon: "🚀", requirement: 1, reward: "50% off next month", value: "~$25–$65 saved", color: "from-blue-400 to-blue-600" },
-  { key: "bronze", label: "Bronze", icon: "🥉", requirement: 3, reward: "1 month free", value: "$49–$129 value", color: "from-amber-600 to-amber-800" },
-  { key: "silver", label: "Silver", icon: "🥈", requirement: 5, reward: "Lifetime 25% off", value: "Permanent savings", color: "from-slate-300 to-slate-500" },
-  { key: "gold", label: "Gold", icon: "🥇", requirement: 10, reward: "Free upgrade to Pro", value: "~$1,548/yr value", color: "from-yellow-400 to-yellow-600" },
+  {
+    key: "first",
+    icon: "🚀",
+    requirement: 1,
+    rewards: ["50% OFF your next month"],
+    color: "from-blue-400 to-blue-600",
+    borderColor: "border-blue-500/30",
+    bgColor: "bg-blue-500/[0.06]",
+    textColor: "text-blue-400",
+  },
+  {
+    key: "bronze",
+    label: "Bronze",
+    icon: "🥉",
+    requirement: 3,
+    rewards: ["1 FREE month", "Community badge"],
+    color: "from-amber-600 to-amber-800",
+    borderColor: "border-amber-500/30",
+    bgColor: "bg-amber-500/[0.06]",
+    textColor: "text-amber-400",
+  },
+  {
+    key: "silver",
+    label: "Silver",
+    icon: "🥈",
+    requirement: 5,
+    rewards: ["1 FREE month", "20% OFF for life", "Early feature access"],
+    color: "from-slate-300 to-slate-500",
+    borderColor: "border-slate-400/30",
+    bgColor: "bg-slate-400/[0.06]",
+    textColor: "text-slate-300",
+  },
+  {
+    key: "gold",
+    label: "Gold",
+    icon: "🥇",
+    requirement: 10,
+    rewards: ["Pro upgrade or 50% OFF Pro for life", "Priority Biddie AI access", "Exclusive signals access"],
+    color: "from-yellow-400 to-yellow-600",
+    borderColor: "border-yellow-500/30",
+    bgColor: "bg-yellow-500/[0.06]",
+    textColor: "text-yellow-400",
+  },
 ];
 
 const PLAN_DETAILS: Record<string, { name: string; price: string; icon: React.ReactNode; color: string }> = {
@@ -129,7 +168,7 @@ const ProfileSection = () => {
 };
 
 const ReferralSection = () => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const [referrals, setReferrals] = useState<{ referred_name: string; created_at: string }[]>([]);
   const [copied, setCopied] = useState(false);
   const [loadingReferrals, setLoadingReferrals] = useState(false);
@@ -159,141 +198,210 @@ const ReferralSection = () => {
   const currentTierIndex = TIERS.findIndex((t) => referralCount < t.requirement);
   const currentTier = currentTierIndex === -1 ? TIERS[TIERS.length - 1] : (currentTierIndex > 0 ? TIERS[currentTierIndex - 1] : null);
   const nextTier = currentTierIndex === -1 ? null : TIERS[currentTierIndex];
-  const progressToNext = nextTier ? (referralCount / nextTier.requirement) * 100 : 100;
+  const maxReq = 10;
+  const progressPercent = Math.min((referralCount / maxReq) * 100, 100);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[hsl(232,30%,8%)] p-5 space-y-5">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-          <Gift className="w-4 h-4 text-emerald-400" />
-        </div>
-        <div>
-          <h2 className="text-sm font-bold text-foreground">Referral Program</h2>
-          <p className="text-[10px] text-muted-foreground">Invite friends, earn rewards</p>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 space-y-3">
-        <label className="text-xs text-muted-foreground font-medium block">Your Referral Link</label>
-        <div className="flex gap-2">
-          <div className="flex-1 text-sm text-foreground/80 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 truncate font-mono text-xs">
-            {referralLink || "Loading..."}
-          </div>
-          <button
-            onClick={copyLink}
-            disabled={!referralLink}
-            className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
-          >
-            {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
-          </button>
-        </div>
-        <p className="text-[10px] text-muted-foreground/60">
-          Friends who sign up with your link get 10% off their first paid month
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">
-            {currentTier ? `${currentTier.icon} ${currentTier.label}` : "No tier yet"}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {referralCount} referral{referralCount !== 1 ? "s" : ""}
-            {nextTier ? ` · ${nextTier.requirement - referralCount} more to ${nextTier.label}` : " · Max tier reached! 🎉"}
-          </span>
-        </div>
-
-        <div className="relative h-3 bg-white/[0.04] rounded-full overflow-hidden">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
-            style={{ width: `${Math.min(progressToNext, 100)}%` }}
-          />
-          {TIERS.map((tier) => {
-            const pos = nextTier ? (tier.requirement / nextTier.requirement) * 100 : (tier.requirement / 10) * 100;
-            if (pos > 100) return null;
-            return (
-              <div
-                key={tier.key}
-                className={`absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border ${
-                  referralCount >= tier.requirement
-                    ? "bg-emerald-400 border-emerald-300"
-                    : "bg-white/10 border-white/20"
-                }`}
-                style={{ left: `${Math.min(pos, 98)}%` }}
-                title={`${tier.label}: ${tier.requirement} referrals`}
-              />
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {TIERS.map((tier) => {
-            const reached = referralCount >= tier.requirement;
-            const isNext = nextTier?.key === tier.key;
-            return (
-              <div
-                key={tier.key}
-                className={`rounded-lg border p-3 text-center transition-all ${
-                  reached
-                    ? "border-emerald-500/30 bg-emerald-500/[0.06]"
-                    : isNext
-                    ? "border-primary/20 bg-primary/[0.04]"
-                    : "border-white/[0.04] bg-white/[0.01]"
-                }`}
-              >
-                <div className="text-lg mb-1">{tier.icon}</div>
-                <div className={`text-[10px] font-bold ${reached ? "text-emerald-400" : "text-foreground/60"}`}>
-                  {tier.label}
-                </div>
-                <div className="text-[9px] text-muted-foreground mt-0.5">{tier.requirement} referral{tier.requirement > 1 ? "s" : ""}</div>
-                <div className={`text-[9px] mt-1 font-medium ${reached ? "text-emerald-400/80" : "text-muted-foreground/50"}`}>
-                  {tier.reward}
-                </div>
-                {reached && (
-                  <div className="text-[8px] text-emerald-400 font-bold mt-1 flex items-center justify-center gap-0.5">
-                    <Check className="w-2.5 h-2.5" /> Unlocked
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Users className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-foreground">Your Referrals</span>
-        </div>
-        {loadingReferrals ? (
-          <div className="text-xs text-muted-foreground/50 py-4 text-center">Loading...</div>
-        ) : referrals.length === 0 ? (
-          <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] py-6 text-center">
-            <Gift className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground/50">No referrals yet</p>
-            <p className="text-[10px] text-muted-foreground/30 mt-0.5">Share your link to start earning rewards</p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-            <div className="grid grid-cols-3 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
-              <span>Name</span>
-              <span>Joined</span>
-              <span>Status</span>
+    <div className="rounded-xl border border-white/[0.06] bg-[hsl(232,30%,8%)] overflow-hidden">
+      <div className="relative px-5 pt-6 pb-5 border-b border-white/[0.06]">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.04] via-transparent to-blue-500/[0.04]" />
+        <div className="relative space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <Share2 className="w-4 h-4 text-emerald-400" />
             </div>
-            {referrals.map((ref, i) => (
+            <div>
+              <h2 className="text-base font-black text-foreground tracking-wide">Turn Your Network Into Your Edge</h2>
+              <p className="text-[11px] text-muted-foreground font-medium">Invite. Earn. Upgrade.</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">
+            Most traders trade alone. The smart ones build networks — and get rewarded for it.
+          </p>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-5">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">How It Works</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+              <div className="text-lg mb-1">1</div>
+              <div className="text-[10px] text-foreground/70 font-medium">Share your referral link</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+              <div className="text-lg mb-1">2</div>
+              <div className="text-[10px] text-foreground/70 font-medium">Friend joins & subscribes</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+              <div className="text-lg mb-1">3</div>
+              <div className="text-[10px] text-foreground/70 font-medium">You earn rewards</div>
+            </div>
+          </div>
+          <p className="text-[9px] text-muted-foreground/40 leading-relaxed">
+            Referrals are counted once a referred user completes their first successful subscription payment. Abuse or self-referrals may result in disqualification.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-4 space-y-3">
+          <label className="text-xs text-emerald-400 font-bold block uppercase tracking-wider">Your Referral Link</label>
+          <div className="flex gap-2">
+            <div className="flex-1 text-foreground/80 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 truncate font-mono text-[11px]">
+              {referralLink || "Loading..."}
+            </div>
+            <button
+              onClick={copyLink}
+              disabled={!referralLink}
+              className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
+            >
+              {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <ArrowRight className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">Earn More As You Grow</span>
+          </div>
+
+          <div className="space-y-1.5">
+            {[
+              { req: 1, text: "50% OFF your next month", icon: "🚀" },
+              { req: 3, text: "1 FREE month + Bronze status", icon: "🥉" },
+              { req: 5, text: "1 FREE month + 20% OFF for life (Silver)", icon: "🥈" },
+              { req: 10, text: "Gold status + Pro upgrade or Pro Elite", icon: "🥇" },
+            ].map((step) => (
               <div
-                key={i}
-                className="grid grid-cols-3 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors"
+                key={step.req}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs transition-all ${
+                  referralCount >= step.req
+                    ? "bg-emerald-500/[0.08] border border-emerald-500/20 text-emerald-400"
+                    : "bg-white/[0.01] border border-white/[0.04] text-foreground/60"
+                }`}
               >
-                <span className="text-foreground/70 truncate">{ref.referred_name}</span>
-                <span className="text-muted-foreground/60">
-                  {new Date(ref.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-                <span className="text-emerald-400/80 font-medium">Signed Up</span>
+                <span className="text-base">{step.icon}</span>
+                <span className="font-bold min-w-[20px]">{step.req}</span>
+                <ArrowRight className="w-3 h-3 text-muted-foreground/30 shrink-0" />
+                <span className="font-medium">{step.text}</span>
+                {referralCount >= step.req && <Check className="w-3.5 h-3.5 text-emerald-400 ml-auto shrink-0" />}
               </div>
             ))}
           </div>
-        )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">
+              {currentTier ? `${currentTier.icon} ${currentTier.label || "Started"}` : "No tier yet"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {referralCount} referral{referralCount !== 1 ? "s" : ""}
+              {nextTier ? ` · ${nextTier.requirement - referralCount} more to ${nextTier.label || "next reward"}` : " · Max tier reached!"}
+            </span>
+          </div>
+
+          <div className="relative h-3 bg-white/[0.04] rounded-full overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
+              style={{ width: `${progressPercent}%` }}
+            />
+            {TIERS.map((tier) => {
+              const pos = (tier.requirement / maxReq) * 100;
+              return (
+                <div
+                  key={tier.key}
+                  className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 transition-all ${
+                    referralCount >= tier.requirement
+                      ? "bg-emerald-400 border-emerald-300 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+                      : "bg-white/10 border-white/20"
+                  }`}
+                  style={{ left: `${Math.min(pos, 97)}%` }}
+                  title={`${tier.label || "First"}: ${tier.requirement} referral${tier.requirement > 1 ? "s" : ""}`}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Crown className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider">What You Unlock</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className={`rounded-lg border p-4 space-y-2 ${referralCount >= 3 ? "border-amber-500/30 bg-amber-500/[0.04]" : "border-white/[0.06] bg-white/[0.01]"}`}>
+              <div className="text-lg">🥉</div>
+              <div className={`text-xs font-bold ${referralCount >= 3 ? "text-amber-400" : "text-foreground/60"}`}>Bronze (3 Referrals)</div>
+              <ul className="space-y-1">
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> 1 FREE month</li>
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> Community badge</li>
+              </ul>
+            </div>
+            <div className={`rounded-lg border p-4 space-y-2 ${referralCount >= 5 ? "border-slate-400/30 bg-slate-400/[0.04]" : "border-white/[0.06] bg-white/[0.01]"}`}>
+              <div className="text-lg">🥈</div>
+              <div className={`text-xs font-bold ${referralCount >= 5 ? "text-slate-300" : "text-foreground/60"}`}>Silver (5 Referrals)</div>
+              <ul className="space-y-1">
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> 1 FREE month</li>
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> 20% OFF for life</li>
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> Early feature access</li>
+              </ul>
+            </div>
+            <div className={`rounded-lg border p-4 space-y-2 ${referralCount >= 10 ? "border-yellow-500/30 bg-yellow-500/[0.04]" : "border-white/[0.06] bg-white/[0.01]"}`}>
+              <div className="text-lg">🥇</div>
+              <div className={`text-xs font-bold ${referralCount >= 10 ? "text-yellow-400" : "text-foreground/60"}`}>Gold (10 Referrals)</div>
+              <ul className="space-y-1">
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> Free Pro upgrade (or 50% OFF Pro for life)</li>
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> Priority Biddie AI access</li>
+                <li className="text-[10px] text-muted-foreground/70 flex items-start gap-1"><Check className="w-2.5 h-2.5 mt-0.5 shrink-0 text-muted-foreground/30" /> Exclusive signals access</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-foreground">Your Referrals</span>
+          </div>
+          {loadingReferrals ? (
+            <div className="text-xs text-muted-foreground/50 py-4 text-center">Loading...</div>
+          ) : referrals.length === 0 ? (
+            <div className="rounded-lg border border-white/[0.04] bg-white/[0.01] py-6 text-center">
+              <Gift className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground/50">No referrals yet</p>
+              <p className="text-[10px] text-muted-foreground/30 mt-0.5">Share your link to start earning rewards</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-white/[0.04] overflow-hidden">
+              <div className="grid grid-cols-3 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+                <span>Name</span>
+                <span>Joined</span>
+                <span>Status</span>
+              </div>
+              {referrals.map((ref, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-3 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors"
+                >
+                  <span className="text-foreground/70 truncate">{ref.referred_name}</span>
+                  <span className="text-muted-foreground/60">
+                    {new Date(ref.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span className="text-emerald-400/80 font-medium">Signed Up</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-4 text-center space-y-1">
+          <p className="text-xs font-bold text-foreground">The traders who share the edge... become the edge.</p>
+          <p className="text-[10px] text-muted-foreground/60">Share your link. Build your network. Unlock your edge.</p>
+        </div>
       </div>
     </div>
   );

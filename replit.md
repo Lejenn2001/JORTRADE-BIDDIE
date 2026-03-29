@@ -114,7 +114,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **Database Tables**: `user_settings` (referral_code UNIQUE, referred_by), `referrals` (referrer_id, referred_id UNIQUE, referred_name, created_at)
 - **Referral Code Generation**: Auto-generated on first settings fetch, based on user's first name + random suffix. Uniqueness checked before assignment with retry logic
 - **Signup Flow**: `?ref=CODE` param on signup page shows referral banner (10% off first paid month). Code applied on signup via `/api/whale/referral/apply`
-- **Tier System**: Launch (1 referral = 50% off next month), Bronze (3 = 1 month free), Silver (5 = lifetime 25% off), Gold (10 = free Pro upgrade)
+- **Tier System**: 1 referral = 50% off next month; Bronze (3) = 1 free month + badge; Silver (5) = 1 free month + 20% off for life + early access; Gold (10) = Pro upgrade or 50% off Pro for life + priority AI + exclusive signals
 - **Settings Dashboard**: Profile & Membership section (name, email, plan, billing), Referral section (link + copy, tier progress bar with milestone dots, tier cards, referral list table)
 - **API Endpoints**: `GET /api/whale/user-settings` (returns alias + referral_code + count), `POST /api/whale/user-settings` (update alias), `POST /api/whale/referral/apply` (apply ref code at signup), `GET /api/whale/referrals` (list referrals)
 - **Two-sided incentive**: Referrer earns tier rewards, referred user gets 10% off first paid month
