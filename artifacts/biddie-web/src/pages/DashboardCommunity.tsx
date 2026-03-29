@@ -182,7 +182,7 @@ const DashboardCommunity = () => {
     setBiddieThinking(true);
     scrollToBottom();
     try {
-      const senderName = profile?.full_name?.split(" ")[0] || "fam";
+      const senderName = profile?.chat_alias || profile?.full_name?.split(" ")[0] || "fam";
       await fetch('/api/whale/community-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,7 +206,7 @@ const DashboardCommunity = () => {
     setSending(true);
     const { error } = await supabase.from("chat_messages").insert({
       user_id: session.user.id,
-      user_name: profile?.full_name || "Trader",
+      user_name: profile?.chat_alias || profile?.full_name || "Trader",
       content: messageText,
     } as any);
     if (error) {

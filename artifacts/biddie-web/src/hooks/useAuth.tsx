@@ -7,7 +7,7 @@ export type UserPlan = "starter" | "active" | "pro" | null;
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: { full_name: string; selected_plan: UserPlan; created_at: string } | null;
+  profile: { full_name: string; selected_plan: UserPlan; created_at: string; chat_alias: string | null } | null;
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -29,22 +29,21 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<{ full_name: string; selected_plan: UserPlan; created_at: string } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string; selected_plan: UserPlan; created_at: string; chat_alias: string | null } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, selected_plan, created_at")
-      .eq("id", userId)
-      .single();
+    const [{ data }, aliasResp] = await Promise.all([
+      supabase.from("profiles").select("full_name, selected_plan, created_at").eq("id", userId).single(),
+      fetch(`/api/whale/user-settings?userId=${userId}`).then(r => r.json()).catch(() => ({ chat_alias: null })),
+    ]);
     if (data) {
       const plan = (data.selected_plan as UserPlan) || "starter";
       if (!data.selected_plan) {
         supabase.from("profiles").update({ selected_plan: "starter" }).eq("id", userId).then(() => {});
       }
-      setProfile({ full_name: data.full_name, selected_plan: plan, created_at: data.created_at });
+      setProfile({ full_name: data.full_name, selected_plan: plan, created_at: data.created_at, chat_alias: aliasResp?.chat_alias || null });
     }
 
     try {

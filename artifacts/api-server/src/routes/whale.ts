@@ -1283,6 +1283,35 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
   }
 });
 
+// ── User Settings (Chat Alias) ──────────────────────────────────────────────────
+
+router.get("/whale/user-settings", async (req, res) => {
+  const userId = req.query.userId as string;
+  if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+  try {
+    const result = await dbQuery("SELECT chat_alias FROM user_settings WHERE user_id = $1", [userId]);
+    res.json({ chat_alias: result?.rows?.[0]?.chat_alias || null });
+  } catch {
+    res.json({ chat_alias: null });
+  }
+});
+
+router.post("/whale/user-settings", async (req, res) => {
+  const { userId, chat_alias } = req.body as { userId?: string; chat_alias?: string };
+  if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+  const alias = chat_alias?.trim()?.slice(0, 20) || null;
+  try {
+    await dbQuery(
+      `INSERT INTO user_settings (user_id, chat_alias, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET chat_alias = $2, updated_at = NOW()`,
+      [userId, alias]
+    );
+    res.json({ ok: true, chat_alias: alias });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Community Chat Endpoint ──────────────────────────────────────────────────────
 
 const COMMUNITY_SYSTEM = `You are Biddie AI — a friend hanging out in the JORTRADE group chat. You're part of the crew. You are NOT a trading terminal or analysis bot here. You're a homie who happens to know trading.
