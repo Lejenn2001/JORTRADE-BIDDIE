@@ -100,17 +100,14 @@ const DashboardSidebar = () => {
               </Link>
             );
           })}
-        </nav>
-
-        <div className="border-t border-border/40 pt-4 mt-4">
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-destructive transition-colors w-full mt-2 border-t border-border/40 pt-2"
           >
             <LogOut className="h-4 w-4" />
             Sign Out
           </button>
-        </div>
+        </nav>
       </aside>
     </>
   );
