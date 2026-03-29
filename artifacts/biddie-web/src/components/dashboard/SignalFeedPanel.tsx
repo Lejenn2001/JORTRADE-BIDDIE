@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, Radio, ChevronDown, ChevronUp, XCircle } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, Radio, ChevronDown, ChevronUp, XCircle, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
 import type { PriceInfo } from "@/hooks/useRealtimePrices";
@@ -59,20 +59,24 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
 
   return (
     <div className={`glass-panel rounded-xl p-5 ${isWhale ? "border-blue-500/30 border" : isSpread ? "border-violet-500/30 border" : isAlgo ? "border-emerald-500/30 border" : "border-glow-blue"}`}>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           {headerIcon}
           <span className={`font-semibold text-sm ${accentColor}`}>{headerTitle}</span>
+          {subtitle && (
+            <div className="relative group">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/40 cursor-help" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1.5 rounded-lg bg-popover border border-border text-[10px] text-muted-foreground whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 shadow-lg">
+                {subtitle}
+              </div>
+            </div>
+          )}
         </div>
         <span className={`text-xs ${accentBg} ${accentColor} px-2.5 py-0.5 rounded-full flex items-center gap-1`}>
           <span className={`w-1.5 h-1.5 rounded-full ${isWhale ? "bg-blue-400" : isSpread ? "bg-violet-400" : isAlgo ? "bg-emerald-400" : "bg-primary"} animate-pulse`} />
           {displaySignals.length} Active
         </span>
       </div>
-      {subtitle && (
-        <p className="text-[10px] text-muted-foreground mb-4 ml-6">{subtitle}</p>
-      )}
-      {!subtitle && <div className="mb-4" />}
 
       {!icon && <SignalLegend />}
 
