@@ -125,6 +125,15 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    if (showWelcome && !isFirstTime) {
+      const timer = setTimeout(() => {
+        dismissWelcome();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [showWelcome, isFirstTime]);
+
+  useEffect(() => {
     const loadTodaysLiveSignals = async () => {
       setPersistedLoading(true);
 
