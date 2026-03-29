@@ -174,7 +174,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           </span>
                         )}
                         <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
                             signal.putCall === "put"
                               ? "bg-destructive/20 text-destructive"
                               : "bg-primary/20 text-primary"
@@ -183,9 +183,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           {signal.putCall === "call" ? "CALL" : signal.putCall === "put" ? "PUT" : signal.type?.toUpperCase()}
                         </span>
                         {signal.timeframe === "buy_now" || signal.timeframe === "short_term" ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">0DTE</span>
+                          <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">0DTE</span>
                         ) : signal.timeframe === "swing" ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing</span>
+                          <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing</span>
                         ) : null}
                         {(() => {
                           let ts = signal.tradeStatus || "watching";
@@ -204,7 +204,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           const info = statusInfo[ts] || statusInfo.watching;
                           return (
                             <span className="relative group">
-                              <span className={`flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-help ${info.color}`}>
+                              <span className={`inline-flex items-center gap-0.5 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${info.color}`}>
                                 {info.icon} {info.label}
                               </span>
                               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
@@ -215,7 +215,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         })()}
                         {signal.mfePercent != null && (
                           <span className="relative group">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-help ${
+                            <span className={`inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
                               signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
                               signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
                               signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
