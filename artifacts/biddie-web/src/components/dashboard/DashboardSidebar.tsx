@@ -80,7 +80,7 @@ const DashboardSidebar = () => {
           <img src={jortradeLogo} alt="JORTRADE" className="h-32 w-auto" />
         </Link>
 
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto">
           {allNavItems.map((item) => {
             const isActive = location.pathname === item.path ||
               (item.path === "/dashboard" && location.pathname === "/dashboard");
