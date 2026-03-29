@@ -102,6 +102,29 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
             const catColor = signal.category === "whale" ? "text-blue-400" : signal.category === "spread" ? "text-violet-400" : "text-emerald-400";
             const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
 
+            const isWhaleCard = signal.category === "whale";
+            const isSpreadCard = signal.category === "spread";
+            const isCall = signal.type === "bullish";
+            const glowClass = signal.aiEvaluated
+              ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20"
+              : isWhaleCard
+              ? score >= 85
+                ? "shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] border-blue-500/40"
+                : "shadow-[0_0_10px_-3px_rgba(59,130,246,0.25)] border-blue-500/30"
+              : isSpreadCard
+              ? score >= 85
+                ? "shadow-[0_0_15px_-3px_rgba(139,92,246,0.4)] border-violet-500/40"
+                : "shadow-[0_0_10px_-3px_rgba(139,92,246,0.25)] border-violet-500/30"
+              : score >= 85
+              ? "shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)] border-primary/40"
+              : score >= 70
+              ? "shadow-[0_0_10px_-3px_hsl(var(--primary)/0.25)] border-primary/30"
+              : isCall
+              ? "border-primary/20"
+              : "border-destructive/20";
+
+            const bgClass = isWhaleCard ? "bg-blue-500/5" : isSpreadCard ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5";
+
             return (
               <motion.div
                 key={signal.id}
@@ -109,13 +132,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 initial="hidden"
                 animate="visible"
                 variants={cardVariants}
-                className={`rounded-xl border overflow-visible transition-all ${
-                  signal.type === "bullish"
-                    ? "border-primary/20 bg-gradient-to-br from-primary/5 to-transparent"
-                    : signal.type === "bearish"
-                    ? "border-destructive/20 bg-gradient-to-br from-destructive/5 to-transparent"
-                    : "border-muted bg-muted/30"
-                }`}
+                className={`rounded-xl border overflow-visible transition-all ${glowClass} ${bgClass}`}
               >
                 {signal.priceConfirmed && (
                   <div className="px-4 py-1 bg-emerald-500/15 border-b border-emerald-500/20 flex items-center gap-2">
