@@ -20,11 +20,11 @@ function parsePremiumValue(raw: string): number {
 }
 
 function premiumColor(val: number): string {
-  if (val >= 5_000_000) return "This is a massive bet — this trader means business and is extremely confident";
-  if (val >= 2_000_000) return "That's a huge amount of money — this is a very serious, high-conviction play";
-  if (val >= 1_000_000) return "Over a million dollars — that's a big bet and worth paying close attention to";
-  if (val >= 500_000) return "That's a really significant amount — someone with deep pockets is making a move";
-  if (val >= 100_000) return "That's a solid bet — enough money to show real conviction";
+  if (val >= 5_000_000) return "This is a massive bet. This trader means business and is extremely confident";
+  if (val >= 2_000_000) return "That's a huge amount of money. This is a very serious, high-conviction play";
+  if (val >= 1_000_000) return "Over a million dollars. That's a big bet and worth paying close attention to";
+  if (val >= 500_000) return "That's a really significant amount. Someone with deep pockets is making a move";
+  if (val >= 100_000) return "That's a solid bet. Enough money to show real conviction";
   return "A noteworthy trade worth keeping an eye on";
 }
 
@@ -51,14 +51,14 @@ export function simplifySignalDescription(signal: SignalInfo): string {
   if (signal.putCall === "put") {
     if (signal.strike) {
       const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} put — they profit if ${ticker} keeps falling`);
+      chunks.push(`on a $${cleanStrike} put. They profit if ${ticker} keeps falling`);
     } else {
       chunks.push(`betting ${ticker} goes lower`);
     }
   } else if (signal.putCall === "call") {
     if (signal.strike) {
       const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} call — they profit if ${ticker} keeps rising`);
+      chunks.push(`on a $${cleanStrike} call. They profit if ${ticker} keeps rising`);
     } else {
       chunks.push(`betting ${ticker} goes higher`);
     }
@@ -70,16 +70,16 @@ export function simplifySignalDescription(signal: SignalInfo): string {
   if (aggressionMatch) {
     const pct = parseInt(aggressionMatch[1]);
     if (pct >= 90) {
-      chunks.push("They paid full asking price — very urgent, no negotiating");
+      chunks.push("They paid full asking price. Very urgent, no negotiating");
     } else if (pct >= 70) {
-      chunks.push("They paid a high price to get in quick — shows urgency");
+      chunks.push("They paid a high price to get in quick. Shows urgency");
     }
   }
 
   if (signal.expiry) {
     const exp = signal.expiry;
     if (exp === "0DTE" || exp.includes("0 DTE") || exp.includes("today")) {
-      chunks.push("This bet expires TODAY — same-day play, high risk");
+      chunks.push("This bet expires TODAY. Same-day play, high risk");
     } else {
       chunks.push(`This bet expires ${exp}`);
     }

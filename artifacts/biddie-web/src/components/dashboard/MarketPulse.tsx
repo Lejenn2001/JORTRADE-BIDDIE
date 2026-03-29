@@ -171,11 +171,11 @@ const MarketPulse = () => {
               <BeginnerTooltip
                 content={
                   <div className="space-y-1.5">
-                    <p>The VIX is like a "fear meter" — when it's low, the market is calm. When it's high, things get wild and scary. Low = safe to size up. High = play small!</p>
+                    <p>The VIX is like a "fear meter." When it's low, the market is calm. When it's high, things get wild and scary. Low = safe to size up. High = play small!</p>
                     <div className="space-y-0.5">
-                      <p><span className="text-emerald-400 font-bold">10–20:</span> Calm to normal — safe to play regular size.</p>
-                      <p><span className="text-amber-400 font-bold">20–30:</span> Getting shaky — be careful, play smaller.</p>
-                      <p><span className="text-red-400 font-bold">30+:</span> Fear/panic — play very small or sit out.</p>
+                      <p><span className="text-emerald-400 font-bold">10 to 20:</span> Calm to normal. Safe to play regular size.</p>
+                      <p><span className="text-amber-400 font-bold">20 to 30:</span> Getting shaky. Be careful, play smaller.</p>
+                      <p><span className="text-red-400 font-bold">30+:</span> Fear or panic. Play very small or sit out.</p>
                     </div>
                   </div>
                 }
@@ -234,14 +234,14 @@ const MarketPulse = () => {
               <BeginnerTooltip
                 content={
                   <div className="space-y-1.5">
-                    <p>Imagine a classroom voting — Calls = kids voting "prices go UP!" and Puts = voting "prices go DOWN!" This ratio tells you which side has more votes.</p>
+                    <p>Imagine a classroom voting. Calls = kids voting "prices go UP!" and Puts = voting "prices go DOWN!" This ratio tells you which side has more votes.</p>
                     <div className="space-y-0.5">
-                      <p><span className="text-emerald-400 font-bold">Below 0.7:</span> Almost everyone voting UP — super confident!</p>
-                      <p><span className="text-blue-400 font-bold">0.9–1.1:</span> About half and half — nobody knows.</p>
-                      <p><span className="text-red-400 font-bold">Above 1.3:</span> Almost everyone voting DOWN — scared!</p>
+                      <p><span className="text-emerald-400 font-bold">Below 0.7:</span> Almost everyone voting UP. Super confident!</p>
+                      <p><span className="text-blue-400 font-bold">0.9 to 1.1:</span> About half and half. Nobody knows.</p>
+                      <p><span className="text-red-400 font-bold">Above 1.3:</span> Almost everyone voting DOWN. Scared!</p>
                     </div>
                     <div className="border-t border-indigo-500/20 pt-1.5">
-                      <p><span className="text-primary font-bold">Premium</span> = who brought the most money to bet. <span className="text-amber-400 font-bold">Sweeps</span> = who's rushing to bet first. Watch both — they can tell different stories!</p>
+                      <p><span className="text-primary font-bold">Premium</span> = who brought the most money to bet. <span className="text-amber-400 font-bold">Sweeps</span> = who's rushing to bet first. Watch both. They can tell different stories!</p>
                     </div>
                   </div>
                 }
