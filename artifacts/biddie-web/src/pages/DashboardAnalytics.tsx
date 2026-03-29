@@ -760,7 +760,16 @@ function OverviewTab({ signalStats, topTickers, weeklyStats }: {
     return "📉";
   };
 
-  const sortedWeeks = [...weeklyStats].filter(w => (w.biddie_pick_total || w.total_signals) > 0).sort((a, b) =>
+  const now = new Date();
+  const currentSunday = new Date(now);
+  currentSunday.setDate(currentSunday.getDate() - currentSunday.getDay());
+  currentSunday.setHours(0, 0, 0, 0);
+  const currentWeekStr = currentSunday.toISOString().slice(0, 10);
+
+  const sortedWeeks = [...weeklyStats].filter(w => {
+    const isCurrentWeek = w.week_start.slice(0, 10) === currentWeekStr;
+    return isCurrentWeek || (w.biddie_pick_total || w.total_signals) > 0;
+  }).sort((a, b) =>
     new Date(a.week_start).getTime() - new Date(b.week_start).getTime()
   );
 

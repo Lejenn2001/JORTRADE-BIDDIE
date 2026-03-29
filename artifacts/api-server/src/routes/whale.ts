@@ -5170,7 +5170,7 @@ router.get("/whale/trades/stats", async (req, res) => {
     const weeklyBreakdown = Object.entries(weeklyMap)
       .map(([weekStart, data]) => {
         const ws = new Date(weekStart);
-        const we = new Date(ws); we.setDate(we.getDate() + 7);
+        const we = new Date(ws); we.setDate(we.getDate() + 6);
         const resolved = data.hits + data.partial_hits + data.misses;
         const wr = resolved > 0 ? Math.round(((data.hits + data.partial_hits) / resolved) * 100) : 0;
 
@@ -5258,8 +5258,10 @@ function getSunday(d: Date): Date {
 }
 
 async function snapshotWeek(weekStart: Date): Promise<any> {
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 7);
+  const weekEndDisplay = new Date(weekStart);
+  weekEndDisplay.setDate(weekEndDisplay.getDate() + 6);
+  const queryEnd = new Date(weekStart);
+  queryEnd.setDate(queryEnd.getDate() + 7);
 
   const existing = await dbQuery(
     `SELECT id FROM weekly_signal_stats WHERE week_start = $1`,
@@ -5271,7 +5273,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
      FROM signal_outcomes
      WHERE signal_source = 'replit'
        AND detected_at >= $1 AND detected_at < $2`,
-    [weekStart.toISOString(), weekEnd.toISOString()]
+    [weekStart.toISOString(), queryEnd.toISOString()]
   );
 
   const rows = signals?.rows || [];
@@ -5310,7 +5312,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
 
   const statsRow = {
     weekStart: weekStart.toISOString(),
-    weekEnd: weekEnd.toISOString(),
+    weekEnd: weekEndDisplay.toISOString(),
     totalSignals: total,
     hits,
     misses,
@@ -5338,7 +5340,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
        WHERE week_start = $14`,
       [total, hits, misses, partialHits, expired, pending, winRate, avgConviction,
        statsRow.topTickers, biddieHits, biddiePicks.length, biddieWinRate,
-       weekEnd.toISOString(), weekStart.toISOString(), biddieMisses, biddiePending]
+       weekEndDisplay.toISOString(), weekStart.toISOString(), biddieMisses, biddiePending]
     );
   } else {
     await dbQuery(
@@ -5348,7 +5350,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
          biddie_pick_hits, biddie_pick_total, biddie_pick_win_rate,
          biddie_pick_misses, biddie_pick_pending)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [weekStart.toISOString(), weekEnd.toISOString(), total, hits, misses, partialHits,
+      [weekStart.toISOString(), weekEndDisplay.toISOString(), total, hits, misses, partialHits,
        expired, pending, winRate, avgConviction, statsRow.topTickers,
        biddieHits, biddiePicks.length, biddieWinRate, biddieMisses, biddiePending]
     );
@@ -5424,6 +5426,46 @@ router.post("/whale/weekly-stats/backfill", async (_req, res) => {
     }
 
     res.json({ ok: true, weeks: count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/weekly-stats/cleanup", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] as string;
+    if (userId !== "5845af78-f880-431b-b2c0-56a9923e6835") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const allRows = await dbQuery(`SELECT id, week_start, week_end, total_signals FROM weekly_signal_stats ORDER BY week_start DESC`);
+    const seen = new Map<string, any>();
+    const toDelete: string[] = [];
+
+    for (const row of allRows.rows) {
+      const ws = new Date(row.week_start);
+      const dayOfWeek = ws.getUTCDay();
+      if (dayOfWeek !== 0) {
+        toDelete.push(row.id);
+        continue;
+      }
+      const key = row.week_start;
+      if (seen.has(key)) {
+        toDelete.push(row.id);
+      } else {
+        seen.set(key, row);
+      }
+    }
+
+    for (const id of toDelete) {
+      await dbQuery(`DELETE FROM weekly_signal_stats WHERE id = $1`, [id]);
+    }
+
+    const fixedEnds = await dbQuery(
+      `UPDATE weekly_signal_stats SET week_end = week_start + interval '6 days' WHERE week_end != week_start + interval '6 days' RETURNING id, week_start, week_end`
+    );
+
+    res.json({ ok: true, deleted: toDelete.length, fixedEnds: fixedEnds.rows.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
