@@ -5137,6 +5137,8 @@ router.get("/whale/trades/stats", async (req, res) => {
     const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= sunday);
     const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
     const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit").length;
+    const weekMisses = thisWeekResolved.filter((t: any) => t.outcome === "missed").length;
+    const weekPending = thisWeek.filter((t: any) => !t.outcome || t.outcome === "pending").length;
     const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
 
     const weeklyMap: Record<string, { hits: number; misses: number; pending: number; total: number; partial_hits: number }> = {};
@@ -5203,6 +5205,8 @@ router.get("/whale/trades/stats", async (req, res) => {
         streak,
         weekWinRate,
         weekHits,
+        weekMisses,
+        weekPending,
         weekTotal: thisWeek.length,
         byTicker,
         byCategory,
