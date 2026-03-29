@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Globe, Sun, Moon, Sunrise } from "lucide-react";
+import { Clock, Sun, Moon, Sunrise } from "lucide-react";
 
 interface SessionInfo {
   name: string;
-  icon: typeof Globe;
+  icon: typeof Clock;
   color: string;
   bgColor: string;
   borderColor: string;
@@ -77,7 +77,7 @@ const SessionBanner = () => {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-1">
-        <Globe className="h-3.5 w-3.5" />
+        <Clock className="h-3.5 w-3.5" />
         <span className="font-medium">{etTime} ET</span>
       </div>
 
