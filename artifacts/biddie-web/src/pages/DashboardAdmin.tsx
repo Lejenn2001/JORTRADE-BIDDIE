@@ -878,32 +878,32 @@ const DashboardAdmin = () => {
                                 </div>
                               </td>
                               <td className="px-5 py-3.5">
-                                {config ? (
-                                  <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-col gap-1.5">
+                                  {config ? (
                                     <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${config.bg} ${config.color} w-fit`}>
                                       <config.icon className="h-3 w-3" />
                                       {config.label}
                                     </span>
-                                    <div className="flex items-center gap-1">
-                                      {(["starter", "active", "pro"] as const).filter(p => p !== plan).map((p) => {
-                                        const pc = planConfig[p];
-                                        return (
-                                          <button
-                                            key={p}
-                                            disabled={updating === u.id}
-                                            onClick={() => updateUserPlan(u.id, p)}
-                                            className={`text-[10px] px-1.5 py-0.5 rounded ${pc.color} hover:bg-muted/20 transition-colors disabled:opacity-30`}
-                                            title={`Switch to ${pc.label}`}
-                                          >
-                                            <pc.icon className="h-3 w-3" />
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-muted-foreground/50">No plan</span>
+                                  )}
+                                  <div className="flex items-center gap-1">
+                                    {(["starter", "active", "pro"] as const).filter(p => p !== plan).map((p) => {
+                                      const pc = planConfig[p];
+                                      return (
+                                        <button
+                                          key={p}
+                                          disabled={updating === u.id}
+                                          onClick={() => updateUserPlan(u.id, p)}
+                                          className={`text-[10px] px-1.5 py-0.5 rounded ${pc.color} hover:bg-muted/20 transition-colors disabled:opacity-30`}
+                                          title={`Switch to ${pc.label}`}
+                                        >
+                                          <pc.icon className="h-3 w-3" />
+                                        </button>
+                                      );
+                                    })}
                                   </div>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground/50">No plan</span>
-                                )}
+                                </div>
                               </td>
                               <td className="px-5 py-3.5">
                                 {u.is_admin ? (
