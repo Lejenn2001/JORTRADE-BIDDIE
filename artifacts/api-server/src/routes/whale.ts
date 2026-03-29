@@ -4033,19 +4033,19 @@ router.get("/whale/market-pulse", async (_req, res) => {
     if (vixPrice != null) {
       if (vixPrice < 25) {
         vixLevel = "Low";
-        vixDescription = "Think of the VIX like a scared-o-meter for the stock market. Right now it's LOW — the market is like a calm lake, barely any waves. Traders feel safe, prices move in small steps, and it's a chill time to trade.";
+        vixDescription = "VIX is the market's scared-o-meter. Right now it's in the 10-20 zone — the market is calm like a quiet lake. Traders feel safe, prices move in small baby steps, and it's smooth sailing. Great time for steady trades.";
       } else if (vixPrice < 35) {
         vixLevel = "Normal";
-        vixDescription = "The scared-o-meter is at NORMAL — like a regular day at the playground. Some ups, some downs, nothing crazy. The market is doing its usual thing, and options are fairly priced.";
+        vixDescription = "The scared-o-meter is in the 20-30 zone — like a regular day at the playground. Some ups, some downs, nothing too wild. The market is doing its thing. Options are fairly priced and most strategies work fine here.";
       } else if (vixPrice < 45) {
         vixLevel = "Elevated";
-        vixDescription = "The scared-o-meter is getting ELEVATED — like thunder rumbling in the distance. Traders are getting a little nervous, prices can swing bigger than usual. Time to be careful and maybe size down your trades.";
+        vixDescription = "The scared-o-meter is in the 30-40 zone — like thunder rumbling in the distance. Traders are getting nervous, and prices can swing bigger than usual. Time to be careful, size down, and keep wider stops.";
       } else if (vixPrice < 55) {
         vixLevel = "High";
-        vixDescription = "The scared-o-meter is HIGH — like a roller coaster that keeps going faster. Big swings up and down, traders are fearful. Options are expensive because everyone wants protection. Stay sharp and keep positions small.";
+        vixDescription = "The scared-o-meter is in the 40-50 zone — like a roller coaster that won't slow down. Big swings up AND down. Options are expensive because everyone wants protection. Stay sharp and keep positions small.";
       } else {
         vixLevel = "Extreme";
-        vixDescription = "The scared-o-meter is SCREAMING — like a fire alarm going off! The market is panicking, prices can move 2-5% in a single day. It's okay to sit this one out. Cash is a position too, and sometimes the smartest trade is no trade.";
+        vixDescription = "The scared-o-meter is above 50 — FIRE ALARM! The market is panicking, prices can move 2-5% in a single day. It's totally okay to sit this one out. Cash is a position too, and sometimes the smartest trade is no trade at all.";
       }
     }
 
