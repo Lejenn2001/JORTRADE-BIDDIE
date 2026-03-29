@@ -54,48 +54,52 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
   const biddieOutfit = weather ? getBiddieOutfit(weather.condition) : "looking fresh 🤖";
 
   return (
-    <div className="space-y-3">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="glass-panel rounded-xl px-4 py-2.5 flex items-center gap-2.5">
-          <Clock className="h-4 w-4 text-primary" />
+    <div className="space-y-2 lg:space-y-3">
+      <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
+        <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
+          <Clock className="h-3.5 lg:h-4 w-3.5 lg:w-4 text-primary" />
           <div>
-            <p className="text-sm font-semibold text-foreground tracking-wide">{timeStr}</p>
-            <p className="text-[10px] text-muted-foreground">{dateStr} EST</p>
+            <p className="text-xs lg:text-sm font-semibold text-foreground tracking-wide">{timeStr}</p>
+            <p className="text-[9px] lg:text-[10px] text-muted-foreground">{dateStr} EST</p>
           </div>
         </div>
 
         {weather && (
-          <div className="glass-panel rounded-xl px-4 py-2.5 flex items-center gap-2.5">
-            <span className="text-xl">{weather.icon}</span>
+          <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
+            <span className="text-lg lg:text-xl">{weather.icon}</span>
             <div>
-              <p className="text-sm font-semibold text-foreground">{weather.temp}°F</p>
+              <p className="text-xs lg:text-sm font-semibold text-foreground">{weather.temp}°F</p>
               <div className="flex items-center gap-1">
                 <MapPin className="h-2.5 w-2.5 text-muted-foreground" />
-                <p className="text-[10px] text-muted-foreground">{weather.location}</p>
+                <p className="text-[9px] lg:text-[10px] text-muted-foreground">{weather.location}</p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="glass-panel rounded-xl px-4 py-2.5 flex items-center gap-2.5">
+        <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <Users className="h-3.5 w-3.5 text-emerald-400" />
-          <span className="text-sm font-medium text-emerald-400">{onlineCount} online</span>
+          <Users className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-emerald-400" />
+          <span className="text-xs lg:text-sm font-medium text-emerald-400">{onlineCount} online</span>
         </div>
 
-        <MarketStatusSign />
+        <div className="hidden md:block">
+          <MarketStatusSign />
+        </div>
 
         <div className="flex-1" />
 
         <div className="text-right">
-          <h1 className="text-lg font-bold text-foreground">JORTRADE CHAT</h1>
-          <p className="text-[10px] text-muted-foreground">Talk trades · Share setups · Build together</p>
+          <h1 className="text-base lg:text-lg font-bold text-foreground">JORTRADE CHAT</h1>
+          <p className="text-[9px] lg:text-[10px] text-muted-foreground">Talk trades · Share setups · Build together</p>
         </div>
       </div>
 
-      {/* Biddie + Quote Row */}
-      <div className="glass-panel rounded-xl p-3 border-glow-blue flex items-center gap-4">
+      <div className="md:hidden">
+        <MarketStatusSign />
+      </div>
+
+      <div className="glass-panel rounded-xl p-2 lg:p-3 border-glow-blue flex items-center gap-3 lg:gap-4">
         <motion.div
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
@@ -104,15 +108,15 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
           <img
             src={biddieRobot}
             alt="Biddie"
-            className="w-16 h-16 object-contain drop-shadow-[0_0_12px_hsl(230_85%_60%_/_0.4)]"
+            className="w-10 h-10 lg:w-16 lg:h-16 object-contain drop-shadow-[0_0_12px_hsl(230_85%_60%_/_0.4)]"
           />
         </motion.div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-xs font-semibold text-primary">Biddie AI</p>
+            <p className="text-[11px] lg:text-xs font-semibold text-primary">Biddie AI</p>
           </div>
-          <p className="text-xs text-muted-foreground/80 italic truncate">"{quote}"</p>
+          <p className="text-[10px] lg:text-xs text-muted-foreground/80 italic truncate">"{quote}"</p>
         </div>
 
         <div className="hidden md:block text-right flex-shrink-0">
