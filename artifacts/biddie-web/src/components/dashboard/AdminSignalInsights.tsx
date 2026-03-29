@@ -530,7 +530,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
             className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
           >
             <Lightbulb className="h-5 w-5 text-amber-400" />
-            <h2 className="text-lg font-bold text-foreground">Pattern Analysis</h2>
+            <h2 className="text-lg font-bold text-foreground">Chart Analysis</h2>
             <span className="text-[10px] text-muted-foreground ml-1">({insights.length} insights)</span>
             {showPatternAnalysis ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
           </button>
