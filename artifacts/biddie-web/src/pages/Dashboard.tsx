@@ -273,32 +273,36 @@ const Dashboard = () => {
         <TickerTape />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-6">
-          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-            <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 1000 200" preserveAspectRatio="none">
+          <div className="relative overflow-hidden rounded-2xl border border-cyan-500/10 bg-[hsl(232,30%,7%)]">
+            <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-cyan-500/8 blur-3xl animate-pulse" />
+            <div className="absolute -bottom-20 -left-20 w-56 h-56 rounded-full bg-purple-500/8 blur-3xl animate-pulse" style={{ animationDelay: "1.5s" }} />
+
+            <svg className="absolute inset-0 w-full h-full opacity-[0.4]" viewBox="0 0 1000 200" preserveAspectRatio="none">
               {[40, 95, 150, 205, 260, 315, 370, 425, 480, 535, 590, 645, 700, 755, 810, 865, 920].map((x, i) => {
                 const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45, 70, 55];
                 const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85, 50, 75];
-                const green = i % 3 !== 0;
+                const bullish = i % 3 !== 0;
                 return (
                   <g key={i}>
-                    <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#818cf8" : "#a78bfa"} strokeWidth="1" />
-                    <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#818cf8" : "#a78bfa"} rx="1" />
+                    <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={bullish ? "#22d3ee" : "#f97316"} strokeWidth="1" strokeOpacity="0.6" />
+                    <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={bullish ? "#22d3ee" : "#f97316"} rx="1" fillOpacity="0.5" />
                   </g>
                 );
               })}
             </svg>
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-900/15 via-purple-900/8 to-cyan-900/10" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-[hsl(232,30%,7%)]/30 to-transparent" />
+
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/20 via-purple-900/10 to-blue-900/15" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-[hsl(232,30%,7%)]/40 to-transparent" />
 
             <div className="relative px-6 py-7 lg:py-8">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-10 rounded-full bg-gradient-to-b from-[hsl(var(--glow-blue))] via-[hsl(var(--glow-purple))] to-[hsl(var(--glow-cyan))]" />
+                  <div className="w-2 h-12 rounded-full bg-gradient-to-b from-cyan-400 via-purple-500 to-blue-500 shadow-[0_0_12px_rgba(34,211,238,0.4)]" />
                   <div>
-                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-cyan-300 via-white to-purple-300 bg-clip-text text-transparent drop-shadow-sm">
                       DECISION ENGINE
                     </h1>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--glow-blue))]/80 font-semibold mt-0.5">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-cyan-400/80 font-semibold mt-0.5">
                       Flow · Insight · Execution
                     </p>
                   </div>
