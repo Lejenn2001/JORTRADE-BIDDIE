@@ -319,7 +319,7 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="Quick trades Biddie finds using smart math patterns — usually in and out the same day"
+                subtitle="AI-detected setups using price action and options flow analysis — typically short-term, same-day trades"
                 icon="algorithm"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -332,7 +332,7 @@ const Dashboard = () => {
                 signals={whalePlays}
                 loading={signalFeedLoading}
                 title="Whale Plays"
-                subtitle="Big money moves from hedge funds and institutions — these trades take a few days to play out"
+                subtitle="Tracks large-volume trades from institutions and hedge funds — multi-day swing setups following smart money"
                 icon="whale"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -345,7 +345,7 @@ const Dashboard = () => {
                 signals={spreadPlays}
                 loading={signalFeedLoading}
                 title="Spreads & Butterflies"
-                subtitle="Combo trades that limit how much you can lose — like buying insurance on your bets"
+                subtitle="Multi-leg options strategies with defined risk — built to cap your downside while keeping upside potential"
                 icon="spread"
                 limit={5}
                 takenSignalIds={takenSignalIds}
