@@ -434,7 +434,7 @@ const DashboardAnalytics = () => {
         }
 
         promises.push(
-          fetch("/api/whale/signals/calendar?limit=500").then(r => r.json())
+          fetch("/api/whale/signals/calendar?limit=1000").then(r => r.json())
         );
 
         promises.push(
@@ -449,8 +449,8 @@ const DashboardAnalytics = () => {
 
         if (historyData.signals) {
           setAllSignals(historyData.signals);
-          const picks = historyData.signals.filter((s: any) => s.is_biddie_pick);
-          const resolved = picks.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
+          const allSigs = historyData.signals;
+          const resolved = allSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
 
           const byTicker: Record<string, { hits: number; total: number }> = {};
@@ -468,10 +468,10 @@ const DashboardAnalytics = () => {
           }
 
           setSignalStats({
-            total: picks.length,
+            total: allSigs.length,
             hits,
             misses: resolved.length - hits,
-            pending: picks.filter((s: any) => !s.outcome || s.outcome === "pending").length,
+            pending: allSigs.filter((s: any) => !s.outcome || s.outcome === "pending").length,
             winRate: resolved.length > 0 ? Math.round((hits / resolved.length) * 100) : 0,
             byTicker,
             byCategory,

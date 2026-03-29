@@ -161,7 +161,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       else if (s.outcome === "expired") expired++;
       else pending++;
     }
-    const resolved = hits + partialHits + misses + expired;
+    const resolved = hits + partialHits + misses;
     const successRate = resolved > 0 ? ((hits + partialHits) / resolved) * 100 : null;
     return { hits, partialHits, misses, expired, pending, total: signals.length, resolved, winRate: successRate };
   }, [signals]);
