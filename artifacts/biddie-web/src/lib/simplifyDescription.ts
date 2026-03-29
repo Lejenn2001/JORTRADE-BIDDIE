@@ -47,7 +47,7 @@ export function compactDescription(signal: SignalInfo): string {
     const label = sweep
       ? `${sweepMatch ? sweepMatch[1] + "x " : ""}sweep`
       : "flow";
-    parts.push(`$${premiumMatch[1]} ${label}${strike ? ` @ $${strike}${pc}` : ""}`);
+    parts.push(`$${premiumMatch[1]} ${label}${strike ? ` → $${strike}${pc}` : ""}`);
   } else {
     parts.push(sweep ? "Sweep order" : "Options flow");
   }
