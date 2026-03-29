@@ -58,7 +58,7 @@ const SignalAlerts = () => {
                 : alert.alert_type === "price_alert" ? "Price Alert!"
                 : "Expired"
               }`,
-              description: alert.message,
+              description: alert.message.replace(/🔔\s*/g, ""),
               variant: alert.alert_type === "invalidated" ? "destructive" : "default",
               duration: 10000,
             });
