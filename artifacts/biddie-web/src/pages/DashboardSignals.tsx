@@ -500,7 +500,7 @@ const DashboardSignals = () => {
               ))}
               <span className="w-px h-4 bg-border/40 mx-1" />
               <button
-                onClick={() => { if (showResolved) setShowResolved(false); }}
+                onClick={() => setShowResolved(false)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                   !showResolved
                     ? "bg-emerald-500/20 text-emerald-400"
@@ -510,7 +510,7 @@ const DashboardSignals = () => {
                 Pending
               </button>
               <button
-                onClick={() => { if (!showResolved) setShowResolved(true); }}
+                onClick={() => setShowResolved(true)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
                   showResolved
                     ? "bg-muted/50 text-foreground"
