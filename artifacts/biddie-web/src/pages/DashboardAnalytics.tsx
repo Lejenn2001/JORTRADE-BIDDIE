@@ -470,7 +470,6 @@ const DashboardAnalytics = () => {
                   <BarChart3 className="h-6 w-6 text-primary" />
                   Performance Analytics
                 </h1>
-                <p className="text-sm text-muted-foreground">Track Biddie Pick accuracy and your personal trading performance</p>
               </div>
 
               <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
@@ -488,8 +487,6 @@ const DashboardAnalytics = () => {
               </div>
             </div>
 
-            <PerformanceSnapshot />
-
             {loading ? (
               <div className="flex items-center justify-center h-60">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -497,12 +494,15 @@ const DashboardAnalytics = () => {
             ) : (
               <>
                 {activeTab === "overview" && (
-                  <OverviewTab
-                    userStats={userStats}
-                    signalStats={signalStats}
-                    topTickers={topTickers}
-                    userTopTickers={userTopTickers}
-                  />
+                  <>
+                    <PerformanceSnapshot />
+                    <OverviewTab
+                      userStats={userStats}
+                      signalStats={signalStats}
+                      topTickers={topTickers}
+                      userTopTickers={userTopTickers}
+                    />
+                  </>
                 )}
                 {activeTab === "mytrades" && (
                   <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} getPrice={getPrice} />
