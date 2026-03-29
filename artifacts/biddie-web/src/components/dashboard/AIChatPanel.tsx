@@ -201,10 +201,13 @@ const AIChatPanel = () => {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="text-center py-8">
-            <img src={biddieRobot} alt="Biddie" className="w-24 h-24 mx-auto mb-3 drop-shadow-[0_0_15px_hsl(230_85%_60%_/_0.4)]" />
-            <p className="text-sm text-foreground font-medium">{greeting}</p>
-            <p className="text-xs text-muted-foreground mt-2">Powered by JORTRADE</p>
+          <div className="text-center py-6 space-y-2">
+            <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mx-auto mb-2 drop-shadow-[0_0_15px_hsl(230_85%_60%_/_0.4)]" />
+            <p className="text-sm font-bold text-foreground">Hey {firstName}!</p>
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mx-auto">
+              I'm Biddie, your AI trading assistant. Ask me anything about the markets, setups, or how to read signals. I'm here to help!
+            </p>
+            <p className="text-[10px] text-muted-foreground/60 mt-1">Powered by JORTRADE</p>
           </div>
         )}
 
