@@ -464,7 +464,7 @@ const DashboardBreakout = () => {
                     <span className="text-border">|</span>
                     <span className="flex items-center gap-1">
                       <Radio className={`h-2.5 w-2.5 ${monitoring.wsConnected ? "text-emerald-400 animate-pulse" : "text-zinc-500"}`} />
-                      {monitoring.wsConnected ? `${monitoring.subscribedTickers} tickers live` : "Offline"}
+                      {monitoring.wsConnected ? "Live" : "Offline"}
                     </span>
                   </>
                 )}
