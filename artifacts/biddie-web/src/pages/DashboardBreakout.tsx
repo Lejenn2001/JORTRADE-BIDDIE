@@ -672,31 +672,24 @@ const DashboardBreakout = () => {
                         </div>
                       </div>
                       <div className="border-t border-white/[0.06] pt-3">
-                        <p className="font-semibold text-foreground text-[11px] mb-2">Score (0–100)</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[10px]">
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-yellow-400 font-bold w-10">~35</span>
-                            <span className="text-muted-foreground">Active squeeze</span>
+                        <p className="font-semibold text-foreground text-[11px] mb-2">Breakout Readiness Score (0–100)</p>
+                        <p className="text-[10px] text-muted-foreground mb-2">The higher the score, the more ready a ticker is to make an explosive move. Multiple signals stacking together push the score higher.</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                          <div className="p-2 rounded-lg bg-zinc-500/10 border border-zinc-500/20">
+                            <p className="font-bold text-zinc-400 mb-0.5">20–35</p>
+                            <p className="text-muted-foreground">Early signs — one factor present like a near-squeeze or tight range</p>
                           </div>
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-purple-400 font-bold w-10">~22</span>
-                            <span className="text-muted-foreground">3+ day consolidation</span>
+                          <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                            <p className="font-bold text-yellow-400 mb-0.5">35–55</p>
+                            <p className="text-muted-foreground">Building — squeeze active with consolidation or volume picking up</p>
                           </div>
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-blue-400 font-bold w-10">~17</span>
-                            <span className="text-muted-foreground">Volume spike 2x+</span>
+                          <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <p className="font-bold text-blue-400 mb-0.5">55–75</p>
+                            <p className="text-muted-foreground">High pressure — multiple factors aligned, breakout likely soon</p>
                           </div>
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-emerald-400 font-bold w-10">~26</span>
-                            <span className="text-muted-foreground">Breakout confirmed</span>
-                          </div>
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-zinc-400 font-bold w-10">~9</span>
-                            <span className="text-muted-foreground">Tight range bonus</span>
-                          </div>
-                          <div className="flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02]">
-                            <span className="text-orange-400 font-bold w-10">~13</span>
-                            <span className="text-muted-foreground">Near squeeze</span>
+                          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <p className="font-bold text-emerald-400 mb-0.5">75–100</p>
+                            <p className="text-muted-foreground">Breakout firing — confirmed move with volume, full setup triggered</p>
                           </div>
                         </div>
                       </div>
