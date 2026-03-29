@@ -65,7 +65,7 @@ export function simplifySignalDescription(desc: string): string {
   simple = simple.replace(/\bIV\s*percentile\b/gi, "volatility ranking vs past year");
   simple = simple.replace(/\bIV\b/g, "expected movement");
   simple = simple.replace(/\bdelta\b/gi, "chance of profit");
-  simple = simple.replace(/\bgamma\b/gi, "speed of price change");
+  simple = simple.replace(/\bgamma\b/gi, "");
   simple = simple.replace(/\btheta\b/gi, "time decay (cost of waiting)");
   simple = simple.replace(/\bvega\b/gi, "volatility sensitivity");
   simple = simple.replace(/\bVWAP\b/g, "average traded price today");
