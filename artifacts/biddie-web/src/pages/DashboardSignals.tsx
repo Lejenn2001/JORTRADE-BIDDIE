@@ -569,7 +569,6 @@ const DashboardSignals = () => {
                   <div className="flex items-center gap-2 px-1">
                     <Waves className="h-4 w-4 text-blue-400" />
                     <span className="font-bold text-xs sm:text-sm text-blue-400">🐋 WHALE PLAYS</span>
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline">Institutional flow tracking large volume orders</span>
                     <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-auto">
                       {whaleSignals.length}
                     </span>
