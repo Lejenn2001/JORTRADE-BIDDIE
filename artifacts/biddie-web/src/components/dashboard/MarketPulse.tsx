@@ -147,7 +147,7 @@ const MarketPulse = () => {
           );
           const isUp = d.changePercent >= 0;
           return (
-            <div key={ticker} className={`rounded-lg px-3 py-2 text-center ${isUp ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
+            <div key={ticker} className={`rounded-lg px-3 py-2 text-center border ${isUp ? "bg-emerald-500/8 border-emerald-500/15" : "bg-white/[0.04] border-white/[0.08]"}`}>
               <span className="text-[10px] text-muted-foreground block">{ticker}</span>
               <span className="text-sm font-bold text-foreground">${d.price.toFixed(2)}</span>
               <div className={`flex items-center justify-center gap-0.5 text-[10px] font-semibold ${isUp ? "text-emerald-400" : "text-red-400"}`}>
