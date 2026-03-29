@@ -507,20 +507,10 @@ function generateContractRec(
   breakoutTriggered: boolean,
   imminenceLabel: string | null,
 ): ContractRec | null {
+  if (direction === "neutral" || direction === "none") return null;
   if (price <= 0) return null;
 
-  let effectiveDir = direction;
-  if (effectiveDir === "neutral" || effectiveDir === "none") {
-    if (resistance && support) {
-      const distToRes = (resistance - price) / price;
-      const distToSup = (price - support) / price;
-      effectiveDir = distToRes <= distToSup ? "bullish" : "bearish";
-    } else {
-      effectiveDir = "bullish";
-    }
-  }
-
-  const isBullish = effectiveDir === "bullish";
+  const isBullish = direction === "bullish";
   const type: "CALL" | "PUT" = isBullish ? "CALL" : "PUT";
 
   let strikeBase: number;
