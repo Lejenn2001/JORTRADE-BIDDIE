@@ -319,7 +319,7 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="AI-detected setups using price action and options flow analysis — short to mid-term entries with confirmed momentum"
+                subtitle="AI detected setups using price action and options flow analysis. Short to mid term entries with confirmed momentum."
                 icon="algorithm"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -332,7 +332,7 @@ const Dashboard = () => {
                 signals={whalePlays}
                 loading={signalFeedLoading}
                 title="Whale Plays"
-                subtitle="Tracks large-volume trades from institutions and hedge funds — multi-day swing setups following smart money"
+                subtitle="Tracks large volume trades from institutions and hedge funds. Multi day swing setups following smart money."
                 icon="whale"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -345,7 +345,7 @@ const Dashboard = () => {
                 signals={spreadPlays}
                 loading={signalFeedLoading}
                 title="Spreads & Butterflies"
-                subtitle="Multi-leg options strategies with defined risk — built to cap your downside while keeping upside potential"
+                subtitle="Multi leg options strategies with defined risk. Built to cap your downside while keeping upside potential."
                 icon="spread"
                 limit={5}
                 takenSignalIds={takenSignalIds}
