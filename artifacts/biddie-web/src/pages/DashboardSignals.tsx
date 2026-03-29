@@ -762,7 +762,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
       )}
 
       <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
-        isWhale ? "bg-blue-500/15" : isSpread ? "bg-violet-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
+        isWhale ? "bg-blue-500/15" : isSpread ? "bg-violet-500/15" : "bg-emerald-500/15"
       }`}>
         <div className="flex items-center gap-2">
           {isWhale ? (

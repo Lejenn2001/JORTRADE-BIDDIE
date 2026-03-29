@@ -161,7 +161,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 )}
 
                 <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
-                  isWhaleCard ? "bg-blue-500/15" : isSpreadCard ? "bg-violet-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
+                  isWhaleCard ? "bg-blue-500/15" : isSpreadCard ? "bg-violet-500/15" : "bg-emerald-500/15"
                 }`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     {signal.category === "whale" ? (
