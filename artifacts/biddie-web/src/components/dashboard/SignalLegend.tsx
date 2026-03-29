@@ -2,21 +2,21 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
 
 const terms = [
-  { label: "S1 / S2", desc: "Support Level 1 & 2 — price levels where buying pressure may hold or reverse a decline" },
-  { label: "R1 / R2", desc: "Resistance Level 1 & 2 — price levels where selling pressure may slow or reverse a rally" },
-  { label: "VWAP", desc: "Volume-Weighted Average Price — the average price weighted by volume; a key intraday benchmark" },
-  { label: "Pivot", desc: "Central pivot point calculated from prior day's high, low, and close" },
-  { label: "Conviction Score", desc: "0–100 score measuring signal strength based on flow size, aggression, volume, and technical alignment" },
-  { label: "Sweep", desc: "An aggressive order that hits multiple price levels simultaneously — signals urgency" },
-  { label: "Vol/OI", desc: "Volume to Open Interest ratio — high values indicate fresh, new positioning rather than closing trades" },
-  { label: "ATM", desc: "At-The-Money — the option strike is near the current stock price" },
+  { label: "S1 / S2", desc: "Support floors — think of these like trampolines for the price. When price falls to these levels, it often bounces back up!" },
+  { label: "R1 / R2", desc: "Resistance ceilings — like a ceiling the price keeps bumping its head on. Price often slows down or turns around here." },
+  { label: "VWAP", desc: "The \"fair price\" for the day — it's the average price weighted by how much was traded. If price is above VWAP, buyers are winning. Below? Sellers are winning." },
+  { label: "Pivot", desc: "The middle point — calculated from yesterday's high, low, and close. Think of it like the center of a seesaw. Price above = bullish, below = bearish." },
+  { label: "Conviction Score", desc: "A score from 0–100 that tells you how strong a signal is. Like a report card for the trade — the higher the grade, the more confident we are!" },
+  { label: "Sweep", desc: "When a big trader is in such a hurry they buy from every store at once! It means someone with a LOT of money wants in (or out) RIGHT NOW." },
+  { label: "Vol/OI", desc: "Compares today's trading to existing bets. A high number means fresh new bets are being placed — not just old ones closing. New bets = someone knows something!" },
+  { label: "ATM", desc: "At-The-Money — the option's strike price is right near where the stock is trading now. These are the most popular and active options." },
 ];
 
 const mfeColors = [
-  { color: "bg-emerald-400", text: "text-emerald-400", label: "MFE 100%+", desc: "Price fully reached the target zone" },
-  { color: "bg-blue-400", text: "text-blue-400", label: "MFE 50–99%", desc: "Price moved at least halfway to target" },
-  { color: "bg-yellow-400", text: "text-yellow-400", label: "MFE 1–49%", desc: "Price moved toward target but less than halfway" },
-  { color: "bg-red-400", text: "text-red-400", label: "MFE 0%", desc: "Price moved against the trade direction" },
+  { color: "bg-emerald-400", text: "text-emerald-400", label: "MFE 100%+", desc: "The price made it all the way to the target — home run!" },
+  { color: "bg-blue-400", text: "text-blue-400", label: "MFE 50–99%", desc: "More than halfway to the target — solid move!" },
+  { color: "bg-yellow-400", text: "text-yellow-400", label: "MFE 1–49%", desc: "Moved in the right direction but didn't get far" },
+  { color: "bg-red-400", text: "text-red-400", label: "MFE 0%", desc: "Went the wrong way — the trade moved against us" },
 ];
 
 const SignalLegend = () => {
@@ -46,7 +46,7 @@ const SignalLegend = () => {
           </div>
           <div className="border-t border-muted/30 pt-2.5">
             <p className="text-[11px] font-semibold text-foreground mb-1.5">MFE (Max Favorable Excursion)</p>
-            <p className="text-[10px] text-muted-foreground mb-2">How far the price moved toward the target zone after signal detection.</p>
+            <p className="text-[10px] text-muted-foreground mb-2">After we spot a signal, how far did the price actually move toward the target? Think of it like measuring how close a ball got to the goal.</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {mfeColors.map((m) => (
                 <div key={m.label} className="flex items-center gap-1.5 text-[10px]">

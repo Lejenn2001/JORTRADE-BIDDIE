@@ -193,11 +193,11 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                             else if (signal.outcome === "expired") ts = "expired";
                           }
                           const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                            hit: { label: "HIT", desc: "Price reached the target zone", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                            miss: { label: "MISS", desc: "Price breached invalidation level", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                            expired: { label: "EXPIRED", desc: "Time ran out before hitting target or invalidation", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                            active: { label: "ACTIVE", desc: "Entry level reached — trade is live", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
-                            watching: { label: "WATCHING", desc: "Waiting for price to reach entry level", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
+                            hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                            miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                            expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                            active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
+                            watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
                           };
                           const info = statusInfo[ts] || statusInfo.watching;
                           return (
@@ -222,10 +222,10 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                               MFE {signal.mfePercent.toFixed(0)}%
                             </span>
                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                              {signal.mfePercent >= 100 ? "Max Favorable Excursion — price fully reached target zone" :
-                               signal.mfePercent >= 50 ? "Max Favorable Excursion — price moved halfway to target" :
-                               signal.mfePercent > 0 ? "Max Favorable Excursion — price moved slightly toward target" :
-                               "Max Favorable Excursion — price moved against the trade"}
+                              {signal.mfePercent >= 100 ? "Home run! Price went all the way to the target" :
+                               signal.mfePercent >= 50 ? "Good progress — price got over halfway to the target" :
+                               signal.mfePercent > 0 ? "Moved in the right direction but didn't get far" :
+                               "Went the wrong way — price moved against us"}
                               {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
                             </span>
                           </span>

@@ -17,14 +17,14 @@ const getScoreColor = (score: number) => {
 };
 
 const breakdownLabels: Record<string, string> = {
-  size: "Size",
-  aggression: "Aggression",
-  urgency: "Urgency",
-  strikeQuality: "Strike",
-  newPositioning: "New Pos.",
-  stacking: "Stacking",
-  levelAlignment: "Level",
-  penalties: "Penalties",
+  size: "Big Money",
+  aggression: "How Hard",
+  urgency: "How Fast",
+  strikeQuality: "Strike Aim",
+  newPositioning: "New Bets",
+  stacking: "Repeat Bets",
+  levelAlignment: "Key Level",
+  penalties: "Red Flags",
 };
 
 const breakdownMax: Record<string, number> = {

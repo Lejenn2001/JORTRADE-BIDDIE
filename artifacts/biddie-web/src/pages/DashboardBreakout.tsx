@@ -1200,7 +1200,7 @@ function SetupCard({
                       <p className="text-[11px] font-bold text-foreground">{setup.contract.entry}</p>
                       {setup.contract.vwap && (
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[9px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                          VWAP: {setup.contract.vwap} · {setup.contract.entryLabel === "VWAP" ? "Entry at VWAP" : "Price too far from VWAP"}
+                          VWAP (fair price): {setup.contract.vwap} · {setup.contract.entryLabel === "VWAP" ? "Entry is right at the fair price — nice!" : "Price is too far from the fair price right now"}
                         </span>
                       )}
                     </div>
@@ -1212,7 +1212,7 @@ function SetupCard({
                             {setup.contract.targetNear} – {setup.contract.targetFar}
                           </p>
                           <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[9px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                            {setup.contract.targetNear}: Conservative · {setup.contract.targetFar}: Extended
+                            {setup.contract.targetNear}: Safe target (closer) · {setup.contract.targetFar}: Stretch goal (farther)
                           </span>
                         </>
                       ) : (
