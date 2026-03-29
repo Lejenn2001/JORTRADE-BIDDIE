@@ -95,7 +95,17 @@ const SignalAlerts = () => {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const handleOpenPanel = () => {
+      fetchUserAlerts();
+      setShowPanel(true);
+      setTab("active");
+    };
+    window.addEventListener("open-alerts-panel", handleOpenPanel);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener("open-alerts-panel", handleOpenPanel);
+    };
   }, [user?.id]);
 
   const markRead = async (id: string) => {

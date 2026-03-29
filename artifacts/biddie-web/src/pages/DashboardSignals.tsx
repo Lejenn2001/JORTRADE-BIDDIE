@@ -181,7 +181,20 @@ const DashboardSignals = () => {
   const [alertPrice, setAlertPrice] = useState("");
   const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
   const [alertSaving, setAlertSaving] = useState(false);
+  const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`/api/alerts?userId=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.alerts) {
+          setAlertTickers(new Set(data.alerts.filter((a: any) => a.active).map((a: any) => a.ticker)));
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -264,7 +277,9 @@ const DashboardSignals = () => {
       });
       if (res.ok) {
         toast({ title: `🔔 Alert set for ${alertSignal.ticker}`, description: `${alertCondition === "above" ? "Above" : "Below"} $${parseFloat(alertPrice).toFixed(2)}` });
+        setAlertTickers(prev => new Set(prev).add(alertSignal.ticker));
         setAlertSignal(null);
+        window.dispatchEvent(new CustomEvent("open-alerts-panel"));
       }
     } catch {
       toast({ title: "Failed to set alert", variant: "destructive" });
@@ -511,7 +526,7 @@ const DashboardSignals = () => {
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                         </motion.div>
                       ))}
                     </div>
@@ -544,7 +559,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                       </motion.div>
                     ))}
                   </div>
@@ -576,7 +591,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                       </motion.div>
                     ))}
                   </div>
@@ -680,7 +695,7 @@ const DashboardSignals = () => {
   );
 };
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -761,10 +776,10 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           {onSetAlert && (
             <button
               onClick={(e) => { e.stopPropagation(); onSetAlert(signal); }}
-              className="p-1 rounded hover:bg-amber-500/20 transition-colors group"
-              title="Set price alert"
+              className={`p-1 rounded transition-colors group ${hasAlert ? "bg-amber-500/20" : "hover:bg-amber-500/20"}`}
+              title={hasAlert ? "Alert set — tap to add another" : "Set price alert"}
             >
-              <Bell className="h-3.5 w-3.5 text-muted-foreground group-hover:text-amber-400 transition-colors" />
+              <Bell className={`h-3.5 w-3.5 transition-colors ${hasAlert ? "text-amber-400 fill-amber-400/30" : "text-muted-foreground group-hover:text-amber-400"}`} />
             </button>
           )}
           <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
