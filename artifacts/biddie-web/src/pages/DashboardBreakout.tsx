@@ -757,7 +757,7 @@ function SetupSection({
         <span className={`font-bold text-xs ${accent.split(" ")[0]}`}>{label}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${accent}`}>{count}</span>
       </div>
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {setups.map((setup, i) => (
           <motion.div
             key={setup.ticker}
@@ -811,82 +811,104 @@ function SetupCard({
     <div
       className={`rounded-xl border overflow-hidden transition-all cursor-pointer hover:border-primary/25 ${
         setup.breakoutTriggered
-          ? "bg-emerald-500/[0.06] border-emerald-500/20"
-          : setup.squeezeActive
-            ? "bg-yellow-500/[0.04] border-yellow-500/15"
-            : "bg-white/[0.02] border-white/[0.06]"
+          ? "bg-emerald-500/[0.06] border-emerald-500/30"
+          : isBullish
+            ? "bg-emerald-500/[0.03] border-emerald-500/20"
+            : isBearish
+              ? "bg-red-500/[0.03] border-red-500/20"
+              : setup.squeezeActive
+                ? "bg-yellow-500/[0.04] border-yellow-500/15"
+                : "bg-white/[0.02] border-white/[0.06]"
       }`}
       onClick={onToggle}
     >
-      <div className="px-3 sm:px-4 py-3">
-        <div className="flex items-start gap-3">
-          <ConvictionScoreRing score={setup.score} size="sm" />
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base font-extrabold text-foreground">{setup.ticker}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${tag.colors} ${tag.pulse ? "animate-pulse" : ""}`}>
-                  {tag.label}
-                </span>
-                {dir !== "neutral" && (
-                  <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                    isBullish ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-red-500/10 text-red-400 border-red-500/25"
-                  }`}>
-                    {isBullish ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
-                    {isBullish ? "CALLS" : "PUTS"}
-                  </span>
-                )}
-                {setup.contract && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                    setup.contract.expiryLabel === "0DTE"
-                      ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
-                      : setup.contract.expiryLabel === "1DTE"
-                        ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
-                        : "bg-blue-500/15 text-blue-400 border-blue-500/30"
-                  }`}>{setup.contract.expiryLabel}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="text-right">
-                  <p className="text-sm font-bold text-foreground">${setup.currentPrice.toFixed(2)}</p>
-                </div>
-                <button
-                  onClick={onWatch}
-                  className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all border ${
-                    watched
-                      ? "bg-primary/20 border-primary/50 text-primary"
-                      : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
-                  }`}
-                  title={watched ? "Stop watching" : "Watch for breakout"}
-                >
-                  <Bell className={`h-3 w-3 ${watched ? "fill-current" : ""}`} />
-                </button>
-                <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
-              </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-0.5">
+              <ConvictionScoreRing score={setup.score} size="sm" />
+              <span className="text-[9px] text-muted-foreground/60 font-medium">
+                {setup.score >= 75 ? "Strong" : setup.score >= 55 ? "High" : setup.score >= 35 ? "Moderate" : "Low"}
+              </span>
             </div>
-
-            <div className="flex items-center gap-3 mt-1.5 text-[11px]">
-              {setup.contract && (
-                <span className={`font-bold ${setup.contract.type === "CALL" ? "text-emerald-400/80" : "text-red-400/80"}`}>
-                  ${setup.contract.strike} {setup.contract.type}
-                </span>
-              )}
-              {setup.targetPrice && (
-                <span className="font-semibold text-primary">Target ${setup.targetPrice.toFixed(2)}</span>
-              )}
-              {setup.squeezeFirstSeen && (
-                <span className="text-muted-foreground/60">Squeeze {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-              )}
-              <span className="ml-auto flex items-center gap-1 text-muted-foreground/50">
-                <Clock className="h-2.5 w-2.5" />
-                {setup.firstDetected
-                  ? new Date(setup.firstDetected).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(setup.firstDetected).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })
-                  : fresh.label || "Just now"
-                }
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-extrabold text-foreground tracking-tight">{setup.ticker}</span>
+                <span className="text-base font-bold text-foreground">${setup.currentPrice.toFixed(2)}</span>
+                {fresh.label && (
+                  <span className={`text-[10px] ${fresh.color}`}>{fresh.label}</span>
+                )}
+              </div>
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border mt-1 ${tag.colors} ${tag.pulse ? "animate-pulse" : ""}`}>
+                {tag.label}
               </span>
             </div>
           </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onWatch}
+              className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all border ${
+                watched
+                  ? "bg-primary/20 border-primary/50 text-primary"
+                  : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
+              }`}
+              title={watched ? "Stop watching" : "Watch for breakout"}
+            >
+              <Bell className={`h-3 w-3 ${watched ? "fill-current" : ""}`} />
+            </button>
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {dir !== "neutral" && (
+            <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+              isBullish ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-red-500/10 text-red-400 border-red-500/25"
+            }`}>
+              {isBullish ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
+              {isBullish ? "CALLS" : "PUTS"}
+            </span>
+          )}
+          {setup.contract && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+              setup.contract.expiryLabel === "0DTE"
+                ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+                : setup.contract.expiryLabel === "1DTE"
+                  ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                  : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+            }`}>{setup.contract.expiryLabel}</span>
+          )}
+          {setup.squeezeFirstSeen && (
+            <span className="text-[10px] text-muted-foreground/60">
+              Squeeze since {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          )}
+        </div>
+
+        {setup.contract && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className={`font-bold ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>
+              ${setup.contract.strike} {setup.contract.type}
+            </span>
+            {setup.targetPrice && (
+              <>
+                <span className="text-muted-foreground/40">→</span>
+                <span className="font-semibold text-primary">Target ${setup.targetPrice.toFixed(2)}</span>
+              </>
+            )}
+          </div>
+        )}
+        {!setup.contract && setup.targetPrice && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-semibold text-primary">Target ${setup.targetPrice.toFixed(2)}</span>
+          </div>
+        )}
+
+        <div className="text-[10px] text-muted-foreground/40 pt-1 border-t border-white/[0.04]">
+          Posted {setup.firstDetected
+            ? new Date(setup.firstDetected).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(setup.firstDetected).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })
+            : "Just now"
+          }
         </div>
       </div>
 
