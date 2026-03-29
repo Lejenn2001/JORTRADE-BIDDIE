@@ -883,17 +883,16 @@ const DashboardAdmin = () => {
                                     const pc = planConfig[p];
                                     const isActive = u.selected_plan === p;
                                     return (
-                                      <Button
+                                      <button
                                         key={p}
-                                        size="sm"
-                                        variant={isActive ? "default" : "outline"}
                                         disabled={isActive || updating === u.id}
                                         onClick={() => updateUserPlan(u.id, p)}
-                                        className={`text-[10px] h-6 px-2 ${isActive ? "bg-primary" : "border-border/50"}`}
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all disabled:cursor-default ${isActive ? `${pc.bg} ${pc.color}` : "border-border/30 text-muted-foreground/50 hover:border-border/60 hover:text-muted-foreground hover:bg-muted/10"}`}
+                                        title={isActive ? pc.label : `Switch to ${pc.label}`}
                                       >
-                                        <pc.icon className="h-3 w-3 mr-1" />
-                                        {pc.label.split(" ")[0]}
-                                      </Button>
+                                        <pc.icon className="h-3 w-3" />
+                                        {isActive && <span>{pc.label.split(" ")[0]}</span>}
+                                      </button>
                                     );
                                   })}
                                 </div>
