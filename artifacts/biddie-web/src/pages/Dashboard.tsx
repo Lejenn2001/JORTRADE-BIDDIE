@@ -299,7 +299,7 @@ const Dashboard = () => {
                       DECISION ENGINE
                     </h1>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--glow-blue))]/80 font-semibold mt-0.5">
-                      Live Signals · AI Analysis · Market Intelligence
+                      Glow · Insight · Execution
                     </p>
                   </div>
                 </div>
