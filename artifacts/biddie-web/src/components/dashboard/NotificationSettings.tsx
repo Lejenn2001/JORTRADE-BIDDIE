@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Bell, MessageSquare, Smartphone, Send, HelpCircle } from "lucide-react";
+import { Bell, MessageSquare, Smartphone, Send, HelpCircle, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ const NotificationSettings = () => {
   const [alertMarketPulse, setAlertMarketPulse] = useState(false);
   const [alertOutcomes, setAlertOutcomes] = useState(true);
   const [alertTrumpFeed, setAlertTrumpFeed] = useState(false);
+  const [alertTypesOpen, setAlertTypesOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -251,17 +252,21 @@ const NotificationSettings = () => {
 
       {/* Alert Types */}
       <div className="rounded-xl border border-border/60 bg-card p-6 space-y-4">
-        <div className="flex items-center gap-3 mb-2">
+        <button
+          onClick={() => setAlertTypesOpen(!alertTypesOpen)}
+          className="flex items-center gap-3 w-full text-left"
+        >
           <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
             <Bell className="h-5 w-5 text-accent-foreground" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="font-semibold text-foreground">Alert Types</h3>
             <p className="text-xs text-muted-foreground">Choose what you want to be notified about</p>
           </div>
-        </div>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${alertTypesOpen ? "rotate-180" : ""}`} />
+        </button>
 
-        <div className="space-y-3 pt-2 border-t border-border/40">
+        <div className={`space-y-3 pt-2 border-t border-border/40 overflow-hidden transition-all duration-200 ${alertTypesOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0 pt-0 border-t-0"}`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Biddie Picks</p>
