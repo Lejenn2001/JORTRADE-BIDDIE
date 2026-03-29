@@ -48,9 +48,9 @@ interface UserProfile {
 }
 
 const planConfig = {
-  starter: { label: "Signal Scout", icon: Star, color: "text-blue-400" },
-  active: { label: "Active Trader", icon: Zap, color: "text-amber-400" },
-  pro: { label: "Pro Trader", icon: Crown, color: "text-purple-400" },
+  starter: { label: "Signal Scout", icon: Star, color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/30", dot: "bg-blue-400" },
+  active: { label: "Active Trader", icon: Zap, color: "text-amber-400", bg: "bg-amber-500/15 border-amber-500/30", dot: "bg-amber-400" },
+  pro: { label: "Pro Trader", icon: Crown, color: "text-purple-400", bg: "bg-purple-500/15 border-purple-500/30", dot: "bg-purple-400" },
 };
 
 const formatDate = (iso: string) =>
@@ -65,6 +65,7 @@ const DashboardAdmin = () => {
   const [updating, setUpdating] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showReference, setShowReference] = useState(false);
+  const [showTiers, setShowTiers] = useState(false);
   const [chatCount, setChatCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users'>('overview');
   const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
@@ -779,205 +780,265 @@ const DashboardAdmin = () => {
 
           {activeTab === 'users' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-muted/30 border-border/50 rounded-lg"
-            />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportCSV}
-              disabled={users.length === 0}
-              className="text-xs border-border/50 gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export Users
-            </Button>
-          </div>
 
-          {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Loading users...</div>
-          ) : (
-            <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/30">
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Name</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Email</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Plan</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Joined</th>
-                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Role</th>
-                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((u) => {
-                      const plan = u.selected_plan as keyof typeof planConfig;
-                      const config = planConfig[plan] || null;
-                      const isSelf = u.id === user?.id;
-                      const isOnline = onlineUsers.has(u.id);
+              <div className="glass-panel rounded-xl p-4 border-border/40">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Users className="h-5 w-5 text-cyan-400" />
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground">User Management</h2>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-muted-foreground">{users.length} total</span>
+                        <span className="flex items-center gap-1 text-xs text-emerald-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          {onlineUsers.size} online
+                        </span>
+                        {users.length > 0 && (
+                          <>
+                            <span className="flex items-center gap-1 text-xs text-blue-400">
+                              <Star className="h-3 w-3" />
+                              {users.filter(u => u.selected_plan === 'starter').length}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-amber-400">
+                              <Zap className="h-3 w-3" />
+                              {users.filter(u => u.selected_plan === 'active').length}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-purple-400">
+                              <Crown className="h-3 w-3" />
+                              {users.filter(u => u.selected_plan === 'pro').length}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search users..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 bg-muted/30 border-border/50 rounded-lg h-9 text-sm"
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportCSV}
+                      disabled={users.length === 0}
+                      className="text-xs border-border/50 gap-1.5 h-9 shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Export
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
-                      return (
-                        <tr key={u.id} className="border-b border-border/20 hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3">
-                            <span className={`w-2 h-2 rounded-full inline-block ${isOnline ? "bg-emerald-400" : "bg-muted-foreground/30"}`} title={isOnline ? "Online" : "Offline"} />
-                          </td>
-                          <td className="px-5 py-3 text-foreground">
-                            {u.full_name || "No name"}
-                            {isSelf && <span className="text-xs text-muted-foreground ml-2">(you)</span>}
-                          </td>
-                          <td className="px-5 py-3 text-muted-foreground text-xs">{u.email || "—"}</td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1.5">
-                              {(["starter", "active", "pro"] as const).map((p) => {
-                                const pc = planConfig[p];
-                                const isActive = u.selected_plan === p;
-                                return (
-                                  <Button
-                                    key={p}
-                                    size="sm"
-                                    variant={isActive ? "default" : "outline"}
-                                    disabled={isActive || updating === u.id}
-                                    onClick={() => updateUserPlan(u.id, p)}
-                                    className={`text-[10px] h-6 px-2 ${isActive ? "bg-primary" : "border-border/50"}`}
-                                  >
-                                    <pc.icon className="h-3 w-3 mr-1" />
-                                    {pc.label.split(" ")[0]}
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-muted-foreground text-xs">{formatDate(u.created_at)}</td>
-                          <td className="px-5 py-3">
-                            {u.is_admin ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
-                                <ShieldCheck className="h-3 w-3" /> Admin
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Member</span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            {!isSelf && (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                  size="sm"
-                                  variant={u.is_admin ? "destructive" : "outline"}
-                                  className="text-xs h-7 px-3"
-                                  disabled={updating === u.id}
-                                  onClick={() => toggleAdmin(u.id, !!u.is_admin)}
-                                >
-                                  {updating === u.id ? (
-                                    <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                  ) : u.is_admin ? (
-                                    <><ShieldOff className="h-3 w-3 mr-1" /> Revoke</>
-                                  ) : (
-                                    <><ShieldCheck className="h-3 w-3 mr-1" /> Make Admin</>
-                                  )}
-                                </Button>
-                                {confirmDelete === u.id ? (
-                                  <div className="flex items-center gap-1">
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      disabled={updating === u.id}
-                                      onClick={() => deleteUser(u.id)}
-                                      className="text-xs h-7 px-3"
-                                    >
-                                      Confirm
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setConfirmDelete(null)}
-                                      className="text-xs h-7 px-2 border-border/50"
-                                    >
-                                      Cancel
-                                    </Button>
+              {loading ? (
+                <div className="text-center py-12 text-muted-foreground">Loading users...</div>
+              ) : (
+                <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/30 bg-muted/5">
+                          <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">User</th>
+                          <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Plan</th>
+                          <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Role</th>
+                          <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Joined</th>
+                          <th className="text-right px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map((u) => {
+                          const plan = u.selected_plan as keyof typeof planConfig;
+                          const config = planConfig[plan] || null;
+                          const isSelf = u.id === user?.id;
+                          const isOnline = onlineUsers.has(u.id);
+
+                          return (
+                            <tr key={u.id} className="border-b border-border/20 hover:bg-muted/10 transition-colors group">
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-border/30 flex items-center justify-center text-xs font-bold text-foreground">
+                                      {(u.full_name || "?").charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background ${isOnline ? "bg-emerald-400" : "bg-muted-foreground/30"}`} />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-medium text-foreground truncate">{u.full_name || "No name"}</span>
+                                      {isSelf && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-medium">you</span>}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">{u.email || "—"}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {config ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${config.bg} ${config.color} w-fit`}>
+                                      <config.icon className="h-3 w-3" />
+                                      {config.label}
+                                    </span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {(["starter", "active", "pro"] as const).filter(p => p !== plan).map((p) => {
+                                        const pc = planConfig[p];
+                                        return (
+                                          <button
+                                            key={p}
+                                            disabled={updating === u.id}
+                                            onClick={() => updateUserPlan(u.id, p)}
+                                            className={`text-[10px] px-1.5 py-0.5 rounded ${pc.color} hover:bg-muted/20 transition-colors disabled:opacity-30`}
+                                            title={`Switch to ${pc.label}`}
+                                          >
+                                            <pc.icon className="h-3 w-3" />
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-xs h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    disabled={updating === u.id}
-                                    onClick={() => setConfirmDelete(u.id)}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
+                                  <span className="text-xs text-muted-foreground/50">No plan</span>
                                 )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filteredUsers.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-5 py-8 text-center text-muted-foreground text-sm">No users found</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                {u.is_admin ? (
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-full">
+                                    <ShieldCheck className="h-3 w-3" /> Admin
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted/20 border border-border/30 px-2.5 py-1 rounded-full">
+                                    <Circle className="h-2.5 w-2.5" /> Member
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
+                              <td className="px-5 py-3.5 text-right">
+                                {!isSelf && (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant={u.is_admin ? "destructive" : "outline"}
+                                      className="text-xs h-7 px-3"
+                                      disabled={updating === u.id}
+                                      onClick={() => toggleAdmin(u.id, !!u.is_admin)}
+                                    >
+                                      {updating === u.id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : u.is_admin ? (
+                                        <><ShieldOff className="h-3 w-3 mr-1" /> Revoke</>
+                                      ) : (
+                                        <><ShieldCheck className="h-3 w-3 mr-1" /> Promote</>
+                                      )}
+                                    </Button>
+                                    {confirmDelete === u.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <Button size="sm" variant="destructive" disabled={updating === u.id} onClick={() => deleteUser(u.id)} className="text-xs h-7 px-3">
+                                          Confirm
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={() => setConfirmDelete(null)} className="text-xs h-7 px-2 border-border/50">
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-xs h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        disabled={updating === u.id}
+                                        onClick={() => setConfirmDelete(u.id)}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {filteredUsers.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-12 text-center">
+                              <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                              <p className="text-sm text-muted-foreground">No users found</p>
+                              {searchQuery && <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
-          <div className="glass-panel rounded-xl p-6 border-border/40">
-            <h3 className="text-lg font-bold text-foreground mb-4">Subscription Tiers</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Star className="h-4 w-4 text-blue-400" />
-                  <h4 className="font-semibold text-blue-400">Signal Scout</h4>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>Community chat access</li>
-                  <li>Biddie AI: 10 questions/day</li>
-                  <li>Can purchase credit packs</li>
-                </ul>
+              <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+                <button
+                  onClick={() => setShowTiers(!showTiers)}
+                  className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
+                >
+                  <Crown className="h-5 w-5 text-purple-400" />
+                  <h2 className="text-lg font-bold text-foreground">Subscription Tiers</h2>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-bold">PLANS</span>
+                  {showTiers ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+                </button>
+                {showTiers && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="p-5 space-y-4 border-t border-border/40"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Star className="h-4 w-4 text-blue-400" />
+                          <h4 className="font-semibold text-blue-400">Signal Scout</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Community chat access</li>
+                          <li>Biddie AI: 10 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Zap className="h-4 w-4 text-amber-400" />
+                          <h4 className="font-semibold text-amber-400">Active Trader</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Full dashboard access</li>
+                          <li>Biddie AI: 25 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Crown className="h-4 w-4 text-purple-400" />
+                          <h4 className="font-semibold text-purple-400">Pro Trader</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Full dashboard access</li>
+                          <li>Biddie AI: 50 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                      <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
+                      <div className="flex gap-4 text-xs text-muted-foreground">
+                        <span>10 credits — $4.99</span>
+                        <span>25 credits — $9.99</span>
+                        <span>50 credits — $17.99</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
-              <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="h-4 w-4 text-amber-400" />
-                  <h4 className="font-semibold text-amber-400">Active Trader</h4>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>Full dashboard access</li>
-                  <li>Biddie AI: 25 questions/day</li>
-                  <li>Can purchase credit packs</li>
-                </ul>
-              </div>
-              <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Crown className="h-4 w-4 text-purple-400" />
-                  <h4 className="font-semibold text-purple-400">Pro Trader</h4>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>Full dashboard access</li>
-                  <li>Biddie AI: 50 questions/day</li>
-                  <li>Can purchase credit packs</li>
-                </ul>
-              </div>
-            </div>
-            <div className="mt-4 bg-card/50 rounded-lg p-4 border border-border/30">
-              <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <span>10 credits — $4.99</span>
-                <span>25 credits — $9.99</span>
-                <span>50 credits — $17.99</span>
-              </div>
-            </div>
-          </div>
+
             </motion.div>
           )}
 
