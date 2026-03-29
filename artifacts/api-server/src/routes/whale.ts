@@ -4738,6 +4738,180 @@ router.get("/whale/health", (_req, res) => {
   });
 });
 
+// ── Weekly Signal Stats Snapshot ──────────────────────────────────────────────────
+
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  date.setDate(date.getDate() - diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+async function snapshotWeek(weekStart: Date): Promise<any> {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const existing = await dbQuery(
+    `SELECT id FROM weekly_signal_stats WHERE week_start = $1`,
+    [weekStart.toISOString()]
+  );
+
+  const signals = await dbQuery(
+    `SELECT ticker, outcome, conviction_score, is_biddie_pick
+     FROM signal_outcomes
+     WHERE signal_source = 'replit'
+       AND detected_at >= $1 AND detected_at < $2`,
+    [weekStart.toISOString(), weekEnd.toISOString()]
+  );
+
+  const rows = signals?.rows || [];
+  const total = rows.length;
+  const hits = rows.filter((r: any) => r.outcome === "hit").length;
+  const partialHits = rows.filter((r: any) => r.outcome === "partial_hit").length;
+  const misses = rows.filter((r: any) => r.outcome === "missed").length;
+  const expired = rows.filter((r: any) => r.outcome === "expired").length;
+  const pending = rows.filter((r: any) => !r.outcome || r.outcome === "pending").length;
+  const resolved = hits + partialHits + misses;
+  const winRate = resolved > 0 ? ((hits + partialHits) / resolved * 100).toFixed(2) : "0";
+  const scores = rows.filter((r: any) => r.conviction_score).map((r: any) => r.conviction_score);
+  const avgConviction = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(2) : "0";
+
+  const tickerCounts: Record<string, { hits: number; total: number }> = {};
+  for (const r of rows) {
+    const tk = (r as any).ticker;
+    if (!tickerCounts[tk]) tickerCounts[tk] = { hits: 0, total: 0 };
+    tickerCounts[tk].total++;
+    if ((r as any).outcome === "hit" || (r as any).outcome === "partial_hit") tickerCounts[tk].hits++;
+  }
+  const topTickers = Object.entries(tickerCounts)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 5)
+    .map(([ticker, data]) => ({ ticker, ...data }));
+
+  const biddiePicks = rows.filter((r: any) => r.is_biddie_pick);
+  const biddieResolved = biddiePicks.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit" || r.outcome === "missed");
+  const biddieHits = biddieResolved.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit").length;
+  const biddieWinRate = biddieResolved.length > 0 ? ((biddieHits / biddieResolved.length) * 100).toFixed(2) : "0";
+
+  const statsRow = {
+    weekStart: weekStart.toISOString(),
+    weekEnd: weekEnd.toISOString(),
+    totalSignals: total,
+    hits,
+    misses,
+    partialHits,
+    expired,
+    pending,
+    winRate,
+    avgConviction,
+    topTickers: JSON.stringify(topTickers),
+    biddiePickHits: biddieHits,
+    biddiePickTotal: biddiePicks.length,
+    biddiePickWinRate: biddieWinRate,
+  };
+
+  if (existing?.rows?.length) {
+    await dbQuery(
+      `UPDATE weekly_signal_stats SET
+        total_signals = $1, hits = $2, misses = $3, partial_hits = $4,
+        expired = $5, pending = $6, win_rate = $7, avg_conviction = $8,
+        top_tickers = $9, biddie_pick_hits = $10, biddie_pick_total = $11,
+        biddie_pick_win_rate = $12, week_end = $13
+       WHERE week_start = $14`,
+      [total, hits, misses, partialHits, expired, pending, winRate, avgConviction,
+       statsRow.topTickers, biddieHits, biddiePicks.length, biddieWinRate,
+       weekEnd.toISOString(), weekStart.toISOString()]
+    );
+  } else {
+    await dbQuery(
+      `INSERT INTO weekly_signal_stats
+        (week_start, week_end, total_signals, hits, misses, partial_hits,
+         expired, pending, win_rate, avg_conviction, top_tickers,
+         biddie_pick_hits, biddie_pick_total, biddie_pick_win_rate)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [weekStart.toISOString(), weekEnd.toISOString(), total, hits, misses, partialHits,
+       expired, pending, winRate, avgConviction, statsRow.topTickers,
+       biddieHits, biddiePicks.length, biddieWinRate]
+    );
+  }
+
+  return { ...statsRow, topTickers };
+}
+
+async function autoSnapshotWeeklyStats() {
+  try {
+    const now = new Date();
+    const currentMonday = getMonday(now);
+
+    await snapshotWeek(currentMonday);
+
+    const lastMonday = new Date(currentMonday);
+    lastMonday.setDate(lastMonday.getDate() - 7);
+    const lastExists = await dbQuery(
+      `SELECT id FROM weekly_signal_stats WHERE week_start = $1`,
+      [lastMonday.toISOString()]
+    );
+    if (!lastExists?.rows?.length) {
+      await snapshotWeek(lastMonday);
+    }
+
+    console.log("[weekly-stats] Auto-snapshot complete");
+  } catch (err: any) {
+    console.error("[weekly-stats] Auto-snapshot error:", err.message);
+  }
+}
+
+autoSnapshotWeeklyStats();
+setInterval(autoSnapshotWeeklyStats, 60 * 60 * 1000);
+
+router.get("/whale/weekly-stats", async (_req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT * FROM weekly_signal_stats ORDER BY week_start DESC LIMIT 52`
+    );
+    res.json({ weeks: result?.rows || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/weekly-stats/snapshot", async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+    const monday = weekStart ? new Date(weekStart) : getMonday(new Date());
+    const result = await snapshotWeek(monday);
+    res.json({ ok: true, stats: result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/weekly-stats/backfill", async (_req, res) => {
+  try {
+    const oldest = await dbQuery(
+      `SELECT MIN(detected_at) as oldest FROM signal_outcomes WHERE signal_source = 'replit'`
+    );
+    const oldestDate = oldest?.rows?.[0]?.oldest;
+    if (!oldestDate) return res.json({ ok: true, weeks: 0 });
+
+    let monday = getMonday(new Date(oldestDate));
+    const now = new Date();
+    let count = 0;
+
+    while (monday < now) {
+      await snapshotWeek(monday);
+      count++;
+      monday.setDate(monday.getDate() + 7);
+    }
+
+    res.json({ ok: true, weeks: count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Trump Truth Social Monitor ──────────────────────────────────────────────────
 
 interface TrumpPost {

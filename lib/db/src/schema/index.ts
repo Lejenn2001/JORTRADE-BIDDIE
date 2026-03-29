@@ -107,6 +107,27 @@ export const userPriceAlerts = pgTable("user_price_alerts", {
   index("idx_user_price_alerts_active").on(table.active),
 ]);
 
+export const weeklySignalStats = pgTable("weekly_signal_stats", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  weekStart: timestamp("week_start", { withTimezone: true }).notNull(),
+  weekEnd: timestamp("week_end", { withTimezone: true }).notNull(),
+  totalSignals: integer("total_signals").default(0),
+  hits: integer("hits").default(0),
+  misses: integer("misses").default(0),
+  partialHits: integer("partial_hits").default(0),
+  expired: integer("expired").default(0),
+  pending: integer("pending").default(0),
+  winRate: numeric("win_rate", { precision: 5, scale: 2 }),
+  avgConviction: numeric("avg_conviction", { precision: 5, scale: 2 }),
+  topTickers: jsonb("top_tickers"),
+  biddiePickHits: integer("biddie_pick_hits").default(0),
+  biddiePickTotal: integer("biddie_pick_total").default(0),
+  biddiePickWinRate: numeric("biddie_pick_win_rate", { precision: 5, scale: 2 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => [
+  uniqueIndex("idx_weekly_signal_stats_week").on(table.weekStart),
+]);
+
 export const userTrades = pgTable("user_trades", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: text("user_id").notNull(),

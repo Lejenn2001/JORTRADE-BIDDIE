@@ -45,6 +45,23 @@ interface SignalStats {
   byCategory: Record<string, { hits: number; total: number }>;
 }
 
+interface WeeklyStats {
+  week_start: string;
+  week_end: string;
+  total_signals: number;
+  hits: number;
+  misses: number;
+  partial_hits: number;
+  expired: number;
+  pending: number;
+  win_rate: string;
+  avg_conviction: string;
+  top_tickers: { ticker: string; hits: number; total: number }[];
+  biddie_pick_hits: number;
+  biddie_pick_total: number;
+  biddie_pick_win_rate: string;
+}
+
 interface UserTrade {
   id: string;
   signal_id: string;
@@ -397,6 +414,7 @@ const DashboardAnalytics = () => {
   const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
   const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
   const [allSignals, setAllSignals] = useState<HistoricalSignal[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "pnl">("overview");
 
@@ -419,10 +437,15 @@ const DashboardAnalytics = () => {
           fetch("/api/whale/signals/calendar?limit=500").then(r => r.json())
         );
 
-        const [statsData, tradesData, historyData] = await Promise.all(promises);
+        promises.push(
+          fetch("/api/whale/weekly-stats").then(r => r.json())
+        );
+
+        const [statsData, tradesData, historyData, weeklyData] = await Promise.all(promises);
 
         if (statsData.stats) setUserStats(statsData.stats);
         if (tradesData.trades) setUserTrades(tradesData.trades);
+        if (weeklyData?.weeks) setWeeklyStats(weeklyData.weeks);
 
         if (historyData.signals) {
           setAllSignals(historyData.signals);
@@ -547,6 +570,7 @@ const DashboardAnalytics = () => {
                       signalStats={signalStats}
                       topTickers={topTickers}
                       userTopTickers={userTopTickers}
+                      weeklyStats={weeklyStats}
                     />
                   </>
                 )}
@@ -634,11 +658,39 @@ function CategoryBar({ category, hits, total }: { category: string; hits: number
   );
 }
 
-function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
+function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weeklyStats }: {
   userStats: TradeStats | null; signalStats: SignalStats | null;
   topTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
+  weeklyStats: WeeklyStats[];
 }) {
+  const [selectedWeek, setSelectedWeek] = useState<WeeklyStats | null>(null);
+
+  const formatWeekLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const getWeekColor = (winRate: number, total: number) => {
+    if (total === 0) return "bg-muted/20 border-white/5";
+    if (winRate >= 80) return "bg-emerald-500/15 border-emerald-500/30";
+    if (winRate >= 60) return "bg-blue-500/15 border-blue-500/30";
+    if (winRate >= 40) return "bg-yellow-500/15 border-yellow-500/30";
+    return "bg-red-500/15 border-red-500/30";
+  };
+
+  const getWinRateEmoji = (winRate: number, total: number) => {
+    if (total === 0) return "—";
+    if (winRate >= 80) return "🔥";
+    if (winRate >= 60) return "✅";
+    if (winRate >= 40) return "⚠️";
+    return "📉";
+  };
+
+  const sortedWeeks = [...weeklyStats].filter(w => w.total_signals > 0).sort((a, b) =>
+    new Date(a.week_start).getTime() - new Date(b.week_start).getTime()
+  );
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -685,6 +737,180 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
           )}
         </motion.div>
       </div>
+
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+        className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-primary/5 via-background to-background">
+        <div className="absolute top-0 left-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl -translate-y-12 -translate-x-12" />
+        <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4 text-primary" />
+          Weekly Signal Report Card
+        </h3>
+        <p className="text-[10px] text-muted-foreground/60 mb-4">
+          How Biddie's signals performed each week — every week is saved so you can track progress over time!
+        </p>
+
+        {sortedWeeks.length > 0 ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+              {sortedWeeks.map((week) => {
+                const wr = parseFloat(week.win_rate);
+                const isSelected = selectedWeek?.week_start === week.week_start;
+                const now = new Date();
+                const ws = new Date(week.week_start);
+                const isCurrentWeek = ws <= now && new Date(week.week_end) > now;
+
+                return (
+                  <button
+                    key={week.week_start}
+                    onClick={() => setSelectedWeek(isSelected ? null : week)}
+                    className={`relative rounded-xl p-3 border text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                      isSelected
+                        ? "border-primary/50 bg-primary/10 ring-1 ring-primary/30"
+                        : getWeekColor(wr, week.total_signals)
+                    }`}
+                  >
+                    {isCurrentWeek && (
+                      <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 animate-pulse">
+                        NOW
+                      </span>
+                    )}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-muted-foreground">
+                        {formatWeekLabel(week.week_start)} – {formatWeekLabel(week.week_end)}
+                      </span>
+                      <span className="text-xs">{getWinRateEmoji(wr, week.total_signals)}</span>
+                    </div>
+                    <div className={`text-xl font-black ${
+                      wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                    }`}>
+                      {wr.toFixed(0)}%
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      {week.total_signals} signals · {week.hits + week.partial_hits}W / {week.misses}L
+                    </div>
+                    <div className="mt-1.5 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          wr >= 80 ? "bg-emerald-400" : wr >= 60 ? "bg-blue-400" : wr >= 40 ? "bg-yellow-400" : "bg-red-400"
+                        }`}
+                        style={{ width: `${Math.min(wr, 100)}%` }}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedWeek && (() => {
+              const w = selectedWeek;
+              const wr = parseFloat(w.win_rate);
+              const avgConv = parseFloat(w.avg_conviction);
+              const biddieWr = parseFloat(w.biddie_pick_win_rate);
+              const resolved = w.hits + w.partial_hits + w.misses;
+
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
+                      <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+                      Week of {formatWeekLabel(w.week_start)} – {formatWeekLabel(w.week_end)}
+                    </h4>
+                    <span className={`text-lg font-black ${
+                      wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                    }`}>
+                      {wr.toFixed(0)}% Win Rate
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-center">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 mx-auto mb-1" />
+                      <div className="text-lg font-black text-emerald-400">{w.hits + w.partial_hits}</div>
+                      <div className="text-[9px] text-muted-foreground">Wins</div>
+                    </div>
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2.5 text-center">
+                      <XCircle className="h-4 w-4 text-red-400 mx-auto mb-1" />
+                      <div className="text-lg font-black text-red-400">{w.misses}</div>
+                      <div className="text-[9px] text-muted-foreground">Losses</div>
+                    </div>
+                    <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2.5 text-center">
+                      <Clock className="h-4 w-4 text-yellow-400 mx-auto mb-1" />
+                      <div className="text-lg font-black text-yellow-400">{w.pending + w.expired}</div>
+                      <div className="text-[9px] text-muted-foreground">Pending/Expired</div>
+                    </div>
+                    <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5 text-center">
+                      <Activity className="h-4 w-4 text-primary mx-auto mb-1" />
+                      <div className="text-lg font-black text-primary">{avgConv.toFixed(0)}</div>
+                      <div className="text-[9px] text-muted-foreground">Avg Conviction</div>
+                    </div>
+                  </div>
+
+                  {w.biddie_pick_total > 0 && (
+                    <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-3.5 w-3.5 text-violet-400" />
+                        <span className="text-xs text-foreground font-semibold">Biddie Picks</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black ${biddieWr >= 70 ? "text-emerald-400" : biddieWr >= 50 ? "text-yellow-400" : "text-red-400"}`}>
+                          {biddieWr.toFixed(0)}%
+                        </span>
+                        <span className="text-[10px] text-muted-foreground ml-1.5">
+                          ({w.biddie_pick_hits}/{w.biddie_pick_total})
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {w.top_tickers && w.top_tickers.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1.5 font-semibold">Most Active Tickers This Week</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {w.top_tickers.map((t) => (
+                          <span key={t.ticker} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-muted/20 border border-white/5">
+                            <span className="text-foreground">{t.ticker}</span>
+                            <span className="text-muted-foreground ml-1">{t.hits}/{t.total}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5">
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {wr >= 80
+                        ? "🔥 Incredible week! The signals were on fire — this is what a hot streak looks like."
+                        : wr >= 60
+                        ? "✅ Solid week! More winners than losers — that's what consistent trading looks like."
+                        : wr >= 40
+                        ? "⚠️ Mixed week — some hits, some misses. Every week teaches you something new!"
+                        : "📉 Tough week — the market didn't cooperate. Even the best traders have off weeks. The key is staying disciplined!"}
+                      {" "}This week had {w.total_signals} total signals with an average conviction of {avgConv.toFixed(0)}/100.
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            <div className="flex items-center gap-2 text-[9px] text-muted-foreground/50">
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400/30" /> 80%+</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400/30" /> 60-79%</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400/30" /> 40-59%</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400/30" /> &lt;40%</div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <CalendarIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No weekly data yet</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-1">Weekly stats are saved automatically — check back after the first full week!</p>
+          </div>
+        )}
+      </motion.div>
 
       {topTickers.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
