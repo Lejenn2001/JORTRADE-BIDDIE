@@ -270,7 +270,7 @@ const DashboardBreakout = () => {
             userId: user.id,
             ticker: setup.ticker,
             targetPrice: setup.breakoutPrice || setup.resistanceLevel || setup.currentPrice,
-            direction: isBullish ? "above" : "below",
+            condition: isBullish ? "above" : "below",
           }),
         });
         if (resp.ok) {
