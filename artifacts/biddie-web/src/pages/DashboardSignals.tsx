@@ -654,7 +654,7 @@ const DashboardSignals = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-foreground">{alertSignal.ticker}</span>
-                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                       alertSignal.putCall === "call" ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
                     }`}>
                       {alertSignal.putCall === "call" ? "CALL" : "PUT"}
@@ -785,15 +785,15 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             {isWhale ? "Whale Play" : isSpread ? "Spread Play" : "Algorithm Play"}
           </span>
           {signal.timeframe === "buy_now" || signal.timeframe === "short_term" ? (
-            <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
           ) : signal.timeframe === "swing" ? (
-            <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
           ) : null}
           {signal.source === "live" ? (
-            <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
           ) : null}
           {isAI && (
-            <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -832,7 +832,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                 </span>
               );
             })()}
-            <span className={`text-[9px] sm:text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
               isCall ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
             }`}>
               {signal.putCall === "call" ? "CALL" : "PUT"}
@@ -856,7 +856,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               const info = statusInfo[ts] || statusInfo.watching;
               return (
                 <span className="relative group">
-                  <span className={`flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full cursor-help ${info.color}`}>
+                  <span className={`flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-help ${info.color}`}>
                     {info.icon} {info.label}
                   </span>
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
@@ -867,7 +867,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             })()}
             {signal.mfePercent != null && (
               <span className="relative group">
-                <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full cursor-help ${
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-help ${
                   signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
                   signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
                   signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
