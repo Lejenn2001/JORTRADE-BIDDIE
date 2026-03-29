@@ -416,8 +416,8 @@ const DashboardBreakout = () => {
                   const green = i % 3 !== 0;
                   return (
                     <g key={i}>
-                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "hsl(38,92%,50%)" : "hsl(142,71%,45%)"} strokeWidth="1" />
-                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "hsl(38,92%,50%)" : "hsl(142,71%,45%)"} rx="1" />
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#f59e0b" : "#22c55e"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#f59e0b" : "#22c55e"} rx="1" />
                     </g>
                   );
                 })}

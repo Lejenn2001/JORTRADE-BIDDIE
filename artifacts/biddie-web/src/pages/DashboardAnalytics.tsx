@@ -495,8 +495,8 @@ const DashboardAnalytics = () => {
                   const green = i % 3 !== 0;
                   return (
                     <g key={i}>
-                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "hsl(270,75%,60%)" : "hsl(230,85%,60%)"} strokeWidth="1" />
-                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "hsl(270,75%,60%)" : "hsl(230,85%,60%)"} rx="1" />
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#a78bfa" : "#818cf8"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#a78bfa" : "#818cf8"} rx="1" />
                     </g>
                   );
                 })}
