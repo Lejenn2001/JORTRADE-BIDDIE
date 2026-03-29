@@ -232,11 +232,11 @@ const DashboardBreakout = () => {
     });
   }, []);
 
-  const runScan = useCallback(async () => {
+  const runScan = useCallback(async (force?: boolean) => {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch("/api/breakout/scan");
+      const resp = await fetch(`/api/breakout/scan${force ? "?force=1" : ""}`);
       if (!resp.ok) throw new Error("Scan failed");
       const data = await resp.json();
       setResult(data);
@@ -362,14 +362,32 @@ const DashboardBreakout = () => {
                   Volatility squeeze detection + consolidation breakouts across {result ? result.tickersScanned : "40+"} tickers
                 </p>
               </div>
-              <button
-                onClick={runScan}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all border border-primary/20 disabled:opacity-40"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                {loading ? "Scanning..." : "Rescan"}
-              </button>
+              <div className="flex items-center gap-2">
+                {notifPermission === "default" && (
+                  <button
+                    onClick={requestNotifPermission}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-semibold text-xs transition-all border border-yellow-500/20"
+                    title="Get desktop notifications when breakouts fire"
+                  >
+                    <Bell className="h-3.5 w-3.5" />
+                    Notify Me
+                  </button>
+                )}
+                {notifPermission === "granted" && (
+                  <span className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20" title="Desktop notifications are active">
+                    <Bell className="h-3 w-3" />
+                    Alerts On
+                  </span>
+                )}
+                <button
+                  onClick={() => runScan(true)}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all border border-primary/20 disabled:opacity-40"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                  {loading ? "Scanning..." : "Rescan"}
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -443,23 +461,6 @@ const DashboardBreakout = () => {
                     </span>
                   </>
                 )}
-              </div>
-            )}
-
-            {notifPermission === "default" && (
-              <button
-                onClick={requestNotifPermission}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary hover:bg-primary/15 transition-colors"
-              >
-                <Bell className="h-3.5 w-3.5" />
-                <span className="font-semibold">Enable Desktop Notifications</span>
-                <span className="text-primary/70">— get alerted when breakouts fire, even if this tab is in the background</span>
-              </button>
-            )}
-            {notifPermission === "granted" && (
-              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400/70">
-                <Bell className="h-2.5 w-2.5" />
-                Desktop notifications active
               </div>
             )}
 
@@ -722,16 +723,16 @@ const DashboardBreakout = () => {
                           <div className="p-2.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-zinc-400">20–35</span>
-                              <span className="font-bold text-zinc-300">Watch &amp; Set Alert</span>
+                              <span className="font-bold text-zinc-300">On Your Radar</span>
                             </div>
-                            <p className="text-muted-foreground">Early signs of a setup forming. Hit the bell icon to watch this ticker — you'll be alerted if it breaks out. Do NOT enter a trade yet.</p>
+                            <p className="text-muted-foreground">Early signs of a setup forming. Interesting but not actionable yet — check back later or move on to higher-scoring setups.</p>
                           </div>
                           <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-yellow-400">35–55</span>
-                              <span className="font-bold text-yellow-300">Prepare Your Plan</span>
+                              <span className="font-bold text-yellow-300">Watch &amp; Set Alert</span>
                             </div>
-                            <p className="text-muted-foreground">Squeeze or consolidation is active. Review the contract recommendation and decide your position size. Be ready — breakout could come within hours.</p>
+                            <p className="text-muted-foreground">Squeeze or consolidation is active. Hit the bell icon to watch this ticker — you'll be alerted when it breaks. Review the contract rec and size your position.</p>
                           </div>
                           <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
                             <div className="flex items-center gap-2 mb-1">
@@ -935,7 +936,7 @@ function SetupCard({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <MiniStat
                   label="Squeeze"
-                  value={setup.squeezeActive ? `${setup.squeezeLength} bars` : "Inactive"}
+                  value={setup.squeezeActive ? `${setup.squeezeLength} candles` : "Inactive"}
                   active={setup.squeezeActive}
                   icon={<Activity className="h-3 w-3" />}
                 />

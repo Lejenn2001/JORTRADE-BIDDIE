@@ -1232,8 +1232,11 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-router.get("/breakout/scan", async (_req, res) => {
+router.get("/breakout/scan", async (req, res) => {
   try {
+    if (req.query.force === "1") {
+      lastScanTime = 0;
+    }
     const results = await runFullScan();
     syncBreakoutSubscriptions();
     res.set("Cache-Control", "no-cache, no-store");
