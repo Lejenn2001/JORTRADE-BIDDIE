@@ -428,7 +428,7 @@ const DashboardSignals = () => {
                     )}
                   </div>
                   <p className="text-[10px] uppercase tracking-[0.3em] text-emerald-400/80 font-semibold mt-0.5">
-                    {showResolved ? `All Signals — ${totalCount} total` : `Active Signals — ${totalCount - resolvedCount} pending`}
+                    Filtered · Scored · Actionable
                   </p>
                 </div>
               </div>
@@ -507,7 +507,7 @@ const DashboardSignals = () => {
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 }`}
               >
-                {showResolved ? "Hide Resolved" : `Show Resolved (${resolvedCount})`}
+                {showResolved ? "Hide Resolved" : `Pending · Show Resolved (${resolvedCount})`}
               </button>
             </div>
           </div>
