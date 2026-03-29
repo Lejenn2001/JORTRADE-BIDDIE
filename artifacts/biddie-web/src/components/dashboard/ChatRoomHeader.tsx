@@ -62,7 +62,7 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
             <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-blue-400 to-blue-600" />
             <div>
               <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
-                COMMUNITY
+                JORTRADE CHAT
               </h1>
               <p className="text-[10px] uppercase tracking-[0.3em] text-blue-400/80 font-semibold mt-0.5">
                 Talk Trades · Share Setups · Build Together
