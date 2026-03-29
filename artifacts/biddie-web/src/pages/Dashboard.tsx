@@ -319,7 +319,7 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="Price action confirmed + gamma analysis — intraday entries"
+                subtitle="Quick trades Biddie finds using smart math patterns — usually in and out the same day"
                 icon="algorithm"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -332,7 +332,7 @@ const Dashboard = () => {
                 signals={whalePlays}
                 loading={signalFeedLoading}
                 title="Whale Plays"
-                subtitle="Institutional flow — swing positioning"
+                subtitle="Big money moves from hedge funds and institutions — these trades take a few days to play out"
                 icon="whale"
                 limit={5}
                 takenSignalIds={takenSignalIds}
@@ -345,7 +345,7 @@ const Dashboard = () => {
                 signals={spreadPlays}
                 loading={signalFeedLoading}
                 title="Spreads & Butterflies"
-                subtitle="Multi-leg strategies — defined risk plays"
+                subtitle="Combo trades that limit how much you can lose — like buying insurance on your bets"
                 icon="spread"
                 limit={5}
                 takenSignalIds={takenSignalIds}

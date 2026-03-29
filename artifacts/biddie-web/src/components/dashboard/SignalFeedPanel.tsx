@@ -66,7 +66,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
           {subtitle && (
             <div className="relative group">
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/40 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1.5 rounded-lg bg-popover border border-border text-[10px] text-muted-foreground whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 shadow-lg">
+              <div className="absolute left-0 bottom-full mb-2 px-3 py-2 rounded-lg bg-popover border border-border text-[10px] text-muted-foreground w-52 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 shadow-lg leading-relaxed">
                 {subtitle}
               </div>
             </div>
