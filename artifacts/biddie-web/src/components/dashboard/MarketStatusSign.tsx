@@ -269,7 +269,7 @@ const MarketStatusSign = () => {
           </div>
 
           <div className="text-right">
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+            <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider font-medium">
               {state.targetLabel} <span className="text-foreground font-bold">{state.targetTime}</span>
             </div>
             <div className="text-base sm:text-lg font-mono font-bold tracking-wider text-muted-foreground mt-0.5">
