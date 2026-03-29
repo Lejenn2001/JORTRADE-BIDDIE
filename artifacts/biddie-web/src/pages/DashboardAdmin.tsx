@@ -398,35 +398,53 @@ const DashboardAdmin = () => {
                         <h3 className="text-sm font-bold text-foreground">API Usage (Today)</h3>
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {(() => {
+                          const uw = apiCounts["unusual_whales"] || { today: 0, minute: 0 };
+                          const uwDayPct = Math.min((uw.today / 15000) * 100, 100);
+                          const uwMinPct = Math.min((uw.minute / 120) * 100, 100);
+                          return (
+                            <div className="rounded-lg p-3 bg-emerald-500/10 border border-border/20 col-span-2">
+                              <p className="text-[11px] font-medium text-emerald-400 mb-2">Unusual Whales</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <div className="flex items-baseline gap-1">
+                                    <p className="text-lg font-bold text-foreground">~{uw.minute}</p>
+                                    <p className="text-[10px] text-muted-foreground">/ 120 per min</p>
+                                  </div>
+                                  <div className="w-full h-1.5 rounded-full bg-border/30 mt-1 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all ${uwMinPct > 80 ? 'bg-red-400' : uwMinPct > 50 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                                      style={{ width: `${Math.max(uwMinPct, 3)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="flex items-baseline gap-1">
+                                    <p className="text-lg font-bold text-foreground">{uw.today.toLocaleString()}</p>
+                                    <p className="text-[10px] text-muted-foreground">/ 15,000 per day</p>
+                                  </div>
+                                  <div className="w-full h-1.5 rounded-full bg-border/30 mt-1 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all ${uwDayPct > 80 ? 'bg-red-400' : uwDayPct > 50 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                                      style={{ width: `${Math.max(uwDayPct, 3)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {([
-                          { key: "unusual_whales", label: "Unusual Whales", color: "text-emerald-400", bg: "bg-emerald-500/10", limitPerMin: 120, limitPerDay: 15000 },
-                          { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10", limitPerMin: null, limitPerDay: null },
-                          { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10", limitPerMin: null, limitPerDay: null },
-                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10", limitPerMin: 30, limitPerDay: null },
+                          { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10" },
+                          { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10" },
+                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
-                          const dayPct = svc.limitPerDay ? Math.min((c.today / svc.limitPerDay) * 100, 100) : null;
-                          const minPct = svc.limitPerMin ? Math.min((c.minute / svc.limitPerMin) * 100, 100) : null;
                           return (
                             <div key={svc.key} className={`rounded-lg p-3 ${svc.bg} border border-border/20`}>
                               <p className={`text-[11px] font-medium ${svc.color} mb-1`}>{svc.label}</p>
-                              <div className="flex items-baseline gap-1">
-                                <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {svc.limitPerDay ? `/ ${svc.limitPerDay.toLocaleString()}` : "calls"}
-                                </p>
-                              </div>
-                              {dayPct !== null && (
-                                <div className="w-full h-1.5 rounded-full bg-border/30 mt-1.5 mb-1 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${dayPct > 80 ? 'bg-red-400' : dayPct > 50 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                                    style={{ width: `${Math.max(dayPct, 3)}%` }}
-                                  />
-                                </div>
-                              )}
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {svc.limitPerMin ? `~${c.minute} / ${svc.limitPerMin} per min` : `~${c.minute} per min`}
-                              </p>
+                              <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}<span className="text-[10px] font-normal text-muted-foreground ml-1">calls</span></p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">~{c.minute} per min</p>
                             </div>
                           );
                         })}
