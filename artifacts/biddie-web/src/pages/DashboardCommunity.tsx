@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Trash2, Bot, Lock, ArrowUpRight, Smile } from "lucide-react";
+import { Send, Trash2, Bot, Lock, ArrowUpRight, Smile, CheckSquare, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import biddieRobot from "@/assets/biddie-robot.png";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -40,6 +40,9 @@ const DashboardCommunity = () => {
   const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [showEmojis, setShowEmojis] = useState(false);
   const emojiRef = useRef<HTMLDivElement>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const EMOJI_LIST = [
     "🔥","💪","👀","🚀","📈","📉","💰","🤝","😤","😏",
@@ -220,6 +223,34 @@ const DashboardCommunity = () => {
     await supabase.from("chat_messages").delete().eq("id", id);
   };
 
+  const toggleSelectId = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedIds);
+    const batchSize = 10;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize);
+      await supabase.from("chat_messages").delete().in("id", batch);
+    }
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setBulkDeleting(false);
+    toast({ title: `Deleted ${ids.length} message${ids.length > 1 ? "s" : ""}` });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -270,8 +301,28 @@ const DashboardCommunity = () => {
           </main>
         ) : (
         <main className="flex-1 flex flex-col overflow-hidden p-1.5 sm:p-2 lg:p-3 bg-mesh">
-          <div className="mb-1.5 sm:mb-2 shrink-0 hidden sm:block">
-            <ChatRoomHeader onlineCount={onlineCount} firstName={firstName} />
+          <div className="mb-1.5 sm:mb-2 shrink-0 hidden sm:flex items-center gap-2">
+            <div className="flex-1">
+              <ChatRoomHeader onlineCount={onlineCount} firstName={firstName} />
+            </div>
+            {isAdmin && !selectMode && (
+              <button
+                onClick={() => setSelectMode(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+                Manage
+              </button>
+            )}
+            {isAdmin && selectMode && (
+              <button
+                onClick={exitSelectMode}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-destructive/20 border border-destructive/30 text-destructive hover:bg-destructive/30 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </button>
+            )}
           </div>
 
           <div
@@ -302,8 +353,19 @@ const DashboardCommunity = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
-                    className={`group flex gap-2.5 ${isOwn ? "flex-row-reverse" : ""}`}
+                    className={`group flex gap-2.5 ${isOwn ? "flex-row-reverse" : ""} ${selectMode ? "cursor-pointer" : ""} ${selectMode && selectedIds.has(msg.id) ? "bg-primary/5 rounded-lg -mx-1 px-1" : ""}`}
+                    onClick={selectMode ? () => toggleSelectId(msg.id) : undefined}
                   >
+                    {selectMode && (
+                      <div className="flex-shrink-0 self-center">
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedIds.has(msg.id) ? "bg-primary border-primary" : "border-muted-foreground/40"
+                        }`}>
+                          {selectedIds.has(msg.id) && <CheckSquare className="h-3.5 w-3.5 text-primary-foreground" />}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Avatar */}
                     {isBiddie ? (
                       <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-primary/20 border border-primary/40">
@@ -423,6 +485,30 @@ const DashboardCommunity = () => {
               </motion.div>
             )}
           </div>
+
+          {selectMode && selectedIds.size > 0 && (
+            <div className="glass-panel rounded-xl p-2 flex items-center justify-between border border-destructive/30 shrink-0 mb-1.5">
+              <span className="text-xs text-muted-foreground">
+                {selectedIds.size} message{selectedIds.size > 1 ? "s" : ""} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { const allIds = messages.map(m => m.id); setSelectedIds(new Set(allIds)); }}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={bulkDelete}
+                  disabled={bulkDeleting}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-destructive/20 border border-destructive/30 text-destructive hover:bg-destructive/30 transition-colors font-medium flex items-center gap-1.5"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size}`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="glass-panel rounded-xl p-1.5 sm:p-2.5 flex gap-1.5 sm:gap-2 border-glow-blue shrink-0 relative">
