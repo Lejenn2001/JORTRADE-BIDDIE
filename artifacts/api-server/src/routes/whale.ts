@@ -1285,10 +1285,16 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
 
 // ── User Settings (Chat Alias) ──────────────────────────────────────────────────
 
-function generateReferralCode(name: string): string {
-  const clean = (name || "JORT").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5);
-  const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-  return `${clean}${suffix}`;
+async function generateUniqueReferralCode(name: string): Promise<string> {
+  const clean = (name || "JORT").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5) || "JORT";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
+    const code = `${clean}${suffix}`;
+    const existing = await dbQuery("SELECT 1 FROM user_settings WHERE referral_code = $1", [code]);
+    if (!existing?.rows?.length) return code;
+  }
+  const fallback = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `${clean.slice(0, 3)}${fallback}`;
 }
 
 router.get("/whale/user-settings", async (req, res) => {
@@ -1301,12 +1307,12 @@ router.get("/whale/user-settings", async (req, res) => {
     if (!referralCode && row) {
       const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
       const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
-      referralCode = generateReferralCode(name);
+      referralCode = await generateUniqueReferralCode(name);
       await dbQuery("UPDATE user_settings SET referral_code = $1 WHERE user_id = $2", [referralCode, userId]);
     } else if (!row) {
       const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
       const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
-      referralCode = generateReferralCode(name);
+      referralCode = await generateUniqueReferralCode(name);
       await dbQuery("INSERT INTO user_settings (user_id, referral_code) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET referral_code = $2", [userId, referralCode]);
     }
 

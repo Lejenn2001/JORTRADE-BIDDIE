@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import Disclaimer from "@/components/Disclaimer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { Check, Zap, Crown, Star, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +75,8 @@ const plans = [
 ];
 
 const Signup = () => {
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get("ref") || "";
   const [selectedPlan, setSelectedPlan] = useState("starter");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [email, setEmail] = useState("");
@@ -103,6 +105,20 @@ const Signup = () => {
         selected_plan: selectedPlan,
         email: email,
       }).eq("id", signUpData.user.id);
+
+      if (refCode) {
+        try {
+          const refResp = await fetch("/api/whale/referral/apply", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: signUpData.user.id, referralCode: refCode, userName: name.split(" ")[0] }),
+          });
+          if (refResp.ok) {
+            toast.success("Referral code applied — 10% off your first paid month!");
+          }
+        } catch {
+        }
+      }
     }
     setLoading(false);
     if (error) {
@@ -138,6 +154,11 @@ const Signup = () => {
           <p className="text-muted-foreground text-base max-w-lg mx-auto">
             Start with a 5-day free trial. Cancel anytime — no questions asked.
           </p>
+          {refCode && (
+            <div className="mt-4 inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-2">
+              <span className="text-emerald-400 text-sm font-semibold">🎁 Referred by a friend — you'll get 10% off your first paid month!</span>
+            </div>
+          )}
         </motion.div>
 
         <div className="flex items-center justify-center gap-3 mb-10">
