@@ -978,10 +978,25 @@ function SetupCard({
         )}
 
         <div className="text-[10px] text-muted-foreground/40 pt-1 border-t border-white/[0.04]">
-          Posted {setup.firstDetected
-            ? new Date(setup.firstDetected).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(setup.firstDetected).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })
-            : "Just now"
-          }
+          {(() => {
+            if (!setup.firstDetected) return "Posted just now";
+            const dt = new Date(setup.firstDetected);
+            const now = Date.now();
+            const diffMs = now - dt.getTime();
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMs / 3600000);
+            const diffDay = Math.floor(diffMs / 86400000);
+            const relative = diffMin < 1 ? "just now"
+              : diffMin < 60 ? `${diffMin}m ago`
+              : diffHr < 24 ? `${diffHr}h ago`
+              : `${diffDay}d ago`;
+            const etTime = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" });
+            const etDate = dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+            const etHour = parseInt(dt.toLocaleTimeString("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" }));
+            const etDay = dt.toLocaleDateString("en-US", { weekday: "short", timeZone: "America/New_York" });
+            const isAfterHours = etHour < 9 || etHour >= 16 || etDay === "Sat" || etDay === "Sun";
+            return <>Posted {etDate}, {etTime} ET · {relative}{isAfterHours && <span className="text-yellow-500/60"> · After hours</span>}</>;
+          })()}
         </div>
       </div>
 
