@@ -38,23 +38,18 @@ const cardVariants = {
 };
 
 function classifyTimeframeFromRecord(record: any): SignalTimeframe {
-  const confidence = parseFloat(record.confidence) || 5;
-  const score = confidence >= 8.5 ? 85 : confidence >= 7.5 ? 75 : confidence >= 6 ? 60 : 40;
-  
-  if (score >= 75) return "buy_now";
-  
   if (record.expiry) {
     const expDate = new Date(record.expiry);
     if (!isNaN(expDate.getTime())) {
       const now = new Date();
+      const todayStr = now.toISOString().split("T")[0];
+      const expStr = expDate.toISOString().split("T")[0];
+      if (expStr === todayStr) return "buy_now";
       const dte = Math.max(0, Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      if (dte <= 1) return "buy_now";
       if (dte <= 7) return "short_term";
       return "swing";
     }
   }
-  
-  if (score >= 60) return "short_term";
   return "swing";
 }
 
@@ -574,8 +569,8 @@ const DashboardSignals = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 px-1">
                     <Waves className="h-4 w-4 text-blue-400" />
-                    <span className="font-bold text-xs sm:text-sm text-blue-400">🐋 WHALE SWINGS</span>
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline">— Institutional flow — multi-day positioning plays</span>
+                    <span className="font-bold text-xs sm:text-sm text-blue-400">🐋 WHALE PLAYS</span>
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">Institutional flow tracking large volume orders</span>
                     <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full ml-auto">
                       {whaleSignals.length}
                     </span>
@@ -784,11 +779,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           }`}>
             {isWhale ? "Whale Play" : isSpread ? "Spread Play" : "Algorithm Play"}
           </span>
-          {signal.timeframe === "buy_now" || signal.timeframe === "short_term" ? (
+          {signal.timeframe === "buy_now" ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
-          ) : signal.timeframe === "swing" ? (
+          ) : (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
-          ) : null}
+          )}
           {signal.source === "live" ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
           ) : null}
