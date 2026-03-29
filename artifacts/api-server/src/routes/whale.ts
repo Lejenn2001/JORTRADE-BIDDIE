@@ -1249,7 +1249,12 @@ router.post("/whale/chat", async (req, res) => {
     }
   }
 
-  const currentUserMessage = `User message: "${message}"
+  const casualPatterns = /^(hey|hi|hello|yo|sup|what'?s up|whats up|how'?s it going|hows it going|what are you doing|how are you|gm|good morning|good evening|wassup|howdy|what'?s good|whats good)\b/i;
+  const isCasual = casualPatterns.test(message.trim()) && message.trim().split(/\s+/).length <= 8;
+
+  const currentUserMessage = isCasual
+    ? `User message: "${message}"\n\nThis is a casual greeting — just be friendly and conversational. Do NOT bring up any market data, trades, or flow analysis unless the user asks.`
+    : `User message: "${message}"
 
 --- CURRENT DATE & TRADING CALENDAR ---
 ${getEasternDateContext()}
