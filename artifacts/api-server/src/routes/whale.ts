@@ -1402,17 +1402,24 @@ router.get("/whale/admin/referrals", async (req, res) => {
   try {
     const allReferrers = await dbQuery(`
       SELECT us.user_id, us.referral_code, us.chat_alias,
+        p.full_name as referrer_name,
         (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) as referral_count
       FROM user_settings us
+      LEFT JOIN profiles p ON p.id::text = us.user_id
       WHERE us.referral_code IS NOT NULL
       ORDER BY (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) DESC
     `);
 
     const allReferrals = await dbQuery(`
       SELECT r.referrer_id, r.referred_id, r.referred_name, r.created_at,
-        us_referrer.referral_code as referrer_code, us_referrer.chat_alias as referrer_alias
+        us_referrer.referral_code as referrer_code, us_referrer.chat_alias as referrer_alias,
+        p_referrer.full_name as referrer_full_name,
+        p_referred.full_name as referred_full_name,
+        p_referred.selected_plan as referred_plan
       FROM referrals r
       LEFT JOIN user_settings us_referrer ON us_referrer.user_id = r.referrer_id
+      LEFT JOIN profiles p_referrer ON p_referrer.id::text = r.referrer_id
+      LEFT JOIN profiles p_referred ON p_referred.id::text = r.referred_id
       ORDER BY r.created_at DESC
       LIMIT 100
     `);
@@ -1439,13 +1446,16 @@ router.get("/whale/admin/referrals", async (req, res) => {
         userId: r.user_id,
         code: r.referral_code,
         alias: r.chat_alias,
+        name: r.referrer_name || null,
         count: parseInt(r.referral_count),
       })),
       recentReferrals: (allReferrals?.rows || []).map((r: any) => ({
         referrerId: r.referrer_id,
         referrerCode: r.referrer_code,
         referrerAlias: r.referrer_alias,
-        referredName: r.referred_name,
+        referrerName: r.referrer_full_name || null,
+        referredName: r.referred_full_name || r.referred_name,
+        referredPlan: r.referred_plan || "starter",
         createdAt: r.created_at,
       })),
     });

@@ -147,7 +147,7 @@ const AdminReferralsTab = () => {
               const tier = getTierLabel(r.count);
               return (
                 <div key={r.userId} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
-                  <span className="text-foreground/70 truncate">{r.alias || r.userId.slice(0, 8) + "..."}</span>
+                  <span className="text-foreground/70 truncate">{r.name || r.alias || r.userId.slice(0, 8) + "..."}</span>
                   <span className="text-muted-foreground font-mono text-[10px]">{r.code}</span>
                   <span className="text-foreground font-bold">{r.count}</span>
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${tier.color}`}>{tier.label}</span>
@@ -166,20 +166,26 @@ const AdminReferralsTab = () => {
           <div className="text-center text-muted-foreground/50 py-6 text-xs">No referrals yet</div>
         ) : (
           <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-            <div className="grid grid-cols-3 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+            <div className="grid grid-cols-4 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
               <span>Referred By</span>
               <span>New User</span>
+              <span>Plan</span>
               <span>Date</span>
             </div>
-            {recentReferrals.map((r: any, i: number) => (
-              <div key={i} className="grid grid-cols-3 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors">
-                <span className="text-foreground/70 truncate">{r.referrerAlias || r.referrerCode || "Unknown"}</span>
-                <span className="text-foreground/60 truncate">{r.referredName}</span>
-                <span className="text-muted-foreground/60">
-                  {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-              </div>
-            ))}
+            {recentReferrals.map((r: any, i: number) => {
+              const planLabels: Record<string, string> = { starter: "Signal Scout", pro: "Flow Pro", elite: "Whale Watch" };
+              const planColors: Record<string, string> = { starter: "text-blue-400", pro: "text-violet-400", elite: "text-amber-400" };
+              return (
+                <div key={i} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
+                  <span className="text-foreground/70 truncate">{r.referrerName || r.referrerCode || "Unknown"}</span>
+                  <span className="text-foreground/60 truncate">{r.referredName || "Unknown"}</span>
+                  <span className={`text-[10px] font-semibold ${planColors[r.referredPlan] || "text-muted-foreground"}`}>{planLabels[r.referredPlan] || r.referredPlan || "Starter"}</span>
+                  <span className="text-muted-foreground/60">
+                    {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
