@@ -273,6 +273,66 @@ const Dashboard = () => {
         <TickerTape />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-6">
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+            <svg className="absolute inset-0 w-full h-full opacity-[0.14]" viewBox="0 0 1000 200" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="dash-pulse" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="hsl(230,85%,60%)" stopOpacity="0" />
+                  <stop offset="30%" stopColor="hsl(230,85%,60%)" stopOpacity="1" />
+                  <stop offset="70%" stopColor="hsl(270,75%,60%)" stopOpacity="1" />
+                  <stop offset="100%" stopColor="hsl(270,75%,60%)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[40, 80, 120, 160].map(y => (
+                <line key={y} x1="0" y1={y} x2="1000" y2={y} stroke="hsl(230,85%,60%)" strokeWidth="0.3" opacity="0.15" />
+              ))}
+              {[100, 250, 400, 550, 700, 850].map(x => (
+                <line key={x} x1={x} y1="0" x2={x} y2="200" stroke="hsl(230,85%,60%)" strokeWidth="0.3" opacity="0.1" />
+              ))}
+              <path
+                d="M0,120 L80,118 L150,122 L200,115 L250,120 L300,110 L320,115 L340,95 L350,70 L360,40 L370,65 L380,90 L400,105 L450,108 L500,100 L550,105 L600,98 L620,102 L640,80 L650,55 L660,30 L670,60 L680,85 L700,100 L750,105 L800,98 L850,102 L900,95 L950,100 L1000,98"
+                fill="none"
+                stroke="url(#dash-pulse)"
+                strokeWidth="2.5"
+              />
+              <path
+                d="M0,130 C100,128 200,135 300,125 C400,115 500,120 600,118 C700,115 800,122 900,118 L1000,120"
+                fill="none"
+                stroke="hsl(200,90%,55%)"
+                strokeWidth="1"
+                opacity="0.3"
+                strokeDasharray="4,6"
+              />
+              {[
+                { x: 200, y: 60, w: 6, h: 35, up: true }, { x: 220, y: 75, w: 6, h: 20, up: false },
+                { x: 240, y: 55, w: 6, h: 40, up: true }, { x: 260, y: 70, w: 6, h: 25, up: true },
+                { x: 700, y: 50, w: 6, h: 45, up: true }, { x: 720, y: 65, w: 6, h: 30, up: false },
+                { x: 740, y: 45, w: 6, h: 50, up: true }, { x: 760, y: 60, w: 6, h: 35, up: true },
+              ].map((c, i) => (
+                <rect key={i} x={c.x} y={c.up ? c.y : c.y} width={c.w} height={c.h} rx="1"
+                  fill={c.up ? "hsl(142,71%,45%)" : "hsl(0,84%,60%)"} opacity="0.25" />
+              ))}
+            </svg>
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-900/15 via-purple-900/8 to-cyan-900/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-[hsl(232,30%,7%)]/30 to-transparent" />
+
+            <div className="relative px-6 py-7 lg:py-8">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-1.5 h-10 rounded-full bg-gradient-to-b from-[hsl(var(--glow-blue))] via-[hsl(var(--glow-purple))] to-[hsl(var(--glow-cyan))]" />
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent">
+                      COMMAND CENTER
+                    </h1>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--glow-blue))]/80 font-semibold mt-0.5">
+                      Live Signals · AI Analysis · Market Intelligence
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <MarketStatusSign />
           <MarketPulse />
 
