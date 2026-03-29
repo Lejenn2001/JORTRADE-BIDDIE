@@ -396,7 +396,7 @@ const DashboardSignals = () => {
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4">
           <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-            <svg className="absolute inset-0 w-full h-full opacity-[0.12]" viewBox="0 0 800 200" preserveAspectRatio="none">
+            <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
               {[1, 2, 3, 4, 5].map(ring => (
                 <circle key={ring} cx="400" cy="100" r={ring * 35} fill="none" stroke="hsl(142,71%,45%)" strokeWidth="0.8" opacity={0.5 - ring * 0.08} />
               ))}

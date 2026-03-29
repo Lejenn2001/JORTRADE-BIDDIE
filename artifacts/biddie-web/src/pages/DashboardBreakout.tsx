@@ -409,7 +409,7 @@ const DashboardBreakout = () => {
           <div className="max-w-5xl mx-auto space-y-5">
 
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-              <svg className="absolute inset-0 w-full h-full opacity-[0.15]" viewBox="0 0 800 200" preserveAspectRatio="none">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
                 <line x1="0" y1="130" x2="800" y2="130" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
                 <line x1="0" y1="70" x2="800" y2="70" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
                 <text x="15" y="65" fill="hsl(38,92%,50%)" fontSize="8" opacity="0.5" fontFamily="monospace">RESISTANCE</text>

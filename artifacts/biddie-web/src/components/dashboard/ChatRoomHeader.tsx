@@ -56,7 +56,7 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
   return (
     <div className="space-y-2 lg:space-y-3">
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-        <svg className="absolute inset-0 w-full h-full opacity-[0.10]" viewBox="0 0 800 160" preserveAspectRatio="none">
+        <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 160" preserveAspectRatio="none">
           {[
             { cx: 80, cy: 40 }, { cx: 200, cy: 80 }, { cx: 320, cy: 30 }, { cx: 440, cy: 100 },
             { cx: 560, cy: 50 }, { cx: 680, cy: 90 }, { cx: 140, cy: 120 }, { cx: 380, cy: 60 },

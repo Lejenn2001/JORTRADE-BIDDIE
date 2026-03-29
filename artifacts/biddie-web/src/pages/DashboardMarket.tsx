@@ -378,7 +378,7 @@ const DashboardMarket = () => {
           <div className="max-w-5xl mx-auto space-y-5">
 
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-              <svg className="absolute inset-0 w-full h-full opacity-[0.12]" viewBox="0 0 800 200" preserveAspectRatio="none">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
                 {[
                   { cx: 100, cy: 80 }, { cx: 250, cy: 50 }, { cx: 400, cy: 100 }, { cx: 550, cy: 60 },
                   { cx: 700, cy: 90 }, { cx: 175, cy: 140 }, { cx: 325, cy: 30 }, { cx: 475, cy: 150 },

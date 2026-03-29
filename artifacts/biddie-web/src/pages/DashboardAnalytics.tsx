@@ -488,7 +488,7 @@ const DashboardAnalytics = () => {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-mesh">
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
-              <svg className="absolute inset-0 w-full h-full opacity-[0.15]" viewBox="0 0 800 200" preserveAspectRatio="none">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="equityCurveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="hsl(270,75%,60%)" />
