@@ -1519,7 +1519,7 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                                 : "—"}</span>
                               <span>Added: {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                               {trade.signal_resolved_at && (
-                                <span>Resolved: {new Date(trade.signal_resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                <span>Resolved (est.): {new Date(trade.signal_resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                               )}
                             </div>
                             {trade.signal_id && (
