@@ -105,7 +105,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 initial="hidden"
                 animate="visible"
                 variants={cardVariants}
-                className={`rounded-xl border overflow-hidden transition-all ${
+                className={`rounded-xl border overflow-visible transition-all ${
                   signal.type === "bullish"
                     ? "border-primary/20 bg-gradient-to-br from-primary/5 to-transparent"
                     : signal.type === "bearish"
