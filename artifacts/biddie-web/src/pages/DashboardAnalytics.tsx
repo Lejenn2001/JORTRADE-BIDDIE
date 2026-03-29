@@ -998,7 +998,9 @@ function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { tick
   const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   for (const t of userTrades) {
     if (!t.signal_outcome || t.signal_outcome === "pending") continue;
-    const day = DAYS_FULL[new Date(t.taken_at).getDay()];
+    let dayIdx = new Date(t.taken_at).getUTCDay();
+    if (dayIdx === 0 || dayIdx === 6) dayIdx = 5;
+    const day = DAYS_FULL[dayIdx];
     if (!dayStats[day]) dayStats[day] = { wins: 0, losses: 0, total: 0 };
     dayStats[day].total++;
     if (t.signal_outcome === "hit" || t.signal_outcome === "partial_hit") dayStats[day].wins++;
