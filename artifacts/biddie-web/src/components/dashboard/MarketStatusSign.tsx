@@ -253,7 +253,7 @@ const MarketStatusSign = () => {
               className={`relative rounded-xl border px-4 py-3 text-center transition-all duration-500 ${
                 s.active
                   ? `${s.activeBorder} ${s.activeBg} ${s.activeGlow}`
-                  : "border-white/[0.06] bg-white/[0.02] opacity-35"
+                  : "border-white/[0.12] bg-white/[0.03] opacity-40"
               }`}
             >
               <div className={`absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full border-2 border-[hsl(232,30%,7%)] ${
