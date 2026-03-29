@@ -55,6 +55,37 @@ router.delete("/alerts/:id", async (req, res) => {
   }
 });
 
+router.get("/alerts/notifications", async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM signal_alerts WHERE read = false ORDER BY created_at DESC LIMIT 20`
+    );
+    res.json({ notifications: rows });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/alerts/notifications/read", async (req, res) => {
+  const { id } = req.body;
+  if (!id) { res.status(400).json({ error: "id required" }); return; }
+  try {
+    await pool.query(`UPDATE signal_alerts SET read = true WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/alerts/notifications/read-all", async (_req, res) => {
+  try {
+    await pool.query(`UPDATE signal_alerts SET read = true WHERE read = false`);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/alerts/check-prices", async (req, res) => {
   const { prices } = req.body;
   if (!prices || typeof prices !== "object") {

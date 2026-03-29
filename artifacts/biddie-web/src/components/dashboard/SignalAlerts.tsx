@@ -1,7 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, AlertTriangle, Target, Clock, X, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -11,8 +10,6 @@ interface SignalAlert {
   ticker: string;
   alert_type: string;
   message: string;
-  current_price: number | null;
-  trigger_price: number | null;
   read: boolean;
   created_at: string;
 }
@@ -39,17 +36,39 @@ const SignalAlerts = () => {
   const [tab, setTab] = useState<"notifications" | "active">("active");
   const { toast } = useToast();
   const { user } = useAuth();
+  const prevAlertIds = useRef<Set<string>>(new Set());
 
-  const fetchAlerts = async () => {
-    const { data } = await supabase
-      .from("signal_alerts" as any)
-      .select("*")
-      .eq("read", false)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (data) setAlerts(data as any as SignalAlert[]);
-  };
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/alerts/notifications");
+      const data = await res.json();
+      if (data.notifications) {
+        const newAlerts = data.notifications as SignalAlert[];
+        const prevIds = prevAlertIds.current;
+        for (const alert of newAlerts) {
+          if (!prevIds.has(alert.id)) {
+            const icon = alert.alert_type === "invalidated" ? "🚨"
+              : alert.alert_type === "target_hit" ? "🎯"
+              : alert.alert_type === "price_alert" ? "🔔"
+              : "⏰";
+            toast({
+              title: `${icon} ${alert.ticker} — ${
+                alert.alert_type === "invalidated" ? "Invalidated"
+                : alert.alert_type === "target_hit" ? "Target Hit!"
+                : alert.alert_type === "price_alert" ? "Price Alert!"
+                : "Expired"
+              }`,
+              description: alert.message,
+              variant: alert.alert_type === "invalidated" ? "destructive" : "default",
+              duration: 10000,
+            });
+          }
+        }
+        prevAlertIds.current = new Set(newAlerts.map(a => a.id));
+        setAlerts(newAlerts);
+      }
+    } catch {}
+  }, [toast]);
 
   const fetchUserAlerts = useCallback(async () => {
     if (!user?.id) return;
@@ -61,39 +80,13 @@ const SignalAlerts = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    fetchAlerts();
+    fetchNotifications();
     fetchUserAlerts();
 
-    const channel = supabase
-      .channel("signal-alerts")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "signal_alerts" },
-        (payload) => {
-          const alert = payload.new as SignalAlert;
-          setAlerts((prev) => [alert, ...prev]);
-
-          const icon = alert.alert_type === "invalidated" ? "🚨"
-            : alert.alert_type === "target_hit" ? "🎯"
-            : alert.alert_type === "price_alert" ? "🔔"
-            : "⏰";
-
-          toast({
-            title: `${icon} ${alert.ticker} — ${
-              alert.alert_type === "invalidated" ? "Invalidated"
-              : alert.alert_type === "target_hit" ? "Target Hit!"
-              : alert.alert_type === "price_alert" ? "Price Alert!"
-              : "Expired"
-            }`,
-            description: alert.message,
-            variant: alert.alert_type === "invalidated" ? "destructive" : "default",
-            duration: 10000,
-          });
-
-          fetchUserAlerts();
-        }
-      )
-      .subscribe();
+    const pollInterval = setInterval(() => {
+      fetchNotifications();
+      fetchUserAlerts();
+    }, 15000);
 
     const handleOpenPanel = () => {
       fetchUserAlerts();
@@ -103,21 +96,27 @@ const SignalAlerts = () => {
     window.addEventListener("open-alerts-panel", handleOpenPanel);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
       window.removeEventListener("open-alerts-panel", handleOpenPanel);
     };
-  }, [user?.id]);
+  }, [user?.id, fetchNotifications, fetchUserAlerts]);
 
   const markRead = async (id: string) => {
-    await supabase.from("signal_alerts" as any).update({ read: true }).eq("id", id);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await fetch("/api/alerts/notifications/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch {}
   };
 
   const markAllRead = async () => {
-    const ids = alerts.map((a) => a.id);
-    if (ids.length === 0) return;
-    await supabase.from("signal_alerts" as any).update({ read: true }).in("id", ids);
-    setAlerts([]);
+    try {
+      await fetch("/api/alerts/notifications/read-all", { method: "POST" });
+      setAlerts([]);
+    } catch {}
   };
 
   const deleteUserAlert = async (id: string) => {
@@ -152,7 +151,7 @@ const SignalAlerts = () => {
         onClick={() => setShowPanel(!showPanel)}
         className="relative p-2 rounded-lg hover:bg-muted/50 transition-colors"
       >
-        <Bell className="h-5 w-5 text-muted-foreground" />
+        <Bell className={`h-5 w-5 ${totalBadge > 0 ? "text-amber-400" : "text-muted-foreground"}`} />
         {totalBadge > 0 && (
           <motion.span
             initial={{ scale: 0 }}
