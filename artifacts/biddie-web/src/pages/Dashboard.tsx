@@ -110,13 +110,18 @@ const Dashboard = () => {
   const [takingId, setTakingId] = useState<string | null>(null);
 
   const welcomeKey = user?.id ? `biddie_welcomed_${user.id}` : null;
+  const isFirstTime = welcomeKey ? !localStorage.getItem(welcomeKey) : false;
+  const sessionDismissKey = user?.id ? `biddie_session_${user.id}` : null;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!welcomeKey) return false;
-    return !localStorage.getItem(welcomeKey);
+    if (isFirstTime) return true;
+    if (sessionDismissKey && sessionStorage.getItem(sessionDismissKey)) return false;
+    return true;
   });
   const dismissWelcome = () => {
     setShowWelcome(false);
-    if (welcomeKey) localStorage.setItem(welcomeKey, "true");
+    if (isFirstTime && welcomeKey) localStorage.setItem(welcomeKey, "true");
+    if (sessionDismissKey) sessionStorage.setItem(sessionDismissKey, "true");
   };
 
   useEffect(() => {
@@ -339,30 +344,43 @@ const Dashboard = () => {
                 >
                   <X className="h-4 w-4 text-muted-foreground" />
                 </button>
-                <div className="relative flex flex-col items-center text-center px-5 py-5 gap-3">
-                  <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10" />
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-400" />
-                    <span className="text-sm font-bold text-foreground">Welcome to JORTRADE, {firstName}!</span>
+                {isFirstTime ? (
+                  <div className="relative flex flex-col items-center text-center px-5 py-5 gap-3">
+                    <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10" />
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-400" />
+                      <span className="text-sm font-bold text-foreground">Welcome to JORTRADE, {firstName}!</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
+                      Great to have you! This dashboard is filled with goodies. Real-time whale flow, AI signals, alerts, and so much more.
+                      Take your time and look around, there's a lot to explore.
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
+                      Beginners, hover over the{" "}
+                      <span className="inline-flex items-center gap-0.5 align-middle">
+                        <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                      </span>
+                      {" "}icons next to signals for quick tips that explain everything in plain English. I'm here to help you learn and grow!
+                    </p>
+                    <button
+                      onClick={dismissWelcome}
+                      className="mt-1 px-5 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-sm font-bold text-indigo-300 hover:text-indigo-200 transition-all uppercase tracking-wider"
+                    >
+                      Got it, let's trade!
+                    </button>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
-                    Great to have you! This dashboard is filled with goodies. Real-time whale flow, AI signals, alerts, and so much more.
-                    Take your time and look around, there's a lot to explore.
-                  </p>
-                  <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
-                    Beginners, hover over the{" "}
-                    <span className="inline-flex items-center gap-0.5 align-middle">
-                      <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
-                    </span>
-                    {" "}icons next to signals for quick tips that explain everything in plain English. I'm here to help you learn and grow!
-                  </p>
-                  <button
-                    onClick={dismissWelcome}
-                    className="mt-1 px-5 py-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-sm font-bold text-indigo-300 hover:text-indigo-200 transition-all uppercase tracking-wider"
-                  >
-                    Got it, let's trade!
-                  </button>
-                </div>
+                ) : (
+                  <div className="relative flex items-center px-5 py-4 gap-4">
+                    <img src={biddieRobot} alt="Biddie" className="w-10 h-10 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                        <span className="text-sm font-bold text-foreground">Welcome back, {firstName}!</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Let's get it today. Your signals and plays are ready.</p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
