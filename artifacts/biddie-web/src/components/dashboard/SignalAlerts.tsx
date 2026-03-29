@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, AlertTriangle, Target, Clock, X, Trash2 } from "lucide-react";
+import { Bell, AlertTriangle, Target, Clock, X, Trash2, Settings, CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 interface SignalAlert {
   id: string;
@@ -29,14 +30,37 @@ interface UserAlert {
   created_at: string;
 }
 
+interface AlertSubscription {
+  key: string;
+  label: string;
+  enabled: boolean;
+}
+
 const SignalAlerts = () => {
   const [alerts, setAlerts] = useState<SignalAlert[]>([]);
   const [userAlerts, setUserAlerts] = useState<UserAlert[]>([]);
   const [showPanel, setShowPanel] = useState(false);
-  const [tab, setTab] = useState<"notifications" | "active">("active");
+  const [tab, setTab] = useState<"notifications" | "active" | "subscriptions">("active");
+  const [subscriptions, setSubscriptions] = useState<AlertSubscription[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const prevAlertIds = useRef<Set<string>>(new Set());
+
+  const loadSubscriptions = useCallback(() => {
+    if (!user?.id) return;
+    const stored = localStorage.getItem(`alert_prefs_${user.id}`);
+    const extra = stored ? JSON.parse(stored) : {};
+    setSubscriptions([
+      { key: "biddiePicks", label: "Biddie Picks", enabled: extra.alertBiddiePicks ?? true },
+      { key: "signals", label: "High-Conviction Signals", enabled: true },
+      { key: "whales", label: "Whale Plays", enabled: true },
+      { key: "breakouts", label: "Breakout Alerts", enabled: extra.alertBreakouts ?? true },
+      { key: "zeroDTE", label: "0DTE Plays", enabled: extra.alertZeroDTE ?? false },
+      { key: "marketPulse", label: "Market Pulse Updates", enabled: extra.alertMarketPulse ?? false },
+      { key: "outcomes", label: "Signal Outcomes", enabled: extra.alertOutcomes ?? true },
+    ]);
+  }, [user?.id]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -82,6 +106,7 @@ const SignalAlerts = () => {
   useEffect(() => {
     fetchNotifications();
     fetchUserAlerts();
+    loadSubscriptions();
 
     const pollInterval = setInterval(() => {
       fetchNotifications();
@@ -90,10 +115,11 @@ const SignalAlerts = () => {
 
     const handleOpenPanel = () => {
       fetchUserAlerts();
+      loadSubscriptions();
       setShowPanel(true);
       setTab("active");
     };
-    const handleRefresh = () => { fetchUserAlerts(); fetchNotifications(); };
+    const handleRefresh = () => { fetchUserAlerts(); fetchNotifications(); loadSubscriptions(); };
     window.addEventListener("open-alerts-panel", handleOpenPanel);
     window.addEventListener("refresh-alerts", handleRefresh);
 
@@ -102,7 +128,7 @@ const SignalAlerts = () => {
       window.removeEventListener("open-alerts-panel", handleOpenPanel);
       window.removeEventListener("refresh-alerts", handleRefresh);
     };
-  }, [user?.id, fetchNotifications, fetchUserAlerts]);
+  }, [user?.id, fetchNotifications, fetchUserAlerts, loadSubscriptions]);
 
   const markRead = async (id: string) => {
     try {
@@ -194,6 +220,14 @@ const SignalAlerts = () => {
                 >
                   Notifications {unreadCount > 0 && `(${unreadCount})`}
                 </button>
+                <button
+                  onClick={() => { loadSubscriptions(); setTab("subscriptions"); }}
+                  className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                    tab === "subscriptions" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Subscribed
+                </button>
               </div>
               <button onClick={() => setShowPanel(false)} className="p-1 hover:bg-muted/50 rounded transition-colors">
                 <X className="h-3.5 w-3.5 text-muted-foreground" />
@@ -201,7 +235,30 @@ const SignalAlerts = () => {
             </div>
 
             <div className="overflow-y-auto flex-1">
-              {tab === "active" ? (
+              {tab === "subscriptions" ? (
+                <div className="px-4 py-3 space-y-2">
+                  <p className="text-[10px] text-muted-foreground mb-3">Alert types you're subscribed to:</p>
+                  {subscriptions.map((sub) => (
+                    <div key={sub.key} className="flex items-center gap-2 py-1.5">
+                      {sub.enabled ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={`text-xs ${sub.enabled ? "text-foreground" : "text-muted-foreground/50"}`}>
+                        {sub.label}
+                      </span>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => { setShowPanel(false); navigate("/dashboard/settings"); }}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold transition-colors"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Manage in Settings
+                  </button>
+                </div>
+              ) : tab === "active" ? (
                 userAlerts.length === 0 ? (
                   <div className="px-4 py-8 text-center text-muted-foreground text-sm">
                     <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />

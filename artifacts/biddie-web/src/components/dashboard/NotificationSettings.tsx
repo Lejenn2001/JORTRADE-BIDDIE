@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Bell, MessageSquare, Smartphone, Send } from "lucide-react";
+import { Bell, MessageSquare, Smartphone, Send, HelpCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -202,9 +202,22 @@ const NotificationSettings = () => {
           <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
             <Smartphone className="h-5 w-5 text-primary" />
           </div>
-          <div>
-            <h3 className="font-semibold text-foreground">Browser Push Notifications</h3>
-            <p className="text-xs text-muted-foreground">Get alerts in your browser — no app needed</p>
+          <div className="flex items-center gap-1.5">
+            <div>
+              <h3 className="font-semibold text-foreground">Browser Push Notifications</h3>
+              <p className="text-xs text-muted-foreground">Get alerts in your browser — no app needed</p>
+            </div>
+            <div className="relative group">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-3 rounded-lg bg-popover border border-border shadow-lg text-xs text-muted-foreground opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 space-y-1.5">
+                <p className="font-medium text-foreground">How to enable:</p>
+                <p><span className="font-medium text-foreground">Chrome/Edge:</span> Click the lock icon next to the URL bar, set Notifications to "Allow"</p>
+                <p><span className="font-medium text-foreground">Safari:</span> Safari {">"} Settings {">"} Websites {">"} Notifications</p>
+                <p><span className="font-medium text-foreground">Firefox:</span> Click the lock icon, then "More Information" and allow</p>
+                <p><span className="font-medium text-foreground">Mobile:</span> Browser settings {">"} Site Settings {">"} Notifications</p>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-popover border-b border-r border-border rotate-45 -mt-1" />
+              </div>
+            </div>
           </div>
           <Switch
             checked={pushEnabled}
@@ -216,7 +229,7 @@ const NotificationSettings = () => {
                     toast.success("Push notifications enabled!");
                   } else {
                     setPushEnabled(false);
-                    toast.error("Notifications blocked — see instructions below to enable them");
+                    toast.error("Notifications blocked — hover the ? icon for instructions");
                   }
                 });
               } else {
@@ -230,15 +243,6 @@ const NotificationSettings = () => {
           <p className="text-xs text-muted-foreground pt-2 border-t border-border/40">
             You'll receive alerts when the dashboard is open.
           </p>
-        )}
-        {!pushEnabled && (
-          <div className="text-xs text-muted-foreground pt-2 border-t border-border/40 space-y-1.5">
-            <p className="font-medium text-foreground">How to enable notifications:</p>
-            <p><span className="font-medium text-foreground">Chrome/Edge:</span> Click the lock icon next to the URL bar, then set Notifications to "Allow"</p>
-            <p><span className="font-medium text-foreground">Safari:</span> Go to Safari {">"} Settings {">"} Websites {">"} Notifications, find this site and select "Allow"</p>
-            <p><span className="font-medium text-foreground">Firefox:</span> Click the lock icon next to the URL bar, then click "More Information" and allow notifications</p>
-            <p><span className="font-medium text-foreground">Mobile:</span> Open browser settings {">"} Site Settings {">"} Notifications {">"} find this site and allow</p>
-          </div>
         )}
       </div>
 
