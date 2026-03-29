@@ -180,26 +180,11 @@ const MarketPulse = () => {
               </span>
             </div>
           </button>
-          <AnimatePresence>
-            {expandedTip === "vix" && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    <span className="text-primary font-bold">What is VIXY?</span> Think of it like a scared-o-meter for the stock market! VIXY goes UP when traders are scared and expect big price swings. When it's LOW, the market is calm like a quiet lake.
-                  </p>
-                  <p className="text-[10px] text-foreground/80 mt-1 leading-relaxed">
-                    {data.vix.description}
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
+            <p className="text-[10px] text-foreground/80 leading-relaxed">
+              {data.vix.description}
+            </p>
+          </div>
         </div>
 
         <div className="space-y-1">
