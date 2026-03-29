@@ -1464,7 +1464,13 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                                 <div>
                                   <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Expiry</p>
                                   <p className="text-xs font-semibold text-foreground">
-                                    {new Date(trade.expiry + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {(() => {
+                                      const d = new Date(trade.expiry);
+                                      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                      const d2 = new Date(trade.expiry + "T00:00:00");
+                                      if (!isNaN(d2.getTime())) return d2.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                      return trade.expiry;
+                                    })()}
                                   </p>
                                 </div>
                               )}
