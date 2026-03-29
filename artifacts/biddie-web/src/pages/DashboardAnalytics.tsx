@@ -545,15 +545,16 @@ function StatCard({ label, value, sub, icon, color }: { label: string; value: st
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`glass-panel rounded-xl p-4 border ${color}`}
+      className={`relative overflow-hidden rounded-xl p-4 border ${color} bg-[hsl(232,30%,8%,0.8)] backdrop-blur-md`}
     >
-      <div className="flex items-start justify-between">
+      <div className="absolute inset-0 bg-gradient-to-br from-[hsl(270,60%,40%,0.06)] to-transparent pointer-events-none" />
+      <div className="relative flex items-start justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
           <p className="text-2xl font-extrabold text-foreground mt-1">{value}</p>
           {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
         </div>
-        <div className="p-2 rounded-lg bg-white/5">{icon}</div>
+        <div className="p-2 rounded-lg bg-[hsl(270,60%,40%,0.1)] border border-[hsl(270,60%,40%,0.15)]">{icon}</div>
       </div>
     </motion.div>
   );
@@ -584,16 +585,25 @@ function WinRateRing({ rate, size = 80 }: { rate: number; size?: number }) {
 function CategoryBar({ category, hits, total }: { category: string; hits: number; total: number }) {
   const rate = total > 0 ? Math.round((hits / total) * 100) : 0;
   const labels: Record<string, string> = { algorithm: "Algorithm", whale: "Whale", spread: "Spread" };
-  const colors: Record<string, string> = { algorithm: "bg-emerald-500", whale: "bg-blue-500", spread: "bg-violet-500" };
+  const gradients: Record<string, string> = {
+    algorithm: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    whale: "bg-gradient-to-r from-[hsl(230,85%,60%)] to-[hsl(200,90%,55%)]",
+    spread: "bg-gradient-to-r from-[hsl(270,75%,60%)] to-[hsl(300,60%,50%)]",
+  };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-foreground">{labels[category] || category}</span>
-        <span className="text-xs text-muted-foreground">{rate}% ({hits}/{total})</span>
+        <span className="text-xs text-muted-foreground font-medium">{rate}% ({hits}/{total})</span>
       </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${colors[category] || "bg-primary"}`} style={{ width: `${rate}%` }} />
+      <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+        <motion.div
+          className={`h-full rounded-full ${gradients[category] || "bg-gradient-to-r from-[hsl(230,85%,60%)] to-[hsl(270,75%,60%)]"}`}
+          initial={{ width: 0 }}
+          animate={{ width: `${rate}%` }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        />
       </div>
     </div>
   );
@@ -804,136 +814,176 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
             </motion.div>
           )}
 
-          {userTopTickers.length > 0 && (
-            <div className="glass-panel rounded-xl p-5 border border-white/10">
-              <h3 className="text-sm font-bold text-foreground mb-3">Your Top Tickers</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {userTopTickers.map(t => (
-                  <div key={t.ticker} className="bg-white/5 rounded-lg p-3 flex items-center gap-3">
-                    <div className="text-center flex-1">
-                      <p className="text-sm font-extrabold text-foreground">{t.ticker}</p>
-                      <p className={`text-sm font-bold ${t.winRate >= 70 ? "text-emerald-400" : t.winRate >= 50 ? "text-yellow-400" : "text-red-400"}`}>
-                        {t.winRate}%
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{t.total} trades</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {userStats.byCategory && Object.keys(userStats.byCategory).length > 0 && (
-            <div className="glass-panel rounded-xl p-5 border border-white/10">
-              <h3 className="text-sm font-bold text-foreground mb-3">Win Rate by Signal Type</h3>
-              <div className="space-y-3">
-                {Object.entries(userStats.byCategory).map(([cat, data]) => (
-                  <CategoryBar key={cat} category={cat} hits={data.hits} total={data.total} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="glass-panel rounded-xl p-5 border border-white/10">
-            <h3 className="text-sm font-bold text-foreground mb-3">Recent Trades</h3>
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {userTrades.slice(0, 20).map(trade => {
-                const targetPrice = parseTargetPrice(trade.target);
-                const alertPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
-                const entryPrice = trade.entry_price ? Number(trade.entry_price) : alertPrice;
-                const priceInfo = getPrice(trade.ticker);
-                const currentPrice = priceInfo?.price ?? null;
-                const isBullish = (trade.signal_type || trade.direction) === "bullish";
-                const showProgress = entryPrice && currentPrice && targetPrice;
-
-                let pct = 0;
-                let barColor = "bg-orange-400";
-                let label = "0% to Target";
-                let currentMove = 0;
-
-                if (showProgress) {
-                  pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
-                  const pctRounded = Math.round(pct);
-                  barColor = pct >= 100 ? "bg-emerald-400" : pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-400" : pct >= 25 ? "bg-amber-400" : "bg-orange-400";
-                  label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
-                  currentMove = isBullish ? currentPrice! - entryPrice! : entryPrice! - currentPrice!;
-                }
-
-                return (
-                  <div key={trade.id} className="bg-white/5 rounded-lg px-3 py-2 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                        trade.direction === "bullish" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-                      }`}>
-                        {trade.direction === "bullish" ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-foreground">{trade.ticker}</span>
-                          {trade.strike && <span className="text-[10px] text-muted-foreground">${trade.strike} {trade.option_type || ""}</span>}
-                          {trade.category && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                              trade.category === "whale" ? "bg-blue-500/20 text-blue-400"
-                              : trade.category === "spread" ? "bg-violet-500/20 text-violet-400"
-                              : "bg-primary/20 text-primary"
-                            }`}>{trade.category}</span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {userTopTickers.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                className="relative overflow-hidden rounded-xl border border-[hsl(230,85%,60%,0.15)] bg-[hsl(232,30%,8%,0.7)] backdrop-blur-md p-5">
+                <div className="absolute inset-0 bg-gradient-to-br from-[hsl(230,85%,60%,0.04)] to-transparent pointer-events-none" />
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                    <div className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[hsl(230,85%,60%)] to-[hsl(200,90%,55%)]" />
+                    Your Top Tickers
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {userTopTickers.map((t, i) => (
+                      <div key={t.ticker} className="relative rounded-lg p-3 text-center border border-white/[0.06] bg-gradient-to-br from-white/[0.03] to-transparent hover:border-[hsl(270,60%,40%,0.25)] transition-colors">
+                        {i === 0 && <div className="absolute -top-1 -right-1 text-yellow-400 text-[10px]">&#9733;</div>}
+                        <p className="text-sm font-extrabold text-foreground">{t.ticker}</p>
+                        <p className={`text-base font-black mt-0.5 ${t.winRate >= 70 ? "text-emerald-400" : t.winRate >= 50 ? "text-[hsl(270,75%,70%)]" : "text-red-400"}`}>
+                          {t.winRate}%
                         </p>
+                        <p className="text-[10px] text-muted-foreground">{t.total} trades</p>
                       </div>
-                      <div className={`text-xs font-bold px-2 py-1 rounded-md ${
-                        trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit" ? "bg-emerald-500/20 text-emerald-400"
-                        : trade.signal_outcome === "missed" ? "bg-red-500/20 text-red-400"
-                        : "bg-yellow-500/20 text-yellow-400"
-                      }`}>
-                        {trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit" ? "WIN" : trade.signal_outcome === "missed" ? "LOSS" : "PENDING"}
-                      </div>
-                    </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
-                    {showProgress && (
-                      <div className="bg-muted/20 rounded-lg px-3 py-2.5 space-y-1.5 ml-11">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Target className="h-3 w-3 text-primary" />
-                            <span className={`text-[11px] font-bold ${pct >= 100 ? "text-emerald-400" : "text-foreground"}`}>
-                              {label}
+            {userStats.byCategory && Object.keys(userStats.byCategory).length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+                className="relative overflow-hidden rounded-xl border border-[hsl(270,60%,40%,0.15)] bg-[hsl(232,30%,8%,0.7)] backdrop-blur-md p-5">
+                <div className="absolute inset-0 bg-gradient-to-br from-[hsl(270,60%,40%,0.04)] to-transparent pointer-events-none" />
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                    <div className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[hsl(270,75%,60%)] to-[hsl(300,60%,50%)]" />
+                    Win Rate by Signal Type
+                  </h3>
+                  <div className="space-y-3">
+                    {Object.entries(userStats.byCategory).map(([cat, data]) => (
+                      <CategoryBar key={cat} category={cat} hits={data.hits} total={data.total} />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="relative overflow-hidden rounded-xl border border-[hsl(270,60%,40%,0.2)] bg-[hsl(232,30%,8%,0.7)] backdrop-blur-md">
+            <div className="absolute inset-0 bg-gradient-to-b from-[hsl(270,60%,40%,0.05)] via-transparent to-[hsl(230,85%,60%,0.03)] pointer-events-none" />
+            <div className="relative p-5">
+              <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
+                <div className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[hsl(270,75%,60%)] to-[hsl(230,85%,60%)]" />
+                Recent Trades
+              </h3>
+              <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+                {userTrades.slice(0, 20).map((trade, i) => {
+                  const targetPrice = parseTargetPrice(trade.target);
+                  const alertPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
+                  const entryPrice = trade.entry_price ? Number(trade.entry_price) : alertPrice;
+                  const priceInfo = getPrice(trade.ticker);
+                  const currentPrice = priceInfo?.price ?? null;
+                  const isBullish = (trade.signal_type || trade.direction) === "bullish";
+                  const showProgress = entryPrice && currentPrice && targetPrice;
+                  const isWin = trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit";
+                  const isLoss = trade.signal_outcome === "missed";
+
+                  let pct = 0;
+                  let label = "0% to Target";
+                  let currentMove = 0;
+
+                  if (showProgress) {
+                    pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
+                    const pctRounded = Math.round(pct);
+                    label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
+                    currentMove = isBullish ? currentPrice! - entryPrice! : entryPrice! - currentPrice!;
+                  }
+
+                  const borderGlow = isWin ? "border-l-emerald-500/60" : isLoss ? "border-l-red-500/60" : "border-l-[hsl(270,75%,60%,0.4)]";
+
+                  return (
+                    <motion.div key={trade.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 * Math.min(i, 10) }}
+                      className={`relative rounded-lg border border-white/[0.06] border-l-2 ${borderGlow} bg-gradient-to-r from-white/[0.03] to-transparent hover:from-white/[0.06] transition-all duration-200 px-4 py-3 space-y-2`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                          isBullish
+                            ? "bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 text-emerald-400 shadow-[0_0_12px_hsl(142,71%,45%,0.15)]"
+                            : "bg-gradient-to-br from-red-500/20 to-red-600/10 text-red-400 shadow-[0_0_12px_hsl(0,72%,51%,0.15)]"
+                        }`}>
+                          {isBullish ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-extrabold text-foreground tracking-tight">{trade.ticker}</span>
+                            {trade.strike && <span className="text-[10px] text-muted-foreground font-medium">${trade.strike} {trade.option_type || ""}</span>}
+                            {trade.category && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${
+                                trade.category === "whale" ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                : trade.category === "spread" ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                                : "bg-[hsl(230,85%,60%,0.1)] text-[hsl(230,85%,70%)] border-[hsl(230,85%,60%,0.2)]"
+                              }`}>{trade.category}</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${
+                          isWin ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25 shadow-[0_0_8px_hsl(142,71%,45%,0.1)]"
+                          : isLoss ? "bg-red-500/15 text-red-400 border-red-500/25 shadow-[0_0_8px_hsl(0,72%,51%,0.1)]"
+                          : "bg-[hsl(270,60%,40%,0.1)] text-[hsl(270,75%,70%)] border-[hsl(270,60%,40%,0.2)]"
+                        }`}>
+                          {isWin ? "WIN" : isLoss ? "LOSS" : "PENDING"}
+                        </div>
+                      </div>
+
+                      {showProgress && (
+                        <div className="rounded-lg px-3 py-2.5 space-y-1.5 ml-12 bg-gradient-to-r from-[hsl(270,60%,40%,0.06)] to-[hsl(230,85%,60%,0.04)] border border-white/[0.04]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Target className="h-3 w-3 text-[hsl(270,75%,65%)]" />
+                              <span className={`text-[11px] font-bold ${pct >= 100 ? "text-emerald-400" : "text-foreground"}`}>
+                                {label}
+                              </span>
+                            </div>
+                            <span className={`text-[10px] font-semibold ${currentMove >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                              {currentMove >= 0 ? "+" : ""}${Math.abs(currentMove).toFixed(2)}
                             </span>
                           </div>
-                          <span className={`text-[10px] font-semibold ${currentMove >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                            {currentMove >= 0 ? "+" : ""}${Math.abs(currentMove).toFixed(2)}
-                          </span>
+                          <div className="w-full h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                            <motion.div
+                              className={`h-full rounded-full ${
+                                pct >= 100 ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                                : pct >= 50 ? "bg-gradient-to-r from-[hsl(230,85%,60%)] to-[hsl(270,75%,60%)]"
+                                : "bg-gradient-to-r from-[hsl(270,60%,45%)] to-[hsl(230,70%,55%)]"
+                              }`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(pct, 100)}%` }}
+                              transition={{ duration: 0.8, ease: "easeOut" }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] text-muted-foreground">
+                            <span>Entry: ${entryPrice!.toFixed(2)}</span>
+                            <span className="text-foreground font-medium">${currentPrice!.toFixed(2)}</span>
+                            <span>Target: ${targetPrice!.toFixed(2)}</span>
+                          </div>
                         </div>
-                        <div className="w-full h-2 bg-muted/40 rounded-full overflow-hidden">
-                          <motion.div
-                            className={`h-full rounded-full ${barColor}`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(pct, 100)}%` }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-[9px] text-muted-foreground">
-                          <span>Entry: ${entryPrice!.toFixed(2)}</span>
-                          <span className="text-foreground font-medium">${currentPrice!.toFixed(2)}</span>
-                          <span>Target: ${targetPrice!.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </motion.div>
         </>
       ) : (
-        <div className="glass-panel rounded-xl p-10 border border-white/10 text-center">
-          <Activity className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-foreground">No Trades Yet</h3>
-          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Go to the Signals tab and click "I Took This Trade" on any signal you follow.
-            Your personal win rate and stats will automatically build here.
-          </p>
+        <div className="relative overflow-hidden rounded-xl p-12 border border-[hsl(270,60%,40%,0.15)] bg-[hsl(232,30%,8%,0.7)] backdrop-blur-md text-center">
+          <div className="absolute inset-0 bg-gradient-to-br from-[hsl(270,60%,40%,0.06)] via-transparent to-[hsl(230,85%,60%,0.04)] pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[radial-gradient(circle,hsl(270,75%,40%,0.08)_0%,transparent_60%)] pointer-events-none" />
+          <div className="relative">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[hsl(270,60%,40%,0.15)] to-[hsl(230,85%,60%,0.1)] border border-[hsl(270,60%,40%,0.2)] flex items-center justify-center">
+              <Activity className="h-8 w-8 text-[hsl(270,75%,65%)]" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">No Trades Yet</h3>
+            <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+              Go to the Signals tab and click "I Took This Trade" on any signal you follow.
+              Your personal win rate and stats will automatically build here.
+            </p>
+          </div>
         </div>
       )}
     </div>
