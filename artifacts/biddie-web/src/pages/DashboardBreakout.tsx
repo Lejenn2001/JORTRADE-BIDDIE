@@ -430,7 +430,7 @@ const DashboardBreakout = () => {
                   <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-amber-400 to-emerald-500" />
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
-                      BREAKOUT SCANNER
+                      FLOW SCANNER
                     </h1>
                     <p className="text-[10px] uppercase tracking-[0.3em] text-amber-400/80 font-semibold mt-0.5">
                       {result ? result.tickersScanned : "40+"} Tickers Monitored

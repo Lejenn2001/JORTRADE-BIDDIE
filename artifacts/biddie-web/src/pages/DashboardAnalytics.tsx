@@ -495,24 +495,24 @@ const DashboardAnalytics = () => {
                   const green = i % 3 !== 0;
                   return (
                     <g key={i}>
-                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#a78bfa" : "#818cf8"} strokeWidth="1" />
-                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#a78bfa" : "#818cf8"} rx="1" />
+                      <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#34d399" : "#10b981"} strokeWidth="1" />
+                      <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#34d399" : "#10b981"} rx="1" />
                     </g>
                   );
                 })}
               </svg>
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-900/15 via-transparent to-blue-900/15" />
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/15 via-transparent to-green-900/12" />
               <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
 
               <div className="relative px-6 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-[hsl(270,75%,60%)] to-[hsl(230,85%,60%)]" />
+                  <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-emerald-400 to-green-500" />
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
-                      PERFORMANCE
+                      ANALYTICS
                     </h1>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-purple-400/80 font-semibold mt-0.5">
-                      Analytics & Tracking
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-emerald-400/80 font-semibold mt-0.5">
+                      Performance & Tracking
                     </p>
                   </div>
                 </div>
