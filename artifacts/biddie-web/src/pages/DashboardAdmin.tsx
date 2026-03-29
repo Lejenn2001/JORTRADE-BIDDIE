@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban, Gift, Copy, Check } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban, Gift, Copy, Check, Lightbulb, Plus, X, GripVertical } from "lucide-react";
 
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import { Link } from "react-router-dom";
@@ -198,7 +198,7 @@ const DashboardAdmin = () => {
   const [showReference, setShowReference] = useState(false);
   const [showTiers, setShowTiers] = useState(false);
   const [chatCount, setChatCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users' | 'referrals'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users' | 'referrals' | 'ideas'>('overview');
   const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
   const [replitCredits, setReplitCredits] = useState("242.89");
   const [replitCreditsDate, setReplitCreditsDate] = useState("3/29");
@@ -517,6 +517,7 @@ const DashboardAdmin = () => {
               { id: 'signals' as const, label: 'Signal Insights', icon: Zap },
               { id: 'users' as const, label: 'Users', icon: Users },
               { id: 'referrals' as const, label: 'Referrals', icon: Gift },
+              { id: 'ideas' as const, label: 'Ideas', icon: Lightbulb },
             ]).map((tab) => (
               <button
                 key={tab.id}
@@ -1217,9 +1218,245 @@ const DashboardAdmin = () => {
             <AdminReferralsTab />
           )}
 
+          {activeTab === 'ideas' && (
+            <AdminIdeasTab />
+          )}
+
         </main>
       </div>
     </div>
+  );
+};
+
+interface IdeaNote {
+  id: string;
+  text: string;
+  priority: 'low' | 'medium' | 'high';
+  done: boolean;
+  createdAt: string;
+}
+
+const IDEAS_KEY = "jortrade_admin_ideas";
+
+const loadIdeas = (): IdeaNote[] => {
+  try {
+    const raw = localStorage.getItem(IDEAS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+
+const saveIdeas = (ideas: IdeaNote[]) => {
+  localStorage.setItem(IDEAS_KEY, JSON.stringify(ideas));
+};
+
+const priorityConfig = {
+  high: { label: "High", color: "text-red-400", bg: "bg-red-500/15 border-red-500/30", dot: "bg-red-400" },
+  medium: { label: "Medium", color: "text-yellow-400", bg: "bg-yellow-500/15 border-yellow-500/30", dot: "bg-yellow-400" },
+  low: { label: "Low", color: "text-blue-400", bg: "bg-blue-500/15 border-blue-500/30", dot: "bg-blue-400" },
+};
+
+const AdminIdeasTab = () => {
+  const [ideas, setIdeas] = useState<IdeaNote[]>(loadIdeas);
+  const [newText, setNewText] = useState("");
+  const [newPriority, setNewPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all');
+
+  const persist = (updated: IdeaNote[]) => {
+    setIdeas(updated);
+    saveIdeas(updated);
+  };
+
+  const addIdea = () => {
+    const trimmed = newText.trim();
+    if (!trimmed) return;
+    const idea: IdeaNote = {
+      id: crypto.randomUUID(),
+      text: trimmed,
+      priority: newPriority,
+      done: false,
+      createdAt: new Date().toISOString(),
+    };
+    persist([idea, ...ideas]);
+    setNewText("");
+    toast.success("Idea added");
+  };
+
+  const toggleDone = (id: string) => {
+    persist(ideas.map(i => i.id === id ? { ...i, done: !i.done } : i));
+  };
+
+  const deleteIdea = (id: string) => {
+    persist(ideas.filter(i => i.id !== id));
+    toast.success("Idea removed");
+  };
+
+  const startEdit = (idea: IdeaNote) => {
+    setEditingId(idea.id);
+    setEditText(idea.text);
+  };
+
+  const saveEdit = (id: string) => {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+    persist(ideas.map(i => i.id === id ? { ...i, text: trimmed } : i));
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const cyclePriority = (id: string) => {
+    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
+    persist(ideas.map(i => {
+      if (i.id !== id) return i;
+      const idx = order.indexOf(i.priority);
+      return { ...i, priority: order[(idx + 1) % 3] };
+    }));
+  };
+
+  const filtered = ideas.filter(i => {
+    if (filter === 'active') return !i.done;
+    if (filter === 'done') return i.done;
+    return true;
+  });
+
+  const activeCount = ideas.filter(i => !i.done).length;
+  const doneCount = ideas.filter(i => i.done).length;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+      <div className="glass-panel rounded-xl p-5 border-border/40">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-yellow-500/15">
+            <Lightbulb className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Ideas & Notes</h2>
+            <p className="text-xs text-muted-foreground">Keep track of edits, features, and things to do</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="px-2 py-1 rounded-md bg-muted/30">{activeCount} active</span>
+            <span className="px-2 py-1 rounded-md bg-muted/30">{doneCount} done</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <Input
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addIdea()}
+            placeholder="Add an idea, edit note, or reminder..."
+            className="flex-1 bg-muted/20 border-border/40"
+          />
+          <div className="flex items-center gap-1">
+            {(['low', 'medium', 'high'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setNewPriority(p)}
+                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all border ${
+                  newPriority === p ? priorityConfig[p].bg + " " + priorityConfig[p].color : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {priorityConfig[p].label}
+              </button>
+            ))}
+          </div>
+          <Button onClick={addIdea} size="sm" className="gap-1">
+            <Plus className="w-4 h-4" /> Add
+          </Button>
+        </div>
+
+        <div className="flex gap-1 mb-4">
+          {(['all', 'active', 'done'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                filter === f ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {f === 'all' ? `All (${ideas.length})` : f === 'active' ? `Active (${activeCount})` : `Done (${doneCount})`}
+            </button>
+          ))}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Lightbulb className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">{filter === 'done' ? "No completed ideas yet" : filter === 'active' ? "All caught up!" : "No ideas yet — add one above!"}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map(idea => {
+              const pc = priorityConfig[idea.priority];
+              const isEditing = editingId === idea.id;
+              return (
+                <motion.div
+                  key={idea.id}
+                  layout
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className={`group flex items-start gap-3 p-3 rounded-xl border transition-all ${
+                    idea.done ? "border-border/20 bg-muted/10 opacity-60" : "border-border/40 bg-muted/20 hover:bg-muted/30"
+                  }`}
+                >
+                  <button onClick={() => toggleDone(idea.id)} className="mt-0.5 shrink-0">
+                    {idea.done ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                    )}
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    {isEditing ? (
+                      <div className="flex gap-2">
+                        <Input
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(idea.id); if (e.key === "Escape") setEditingId(null); }}
+                          className="flex-1 bg-muted/30 border-border/40 text-sm"
+                          autoFocus
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => saveEdit(idea.id)}>Save</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                      </div>
+                    ) : (
+                      <p
+                        className={`text-sm cursor-pointer ${idea.done ? "line-through text-muted-foreground" : "text-foreground"}`}
+                        onClick={() => startEdit(idea)}
+                      >
+                        {idea.text}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        onClick={() => cyclePriority(idea.id)}
+                        className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${pc.bg} ${pc.color}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />
+                        {pc.label}
+                      </button>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(idea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => deleteIdea(idea.id)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/20"
+                  >
+                    <X className="w-4 h-4 text-red-400" />
+                  </button>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 };
 
