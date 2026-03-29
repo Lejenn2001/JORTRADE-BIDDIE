@@ -244,9 +244,17 @@ const AIChatPanel = () => {
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-xs text-primary">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Biddie is analyzing...
+          <div className="flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+              <span className="text-[10px]">🤖</span>
+            </div>
+            <div className="bg-muted/30 border border-border/50 rounded-2xl rounded-tl-sm px-4 py-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1.2s" }} />
+                <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "200ms", animationDuration: "1.2s" }} />
+                <span className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "400ms", animationDuration: "1.2s" }} />
+              </div>
+            </div>
           </div>
         )}
       </div>
