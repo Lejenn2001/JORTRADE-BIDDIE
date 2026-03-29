@@ -693,60 +693,86 @@ const DashboardBreakout = () => {
                     className="overflow-hidden"
                   >
                     <div className="px-4 pb-4 space-y-4">
-                      <div className="grid sm:grid-cols-3 gap-3 text-[11px] text-muted-foreground">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">
-                            <Activity className="h-3 w-3 text-yellow-400" />
-                            Squeeze Detection
+                      <p className="text-[11px] text-muted-foreground">A <span className="text-foreground font-semibold">breakout</span> is when a stock's price suddenly moves past a key level (resistance or support) with strong volume. This scanner watches for the conditions that lead to breakouts so you can be ready before they happen.</p>
+
+                      <div className="space-y-3 text-[11px] text-muted-foreground">
+                        <div className="rounded-lg p-3 bg-yellow-500/[0.05] border border-yellow-500/15">
+                          <p className="font-bold text-yellow-400 flex items-center gap-1.5 mb-1.5">
+                            <Activity className="h-3 w-3" />
+                            What is a Squeeze?
                           </p>
-                          <p>When Bollinger Bands contract inside Keltner Channels, volatility is compressing. This "squeeze" precedes explosive moves. Longer squeeze = bigger expected move.</p>
+                          <p className="mb-1">A squeeze happens when a stock's price range gets really tight — it stops moving much in either direction. Think of it like pulling back a rubber band. The tighter you pull, the harder it snaps.</p>
+                          <p className="mb-1"><span className="text-foreground font-semibold">Why it matters:</span> Squeezes almost always lead to big, fast moves. The stock is building up energy, and when it finally breaks out of that tight range, it tends to move explosively.</p>
+                          <p><span className="text-foreground font-semibold">Candles count:</span> Shows how long the squeeze has been active. More candles = more energy building up = bigger expected move.</p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">
-                            <BarChart3 className="h-3 w-3 text-purple-400" />
-                            Consolidation
+
+                        <div className="rounded-lg p-3 bg-purple-500/[0.05] border border-purple-500/15">
+                          <p className="font-bold text-purple-400 flex items-center gap-1.5 mb-1.5">
+                            <BarChart3 className="h-3 w-3" />
+                            What is Consolidation?
                           </p>
-                          <p>Multi-day tight ranges where price trades within a narrow channel. Combined with declining volume, this builds energy for a directional break.</p>
+                          <p className="mb-1">Consolidation is when a stock trades sideways in a narrow range for multiple days. The price keeps bouncing between the same high and low levels without picking a direction.</p>
+                          <p><span className="text-foreground font-semibold">Why days matter:</span> The longer a stock consolidates (3+ days is ideal), the bigger the eventual move. It's like a spring being compressed — more time compressing = more force when it releases.</p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">
-                            <Zap className="h-3 w-3 text-emerald-400" />
-                            Auto Alerts
+
+                        <div className="rounded-lg p-3 bg-blue-500/[0.05] border border-blue-500/15">
+                          <p className="font-bold text-blue-400 flex items-center gap-1.5 mb-1.5">
+                            <TrendingUp className="h-3 w-3" />
+                            What is Volume?
                           </p>
-                          <p>When price breaks above resistance or below support with volume confirmation (1.5x session + 3x burst), you get an instant alert.</p>
+                          <p className="mb-1">Volume is how many shares are being traded. When volume is 2x or 3x higher than normal, it means big money is moving in — institutions, hedge funds, or a wave of traders all jumping at once.</p>
+                          <p><span className="text-foreground font-semibold">Why it matters:</span> A breakout without volume is fake — price might just fall back. A breakout WITH heavy volume means real money is behind the move and it's more likely to keep going.</p>
+                        </div>
+
+                        <div className="rounded-lg p-3 bg-cyan-500/[0.05] border border-cyan-500/15">
+                          <p className="font-bold text-cyan-400 flex items-center gap-1.5 mb-1.5">
+                            <Target className="h-3 w-3" />
+                            What is Proximity?
+                          </p>
+                          <p>This shows how close the current price is to the breakout level (resistance or support). If proximity is 0.5%, the stock is right at the edge — one push and it breaks. If it's 3%, there's still some distance to go.</p>
+                        </div>
+
+                        <div className="rounded-lg p-3 bg-zinc-500/[0.05] border border-zinc-500/15">
+                          <p className="font-bold text-zinc-300 flex items-center gap-1.5 mb-1.5">
+                            <Activity className="h-3 w-3" />
+                            What is the BB/KC Ratio?
+                          </p>
+                          <p className="mb-1">This is the technical measurement behind the squeeze. BB stands for Bollinger Bands (a measure of price volatility) and KC stands for Keltner Channels (a measure of average price range).</p>
+                          <p><span className="text-foreground font-semibold">Simple version:</span> When the ratio is below 1.0, the squeeze is ON — volatility has compressed inside the normal range. The lower the number, the tighter the squeeze. When it climbs back above 1.0, the breakout is starting.</p>
                         </div>
                       </div>
+
                       <div className="border-t border-white/[0.06] pt-3">
-                        <p className="font-semibold text-foreground text-[11px] mb-2">Breakout Readiness Score (0–100)</p>
-                        <p className="text-[10px] text-muted-foreground mb-2">The higher the score, the more ready a ticker is to make an explosive move. This is NOT an entry signal — it tells you how close a ticker is to breaking out.</p>
+                        <p className="font-semibold text-foreground text-[11px] mb-1">Breakout Readiness Score (0–100)</p>
+                        <p className="text-[10px] text-muted-foreground mb-2">Each factor above adds points to the score. The more factors that are active and stacking together, the higher the score — and the closer the stock is to breaking out.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                           <div className="p-2.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-zinc-400">20–35</span>
                               <span className="font-bold text-zinc-300">On Your Radar</span>
                             </div>
-                            <p className="text-muted-foreground">Early signs of a setup forming. Interesting but not actionable yet — check back later or move on to higher-scoring setups.</p>
+                            <p className="text-muted-foreground">Something is starting to form but it's early. Keep an eye on it, but don't act yet — it might fizzle out.</p>
                           </div>
                           <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-yellow-400">35–55</span>
                               <span className="font-bold text-yellow-300">Watch &amp; Set Alert</span>
                             </div>
-                            <p className="text-muted-foreground">Squeeze or consolidation is active. Hit the bell icon to watch this ticker — you'll be alerted when it breaks. Review the contract rec and size your position.</p>
+                            <p className="text-muted-foreground">A real setup is forming. Hit the bell icon so you get notified when it breaks. Look at the suggested contract and decide how much you'd want to risk.</p>
                           </div>
                           <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-blue-400">55–75</span>
                               <span className="font-bold text-blue-300">High Alert — Breakout Imminent</span>
                             </div>
-                            <p className="text-muted-foreground">Multiple factors aligned and price is near a key level. Stay glued to this ticker. When the breakout alert fires with volume confirmation, that's your entry.</p>
+                            <p className="text-muted-foreground">Multiple factors are lined up and price is right near the breakout level. Stay ready. When the alert fires, that's your entry signal.</p>
                           </div>
                           <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-black text-emerald-400">75–100</span>
                               <span className="font-bold text-emerald-300">Breakout Confirmed — Enter Now</span>
                             </div>
-                            <p className="text-muted-foreground">Price has broken through resistance/support with volume behind it. The breakout alert card above shows the trade. This is the entry moment.</p>
+                            <p className="text-muted-foreground">It broke. Price pushed through the key level with heavy volume behind it. The alert card above has the trade details — this is the entry moment.</p>
                           </div>
                         </div>
                       </div>
@@ -953,7 +979,7 @@ function SetupCard({
                   icon={<TrendingUp className="h-3 w-3" />}
                 />
                 <MiniStat
-                  label="Proximity"
+                  label="Distance to Break"
                   value={setup.proximityPct !== null ? `${setup.proximityPct.toFixed(1)}%` : "—"}
                   active={(setup.proximityPct ?? 99) <= 1.0}
                   icon={<Target className="h-3 w-3" />}
@@ -962,22 +988,22 @@ function SetupCard({
 
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
-                  <p className="text-[10px] text-muted-foreground uppercase mb-1">Resistance</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">Ceiling (Resistance)</p>
                   <p className="text-sm font-bold text-red-400">${setup.resistanceLevel.toFixed(2)}</p>
-                  <p className="text-[10px] text-muted-foreground">{((setup.resistanceLevel - setup.currentPrice) / setup.currentPrice * 100).toFixed(1)}% above</p>
+                  <p className="text-[10px] text-muted-foreground">{((setup.resistanceLevel - setup.currentPrice) / setup.currentPrice * 100).toFixed(1)}% above price</p>
                 </div>
                 <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
-                  <p className="text-[10px] text-muted-foreground uppercase mb-1">Support</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">Floor (Support)</p>
                   <p className="text-sm font-bold text-emerald-400">${setup.supportLevel.toFixed(2)}</p>
-                  <p className="text-[10px] text-muted-foreground">{((setup.currentPrice - setup.supportLevel) / setup.currentPrice * 100).toFixed(1)}% below</p>
+                  <p className="text-[10px] text-muted-foreground">{((setup.currentPrice - setup.supportLevel) / setup.currentPrice * 100).toFixed(1)}% below price</p>
                 </div>
                 {setup.bbWidth > 0 && setup.kcWidth > 0 && (
                   <div className="rounded-lg p-2.5 bg-white/[0.02] border border-white/[0.04]">
-                    <p className="text-[10px] text-muted-foreground uppercase mb-1">BB/KC Ratio</p>
+                    <p className="text-[10px] text-muted-foreground mb-1">Squeeze Tightness</p>
                     <p className={`text-sm font-bold ${setup.bbWidth / setup.kcWidth < 1 ? "text-yellow-400" : "text-zinc-400"}`}>
                       {(setup.bbWidth / setup.kcWidth).toFixed(3)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">{setup.squeezeActive ? "Squeeze ON" : "Normal"}</p>
+                    <p className="text-[10px] text-muted-foreground">{setup.squeezeActive ? "Below 1.0 = squeeze ON" : "Above 1.0 = normal"}</p>
                   </div>
                 )}
               </div>
