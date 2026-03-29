@@ -64,7 +64,7 @@ const DashboardSidebar = () => {
 
       <aside
         className={`
-          fixed lg:static z-50 h-screen w-[240px] glass-panel border-r border-border/60 flex flex-col p-4 shrink-0 overflow-hidden
+          fixed lg:static z-50 h-screen w-[240px] glass-panel border-r border-border/60 flex flex-col p-4 shrink-0
           transition-transform duration-200
           ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
@@ -80,7 +80,7 @@ const DashboardSidebar = () => {
           <img src={jortradeLogo} alt="JORTRADE" className="h-32 w-auto" />
         </Link>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto">
+        <nav className="flex-1 space-y-1">
           {allNavItems.map((item) => {
             const isActive = location.pathname === item.path ||
               (item.path === "/dashboard" && location.pathname === "/dashboard");
