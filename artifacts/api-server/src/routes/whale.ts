@@ -5032,11 +5032,10 @@ router.get("/whale/health", (_req, res) => {
 
 // ── Weekly Signal Stats Snapshot ──────────────────────────────────────────────────
 
-function getMonday(d: Date): Date {
+function getSunday(d: Date): Date {
   const date = new Date(d);
   const day = date.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  date.setDate(date.getDate() - diff);
+  date.setDate(date.getDate() - day);
   date.setHours(0, 0, 0, 0);
   return date;
 }
@@ -5135,18 +5134,18 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
 async function autoSnapshotWeeklyStats() {
   try {
     const now = new Date();
-    const currentMonday = getMonday(now);
+    const currentSunday = getSunday(now);
 
-    await snapshotWeek(currentMonday);
+    await snapshotWeek(currentSunday);
 
-    const lastMonday = new Date(currentMonday);
-    lastMonday.setDate(lastMonday.getDate() - 7);
+    const lastSunday = new Date(currentSunday);
+    lastSunday.setDate(lastSunday.getDate() - 7);
     const lastExists = await dbQuery(
       `SELECT id FROM weekly_signal_stats WHERE week_start = $1`,
-      [lastMonday.toISOString()]
+      [lastSunday.toISOString()]
     );
     if (!lastExists?.rows?.length) {
-      await snapshotWeek(lastMonday);
+      await snapshotWeek(lastSunday);
     }
 
     console.log("[weekly-stats] Auto-snapshot complete");
@@ -5172,8 +5171,8 @@ router.get("/whale/weekly-stats", async (_req, res) => {
 router.post("/whale/weekly-stats/snapshot", async (req, res) => {
   try {
     const { weekStart } = req.body;
-    const monday = weekStart ? new Date(weekStart) : getMonday(new Date());
-    const result = await snapshotWeek(monday);
+    const sunday = weekStart ? new Date(weekStart) : getSunday(new Date());
+    const result = await snapshotWeek(sunday);
     res.json({ ok: true, stats: result });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -5188,14 +5187,14 @@ router.post("/whale/weekly-stats/backfill", async (_req, res) => {
     const oldestDate = oldest?.rows?.[0]?.oldest;
     if (!oldestDate) return res.json({ ok: true, weeks: 0 });
 
-    let monday = getMonday(new Date(oldestDate));
+    let sunday = getSunday(new Date(oldestDate));
     const now = new Date();
     let count = 0;
 
-    while (monday < now) {
-      await snapshotWeek(monday);
+    while (sunday < now) {
+      await snapshotWeek(sunday);
       count++;
-      monday.setDate(monday.getDate() + 7);
+      sunday.setDate(sunday.getDate() + 7);
     }
 
     res.json({ ok: true, weeks: count });
