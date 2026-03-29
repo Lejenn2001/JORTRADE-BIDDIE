@@ -46,7 +46,7 @@ const PerformanceSnapshot = () => {
         for (const s of data) {
           const detected = new Date(s.detected_at || s.created_at);
           const cat = (s.category === "whale" ? "whale" : s.category === "spread" ? "spread" : "algorithm") as keyof DayStats;
-          const isHit = s.outcome === "hit" || s.outcome === "win";
+          const isHit = s.outcome === "hit" || s.outcome === "win" || s.outcome === "partial_hit";
           const isMiss = s.outcome === "missed" || s.outcome === "loss";
           const isPending = !s.outcome || s.outcome === "pending";
 

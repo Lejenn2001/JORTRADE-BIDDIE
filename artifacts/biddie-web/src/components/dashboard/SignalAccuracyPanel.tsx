@@ -83,18 +83,18 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
 
   useEffect(() => { fetchOutcomes(); }, []);
 
-  const totalResolved = outcomes.filter((o) => o.outcome === "hit" || o.outcome === "missed").length;
-  const hits = outcomes.filter((o) => o.outcome === "hit").length;
+  const totalResolved = outcomes.filter((o) => o.outcome === "hit" || o.outcome === "partial_hit" || o.outcome === "missed").length;
+  const hits = outcomes.filter((o) => o.outcome === "hit" || o.outcome === "partial_hit").length;
   const misses = outcomes.filter((o) => o.outcome === "missed").length;
   const pending = outcomes.filter((o) => o.outcome === "pending").length;
   const winRate = totalResolved > 0 ? ((hits / totalResolved) * 100).toFixed(1) : "—";
 
   // Stats by ticker
   const tickerStats = outcomes.reduce<Record<string, { hits: number; total: number }>>((acc, o) => {
-    if (o.outcome !== "hit" && o.outcome !== "missed") return acc;
+    if (o.outcome !== "hit" && o.outcome !== "partial_hit" && o.outcome !== "missed") return acc;
     if (!acc[o.ticker]) acc[o.ticker] = { hits: 0, total: 0 };
     acc[o.ticker].total++;
-    if (o.outcome === "hit") acc[o.ticker].hits++;
+    if (o.outcome === "hit" || o.outcome === "partial_hit") acc[o.ticker].hits++;
     return acc;
   }, {});
 

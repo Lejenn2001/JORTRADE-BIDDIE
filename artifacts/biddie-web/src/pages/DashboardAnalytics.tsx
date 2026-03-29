@@ -404,8 +404,8 @@ const DashboardAnalytics = () => {
 
         if (historyData.signals) {
           const picks = historyData.signals.filter((s: any) => s.is_biddie_pick);
-          const resolved = picks.filter((s: any) => s.outcome === "hit" || s.outcome === "missed");
-          const hits = resolved.filter((s: any) => s.outcome === "hit").length;
+          const resolved = picks.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
+          const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
 
           const byTicker: Record<string, { hits: number; total: number }> = {};
           const byCategory: Record<string, { hits: number; total: number }> = {};
@@ -413,12 +413,12 @@ const DashboardAnalytics = () => {
             const tk = s.ticker;
             if (!byTicker[tk]) byTicker[tk] = { hits: 0, total: 0 };
             byTicker[tk].total++;
-            if (s.outcome === "hit") byTicker[tk].hits++;
+            if (s.outcome === "hit" || s.outcome === "partial_hit") byTicker[tk].hits++;
 
             const cat = s.category || "algorithm";
             if (!byCategory[cat]) byCategory[cat] = { hits: 0, total: 0 };
             byCategory[cat].total++;
-            if (s.outcome === "hit") byCategory[cat].hits++;
+            if (s.outcome === "hit" || s.outcome === "partial_hit") byCategory[cat].hits++;
           }
 
           setSignalStats({
