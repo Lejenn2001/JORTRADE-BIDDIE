@@ -27,6 +27,8 @@ interface MarketPulseData {
     totalCallPremium: number;
     totalPutPremium: number;
     sweepCount: number;
+    callSweeps: number;
+    putSweeps: number;
   };
   trending: {
     ticker: string;
@@ -239,7 +241,11 @@ const MarketPulse = () => {
             <div className="flex gap-3 mt-1 text-[9px]">
               <span className="text-emerald-400">Calls: {formatPremium(data.sentiment.totalCallPremium)}</span>
               <span className="text-red-400">Puts: {formatPremium(data.sentiment.totalPutPremium)}</span>
+            </div>
+            <div className="flex gap-3 mt-0.5 text-[9px]">
               <span className="text-amber-400">{data.sentiment.sweepCount} sweeps</span>
+              <span className="text-emerald-400">{data.sentiment.callSweeps} bullish</span>
+              <span className="text-red-400">{data.sentiment.putSweeps} bearish</span>
             </div>
           </div>
           <AnimatePresence>

@@ -4055,6 +4055,8 @@ router.get("/whale/market-pulse", async (_req, res) => {
     let totalCallPrem = 0;
     let totalPutPrem = 0;
     let totalSweeps = 0;
+    let callSweeps = 0;
+    let putSweeps = 0;
     const tickerCounts: Record<string, { alerts: number; callPrem: number; putPrem: number; sweeps: number; totalPrem: number }> = {};
 
     for (const a of flowAlerts) {
@@ -4065,7 +4067,11 @@ router.get("/whale/market-pulse", async (_req, res) => {
 
       if (pc === "call" || pc === "c") totalCallPrem += prem;
       else totalPutPrem += prem;
-      if (isSweep) totalSweeps++;
+      if (isSweep) {
+        totalSweeps++;
+        if (pc === "call" || pc === "c") callSweeps++;
+        else putSweeps++;
+      }
 
       if (ticker) {
         if (!tickerCounts[ticker]) tickerCounts[ticker] = { alerts: 0, callPrem: 0, putPrem: 0, sweeps: 0, totalPrem: 0 };
@@ -4148,6 +4154,8 @@ router.get("/whale/market-pulse", async (_req, res) => {
         totalCallPremium: totalCallPrem,
         totalPutPremium: totalPutPrem,
         sweepCount: totalSweeps,
+        callSweeps,
+        putSweeps,
       },
       trending,
     };
