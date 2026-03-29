@@ -14,8 +14,6 @@ const plans = [
     id: "starter",
     name: "Signal Scout",
     monthlyPrice: "$49",
-    yearlyPrice: "$499",
-    yearlySavings: "Save ~$90",
     badge: null,
     desc: "Stay aware of institutional activity and emerging opportunities.",
     icon: Star,
@@ -33,8 +31,6 @@ const plans = [
     id: "active",
     name: "Active Trader",
     monthlyPrice: "$89",
-    yearlyPrice: "$899",
-    yearlySavings: "Save ~$169",
     badge: "Most Popular",
     desc: "Start trading with real confidence. Talk to Biddie LIVE and plan your trades in real time.",
     icon: Zap,
@@ -55,8 +51,6 @@ const plans = [
     id: "pro",
     name: "Pro Trader",
     monthlyPrice: "$129",
-    yearlyPrice: "$1,199",
-    yearlySavings: "Save ~$349",
     badge: "Full Access",
     desc: "Advanced intelligence tools for traders focused on consistency and edge.",
     icon: Crown,
@@ -78,7 +72,6 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get("ref") || "";
   const [selectedPlan, setSelectedPlan] = useState("starter");
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -161,20 +154,6 @@ const Signup = () => {
           )}
         </motion.div>
 
-        <div className="flex items-center justify-center gap-3 mb-10">
-          <button
-            onClick={() => setBillingCycle("monthly")}
-            className={`text-sm font-semibold px-4 py-2 rounded-full transition-all ${billingCycle === "monthly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBillingCycle("yearly")}
-            className={`text-sm font-semibold px-4 py-2 rounded-full transition-all ${billingCycle === "yearly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Yearly
-          </button>
-        </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-16">
           {plans.map((plan, i) => (
@@ -201,15 +180,12 @@ const Signup = () => {
               <h3 className="text-foreground font-bold text-lg mb-1">{plan.name}</h3>
               <div className="flex items-baseline gap-1 mb-1">
                 <span className="text-3xl font-extrabold text-foreground">
-                  {billingCycle === "monthly" ? plan.monthlyPrice : plan.yearlyPrice}
+                  {plan.monthlyPrice}
                 </span>
                 <span className="text-sm text-muted-foreground">
-                  {billingCycle === "monthly" ? "/mo" : "/yr"}
+                  /mo
                 </span>
               </div>
-              {billingCycle === "yearly" && (
-                <span className="text-[10px] font-semibold text-primary">{plan.yearlySavings}</span>
-              )}
               <p className="text-muted-foreground text-xs mb-5 mt-2">{plan.desc}</p>
               <ul className="space-y-2">
                 {plan.features.map((f) => (
