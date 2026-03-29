@@ -346,7 +346,7 @@ const Dashboard = () => {
                       <span className="text-sm font-bold text-foreground">Welcome to JORTRADE!</span>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Great to have you with me! JORTRADE is packed with goodies. Real-time whale flow, AI signals, alerts, and so much more.
+                      Great to have you with me! This dashboard is filled with goodies. Real-time whale flow, AI signals, alerts, and so much more.
                       Take your time and look around, there's a lot to explore.
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
