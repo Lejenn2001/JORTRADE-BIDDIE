@@ -399,17 +399,34 @@ const DashboardAdmin = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {([
-                          { key: "unusual_whales", label: "Unusual Whales", color: "text-emerald-400", bg: "bg-emerald-500/10" },
-                          { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10" },
-                          { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10" },
-                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
+                          { key: "unusual_whales", label: "Unusual Whales", color: "text-emerald-400", bg: "bg-emerald-500/10", limitPerMin: 120, limitPerDay: 15000 },
+                          { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10", limitPerMin: null, limitPerDay: null },
+                          { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10", limitPerMin: null, limitPerDay: null },
+                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10", limitPerMin: 30, limitPerDay: null },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
+                          const dayPct = svc.limitPerDay ? Math.min((c.today / svc.limitPerDay) * 100, 100) : null;
+                          const minPct = svc.limitPerMin ? Math.min((c.minute / svc.limitPerMin) * 100, 100) : null;
                           return (
                             <div key={svc.key} className={`rounded-lg p-3 ${svc.bg} border border-border/20`}>
                               <p className={`text-[11px] font-medium ${svc.color} mb-1`}>{svc.label}</p>
-                              <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">{c.minute}/min</p>
+                              <div className="flex items-baseline gap-1">
+                                <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {svc.limitPerDay ? `/ ${svc.limitPerDay.toLocaleString()}` : "calls"}
+                                </p>
+                              </div>
+                              {dayPct !== null && (
+                                <div className="w-full h-1 rounded-full bg-border/30 mt-1.5 mb-1">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${dayPct > 80 ? 'bg-red-400' : dayPct > 50 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                                    style={{ width: `${dayPct}%` }}
+                                  />
+                                </div>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {c.minute}/min{svc.limitPerMin ? ` (limit ${svc.limitPerMin})` : ''}
+                              </p>
                             </div>
                           );
                         })}
