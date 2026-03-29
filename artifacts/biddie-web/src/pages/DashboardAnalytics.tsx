@@ -54,6 +54,9 @@ interface SignalStats {
   misses: number;
   pending: number;
   winRate: number;
+  biddiePicks: number;
+  biddiePickRate: number;
+  avgConviction: number;
   byTicker: Record<string, { hits: number; total: number }>;
   byCategory: Record<string, { hits: number; total: number }>;
 }
@@ -464,9 +467,13 @@ const DashboardAnalytics = () => {
 
         if (historyData.signals) {
           setAllSignals(historyData.signals);
-          const picks = historyData.signals.filter((s: any) => s.is_biddie_pick);
-          const resolved = picks.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
+          const allSigs = historyData.signals;
+          const biddiePicks = allSigs.filter((s: any) => s.is_biddie_pick);
+          const resolved = allSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
+
+          const convictions = allSigs.filter((s: any) => s.confidence != null).map((s: any) => Number(s.confidence));
+          const avgConviction = convictions.length > 0 ? convictions.reduce((a: number, b: number) => a + b, 0) / convictions.length : 0;
 
           const byTicker: Record<string, { hits: number; total: number }> = {};
           const byCategory: Record<string, { hits: number; total: number }> = {};
@@ -483,11 +490,14 @@ const DashboardAnalytics = () => {
           }
 
           setSignalStats({
-            total: picks.length,
+            total: allSigs.length,
             hits,
             misses: resolved.length - hits,
-            pending: picks.filter((s: any) => !s.outcome || s.outcome === "pending").length,
+            pending: allSigs.filter((s: any) => !s.outcome || s.outcome === "pending").length,
             winRate: resolved.length > 0 ? Math.round((hits / resolved.length) * 100) : 0,
+            biddiePicks: biddiePicks.length,
+            biddiePickRate: allSigs.length > 0 ? Math.round((biddiePicks.length / allSigs.length) * 100) : 0,
+            avgConviction,
             byTicker,
             byCategory,
           });
@@ -581,10 +591,8 @@ const DashboardAnalytics = () => {
                   <>
                     <PerformanceSnapshot />
                     <OverviewTab
-                      userStats={userStats}
                       signalStats={signalStats}
                       topTickers={topTickers}
-                      userTopTickers={userTopTickers}
                       weeklyStats={weeklyStats}
                     />
                   </>
@@ -673,10 +681,9 @@ function CategoryBar({ category, hits, total }: { category: string; hits: number
   );
 }
 
-function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weeklyStats }: {
-  userStats: TradeStats | null; signalStats: SignalStats | null;
+function OverviewTab({ signalStats, topTickers, weeklyStats }: {
+  signalStats: SignalStats | null;
   topTickers: { ticker: string; hits: number; total: number; winRate: number }[];
-  userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   weeklyStats: WeeklyStats[];
 }) {
   const [selectedWeek, setSelectedWeek] = useState<WeeklyStats | null>(null);
@@ -708,50 +715,14 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-yellow-500/10 via-background to-background">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-2xl -translate-y-8 translate-x-8" />
-          <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-yellow-400" />
-            Your Trading Stats
-          </h3>
-          {userStats && userStats.total > 0 ? (
-            <div className="flex items-center gap-5">
-              <WinRateRing rate={userStats.winRate} size={80} />
-              <div className="flex-1 space-y-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">This Week</span>
-                  <span className="font-bold text-foreground">{userStats.weekWinRate}% ({userStats.weekHits}/{userStats.weekTotal})</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Total Trades</span>
-                  <span className="font-bold text-foreground">{userStats.total}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Pending</span>
-                  <span className="font-bold text-yellow-400">{userStats.pending}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Win Streak</span>
-                  <span className="font-bold text-orange-400 flex items-center gap-1">
-                    {userStats.streak >= 3 && <Flame className="h-3 w-3" />}
-                    {userStats.streak}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-6">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-yellow-400/50" />
-              </div>
-              <p className="text-sm font-medium text-muted-foreground">No trades taken yet</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Click "I Took This Trade" on signals to start tracking</p>
-            </div>
-          )}
-        </motion.div>
-      </div>
+      {signalStats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard label="Total Signals" value={signalStats.total} icon={<Activity className="h-5 w-5 text-blue-400" />} color="border-blue-500/20" />
+          <StatCard label="Overall Win Rate" value={`${signalStats.winRate}%`} icon={<CheckCircle2 className="h-5 w-5 text-emerald-400" />} color="border-emerald-500/20" />
+          <StatCard label="Biddie Picks" value={signalStats.biddiePicks} sub={`${signalStats.biddiePickRate}% pick rate`} icon={<Zap className="h-5 w-5 text-violet-400" />} color="border-violet-500/20" />
+          <StatCard label="Avg Conviction" value={(signalStats.avgConviction || 0).toFixed(1)} sub="out of 10" icon={<Flame className="h-5 w-5 text-orange-400" />} color="border-orange-500/20" />
+        </div>
+      )}
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-primary/5 via-background to-background">
