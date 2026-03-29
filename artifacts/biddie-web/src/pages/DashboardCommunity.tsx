@@ -307,7 +307,7 @@ const DashboardCommunity = () => {
             </div>
             {isAdmin && !selectMode && (
               <button
-                onClick={() => setSelectMode(true)}
+                onClick={() => { setSelectMode(true); setSelectedIds(new Set(messages.map(m => m.id))); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
               >
                 <CheckSquare className="h-3.5 w-3.5" />
@@ -493,10 +493,13 @@ const DashboardCommunity = () => {
               </span>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { const allIds = messages.map(m => m.id); setSelectedIds(new Set(allIds)); }}
+                  onClick={() => {
+                    if (selectedIds.size === messages.length) setSelectedIds(new Set());
+                    else setSelectedIds(new Set(messages.map(m => m.id)));
+                  }}
                   className="text-xs px-3 py-1.5 rounded-lg bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
                 >
-                  Select All
+                  {selectedIds.size === messages.length ? "Deselect All" : "Select All"}
                 </button>
                 <button
                   onClick={bulkDelete}
