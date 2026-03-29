@@ -301,34 +301,36 @@ const DashboardCommunity = () => {
           </main>
         ) : (
         <main className="flex-1 flex flex-col overflow-hidden p-1.5 sm:p-2 lg:p-3 bg-mesh">
-          <div className="mb-1.5 sm:mb-2 shrink-0 hidden sm:flex items-center gap-2">
-            <div className="flex-1">
-              <ChatRoomHeader onlineCount={onlineCount} firstName={firstName} />
-            </div>
-            {isAdmin && !selectMode && (
-              <button
-                onClick={() => { setSelectMode(true); setSelectedIds(new Set(messages.map(m => m.id))); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted/30 border border-border/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-              >
-                <CheckSquare className="h-3.5 w-3.5" />
-                Manage
-              </button>
-            )}
-            {isAdmin && selectMode && (
-              <button
-                onClick={exitSelectMode}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-destructive/20 border border-destructive/30 text-destructive hover:bg-destructive/30 transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-                Cancel
-              </button>
-            )}
+          <div className="mb-1.5 sm:mb-2 shrink-0 hidden sm:block">
+            <ChatRoomHeader onlineCount={onlineCount} firstName={firstName} />
           </div>
 
           <div
             ref={scrollRef}
             className="flex-1 glass-panel rounded-xl border-glow-purple px-2.5 sm:px-4 py-2 sm:py-3 overflow-y-auto space-y-2 mb-1.5 sm:mb-2 min-h-0"
           >
+            {isAdmin && !selectMode && (
+              <div className="flex justify-end mb-1">
+                <button
+                  onClick={() => { setSelectMode(true); setSelectedIds(new Set(messages.map(m => m.id))); }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
+                >
+                  <CheckSquare className="h-3 w-3" />
+                  Manage
+                </button>
+              </div>
+            )}
+            {isAdmin && selectMode && (
+              <div className="flex justify-end mb-1">
+                <button
+                  onClick={exitSelectMode}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Cancel
+                </button>
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="flex-1 flex items-center justify-center h-full">
                 <motion.div
