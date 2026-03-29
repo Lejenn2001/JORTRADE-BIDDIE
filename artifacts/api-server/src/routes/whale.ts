@@ -5098,4 +5098,17 @@ router.get("/whale/trump-posts", (_req, res) => {
   });
 });
 
+router.post("/whale/trump-posts/refresh", async (_req, res) => {
+  try {
+    await fetchTrumpPosts();
+    res.json({
+      posts: trumpPosts,
+      lastFetch: trumpLastFetch ? new Date(trumpLastFetch).toISOString() : null,
+      count: trumpPosts.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

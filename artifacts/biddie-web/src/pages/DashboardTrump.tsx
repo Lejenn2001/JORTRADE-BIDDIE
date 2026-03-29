@@ -51,10 +51,12 @@ const DashboardTrump = () => {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchPosts = useCallback(async (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true);
+  const fetchPosts = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
     try {
-      const resp = await fetch("/api/whale/trump-posts");
+      const resp = forceRefresh
+        ? await fetch("/api/whale/trump-posts/refresh", { method: "POST" })
+        : await fetch("/api/whale/trump-posts");
       if (!resp.ok) throw new Error("Failed to fetch");
       const data: TrumpFeedResponse = await resp.json();
       setPosts(data.posts);
