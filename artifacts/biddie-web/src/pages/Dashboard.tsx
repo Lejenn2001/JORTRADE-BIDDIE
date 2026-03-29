@@ -112,8 +112,7 @@ const Dashboard = () => {
   const welcomeKey = user?.id ? `biddie_welcomed_${user.id}` : null;
   const [showWelcome, setShowWelcome] = useState(() => {
     if (!welcomeKey) return false;
-    if (welcomeKey) localStorage.removeItem(welcomeKey);
-    return true;
+    return !localStorage.getItem(welcomeKey);
   });
   const dismissWelcome = () => {
     setShowWelcome(false);
