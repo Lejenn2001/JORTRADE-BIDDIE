@@ -235,32 +235,19 @@ const MarketPulse = () => {
               </div>
               <BeginnerTooltip
                 content={
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <p>Imagine a classroom voting. Calls = kids voting "prices go UP!" and Puts = kids voting "prices go DOWN!" The Put/Call Ratio tells you which side has more votes.</p>
-                      <div className="space-y-0.5">
-                        <p><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> Almost everyone is voting UP — the class is super confident!</p>
-                        <p><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> More kids voting UP than DOWN — feeling good.</p>
-                        <p><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> About half and half — nobody knows what's next.</p>
-                        <p><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> More kids voting DOWN — getting worried.</p>
-                        <p><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> Almost everyone is voting DOWN — the class is scared!</p>
-                      </div>
+                  <div className="space-y-1.5">
+                    <p>Imagine a classroom voting — Calls = kids voting "prices go UP!" and Puts = voting "prices go DOWN!" This ratio tells you which side has more votes.</p>
+                    <div className="space-y-0.5">
+                      <p><span className="text-emerald-400 font-bold">Below 0.7:</span> Almost everyone voting UP — super confident!</p>
+                      <p><span className="text-blue-400 font-bold">0.9–1.1:</span> About half and half — nobody knows.</p>
+                      <p><span className="text-red-400 font-bold">Above 1.3:</span> Almost everyone voting DOWN — scared!</p>
                     </div>
                     <div className="border-t border-indigo-500/20 pt-1.5">
-                      <p><span className="text-primary font-bold">Money vs Rush Orders:</span> The MONEY (premium) shows who brought the most lunch money to bet. The SWEEPS show who is running to place their bet first. Sometimes the kid with the most money bets DOWN, but the kids rushing to the front are all betting UP — watch both!</p>
-                    </div>
-                    <div className="border-t border-indigo-500/20 pt-1.5">
-                      <p><span className="text-amber-400 font-bold">What are sweeps?</span> A sweep is when a big trader sends orders to every exchange at once because they want in RIGHT NOW. It means someone with a lot of money is in a hurry!</p>
-                      <div className="space-y-0.5 mt-1">
-                        <p><span className="text-foreground/50 font-bold">Under 20:</span> Quiet — the big kids are sitting down, nothing urgent.</p>
-                        <p><span className="text-blue-400 font-bold">20–50:</span> Normal — some big kids are moving around, regular activity.</p>
-                        <p><span className="text-amber-400 font-bold">50–100:</span> Busy — the big kids are running around, pay attention!</p>
-                        <p><span className="text-red-400 font-bold">100+:</span> Chaos — everyone is sprinting, something BIG is happening!</p>
-                      </div>
+                      <p><span className="text-primary font-bold">Premium</span> = who brought the most money to bet. <span className="text-amber-400 font-bold">Sweeps</span> = who's rushing to bet first. Watch both — they can tell different stories!</p>
                     </div>
                   </div>
                 }
-                maxWidth={300}
+                maxWidth={280}
               />
             </div>
             <div className="flex items-center gap-2 mt-1">
