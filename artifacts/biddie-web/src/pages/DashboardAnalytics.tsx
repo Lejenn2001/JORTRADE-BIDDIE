@@ -1033,6 +1033,168 @@ function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { tick
 }
 
 
+function PersonalWeeklyReportCard({ weeks }: { weeks: PersonalWeek[] }) {
+  const [selectedWeek, setSelectedWeek] = useState<PersonalWeek | null>(null);
+
+  const formatWeekLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const getWeekColor = (wr: number, total: number) => {
+    if (total === 0) return "bg-muted/20 border-white/5";
+    if (wr >= 80) return "bg-emerald-500/15 border-emerald-500/30";
+    if (wr >= 60) return "bg-blue-500/15 border-blue-500/30";
+    if (wr >= 40) return "bg-yellow-500/15 border-yellow-500/30";
+    return "bg-red-500/15 border-red-500/30";
+  };
+
+  const getEmoji = (wr: number, total: number) => {
+    if (total === 0) return "—";
+    if (wr >= 80) return "🔥";
+    if (wr >= 60) return "✅";
+    if (wr >= 40) return "⚠️";
+    return "📉";
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+      className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-yellow-500/5 via-background to-background">
+      <div className="absolute top-0 left-0 w-40 h-40 bg-yellow-500/5 rounded-full blur-3xl -translate-y-12 -translate-x-12" />
+      <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+        <Trophy className="h-4 w-4 text-yellow-400" />
+        Your Personal Report Card
+      </h3>
+      <p className="text-[10px] text-muted-foreground/60 mb-4">
+        Your weekly performance based on trades you took — track your progress over time!
+      </p>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          {weeks.map((week) => {
+            const wr = week.win_rate;
+            const wins = week.hits + week.partial_hits;
+            const isSelected = selectedWeek?.week_start === week.week_start;
+
+            return (
+              <button
+                key={week.week_start}
+                onClick={() => setSelectedWeek(isSelected ? null : week)}
+                className={`relative rounded-xl p-3 border text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                  isSelected
+                    ? "border-yellow-500/50 bg-yellow-500/10 ring-1 ring-yellow-500/30"
+                    : getWeekColor(wr, week.total)
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatWeekLabel(week.week_start)} – {formatWeekLabel(week.week_end)}
+                  </span>
+                  <span className="text-xs">{getEmoji(wr, week.total)}</span>
+                </div>
+                <div className={`text-xl font-black ${
+                  wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                }`}>
+                  {wr}%
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {week.total} trades · {wins}W / {week.misses}L / {week.pending}P
+                </div>
+                <div className="mt-1.5 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      wr >= 80 ? "bg-emerald-400" : wr >= 60 ? "bg-blue-400" : wr >= 40 ? "bg-yellow-400" : "bg-red-400"
+                    }`}
+                    style={{ width: `${Math.min(wr, 100)}%` }}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedWeek && (() => {
+          const w = selectedWeek;
+          const wr = w.win_rate;
+          const wins = w.hits + w.partial_hits;
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <CalendarIcon className="h-3.5 w-3.5 text-yellow-400" />
+                  Week of {formatWeekLabel(w.week_start)} – {formatWeekLabel(w.week_end)}
+                </h4>
+                <span className={`text-lg font-black ${
+                  wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                }`}>
+                  {wr}% Win Rate
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
+                  <div className="text-base font-black text-emerald-400">{wins}</div>
+                  <div className="text-[9px] text-muted-foreground">Wins</div>
+                </div>
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-center">
+                  <XCircle className="h-3.5 w-3.5 text-red-400 mx-auto mb-0.5" />
+                  <div className="text-base font-black text-red-400">{w.misses}</div>
+                  <div className="text-[9px] text-muted-foreground">Losses</div>
+                </div>
+                <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2 text-center">
+                  <Clock className="h-3.5 w-3.5 text-yellow-400 mx-auto mb-0.5" />
+                  <div className="text-base font-black text-yellow-400">{w.pending}</div>
+                  <div className="text-[9px] text-muted-foreground">Pending</div>
+                </div>
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-2 text-center">
+                  <Activity className="h-3.5 w-3.5 text-primary mx-auto mb-0.5" />
+                  <div className="text-base font-black text-primary">{w.total}</div>
+                  <div className="text-[9px] text-muted-foreground">Total</div>
+                </div>
+              </div>
+
+              {w.top_tickers && w.top_tickers.length > 0 && (
+                <div className="pt-2 border-t border-white/[0.06]">
+                  <p className="text-[10px] text-muted-foreground mb-1.5 font-semibold">Your Top Tickers This Week</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {w.top_tickers.map((t) => (
+                      <span key={t.ticker} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-muted/20 border border-white/5">
+                        <span className="text-foreground">{t.ticker}</span>
+                        <span className="text-emerald-400 ml-1.5">{t.hits}W</span>
+                        <span className="text-red-400 ml-1">{t.misses}L</span>
+                        {t.pending > 0 && <span className="text-yellow-400 ml-1">{t.pending}P</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5">
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {wr >= 80
+                    ? "🔥 Amazing week! Your trade selections were on point — keep trusting your instincts!"
+                    : wr >= 60
+                    ? "✅ Nice work! You're picking winners more often than not. Consistency is key!"
+                    : wr >= 40
+                    ? "⚠️ Mixed results this week. Review which signals you passed on vs. took — patterns will emerge!"
+                    : "📉 Tough week for your picks. Consider being more selective or waiting for higher-conviction signals."}
+                  {" "}You took {w.total} trades this week.
+                </p>
+              </div>
+            </motion.div>
+          );
+        })()}
+      </div>
+    </motion.div>
+  );
+}
+
 function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
   userStats: TradeStats | null; userTrades: UserTrade[]; userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   allSignals: HistoricalSignal[];
@@ -1078,6 +1240,10 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                 ))}
               </div>
             </motion.div>
+          )}
+
+          {userStats.weeklyBreakdown && userStats.weeklyBreakdown.length > 0 && (
+            <PersonalWeeklyReportCard weeks={userStats.weeklyBreakdown} />
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
