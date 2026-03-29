@@ -5158,7 +5158,7 @@ router.get("/whale/trades/stats", async (req, res) => {
     const weeklyBreakdown = Object.entries(weeklyMap)
       .map(([weekStart, data]) => {
         const ws = new Date(weekStart);
-        const we = new Date(ws); we.setDate(we.getDate() + 8);
+        const we = new Date(ws); we.setDate(we.getDate() + 7);
         const resolved = data.hits + data.partial_hits + data.misses;
         const wr = resolved > 0 ? Math.round(((data.hits + data.partial_hits) / resolved) * 100) : 0;
 
@@ -5232,11 +5232,7 @@ router.get("/whale/health", (_req, res) => {
 function getTradeWeekStart(d: Date): Date {
   const date = new Date(d);
   const day = date.getDay();
-  if (day === 0) {
-    date.setDate(date.getDate() - 7);
-  } else {
-    date.setDate(date.getDate() - day);
-  }
+  date.setDate(date.getDate() - day);
   date.setHours(0, 0, 0, 0);
   return date;
 }
