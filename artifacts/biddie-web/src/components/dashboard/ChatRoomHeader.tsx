@@ -57,34 +57,9 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
     <div className="space-y-2 lg:space-y-3">
       <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
         <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
-          <Clock className="h-3.5 lg:h-4 w-3.5 lg:w-4 text-primary" />
-          <div>
-            <p className="text-xs lg:text-sm font-semibold text-foreground tracking-wide">{timeStr}</p>
-            <p className="text-[9px] lg:text-[10px] text-muted-foreground">{dateStr} EST</p>
-          </div>
-        </div>
-
-        {weather && (
-          <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
-            <span className="text-lg lg:text-xl">{weather.icon}</span>
-            <div>
-              <p className="text-xs lg:text-sm font-semibold text-foreground">{weather.temp}°F</p>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-2.5 w-2.5 text-muted-foreground" />
-                <p className="text-[9px] lg:text-[10px] text-muted-foreground">{weather.location}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="glass-panel rounded-xl px-3 lg:px-4 py-1.5 lg:py-2.5 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <Users className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-emerald-400" />
           <span className="text-xs lg:text-sm font-medium text-emerald-400">{onlineCount} online</span>
-        </div>
-
-        <div className="hidden md:block">
-          <MarketStatusSign />
         </div>
 
         <div className="flex-1" />
