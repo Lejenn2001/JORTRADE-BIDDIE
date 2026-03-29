@@ -162,6 +162,27 @@ const DashboardBreakout = () => {
   const [tickerMessage, setTickerMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [takenTrades, setTakenTrades] = useState<Set<string>>(new Set());
   const [takingTrade, setTakingTrade] = useState<string | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+
+  const requestNotifPermission = useCallback(async () => {
+    if (typeof Notification === "undefined") return;
+    const perm = await Notification.requestPermission();
+    setNotifPermission(perm);
+  }, []);
+
+  const sendBrowserNotif = useCallback((alert: BreakoutAlertData) => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const dir = alert.direction === "bullish" ? "CALL" : "PUT";
+    const notif = new Notification(`Breakout Alert: ${alert.ticker}`, {
+      body: `${alert.ticker} $${alert.suggestedStrike} ${dir} @ $${alert.breakoutPrice}\nTarget: $${alert.targetPrice} | Score: ${alert.score}`,
+      icon: "/favicon.ico",
+      tag: alert.id,
+      requireInteraction: true,
+    });
+    notif.onclick = () => { window.focus(); notif.close(); };
+  }, []);
 
   const buildTradeKey = (setup: BreakoutSetup) =>
     `${setup.ticker}|${setup.contract?.strike}|${setup.contract?.type}|${setup.contract?.expiry}`;
@@ -232,10 +253,16 @@ const DashboardBreakout = () => {
       const resp = await fetch("/api/breakout/alerts");
       if (!resp.ok) return;
       const data: AlertsResponse = await resp.json();
+      const prevIds = prevAlertsRef.current;
+      const newAlerts = data.alerts.filter(a => !prevIds.includes(a.id));
+      if (prevIds.length > 0 && newAlerts.length > 0) {
+        newAlerts.forEach(a => sendBrowserNotif(a));
+      }
+      prevAlertsRef.current = data.alerts.map(a => a.id);
       setAlerts(data.alerts);
       setMonitoring(data.monitoring);
     } catch {}
-  }, []);
+  }, [sendBrowserNotif]);
 
   const fetchCustomTickers = useCallback(async () => {
     try {
@@ -416,6 +443,23 @@ const DashboardBreakout = () => {
                     </span>
                   </>
                 )}
+              </div>
+            )}
+
+            {notifPermission === "default" && (
+              <button
+                onClick={requestNotifPermission}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary hover:bg-primary/15 transition-colors"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                <span className="font-semibold">Enable Desktop Notifications</span>
+                <span className="text-primary/70">— get alerted when breakouts fire, even if this tab is in the background</span>
+              </button>
+            )}
+            {notifPermission === "granted" && (
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-400/70">
+                <Bell className="h-2.5 w-2.5" />
+                Desktop notifications active
               </div>
             )}
 
