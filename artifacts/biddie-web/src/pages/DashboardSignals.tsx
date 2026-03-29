@@ -801,6 +801,16 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               <Bell className={`h-3.5 w-3.5 transition-colors ${hasAlert ? "text-amber-400 fill-amber-400/30" : "text-muted-foreground group-hover:text-amber-400"}`} />
             </button>
           )}
+          {(() => {
+            const priceInfo = getPrice?.(signal.ticker);
+            if (!priceInfo) return null;
+            return (
+              <span className="flex items-center gap-1 text-xs font-mono">
+                <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
+                <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
+              </span>
+            );
+          })()}
           <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
             <Clock className="h-2.5 w-2.5" />
             {signal.timestamp}
@@ -817,16 +827,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               <TrendingDown className="h-4 w-4 text-destructive" />
             )}
             <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
-            {(() => {
-              const priceInfo = getPrice?.(signal.ticker);
-              if (!priceInfo) return null;
-              return (
-                <span className="flex items-center gap-1 text-xs font-mono">
-                  <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                  <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
-                </span>
-              );
-            })()}
             <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
               isCall ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
             }`}>

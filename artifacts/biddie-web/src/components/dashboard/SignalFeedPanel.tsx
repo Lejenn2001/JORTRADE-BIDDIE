@@ -190,10 +190,18 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-2.5 w-2.5" />
-                    {signal.timestamp}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {priceInfo && (
+                      <span className="flex items-center gap-1 text-xs font-mono">
+                        <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
+                        <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      {signal.timestamp}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="px-4 py-3 space-y-3">
@@ -207,12 +215,6 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           <TrendingDown className="h-5 w-5 text-destructive" />
                         )}
                         <span className="font-bold text-foreground text-lg tracking-tight">{signal.ticker}</span>
-                        {priceInfo && (
-                          <span className="flex items-center gap-1 text-xs font-mono">
-                            <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                            <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
-                          </span>
-                        )}
                         <span
                           className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
                             signal.putCall === "put"
