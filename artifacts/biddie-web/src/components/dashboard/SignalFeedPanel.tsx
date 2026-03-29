@@ -252,7 +252,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         </p>
                         {signal.description && (
                           <div className="mt-0.5">
-                            <BeginnerTooltip content={simplifySignalDescription(signal.description)} maxWidth={300} />
+                            <BeginnerTooltip content={simplifySignalDescription(signal)} maxWidth={300} />
                           </div>
                         )}
                       </div>
