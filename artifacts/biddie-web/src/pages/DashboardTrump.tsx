@@ -28,7 +28,7 @@ interface TrumpFeedResponse {
 }
 
 const CandlestickBg = () => (
-  <svg className="absolute inset-0 w-full h-full opacity-[0.06]" viewBox="0 0 800 200" preserveAspectRatio="none">
+  <svg className="absolute inset-0 w-full h-full opacity-[0.03]" viewBox="0 0 800 200" preserveAspectRatio="none">
     {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
       const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
       const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
