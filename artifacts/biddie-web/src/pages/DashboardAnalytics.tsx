@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   BarChart3, Target, Flame, Trophy, TrendingUp,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
   ArrowUpRight, ArrowDownRight, Loader2, Lightbulb,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet, ExternalLink
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -772,6 +773,7 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
   getPrice: (ticker: string) => PriceInfo | null;
   allSignals: HistoricalSignal[];
 }) {
+  const navigate = useNavigate();
   const insights = useMemo(() => computeLearningInsights(userTrades, userTopTickers), [userTrades, userTopTickers]);
 
   return (
@@ -922,12 +924,24 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
                             {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                           </p>
                         </div>
-                        <div className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${
-                          isWin ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25 shadow-[0_0_8px_hsl(142,71%,45%,0.1)]"
-                          : isLoss ? "bg-red-500/15 text-red-400 border-red-500/25 shadow-[0_0_8px_hsl(0,72%,51%,0.1)]"
-                          : "bg-[hsl(270,60%,40%,0.1)] text-[hsl(270,75%,70%)] border-[hsl(270,60%,40%,0.2)]"
-                        }`}>
-                          {isWin ? "WIN" : isLoss ? "LOSS" : "PENDING"}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${
+                            isWin ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25 shadow-[0_0_8px_hsl(142,71%,45%,0.1)]"
+                            : isLoss ? "bg-red-500/15 text-red-400 border-red-500/25 shadow-[0_0_8px_hsl(0,72%,51%,0.1)]"
+                            : "bg-[hsl(270,60%,40%,0.1)] text-[hsl(270,75%,70%)] border-[hsl(270,60%,40%,0.2)]"
+                          }`}>
+                            {isWin ? "WIN" : isLoss ? "LOSS" : "PENDING"}
+                          </div>
+                          <button
+                            onClick={() => {
+                              const resolved = trade.signal_outcome !== "pending" ? "true" : "false";
+                              navigate(`/dashboard/signals?search=${encodeURIComponent(trade.ticker)}&resolved=${resolved}`);
+                            }}
+                            className="w-7 h-7 rounded-md flex items-center justify-center border border-white/[0.08] bg-white/[0.03] hover:bg-[hsl(270,60%,40%,0.15)] hover:border-[hsl(270,60%,40%,0.3)] transition-all text-muted-foreground hover:text-[hsl(270,75%,70%)]"
+                            title="View Signal"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
                         </div>
                       </div>
 
