@@ -319,7 +319,7 @@ const Dashboard = () => {
                 signals={algorithmPlays}
                 loading={signalFeedLoading}
                 title="Algorithm Plays"
-                subtitle="AI-detected setups using price action and options flow analysis — typically short-term, same-day trades"
+                subtitle="AI-detected setups using price action and options flow analysis — short to mid-term entries with confirmed momentum"
                 icon="algorithm"
                 limit={5}
                 takenSignalIds={takenSignalIds}
