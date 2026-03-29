@@ -285,7 +285,7 @@ const MarketStatusSign = () => {
           {sessions.map((s) => (
             <div
               key={s.name}
-              className={`relative rounded-xl border px-4 py-3 text-center transition-all duration-500 ${
+              className={`relative rounded-xl border px-2 py-2.5 text-center transition-all duration-500 ${
                 s.active
                   ? `${s.activeBorder} ${s.activeBg} ${s.activeGlow}`
                   : "border-white/[0.12] bg-white/[0.03] opacity-40"
