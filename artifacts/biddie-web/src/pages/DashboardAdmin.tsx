@@ -466,21 +466,6 @@ const DashboardAdmin = () => {
                         </div>
                       </div>
 
-                      <div
-                        className="glass-panel rounded-xl p-5 border-border/40 cursor-pointer hover:border-primary/30 transition-colors"
-                        onClick={() => setActiveTab('signals')}
-                      >
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                            <Zap className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground">Signal Insights</p>
-                            <p className="text-xs text-muted-foreground">Performance analytics & signal log</p>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">View hit rates, accuracy, and detailed signal history</p>
-                      </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -505,224 +490,6 @@ const DashboardAdmin = () => {
                         Export Users
                       </Button>
                     </div>
-
-                    {/* Signal System Reference */}
-                    <button
-                      onClick={() => setShowReference(!showReference)}
-                      className="w-full flex items-center justify-between glass-panel rounded-xl p-5 border-border/40 hover:border-primary/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                          <BookOpen className="h-5 w-5 text-indigo-400" />
-                        </div>
-                        <div className="text-left">
-                          <p className="font-bold text-foreground">Signal System Reference</p>
-                          <p className="text-xs text-muted-foreground">Criteria, tags, scoring, and how each feature works</p>
-                        </div>
-                      </div>
-                      {showReference ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
-                    </button>
-
-                    {showReference && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="mt-4 space-y-6"
-                      >
-                        <div className="glass-panel rounded-xl p-6 border-border/40">
-                          <h3 className="text-lg font-bold text-foreground mb-4">Signal Sources Overview</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-emerald-400 mb-2">Community Chat (Auto-Posts)</h4>
-                              <p className="text-xs text-muted-foreground mb-3">Biddie monitors the tape and only posts when something serious hits. 3-5 alerts max on a busy day.</p>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> Sweep orders only (urgency signal)</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> $250K+ total premium</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> 85%+ ask-side aggression</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> 5x+ volume/open interest ratio</li>
-                                <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> Strike within 5% of current price (near ATM)</li>
-                              </ul>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-blue-400 mb-2">Dashboard & Signals Tab</h4>
-                              <p className="text-xs text-muted-foreground mb-3">Wider scan pulling 500+ flow alerts. AI scores and categorizes into Algorithm, Whale, and Spread plays.</p>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> $25K+ total premium</li>
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> 50%+ ask-side aggression</li>
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Up to 40 candidates scored by AI</li>
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Only confidence 7-10 make the cut</li>
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Key levels (VWAP, pivots, PDH/PDL) used for entries</li>
-                                <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Signals tab retains 7 days of history</li>
-                              </ul>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-purple-400 mb-2">Biddie AI Chat (On-Demand)</h4>
-                              <p className="text-xs text-muted-foreground mb-3">Full access to live flow data. No pre-filtering — Biddie pulls everything and gives a specific, data-backed answer.</p>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> All flow data (no minimum thresholds)</li>
-                                <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Real-time key levels per ticker</li>
-                                <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Dark pool data when requested</li>
-                                <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Sector ETF analysis</li>
-                                <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Position reviews with gamma/theta analysis</li>
-                              </ul>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-amber-400 mb-2">Morning Outlook (Auto, ~8:15 AM ET)</h4>
-                              <p className="text-xs text-muted-foreground mb-3">Automated pre-market analysis posted to community chat before the open.</p>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Posts once daily, 8:15-8:30 AM ET</li>
-                                <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Key levels for SPY, QQQ, NVDA, AAPL, TSLA</li>
-                                <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Top 50 flow alerts analyzed</li>
-                                <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Sector ETF data + economic calendar</li>
-                                <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Weekdays only, skips weekends</li>
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="glass-panel rounded-xl p-6 border-border/40">
-                          <h3 className="text-lg font-bold text-foreground mb-4">Signal Categories</h3>
-                          <div className="space-y-4">
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-emerald-400 mb-1">Algorithm Plays</h4>
-                              <p className="text-xs text-muted-foreground mb-2">Single-leg directional plays confirmed by price action + gamma analysis. Intraday entries.</p>
-                              <div className="text-xs text-muted-foreground space-y-1">
-                                <p><span className="text-foreground font-medium">How detected:</span> Price action at key support/resistance levels + confirming options flow + gamma zone alignment</p>
-                                <p><span className="text-foreground font-medium">Typical setup:</span> Stock bounces off VWAP or prior day level while sweep orders stack in that direction</p>
-                              </div>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-blue-400 mb-1">Whale Plays</h4>
-                              <p className="text-xs text-muted-foreground mb-2">Large institutional single-leg flow. Sweeps, blocks, floor trades. Swing positioning.</p>
-                              <div className="text-xs text-muted-foreground space-y-1">
-                                <p><span className="text-foreground font-medium">Threshold:</span> $100K+ premium for large-caps, $50K+ for mid/small-caps</p>
-                                <p><span className="text-foreground font-medium">Key indicators:</span> Sweep orders, block trades, floor trades with high ask-side aggression</p>
-                              </div>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-border/30">
-                              <h4 className="font-semibold text-purple-400 mb-1">Spreads & Butterflies</h4>
-                              <p className="text-xs text-muted-foreground mb-2">Multi-leg strategies — debit spreads and butterflies only. Defined risk.</p>
-                              <div className="text-xs text-muted-foreground space-y-1">
-                                <p><span className="text-foreground font-medium">How detected:</span> Multiple flow alerts on same ticker + same expiry at different strikes</p>
-                                <p><span className="text-foreground font-medium">Butterfly:</span> 3 strikes with middle having 2x volume = likely butterfly</p>
-                                <p><span className="text-foreground font-medium">Debit spread:</span> Sweeps at adjacent strikes on same ticker</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="glass-panel rounded-xl p-6 border-border/40">
-                          <h3 className="text-lg font-bold text-foreground mb-4">Tag Legend</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-red-500/20 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full">ACT NOW</span>
-                              <p className="text-xs text-muted-foreground mt-1">Price confirmed at a key level AND in a favorable gamma zone. Highest conviction.</p>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">HIGH CONVICTION</span>
-                              <p className="text-xs text-muted-foreground mt-1">Conviction score 70+. Strong flow with good premium, aggression, and volume.</p>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full">PRICE CONFIRMED</span>
-                              <p className="text-xs text-muted-foreground mt-1">Price action confirmed the signal at a key level. +10 conviction boost.</p>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-violet-500/20 text-violet-400 text-[10px] font-bold px-2 py-0.5 rounded-full">NEG GAMMA</span>
-                              <p className="text-xs text-muted-foreground mt-1">Negative gamma zone — moves amplified. Breakouts/breakdowns more explosive.</p>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-cyan-500/20 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full">POS GAMMA</span>
-                              <p className="text-xs text-muted-foreground mt-1">Positive gamma zone — mean-reversion and pinning. Butterflies benefit here.</p>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-3 border border-border/30">
-                              <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full">Sweep</span>
-                              <p className="text-xs text-muted-foreground mt-1">Large aggressive order across multiple exchanges. Indicates urgency.</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="glass-panel rounded-xl p-6 border-border/40">
-                          <h3 className="text-lg font-bold text-foreground mb-4">Conviction Scoring (0-100)</h3>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
-                              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 font-bold text-sm shrink-0">90+</div>
-                              <div>
-                                <p className="text-sm font-semibold text-red-400">Extreme Conviction</p>
-                                <p className="text-xs text-muted-foreground">Multiple sweeps, 80%+ aggression, 10x+ vol/OI, large premium.</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
-                              <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm shrink-0">75-89</div>
-                              <div>
-                                <p className="text-sm font-semibold text-amber-400">Very High Conviction</p>
-                                <p className="text-xs text-muted-foreground">Strong sweep or 80%+ aggression with large premium and clear direction.</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
-                              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0">60-74</div>
-                              <div>
-                                <p className="text-sm font-semibold text-emerald-400">High Conviction</p>
-                                <p className="text-xs text-muted-foreground">Good flow with decent premium. May be slightly OTM or moderate volume.</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
-                              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm shrink-0">40-59</div>
-                              <div>
-                                <p className="text-sm font-semibold text-blue-400">Moderate Conviction</p>
-                                <p className="text-xs text-muted-foreground">Watchlist candidate. Has some conviction but missing key confirmation.</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="glass-panel rounded-xl p-6 border-border/40">
-                          <h3 className="text-lg font-bold text-foreground mb-4">Subscription Tiers</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Star className="h-4 w-4 text-blue-400" />
-                                <h4 className="font-semibold text-blue-400">Signal Scout</h4>
-                              </div>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li>Community chat access</li>
-                                <li>Biddie AI: 10 questions/day</li>
-                                <li>Can purchase credit packs</li>
-                              </ul>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Zap className="h-4 w-4 text-amber-400" />
-                                <h4 className="font-semibold text-amber-400">Active Trader</h4>
-                              </div>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li>Full dashboard access</li>
-                                <li>Biddie AI: 25 questions/day</li>
-                                <li>Can purchase credit packs</li>
-                              </ul>
-                            </div>
-                            <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Crown className="h-4 w-4 text-purple-400" />
-                                <h4 className="font-semibold text-purple-400">Pro Trader</h4>
-                              </div>
-                              <ul className="text-xs text-muted-foreground space-y-1.5">
-                                <li>Full dashboard access</li>
-                                <li>Biddie AI: 50 questions/day</li>
-                                <li>Can purchase credit packs</li>
-                              </ul>
-                            </div>
-                          </div>
-                          <div className="mt-4 bg-card/50 rounded-lg p-4 border border-border/30">
-                            <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
-                            <div className="flex gap-4 text-xs text-muted-foreground">
-                              <span>10 credits — $4.99</span>
-                              <span>25 credits — $9.99</span>
-                              <span>50 credits — $17.99</span>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
                   </>
                 );
               })()}
@@ -804,8 +571,225 @@ const DashboardAdmin = () => {
           )}
 
           {activeTab === 'signals' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <AdminSignalInsights />
+
+              <button
+                onClick={() => setShowReference(!showReference)}
+                className="w-full flex items-center justify-between glass-panel rounded-xl p-5 border-border/40 hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                    <BookOpen className="h-5 w-5 text-indigo-400" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-foreground">Signal System Reference</p>
+                    <p className="text-xs text-muted-foreground">Criteria, tags, scoring, and how each feature works</p>
+                  </div>
+                </div>
+                {showReference ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+              </button>
+
+              {showReference && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="space-y-6"
+                >
+                  <div className="glass-panel rounded-xl p-6 border-border/40">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Signal Sources Overview</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-emerald-400 mb-2">Community Chat (Auto-Posts)</h4>
+                        <p className="text-xs text-muted-foreground mb-3">Biddie monitors the tape and only posts when something serious hits. 3-5 alerts max on a busy day.</p>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> Sweep orders only (urgency signal)</li>
+                          <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> $250K+ total premium</li>
+                          <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> 85%+ ask-side aggression</li>
+                          <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> 5x+ volume/open interest ratio</li>
+                          <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">&#9679;</span> Strike within 5% of current price (near ATM)</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-blue-400 mb-2">Dashboard & Signals Tab</h4>
+                        <p className="text-xs text-muted-foreground mb-3">Wider scan pulling 500+ flow alerts. AI scores and categorizes into Algorithm, Whale, and Spread plays.</p>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> $25K+ total premium</li>
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> 50%+ ask-side aggression</li>
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Up to 40 candidates scored by AI</li>
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Only confidence 7-10 make the cut</li>
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Key levels (VWAP, pivots, PDH/PDL) used for entries</li>
+                          <li className="flex items-start gap-2"><span className="text-blue-400 mt-0.5">&#9679;</span> Signals tab retains 7 days of history</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-purple-400 mb-2">Biddie AI Chat (On-Demand)</h4>
+                        <p className="text-xs text-muted-foreground mb-3">Full access to live flow data. No pre-filtering — Biddie pulls everything and gives a specific, data-backed answer.</p>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> All flow data (no minimum thresholds)</li>
+                          <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Real-time key levels per ticker</li>
+                          <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Dark pool data when requested</li>
+                          <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Sector ETF analysis</li>
+                          <li className="flex items-start gap-2"><span className="text-purple-400 mt-0.5">&#9679;</span> Position reviews with gamma/theta analysis</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-amber-400 mb-2">Morning Outlook (Auto, ~8:15 AM ET)</h4>
+                        <p className="text-xs text-muted-foreground mb-3">Automated pre-market analysis posted to community chat before the open.</p>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Posts once daily, 8:15-8:30 AM ET</li>
+                          <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Key levels for SPY, QQQ, NVDA, AAPL, TSLA</li>
+                          <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Top 50 flow alerts analyzed</li>
+                          <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Sector ETF data + economic calendar</li>
+                          <li className="flex items-start gap-2"><span className="text-amber-400 mt-0.5">&#9679;</span> Weekdays only, skips weekends</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel rounded-xl p-6 border-border/40">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Signal Categories</h3>
+                    <div className="space-y-4">
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-emerald-400 mb-1">Algorithm Plays</h4>
+                        <p className="text-xs text-muted-foreground mb-2">Single-leg directional plays confirmed by price action + gamma analysis. Intraday entries.</p>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p><span className="text-foreground font-medium">How detected:</span> Price action at key support/resistance levels + confirming options flow + gamma zone alignment</p>
+                          <p><span className="text-foreground font-medium">Typical setup:</span> Stock bounces off VWAP or prior day level while sweep orders stack in that direction</p>
+                        </div>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-blue-400 mb-1">Whale Plays</h4>
+                        <p className="text-xs text-muted-foreground mb-2">Large institutional single-leg flow. Sweeps, blocks, floor trades. Swing positioning.</p>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p><span className="text-foreground font-medium">Threshold:</span> $100K+ premium for large-caps, $50K+ for mid/small-caps</p>
+                          <p><span className="text-foreground font-medium">Key indicators:</span> Sweep orders, block trades, floor trades with high ask-side aggression</p>
+                        </div>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-border/30">
+                        <h4 className="font-semibold text-purple-400 mb-1">Spreads & Butterflies</h4>
+                        <p className="text-xs text-muted-foreground mb-2">Multi-leg strategies — debit spreads and butterflies only. Defined risk.</p>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p><span className="text-foreground font-medium">How detected:</span> Multiple flow alerts on same ticker + same expiry at different strikes</p>
+                          <p><span className="text-foreground font-medium">Butterfly:</span> 3 strikes with middle having 2x volume = likely butterfly</p>
+                          <p><span className="text-foreground font-medium">Debit spread:</span> Sweeps at adjacent strikes on same ticker</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel rounded-xl p-6 border-border/40">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Tag Legend</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-red-500/20 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full">ACT NOW</span>
+                        <p className="text-xs text-muted-foreground mt-1">Price confirmed at a key level AND in a favorable gamma zone. Highest conviction.</p>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">HIGH CONVICTION</span>
+                        <p className="text-xs text-muted-foreground mt-1">Conviction score 70+. Strong flow with good premium, aggression, and volume.</p>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full">PRICE CONFIRMED</span>
+                        <p className="text-xs text-muted-foreground mt-1">Price action confirmed the signal at a key level. +10 conviction boost.</p>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-violet-500/20 text-violet-400 text-[10px] font-bold px-2 py-0.5 rounded-full">NEG GAMMA</span>
+                        <p className="text-xs text-muted-foreground mt-1">Negative gamma zone — moves amplified. Breakouts/breakdowns more explosive.</p>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-cyan-500/20 text-cyan-400 text-[10px] font-bold px-2 py-0.5 rounded-full">POS GAMMA</span>
+                        <p className="text-xs text-muted-foreground mt-1">Positive gamma zone — mean-reversion and pinning. Butterflies benefit here.</p>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-3 border border-border/30">
+                        <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full">Sweep</span>
+                        <p className="text-xs text-muted-foreground mt-1">Large aggressive order across multiple exchanges. Indicates urgency.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel rounded-xl p-6 border-border/40">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Conviction Scoring (0-100)</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
+                        <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 font-bold text-sm shrink-0">90+</div>
+                        <div>
+                          <p className="text-sm font-semibold text-red-400">Extreme Conviction</p>
+                          <p className="text-xs text-muted-foreground">Multiple sweeps, 80%+ aggression, 10x+ vol/OI, large premium.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
+                        <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm shrink-0">75-89</div>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-400">Very High Conviction</p>
+                          <p className="text-xs text-muted-foreground">Strong sweep or 80%+ aggression with large premium and clear direction.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0">60-74</div>
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-400">High Conviction</p>
+                          <p className="text-xs text-muted-foreground">Good flow with decent premium. May be slightly OTM or moderate volume.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 bg-card/50 rounded-lg p-3 border border-border/30">
+                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm shrink-0">40-59</div>
+                        <div>
+                          <p className="text-sm font-semibold text-blue-400">Moderate Conviction</p>
+                          <p className="text-xs text-muted-foreground">Watchlist candidate. Has some conviction but missing key confirmation.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel rounded-xl p-6 border-border/40">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Subscription Tiers</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Star className="h-4 w-4 text-blue-400" />
+                          <h4 className="font-semibold text-blue-400">Signal Scout</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Community chat access</li>
+                          <li>Biddie AI: 10 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Zap className="h-4 w-4 text-amber-400" />
+                          <h4 className="font-semibold text-amber-400">Active Trader</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Full dashboard access</li>
+                          <li>Biddie AI: 25 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                      <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Crown className="h-4 w-4 text-purple-400" />
+                          <h4 className="font-semibold text-purple-400">Pro Trader</h4>
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-1.5">
+                          <li>Full dashboard access</li>
+                          <li>Biddie AI: 50 questions/day</li>
+                          <li>Can purchase credit packs</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="mt-4 bg-card/50 rounded-lg p-4 border border-border/30">
+                      <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
+                      <div className="flex gap-4 text-xs text-muted-foreground">
+                        <span>10 credits — $4.99</span>
+                        <span>25 credits — $9.99</span>
+                        <span>50 credits — $17.99</span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           )}
 
