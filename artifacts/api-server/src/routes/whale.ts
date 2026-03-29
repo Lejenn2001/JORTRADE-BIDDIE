@@ -5259,14 +5259,14 @@ async function fetchTrumpPosts(): Promise<void> {
     const sorted = data
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recent = sorted.filter(p => new Date(p.created_at).getTime() > cutoff);
 
     const newCount = trumpLastSeenId
       ? recent.filter(p => p.id > trumpLastSeenId).length
       : 0;
 
-    trumpPosts = recent.slice(0, 50).map(p => ({
+    trumpPosts = recent.map(p => ({
       ...p,
       content: stripHtml(p.content),
       url: sanitizeUrl(p.url),
@@ -5275,7 +5275,7 @@ async function fetchTrumpPosts(): Promise<void> {
     trumpLastSeenId = sorted[0]?.id ?? trumpLastSeenId;
     trumpLastFetch = Date.now();
 
-    console.log(`[trump-monitor] Fetched ${recent.length} posts (last 24h), ${newCount} new`);
+    console.log(`[trump-monitor] Fetched ${recent.length} posts (last 30d), ${newCount} new`);
   } catch (err: any) {
     console.error(`[trump-monitor] Fetch error: ${err.message}`);
   }
