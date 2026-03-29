@@ -127,6 +127,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethodology, setShowMethodology] = useState(false);
   const [showTickerBreakdown, setShowTickerBreakdown] = useState(false);
+  const [showPatternAnalysis, setShowPatternAnalysis] = useState(false);
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -522,43 +523,49 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
 
       {insights.length > 0 && (
         <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
-          <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+          <button
+            onClick={() => setShowPatternAnalysis(!showPatternAnalysis)}
+            className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
+          >
             <Lightbulb className="h-5 w-5 text-amber-400" />
             <h2 className="text-lg font-bold text-foreground">Pattern Analysis</h2>
-            <span className="text-[10px] bg-amber-400/15 text-amber-400 px-2 py-0.5 rounded-full font-semibold ml-auto">{insights.length} insights</span>
-          </div>
-          <div className="p-4 space-y-3">
-            {insights.map((insight, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className={`rounded-lg p-4 border ${
-                  insight.type === "success" ? "bg-emerald-500/10 border-emerald-500/30" :
-                  insight.type === "warning" ? "bg-amber-500/10 border-amber-500/30" :
-                  "bg-blue-500/10 border-blue-500/30"
-                }`}
-              >
-                <div className="flex items-start gap-2.5">
-                  {insight.type === "success" ? (
-                    <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
-                  ) : insight.type === "warning" ? (
-                    <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-                  ) : (
-                    <Lightbulb className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
-                  )}
-                  <div>
-                    <p className={`text-sm font-semibold ${
-                      insight.type === "success" ? "text-emerald-400" :
-                      insight.type === "warning" ? "text-amber-400" : "text-blue-400"
-                    }`}>{insight.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{insight.detail}</p>
+            <span className="text-[10px] text-muted-foreground ml-1">({insights.length} insights)</span>
+            {showPatternAnalysis ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+          </button>
+          {showPatternAnalysis && (
+            <div className="p-4 border-t border-border/40 space-y-3">
+              {insights.map((insight, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className={`rounded-lg p-4 border ${
+                    insight.type === "success" ? "bg-emerald-500/10 border-emerald-500/30" :
+                    insight.type === "warning" ? "bg-amber-500/10 border-amber-500/30" :
+                    "bg-blue-500/10 border-blue-500/30"
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {insight.type === "success" ? (
+                      <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    ) : insight.type === "warning" ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                    ) : (
+                      <Lightbulb className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-semibold ${
+                        insight.type === "success" ? "text-emerald-400" :
+                        insight.type === "warning" ? "text-amber-400" : "text-blue-400"
+                      }`}>{insight.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{insight.detail}</p>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
