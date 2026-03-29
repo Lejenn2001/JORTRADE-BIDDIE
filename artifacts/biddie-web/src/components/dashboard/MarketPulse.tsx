@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, TrendingUp, TrendingDown, Gauge, BarChart3,
   Info, Flame, Shield, Zap, ArrowUpRight, ArrowDownRight,
-  Loader2, ChevronDown, ChevronUp
+  Loader2, ChevronDown, ChevronUp, HelpCircle
 } from "lucide-react";
+import BeginnerTooltip from "./BeginnerTooltip";
 
 interface MarketPulseData {
   timestamp: string;
@@ -161,16 +162,16 @@ const MarketPulse = () => {
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <button
-            onClick={() => toggleTip("vix")}
-            className="w-full rounded-lg px-3 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
-          >
+          <div className="rounded-lg px-3 py-2.5 bg-muted/20 text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[10px] text-muted-foreground">Volatility (VIX)</span>
               </div>
-              <Info className="h-3 w-3 text-muted-foreground/50" />
+              <BeginnerTooltip
+                content="The VIX is like a fear meter for the market. When it's low, everything is calm. When it's high, things get wild and scary. Low = safe to play bigger. High = be careful and play small!"
+                maxWidth={260}
+              />
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm font-bold text-foreground">
@@ -180,12 +181,19 @@ const MarketPulse = () => {
                 {data.vix.level}
               </span>
             </div>
-          </button>
+          </div>
           <div className="px-3 py-1.5 rounded-lg bg-muted/10">
             <p className="text-[10px] text-foreground/70 leading-relaxed">
               {data.vix.description}
             </p>
           </div>
+          <button
+            onClick={() => toggleTip("vix")}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-3"
+          >
+            {expandedTip === "vix" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {expandedTip === "vix" ? "Hide levels" : "View VIX levels"}
+          </button>
           <AnimatePresence>
             {expandedTip === "vix" && (
               <motion.div
@@ -195,17 +203,12 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
-                  <p className="text-[10px] text-foreground/80 leading-relaxed">
-                    The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.
-                  </p>
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15 Very Calm:</span> <span className="text-foreground/70">Market is smooth — size up, nothing crazy happening.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20 Normal:</span> <span className="text-foreground/70">Regular day — play normal size.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30 Nervous:</span> <span className="text-foreground/70">Getting shaky — play smaller, be careful.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40 Fear:</span> <span className="text-foreground/70">Jumpy and fast — play small, no big risks.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+ Panic:</span> <span className="text-foreground/70">Chaos — play very small or don't play at all.</span></p>
-                  </div>
+                <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5 space-y-0.5">
+                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15:</span> <span className="text-foreground/70">Very low volatility — favorable for position sizing up.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20:</span> <span className="text-foreground/70">Normal range — standard risk parameters.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30:</span> <span className="text-foreground/70">Elevated — reduce size, widen stops.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40:</span> <span className="text-foreground/70">High fear — minimal exposure, quick scalps only.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+:</span> <span className="text-foreground/70">Extreme — consider sitting out or hedging only.</span></p>
                 </div>
               </motion.div>
             )}
@@ -213,16 +216,16 @@ const MarketPulse = () => {
         </div>
 
         <div className="space-y-1">
-          <button
-            onClick={() => toggleTip("sentiment")}
-            className="w-full rounded-lg px-3 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
-          >
+          <div className="rounded-lg px-3 py-2.5 bg-muted/20 text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[10px] text-muted-foreground">Put/Call Ratio</span>
               </div>
-              <Info className="h-3 w-3 text-muted-foreground/50" />
+              <BeginnerTooltip
+                content="Think of it like a classroom vote. Calls = kids voting prices go UP, Puts = kids voting prices go DOWN. This number tells you which side has more votes. Below 1.0 = more bullish votes. Above 1.0 = more bearish votes!"
+                maxWidth={260}
+              />
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm font-bold text-foreground">
@@ -232,12 +235,19 @@ const MarketPulse = () => {
                 {data.sentiment.label}
               </span>
             </div>
-          </button>
+          </div>
           <div className="px-3 py-1.5 rounded-lg bg-muted/10">
             <p className="text-[10px] text-foreground/70 leading-relaxed">
-              {data.sentiment.description} Right now {formatPremium(data.sentiment.totalPutPremium)} is betting prices go DOWN vs {formatPremium(data.sentiment.totalCallPremium)} betting they go UP. Out of {data.sentiment.sweepCount} urgent "rush" orders, {data.sentiment.callSweeps} are bullish and {data.sentiment.putSweeps} are bearish. The money and the urgency can tell different stories — watch both!
+              {data.sentiment.description} Put premium: {formatPremium(data.sentiment.totalPutPremium)} vs Call premium: {formatPremium(data.sentiment.totalCallPremium)}. Sweeps: {data.sentiment.sweepCount} total ({data.sentiment.callSweeps} call / {data.sentiment.putSweeps} put).
             </p>
           </div>
+          <button
+            onClick={() => toggleTip("sentiment")}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-3"
+          >
+            {expandedTip === "sentiment" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {expandedTip === "sentiment" ? "Hide levels" : "View P/C levels"}
+          </button>
           <AnimatePresence>
             {expandedTip === "sentiment" && (
               <motion.div
@@ -247,35 +257,12 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-2">
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-foreground/80 leading-relaxed">
-                      Imagine a classroom voting. Calls = kids voting "prices go UP!" and Puts = kids voting "prices go DOWN!" The Put/Call Ratio tells you which side has more votes.
-                    </p>
-                    <div className="space-y-0.5">
-                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> <span className="text-foreground/70">Almost everyone is voting UP — the class is super confident!</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> <span className="text-foreground/70">More kids voting UP than DOWN — feeling good.</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> <span className="text-foreground/70">About half and half — nobody knows what's next.</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More kids voting DOWN — getting worried.</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Almost everyone is voting DOWN — the class is scared!</span></p>
-                    </div>
-                  </div>
-                  <div className="border-t border-primary/10 pt-1.5 space-y-1">
-                    <p className="text-[10px] text-foreground/80 leading-relaxed">
-                      <span className="text-primary font-bold">Money vs Rush Orders:</span> Think of it like this — the MONEY (premium) shows you who brought the most lunch money to bet. The SWEEPS show you who is running to place their bet first. Sometimes the kid with the most money bets DOWN, but the kids rushing to the front are all betting UP — that's why you watch both!
-                    </p>
-                  </div>
-                  <div className="border-t border-primary/10 pt-1.5">
-                    <p className="text-[10px] text-foreground/80 leading-relaxed">
-                      <span className="text-amber-400 font-bold">What are sweeps?</span> Imagine a kid who wants ALL the candy at every store in the mall at the same time. A sweep is when a big trader sends orders to every exchange at once because they want in RIGHT NOW. It means someone with a lot of money is in a hurry!
-                    </p>
-                    <div className="space-y-0.5 mt-1">
-                      <p className="text-[10px] leading-relaxed"><span className="text-foreground/50 font-bold">Under 20:</span> <span className="text-foreground/70">Quiet — the big kids are sitting down, nothing urgent.</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">20–50:</span> <span className="text-foreground/70">Normal — some big kids are moving around, regular activity.</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">50–100:</span> <span className="text-foreground/70">Busy — the big kids are running around, pay attention!</span></p>
-                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">100+:</span> <span className="text-foreground/70">Chaos — everyone is sprinting, something BIG is happening!</span></p>
-                    </div>
-                  </div>
+                <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5 space-y-0.5">
+                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7:</span> <span className="text-foreground/70">Very bullish — heavy call skew, strong upside conviction.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9:</span> <span className="text-foreground/70">Bullish — call premium dominates, favorable bias.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1:</span> <span className="text-foreground/70">Neutral — balanced flow, no clear directional edge.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3:</span> <span className="text-foreground/70">Bearish — put premium elevated, hedging activity rising.</span></p>
+                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3:</span> <span className="text-foreground/70">Very bearish — heavy put skew, significant downside protection.</span></p>
                 </div>
               </motion.div>
             )}
