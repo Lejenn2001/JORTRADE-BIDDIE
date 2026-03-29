@@ -77,10 +77,10 @@ const DashboardSidebar = () => {
         </button>
 
         <Link to="/" className="flex items-center justify-center mb-4">
-          <img src={jortradeLogo} alt="JORTRADE" className="h-24 w-auto" />
+          <img src={jortradeLogo} alt="JORTRADE" className="h-28 w-auto" />
         </Link>
 
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 space-y-0.5">
           {allNavItems.map((item) => {
             const isActive = location.pathname === item.path ||
               (item.path === "/dashboard" && location.pathname === "/dashboard");
@@ -89,7 +89,7 @@ const DashboardSidebar = () => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors ${
                   isActive
                     ? "bg-primary/15 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
