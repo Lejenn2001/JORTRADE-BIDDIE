@@ -162,6 +162,8 @@ interface ContractRec {
   expiryLabel: string;
   entry: string;
   target: string;
+  targetNear: string;
+  targetFar: string;
   stop: string;
   rationale: string;
 }
@@ -568,10 +570,13 @@ function generateContractRec(
   const stopPrice = isBullish
     ? Math.round((price - atr * 0.5) * 100) / 100
     : Math.round((price + atr * 0.5) * 100) / 100;
-  const targetPrice = target
+  const targetNearPrice = target
     ?? (isBullish
-      ? Math.round((price + atr * 1.5) * 100) / 100
-      : Math.round((price - atr * 1.5) * 100) / 100);
+      ? Math.round((price + atr * 1.0) * 100) / 100
+      : Math.round((price - atr * 1.0) * 100) / 100);
+  const targetFarPrice = isBullish
+    ? Math.round((price + atr * 2.0) * 100) / 100
+    : Math.round((price - atr * 2.0) * 100) / 100;
 
   const parts: string[] = [];
   if (breakoutTriggered) parts.push("Active breakout — move now");
@@ -589,7 +594,9 @@ function generateContractRec(
     expiry,
     expiryLabel: label,
     entry: `$${entryPrice.toFixed(2)}`,
-    target: `$${targetPrice.toFixed(2)}`,
+    target: `$${targetNearPrice.toFixed(2)} – $${targetFarPrice.toFixed(2)}`,
+    targetNear: `$${targetNearPrice.toFixed(2)}`,
+    targetFar: `$${targetFarPrice.toFixed(2)}`,
     stop: `$${stopPrice.toFixed(2)}`,
     rationale: parts.join(" | "),
   };

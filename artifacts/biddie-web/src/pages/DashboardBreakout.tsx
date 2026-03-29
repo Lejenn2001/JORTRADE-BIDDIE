@@ -63,6 +63,8 @@ interface BreakoutSetup {
     expiryLabel: string;
     entry: string;
     target: string;
+    targetNear?: string;
+    targetFar?: string;
     stop: string;
     rationale: string;
   };
@@ -1154,9 +1156,20 @@ function SetupCard({
                       <p className="text-[9px] text-muted-foreground uppercase">Entry</p>
                       <p className="text-[11px] font-bold text-foreground">{setup.contract.entry}</p>
                     </div>
-                    <div className="text-center p-1.5 rounded-md bg-white/[0.03]">
+                    <div className="text-center p-1.5 rounded-md bg-white/[0.03] relative group">
                       <p className="text-[9px] text-muted-foreground uppercase">Target</p>
-                      <p className={`text-[11px] font-bold ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>{setup.contract.target}</p>
+                      {setup.contract.targetNear && setup.contract.targetFar ? (
+                        <>
+                          <p className={`text-[11px] font-bold ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>
+                            {setup.contract.targetNear} – {setup.contract.targetFar}
+                          </p>
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[9px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                            {setup.contract.targetNear}: Conservative · {setup.contract.targetFar}: Extended
+                          </span>
+                        </>
+                      ) : (
+                        <p className={`text-[11px] font-bold ${setup.contract.type === "CALL" ? "text-emerald-400" : "text-red-400"}`}>{setup.contract.target}</p>
+                      )}
                     </div>
                     <div className="text-center p-1.5 rounded-md bg-white/[0.03]">
                       <p className="text-[9px] text-muted-foreground uppercase">Stop</p>
