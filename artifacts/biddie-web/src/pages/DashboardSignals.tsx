@@ -395,20 +395,45 @@ const DashboardSignals = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4">
-          {/* Header */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">Decision Engine</h1>
-              {wsConnected && (
-                <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  <Radio className="h-2.5 w-2.5 animate-pulse" />
-                  Real-Time
-                </span>
-              )}
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+            <svg className="absolute inset-0 w-full h-full opacity-[0.12]" viewBox="0 0 800 200" preserveAspectRatio="none">
+              {[1, 2, 3, 4, 5].map(ring => (
+                <circle key={ring} cx="400" cy="100" r={ring * 35} fill="none" stroke="hsl(142,71%,45%)" strokeWidth="0.8" opacity={0.5 - ring * 0.08} />
+              ))}
+              {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => {
+                const rad = (angle * Math.PI) / 180;
+                return <line key={angle} x1="400" y1="100" x2={400 + Math.cos(rad) * 175} y2={100 + Math.sin(rad) * 175} stroke="hsl(142,71%,45%)" strokeWidth="0.4" opacity="0.2" />;
+              })}
+              <circle cx="400" cy="100" r="4" fill="hsl(142,71%,45%)" opacity="0.8" />
+              <circle cx="400" cy="100" r="12" fill="none" stroke="hsl(142,71%,45%)" strokeWidth="1.5" opacity="0.4" />
+              {[{ x: 280, y: 65 }, { x: 520, y: 45 }, { x: 340, y: 140 }, { x: 500, y: 130 }, { x: 250, y: 110 }, { x: 560, y: 90 }].map((dot, i) => (
+                <circle key={i} cx={dot.x} cy={dot.y} r="3" fill="hsl(142,71%,45%)" opacity={0.4 + i * 0.05} />
+              ))}
+            </svg>
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/15 via-transparent to-cyan-900/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
+
+            <div className="relative px-6 py-7 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-emerald-400 to-cyan-500" />
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                      DECISION ENGINE
+                    </h1>
+                    {wsConnected && (
+                      <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <Radio className="h-2.5 w-2.5 animate-pulse" />
+                        Real-Time
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-emerald-400/80 font-semibold mt-0.5">
+                    {showResolved ? `All Signals — ${totalCount} total` : `Active Signals — ${totalCount - resolvedCount} pending`}
+                  </p>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {showResolved ? `All signals — ${totalCount} total` : `Active signals — ${totalCount - resolvedCount} pending`}
-            </p>
           </div>
 
           {/* Tab Switcher */}

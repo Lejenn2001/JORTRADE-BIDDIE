@@ -487,26 +487,54 @@ const DashboardAnalytics = () => {
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-mesh">
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-                  <BarChart3 className="h-6 w-6 text-primary" />
-                  Performance Analytics
-                </h1>
-              </div>
-
-              <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
-                {(["overview", "mytrades", "pnl"] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                      activeTab === tab ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {tab === "overview" ? "Overview" : tab === "mytrades" ? "My Trades" : "P&L Calendar"}
-                  </button>
+            <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.15]" viewBox="0 0 800 200" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="equityCurveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="hsl(270,75%,60%)" />
+                    <stop offset="100%" stopColor="hsl(230,85%,60%)" />
+                  </linearGradient>
+                  <linearGradient id="equityFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="hsl(250,80%,60%)" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="hsl(250,80%,60%)" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {[0, 1, 2, 3, 4].map(i => (
+                  <line key={i} x1="0" y1={40 + i * 35} x2="800" y2={40 + i * 35} stroke="white" strokeWidth="0.5" opacity="0.15" />
                 ))}
+                <path d="M0,160 Q50,155 100,140 T200,120 T300,100 T400,85 T500,70 T600,55 T700,35 T800,20" fill="none" stroke="url(#equityCurveGrad)" strokeWidth="2.5" />
+                <path d="M0,160 Q50,155 100,140 T200,120 T300,100 T400,85 T500,70 T600,55 T700,35 T800,20 L800,200 L0,200 Z" fill="url(#equityFill)" />
+                <path d="M0,165 Q80,160 160,155 T320,145 T480,130 T640,110 T800,95" fill="none" stroke="hsl(270,75%,60%)" strokeWidth="1" opacity="0.4" strokeDasharray="4,4" />
+              </svg>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-900/15 via-transparent to-blue-900/15" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
+
+              <div className="relative px-6 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-[hsl(270,75%,60%)] to-[hsl(230,85%,60%)]" />
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                      PERFORMANCE
+                    </h1>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-purple-400/80 font-semibold mt-0.5">
+                      Analytics & Tracking
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-1 bg-white/[0.04] border border-white/[0.08] rounded-xl p-1">
+                  {(["overview", "mytrades", "pnl"] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        activeTab === tab ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      {tab === "overview" ? "Overview" : tab === "mytrades" ? "My Trades" : "P&L Calendar"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

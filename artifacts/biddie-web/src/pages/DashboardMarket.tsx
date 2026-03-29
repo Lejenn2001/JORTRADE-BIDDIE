@@ -377,14 +377,46 @@ const DashboardMarket = () => {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
           <div className="max-w-5xl mx-auto space-y-5">
 
-            <div className="space-y-1">
-              <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-                <Crosshair className="h-6 w-6 text-primary" />
-                Market View
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Type any ticker for a full AI-powered breakdown — flow, dark pool, key levels, and trade setup
-              </p>
+            <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.12]" viewBox="0 0 800 200" preserveAspectRatio="none">
+                {[
+                  { cx: 100, cy: 80 }, { cx: 250, cy: 50 }, { cx: 400, cy: 100 }, { cx: 550, cy: 60 },
+                  { cx: 700, cy: 90 }, { cx: 175, cy: 140 }, { cx: 325, cy: 30 }, { cx: 475, cy: 150 },
+                  { cx: 625, cy: 40 }, { cx: 50, cy: 120 }, { cx: 750, cy: 130 }, { cx: 300, cy: 110 },
+                ].map((dot, i) => (
+                  <g key={i}>
+                    <circle cx={dot.cx} cy={dot.cy} r="2" fill="hsl(200,90%,55%)" opacity={0.3 + (i % 4) * 0.1} />
+                  </g>
+                ))}
+                {[
+                  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 7], [1, 6], [6, 2], [3, 8], [4, 10],
+                  [5, 9], [7, 11], [6, 11], [8, 4], [9, 5],
+                ].map(([a, b], i) => {
+                  const dots = [
+                    { cx: 100, cy: 80 }, { cx: 250, cy: 50 }, { cx: 400, cy: 100 }, { cx: 550, cy: 60 },
+                    { cx: 700, cy: 90 }, { cx: 175, cy: 140 }, { cx: 325, cy: 30 }, { cx: 475, cy: 150 },
+                    { cx: 625, cy: 40 }, { cx: 50, cy: 120 }, { cx: 750, cy: 130 }, { cx: 300, cy: 110 },
+                  ];
+                  return <line key={i} x1={dots[a].cx} y1={dots[a].cy} x2={dots[b].cx} y2={dots[b].cy} stroke="hsl(200,90%,55%)" strokeWidth="0.6" opacity="0.25" />;
+                })}
+                <ellipse cx="400" cy="100" rx="350" ry="80" fill="none" stroke="hsl(200,90%,55%)" strokeWidth="0.5" opacity="0.15" />
+              </svg>
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/12 via-transparent to-blue-900/12" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
+
+              <div className="relative px-6 py-7">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-cyan-400 to-blue-500" />
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                      MARKET VIEW
+                    </h1>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-cyan-400/80 font-semibold mt-0.5">
+                      AI-Powered Ticker Analysis
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="relative" ref={dropdownRef}>

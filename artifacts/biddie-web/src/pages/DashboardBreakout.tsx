@@ -408,41 +408,60 @@ const DashboardBreakout = () => {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
           <div className="max-w-5xl mx-auto space-y-5">
 
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="space-y-1">
-                <h1 className="text-xl sm:text-2xl font-extrabold text-foreground flex items-center gap-2">
-                  <Crosshair className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-                  Breakout Scanner
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Real-time breakout detection across {result ? result.tickersScanned : "40+"} tickers
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {notifPermission === "default" && (
+            <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+              <svg className="absolute inset-0 w-full h-full opacity-[0.15]" viewBox="0 0 800 200" preserveAspectRatio="none">
+                <line x1="0" y1="130" x2="800" y2="130" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
+                <line x1="0" y1="70" x2="800" y2="70" stroke="hsl(38,92%,50%)" strokeWidth="1.5" strokeDasharray="8,4" opacity="0.6" />
+                <text x="15" y="65" fill="hsl(38,92%,50%)" fontSize="8" opacity="0.5" fontFamily="monospace">RESISTANCE</text>
+                <text x="15" y="145" fill="hsl(38,92%,50%)" fontSize="8" opacity="0.5" fontFamily="monospace">SUPPORT</text>
+                <path d="M50,135 L150,128 L250,132 L350,125 L400,130 L420,120 L440,90 L460,60 L500,40 L550,35 L600,30" fill="none" stroke="hsl(142,71%,45%)" strokeWidth="2" />
+                <polygon points="595,25 610,30 595,35" fill="hsl(142,71%,45%)" opacity="0.8" />
+                <path d="M50,135 L150,128 L250,132 L350,125 L400,130" fill="none" stroke="hsl(38,92%,50%)" strokeWidth="1.5" opacity="0.5" />
+                {[{ x: 100, y: 128 }, { x: 200, y: 132 }, { x: 300, y: 125 }, { x: 350, y: 130 }, { x: 450, y: 80 }, { x: 550, y: 33 }].map((d, i) => (
+                  <circle key={i} cx={d.x} cy={d.y} r="2.5" fill={i >= 4 ? "hsl(142,71%,45%)" : "hsl(38,92%,50%)"} opacity="0.7" />
+                ))}
+              </svg>
+              <div className="absolute inset-0 bg-gradient-to-r from-amber-900/12 via-transparent to-emerald-900/10" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
+
+              <div className="relative px-6 py-7 flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-amber-400 to-emerald-500" />
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                      BREAKOUT SCANNER
+                    </h1>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-amber-400/80 font-semibold mt-0.5">
+                      {result ? result.tickersScanned : "40+"} Tickers Monitored
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {notifPermission === "default" && (
+                    <button
+                      onClick={requestNotifPermission}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-semibold text-xs transition-all border border-yellow-500/20"
+                      title="Get desktop notifications when breakouts fire"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      Notify Me
+                    </button>
+                  )}
+                  {notifPermission === "granted" && (
+                    <span className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20" title="Desktop notifications are active">
+                      <Bell className="h-3 w-3" />
+                      Alerts On
+                    </span>
+                  )}
                   <button
-                    onClick={requestNotifPermission}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 font-semibold text-xs transition-all border border-yellow-500/20"
-                    title="Get desktop notifications when breakouts fire"
+                    onClick={() => runScan(true)}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all border border-primary/20 disabled:opacity-40"
                   >
-                    <Bell className="h-3.5 w-3.5" />
-                    Notify Me
+                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    {loading ? "Scanning..." : "Rescan"}
                   </button>
-                )}
-                {notifPermission === "granted" && (
-                  <span className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20" title="Desktop notifications are active">
-                    <Bell className="h-3 w-3" />
-                    Alerts On
-                  </span>
-                )}
-                <button
-                  onClick={() => runScan(true)}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all border border-primary/20 disabled:opacity-40"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                  {loading ? "Scanning..." : "Rescan"}
-                </button>
+                </div>
               </div>
             </div>
 
