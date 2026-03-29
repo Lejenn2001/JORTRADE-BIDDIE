@@ -50,14 +50,14 @@ export function simplifySignalDescription(signal: SignalInfo): string {
 
   if (signal.putCall === "put") {
     if (signal.strike) {
-      const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
+      const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
       chunks.push(`on a $${cleanStrike} put. They profit if ${ticker} keeps falling`);
     } else {
       chunks.push(`betting ${ticker} goes lower`);
     }
   } else if (signal.putCall === "call") {
     if (signal.strike) {
-      const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
+      const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
       chunks.push(`on a $${cleanStrike} call. They profit if ${ticker} keeps rising`);
     } else {
       chunks.push(`betting ${ticker} goes higher`);

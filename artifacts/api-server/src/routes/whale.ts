@@ -1766,27 +1766,25 @@ async function runSignalsPipeline() {
       } else {
         invalidation = `Level data not available`;
       }
-      // Target: strike price — but if price ≈ strike (within 1%), use next resistance above
-      const strikeNearPrice = price && Math.abs(strike - price) / price < 0.01;
-      if (strikeNearPrice) {
-        const aboveLevels = [pdh, r1, pivot].filter((l): l is number => !!l && l > (price || 0));
-        if (aboveLevels.length > 0) {
-          const nearest = aboveLevels.sort((a, b) => a - b)[0];
-          target = `$${nearest.toFixed(2)}`;
-          targetNear = `$${strike.toFixed(2)}`;
-        } else {
-          target = `$${(strike * 1.03).toFixed(2)}`;
-          targetNear = `$${strike.toFixed(2)}`;
-        }
+      // CALL Target: must be ABOVE current price — use strike only if it's above price
+      // Gather all resistance levels above price as potential targets
+      const callTargetCandidates = [
+        strike > price ? { level: strike, name: "strike" } : null,
+        pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
+        r1 && r1 > price ? { level: r1, name: "R1" } : null,
+        pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+      ].filter((l): l is { level: number; name: string } => !!l);
+      callTargetCandidates.sort((a, b) => a.level - b.level);
+
+      if (callTargetCandidates.length >= 2) {
+        target = `$${callTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `$${callTargetCandidates[1].level.toFixed(2)}`;
+      } else if (callTargetCandidates.length === 1) {
+        target = `$${callTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `$${(callTargetCandidates[0].level * 1.02).toFixed(2)}`;
       } else {
-        target = `$${strike.toFixed(2)}`;
-        const aboveStrikeLevels = [pdh, r1, pivot, vwap].filter((l): l is number => !!l && l > strike);
-        if (aboveStrikeLevels.length > 0) {
-          const nearest = aboveStrikeLevels.sort((a, b) => a - b)[0];
-          targetNear = `$${nearest.toFixed(2)}`;
-        } else {
-          targetNear = `$${(strike * 1.02).toFixed(2)}`;
-        }
+        target = `$${(price * 1.02).toFixed(2)}`;
+        targetNear = `$${(price * 1.04).toFixed(2)}`;
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
@@ -1831,33 +1829,48 @@ async function runSignalsPipeline() {
       } else {
         invalidation = `Level data not available`;
       }
-      // Target: strike price — but if price ≈ strike (within 1%), use next support below
-      const putStrikeNearPrice = price && Math.abs(strike - price) / price < 0.01;
-      if (putStrikeNearPrice) {
-        const belowLevels = [pdl, s1, pivot].filter((l): l is number => !!l && l < (price || Infinity));
-        if (belowLevels.length > 0) {
-          const nearest = belowLevels.sort((a, b) => b - a)[0];
-          target = `$${nearest.toFixed(2)}`;
-          targetNear = `$${strike.toFixed(2)}`;
-        } else {
-          target = `$${(strike * 0.97).toFixed(2)}`;
-          targetNear = `$${strike.toFixed(2)}`;
-        }
+      // PUT Target: must be BELOW current price — use strike only if it's below price
+      // Gather all support levels below price as potential targets
+      const putTargetCandidates = [
+        strike < price ? { level: strike, name: "strike" } : null,
+        pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
+        s1 && s1 < price ? { level: s1, name: "S1" } : null,
+        pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
+      ].filter((l): l is { level: number; name: string } => !!l);
+      putTargetCandidates.sort((a, b) => b.level - a.level);
+
+      if (putTargetCandidates.length >= 2) {
+        target = `$${putTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `$${putTargetCandidates[1].level.toFixed(2)}`;
+      } else if (putTargetCandidates.length === 1) {
+        target = `$${putTargetCandidates[0].level.toFixed(2)}`;
+        targetNear = `$${(putTargetCandidates[0].level * 0.98).toFixed(2)}`;
       } else {
-        target = `$${strike.toFixed(2)}`;
-        const belowStrikeLevels = [pdl, s1, pivot, vwap].filter((l): l is number => !!l && l < strike);
-        if (belowStrikeLevels.length > 0) {
-          const nearest = belowStrikeLevels.sort((a, b) => b - a)[0];
-          targetNear = `$${nearest.toFixed(2)}`;
-        } else {
-          targetNear = `$${(strike * 0.98).toFixed(2)}`;
-        }
+        target = `$${(price * 0.98).toFixed(2)}`;
+        targetNear = `$${(price * 0.96).toFixed(2)}`;
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
     // Act Now flag — price is at the right level and flow confirms direction
+    // Final validation: target must be in the correct direction relative to price
+    if (price) {
+      const targetVal = parseFloat(target.replace(/[^0-9.]/g, '')) || 0;
+      const targetNearVal = parseFloat(targetNear.replace(/[^0-9.]/g, '')) || 0;
+      if (optType === "call" && targetVal > 0 && targetVal <= price) {
+        target = `$${(price * 1.02).toFixed(2)}`;
+        if (targetNearVal <= price) targetNear = `$${(price * 1.04).toFixed(2)}`;
+        console.log(`[signals] FIXED ${ticker} CALL target: was below price, reset to ${target}`);
+      }
+      if (optType === "put" && targetVal > 0 && targetVal >= price) {
+        target = `$${(price * 0.98).toFixed(2)}`;
+        if (targetNearVal >= price) targetNear = `$${(price * 0.96).toFixed(2)}`;
+        console.log(`[signals] FIXED ${ticker} PUT target: was above price, reset to ${target}`);
+      }
+    }
+
     if (actNow) tags.push("⚡ Act Now");
 
     // Reason
@@ -3732,26 +3745,33 @@ async function realtimeVerifySignals() {
       const MIN_MOVE_PCT2 = 0.005;
 
       if (target_val.low && target_val.high && refPrice2 > 0) {
-        const targetMakesDirectionalSense = isBullish
-          ? target_val.low > refPrice2 * 0.999
-          : target_val.high < refPrice2 * 1.001;
-        if (targetMakesDirectionalSense) {
-          if (isBullish) {
-            const notAlreadyPastTarget = !signalPrice || signalPrice <= target_val.low * 1.03;
-            if (notAlreadyPastTarget && history.highSince >= target_val.low) outcome = "hit";
-          } else {
-            const notAlreadyPastTarget = !signalPrice || signalPrice >= target_val.high * 0.97;
-            if (notAlreadyPastTarget && history.lowSince <= target_val.high) outcome = "hit";
+        // For calls: target should be above price. Use the LOWER target value as the hit threshold.
+        // For puts: target should be below price. Use the HIGHER target value as the hit threshold (closest downside target).
+        // But ONLY if the target makes directional sense (above price for calls, below price for puts)
+        if (isBullish) {
+          // Call: need price to go UP to target. Use lowest target as threshold.
+          const callTarget = Math.min(target_val.low, target_val.high);
+          const targetAbovePrice = callTarget > refPrice2 * 0.995;
+          const notAlreadyPastTarget = !signalPrice || signalPrice <= callTarget * 1.01;
+          if (targetAbovePrice && notAlreadyPastTarget && history.highSince >= callTarget) {
+            outcome = "hit";
           }
-        } else if (refPrice2 > 0) {
-          if (isBullish && history.highSince >= refPrice2 * (1 + MIN_MOVE_PCT2)) outcome = "hit";
-          else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_MOVE_PCT2)) outcome = "hit";
+        } else {
+          // Put: need price to go DOWN to target. Use highest target as threshold (nearest downside target).
+          const putTarget = Math.max(target_val.low, target_val.high);
+          const targetBelowPrice = putTarget < refPrice2 * 1.005;
+          const notAlreadyPastTarget = !signalPrice || signalPrice >= putTarget * 0.99;
+          if (targetBelowPrice && notAlreadyPastTarget && history.lowSince <= putTarget) {
+            outcome = "hit";
+          }
         }
       }
 
-      if (!outcome && !target_val.low && !target_val.high && refPrice2 > 0) {
-        if (isBullish && history.highSince >= refPrice2 * (1 + MIN_MOVE_PCT2)) outcome = "hit";
-        else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_MOVE_PCT2)) outcome = "hit";
+      // Fallback: no valid targets — require at least 1.5% move in the right direction (not 0.5%)
+      const MIN_FALLBACK_PCT = 0.015;
+      if (!outcome && refPrice2 > 0 && (!target_val.low || !target_val.high)) {
+        if (isBullish && history.highSince >= refPrice2 * (1 + MIN_FALLBACK_PCT)) outcome = "hit";
+        else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_FALLBACK_PCT)) outcome = "hit";
       }
 
       if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
