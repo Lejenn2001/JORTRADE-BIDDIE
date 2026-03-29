@@ -341,9 +341,7 @@ const Dashboard = () => {
                   <X className="h-4 w-4 text-muted-foreground" />
                 </button>
                 <div className="relative flex flex-col items-center text-center px-5 py-5 gap-3">
-                  <div className="w-12 h-12 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10 overflow-hidden">
-                    <img src={biddieRobot} alt="Biddie" className="w-[180%] h-auto -ml-[40%] -mt-[5%]" />
-                  </div>
+                  <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10" />
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-indigo-400" />
                     <span className="text-sm font-bold text-foreground">Welcome to JORTRADE, {firstName}!</span>
