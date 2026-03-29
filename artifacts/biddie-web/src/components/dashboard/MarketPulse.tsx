@@ -180,18 +180,35 @@ const MarketPulse = () => {
               </span>
             </div>
           </button>
-          <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
-            <p className="text-[10px] text-foreground/80 leading-relaxed">
-              The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.
+          <div className="px-3 py-1.5 rounded-lg bg-muted/10">
+            <p className="text-[10px] text-foreground/70 leading-relaxed">
+              {data.vix.description}
             </p>
-            <div className="space-y-0.5">
-              <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15 Very Calm:</span> <span className="text-foreground/70">Market is smooth — size up, nothing crazy happening.</span></p>
-              <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20 Normal:</span> <span className="text-foreground/70">Regular day — play normal size.</span></p>
-              <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30 Nervous:</span> <span className="text-foreground/70">Getting shaky — play smaller, be careful.</span></p>
-              <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40 Fear:</span> <span className="text-foreground/70">Jumpy and fast — play small, no big risks.</span></p>
-              <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+ Panic:</span> <span className="text-foreground/70">Chaos — play very small or don't play at all.</span></p>
-            </div>
           </div>
+          <AnimatePresence>
+            {expandedTip === "vix" && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
+                  <p className="text-[10px] text-foreground/80 leading-relaxed">
+                    The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.
+                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15 Very Calm:</span> <span className="text-foreground/70">Market is smooth — size up, nothing crazy happening.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20 Normal:</span> <span className="text-foreground/70">Regular day — play normal size.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30 Nervous:</span> <span className="text-foreground/70">Getting shaky — play smaller, be careful.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40 Fear:</span> <span className="text-foreground/70">Jumpy and fast — play small, no big risks.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+ Panic:</span> <span className="text-foreground/70">Chaos — play very small or don't play at all.</span></p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="space-y-1">
