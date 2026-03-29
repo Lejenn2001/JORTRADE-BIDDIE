@@ -265,17 +265,18 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       const resolved = s.hits + s.misses;
       if (resolved >= 3) {
         const rate = (s.hits / resolved) * 100;
+        const pendingNote = s.pending > 0 ? ` ${s.pending} still pending out of ${s.total} total.` : "";
         if (rate < 35) {
           results.push({
             type: "warning",
             title: `${cat.charAt(0).toUpperCase() + cat.slice(1)} source underperforming`,
-            detail: `${cat} signals at ${rate.toFixed(0)}% win rate (${s.hits}/${resolved}). This source may need tuning or stricter filtering.`,
+            detail: `${cat} signals at ${rate.toFixed(0)}% win rate (${s.hits}H/${s.misses}M of ${resolved} resolved).${pendingNote} This source may need tuning or stricter filtering.`,
           });
         } else if (rate >= 65) {
           results.push({
             type: "success",
             title: `${cat.charAt(0).toUpperCase() + cat.slice(1)} source performing well`,
-            detail: `${cat} signals at ${rate.toFixed(0)}% win rate (${s.hits}/${resolved}). This is a reliable signal source.`,
+            detail: `${cat} signals at ${rate.toFixed(0)}% win rate (${s.hits}H/${s.misses}M of ${resolved} resolved).${pendingNote} This is a reliable signal source.`,
           });
         }
       }
