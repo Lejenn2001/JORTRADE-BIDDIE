@@ -1,5 +1,6 @@
 import { Router } from "express";
 import axios from "axios";
+import pg from "pg";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { priceMonitor } from "../lib/priceMonitor";
@@ -1160,8 +1161,58 @@ function generateBreakoutAlert(ticker: string, livePrice: number, setup: Squeeze
   console.log(`[breakout-alert] ${alert.suggestedTrade} @ $${alert.breakoutPrice} | Session Vol: ${volConfirmation.sessionVolumeRatio.toFixed(1)}x | Burst: ${volConfirmation.burstVolumeRatio.toFixed(1)}x | ${instLabel}`);
 }
 
+const alertCheckPool = new pg.Pool({ connectionString: process.env["DATABASE_URL"] });
+let lastAlertCheckTime = 0;
+const alertCheckCache: Map<string, { condition: string; target: number; id: string; label: string | null; signal_id: string | null }[]> = new Map();
+
+async function refreshAlertCache() {
+  try {
+    const { rows } = await alertCheckPool.query(
+      `SELECT id, ticker, target_price, condition, label, signal_id FROM user_price_alerts WHERE active = true AND triggered = false`
+    );
+    alertCheckCache.clear();
+    for (const row of rows) {
+      const ticker = row.ticker;
+      if (!alertCheckCache.has(ticker)) alertCheckCache.set(ticker, []);
+      alertCheckCache.get(ticker)!.push({ id: row.id, condition: row.condition, target: parseFloat(row.target_price), label: row.label, signal_id: row.signal_id });
+    }
+  } catch {}
+}
+
+async function checkUserAlerts(ticker: string, price: number) {
+  const alerts = alertCheckCache.get(ticker);
+  if (!alerts || alerts.length === 0) return;
+  for (const alert of alerts) {
+    const hit = alert.condition === "above" ? price >= alert.target : price <= alert.target;
+    if (!hit) continue;
+    try {
+      await alertCheckPool.query(
+        `UPDATE user_price_alerts SET triggered = true, triggered_at = now(), triggered_price = $1, active = false WHERE id = $2`,
+        [price, alert.id]
+      );
+      await alertCheckPool.query(
+        `INSERT INTO signal_alerts (ticker, alert_type, message, signal_id) VALUES ($1, 'price_alert', $2, $3)`,
+        [ticker, `🔔 ${ticker} hit $${price.toFixed(2)} (alert: ${alert.condition} $${alert.target.toFixed(2)}${alert.label ? ' — ' + alert.label : ''})`, alert.signal_id || null]
+      );
+      const idx = alerts.indexOf(alert);
+      if (idx !== -1) alerts.splice(idx, 1);
+      console.log(`[user-alert] TRIGGERED: ${ticker} ${alert.condition} $${alert.target.toFixed(2)} → $${price.toFixed(2)}`);
+    } catch (e: any) {
+      console.error(`[user-alert] Error triggering alert:`, e.message);
+    }
+  }
+}
+
+setInterval(() => refreshAlertCache(), 30000);
+refreshAlertCache();
+
 function setupBreakoutMonitor() {
   priceMonitor.onPrice((ticker, data, tradeVolume) => {
+    if (Date.now() - lastAlertCheckTime > 5000) {
+      lastAlertCheckTime = Date.now();
+    }
+    checkUserAlerts(ticker, data.price);
+
     if (cachedResults.length === 0) return;
 
     trackVolumeBurst(ticker, tradeVolume || 0);

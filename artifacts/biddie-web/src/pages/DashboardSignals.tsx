@@ -1,13 +1,14 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
 
@@ -176,6 +177,11 @@ const DashboardSignals = () => {
   const [showResolved, setShowResolved] = useState(searchParams.get("resolved") === "true");
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
+  const [alertSignal, setAlertSignal] = useState<MarketSignal | null>(null);
+  const [alertPrice, setAlertPrice] = useState("");
+  const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
+  const [alertSaving, setAlertSaving] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -226,6 +232,46 @@ const DashboardSignals = () => {
       setTakingId(null);
     }
   }, [user?.id, takenSignalIds]);
+
+  const handleOpenAlert = useCallback((signal: MarketSignal) => {
+    const livePrice = getPrice?.(signal.ticker);
+    const entryText = signal.entryTrigger || "";
+    const priceMatch = entryText.match(/\$[\d,.]+/);
+    const defaultPrice = priceMatch
+      ? priceMatch[0].replace(/[$,]/g, "")
+      : livePrice?.price?.toFixed(2) || signal.priceAtSignal?.toFixed(2) || "";
+    setAlertPrice(defaultPrice);
+    const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
+    setAlertCondition(isCall ? "above" : "below");
+    setAlertSignal(signal);
+  }, [getPrice]);
+
+  const handleSaveAlert = useCallback(async () => {
+    if (!user?.id || !alertSignal || !alertPrice) return;
+    setAlertSaving(true);
+    try {
+      const res = await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          ticker: alertSignal.ticker,
+          targetPrice: parseFloat(alertPrice),
+          condition: alertCondition,
+          signalId: alertSignal.id,
+          label: alertSignal.entryTrigger || `${alertSignal.putCall?.toUpperCase()} signal`,
+        }),
+      });
+      if (res.ok) {
+        toast({ title: `🔔 Alert set for ${alertSignal.ticker}`, description: `${alertCondition === "above" ? "Above" : "Below"} $${parseFloat(alertPrice).toFixed(2)}` });
+        setAlertSignal(null);
+      }
+    } catch {
+      toast({ title: "Failed to set alert", variant: "destructive" });
+    } finally {
+      setAlertSaving(false);
+    }
+  }, [user?.id, alertSignal, alertPrice, alertCondition, toast]);
 
   useEffect(() => {
     const loadRecentSignals = async () => {
@@ -465,7 +511,7 @@ const DashboardSignals = () => {
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
                         </motion.div>
                       ))}
                     </div>
@@ -498,7 +544,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
                       </motion.div>
                     ))}
                   </div>
@@ -530,7 +576,7 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} />
+                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} />
                       </motion.div>
                     ))}
                   </div>
@@ -539,12 +585,102 @@ const DashboardSignals = () => {
             </>
           )}
         </main>
+
+        <AnimatePresence>
+          {alertSignal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+              onClick={() => setAlertSignal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="glass-panel rounded-xl border border-border/50 shadow-2xl w-full max-w-sm p-5 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-amber-400" />
+                    <h3 className="text-sm font-bold text-foreground">Set Price Alert</h3>
+                  </div>
+                  <button onClick={() => setAlertSignal(null)} className="p-1 hover:bg-muted/50 rounded">
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-foreground">{alertSignal.ticker}</span>
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+                      alertSignal.putCall === "call" ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
+                    }`}>
+                      {alertSignal.putCall === "call" ? "CALL" : "PUT"}
+                    </span>
+                    {(() => {
+                      const lp = getPrice?.(alertSignal.ticker);
+                      return lp ? <span className="text-xs text-muted-foreground">Current: ${lp.price.toFixed(2)}</span> : null;
+                    })()}
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Alert when price goes</label>
+                    <div className="flex gap-1.5 mt-1">
+                      <button
+                        onClick={() => setAlertCondition("above")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          alertCondition === "above" ? "bg-primary/20 text-primary border border-primary/30" : "bg-muted/30 text-muted-foreground border border-border/30"
+                        }`}
+                      >
+                        ↗ Above
+                      </button>
+                      <button
+                        onClick={() => setAlertCondition("below")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          alertCondition === "below" ? "bg-destructive/20 text-destructive border border-destructive/30" : "bg-muted/30 text-muted-foreground border border-border/30"
+                        }`}
+                      >
+                        ↘ Below
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Target Price</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={alertPrice}
+                        onChange={(e) => setAlertPrice(e.target.value)}
+                        className="bg-muted/30 border-border/30 text-sm h-9"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSaveAlert}
+                  disabled={alertSaving || !alertPrice}
+                  className="w-full py-2.5 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                >
+                  {alertSaving ? "Setting..." : `Set Alert — ${alertCondition === "above" ? "Above" : "Below"} $${alertPrice || "0.00"}`}
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 };
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -621,10 +757,21 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice }: { sign
             <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie AI Pick</span>
           )}
         </div>
-        <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
-          <Clock className="h-2.5 w-2.5" />
-          {signal.timestamp}
-        </span>
+        <div className="flex items-center gap-2">
+          {onSetAlert && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSetAlert(signal); }}
+              className="p-1 rounded hover:bg-amber-500/20 transition-colors group"
+              title="Set price alert"
+            >
+              <Bell className="h-3.5 w-3.5 text-muted-foreground group-hover:text-amber-400 transition-colors" />
+            </button>
+          )}
+          <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
+            <Clock className="h-2.5 w-2.5" />
+            {signal.timestamp}
+          </span>
+        </div>
       </div>
 
       <div className="px-3 sm:px-4 py-3 space-y-2.5">

@@ -87,6 +87,24 @@ export const userRoles = pgTable("user_roles", {
   uniqueIndex("user_roles_user_id_role_key").on(table.userId, table.role),
 ]);
 
+export const userPriceAlerts = pgTable("user_price_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
+  ticker: varchar("ticker", { length: 20 }).notNull(),
+  targetPrice: numeric("target_price", { precision: 12, scale: 2 }).notNull(),
+  condition: varchar("condition", { length: 10 }).notNull(),
+  signalId: text("signal_id"),
+  label: text("label"),
+  active: boolean("active").default(true),
+  triggered: boolean("triggered").default(false),
+  triggeredAt: timestamp("triggered_at", { withTimezone: true }),
+  triggeredPrice: numeric("triggered_price", { precision: 12, scale: 2 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => [
+  index("idx_user_price_alerts_user").on(table.userId),
+  index("idx_user_price_alerts_active").on(table.active),
+]);
+
 export const userTrades = pgTable("user_trades", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: text("user_id").notNull(),
