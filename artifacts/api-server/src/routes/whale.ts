@@ -1608,11 +1608,13 @@ router.post("/whale/community-chat", async (req, res) => {
   const nameCtx = userName ? `\nThe person talking to you is ${userName}. Use their name naturally when greeting them.` : "";
   const chatInstruction = `User says: ${message}${dataStr}`;
 
+  const casualSystem = `You are Biddie AI — a friend in the JORTRADE group chat. Someone just said a casual greeting or reaction. Respond ONLY as a friend — NO market data, NO trading analysis, NO flow breakdowns, NO price mentions, NO ticker mentions. Just be a homie saying what's up. Keep it to 1-2 SHORT sentences max. Use emojis naturally 🔥💪😎🤝👀.${nameCtx}`;
+
   try {
     const response = await claude.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      system: COMMUNITY_SYSTEM + nameCtx,
+      max_tokens: isCasual ? 150 : 600,
+      system: isCasual ? casualSystem : COMMUNITY_SYSTEM + nameCtx,
       messages: [{ role: "user", content: chatInstruction }],
     });
 
