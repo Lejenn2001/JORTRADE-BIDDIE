@@ -682,6 +682,15 @@ const DashboardBreakout = () => {
                     <div className="px-4 pb-4 space-y-4">
                       <p className="text-[11px] text-muted-foreground">A <span className="text-foreground font-semibold">breakout</span> is when a stock's price suddenly moves past a key level (resistance or support) with strong volume. This scanner watches for the conditions that lead to breakouts so you can be ready before they happen.</p>
 
+                      <div className="rounded-lg p-3 bg-primary/[0.05] border border-primary/15 text-[11px] text-muted-foreground space-y-2">
+                        <p className="font-bold text-primary flex items-center gap-1.5">
+                          <Crosshair className="h-3 w-3" />
+                          How the Scanner Works
+                        </p>
+                        <p>The scanner runs every 5 minutes, analyzing 40 stocks for squeeze patterns, consolidation zones, and breakout setups. When it finds something building up, it shows up here as a card with a score.</p>
+                        <p>Once setups are found, a live price monitor kicks in — watching those stocks in real-time, every second. When a stock actually breaks through its key level with volume, you get an instant alert. The scanner finds the setups, the monitor catches the breakout.</p>
+                      </div>
+
                       <div className="space-y-3 text-[11px] text-muted-foreground">
                         <div className="rounded-lg p-3 bg-yellow-500/[0.05] border border-yellow-500/15">
                           <p className="font-bold text-yellow-400 flex items-center gap-1.5 mb-1.5">
