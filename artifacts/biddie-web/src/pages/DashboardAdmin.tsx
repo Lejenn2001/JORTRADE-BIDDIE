@@ -102,7 +102,7 @@ const AdminReferralsTab = () => {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={Gift} label="Total Referrals" value={totalReferrals} color="bg-emerald-600" />
-        <StatCard icon={Users} label="Active Referrers" value={totalReferrers} subtitle={`${totalCodes} codes generated`} color="bg-blue-600" />
+        <StatCard icon={Users} label="Active Referrers" value={totalReferrers} subtitle={`${totalCodes} users with codes`} color="bg-blue-600" />
         <StatCard icon={TrendingUp} label="Conversion Rate" value={totalCodes > 0 ? `${Math.round((totalReferrers / totalCodes) * 100)}%` : "0%"} subtitle="Referrers with 1+ referral" color="bg-purple-600" />
         <StatCard icon={Crown} label="Highest Tier" value={tierBreakdown.gold > 0 ? "Gold" : tierBreakdown.silver > 0 ? "Silver" : tierBreakdown.bronze > 0 ? "Bronze" : tierBreakdown.launch > 0 ? "Launch" : "None"} color="bg-yellow-600" />
       </div>
