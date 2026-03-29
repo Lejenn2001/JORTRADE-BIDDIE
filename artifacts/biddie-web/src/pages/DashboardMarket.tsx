@@ -5,7 +5,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import {
   Search, TrendingUp, TrendingDown, Activity, Shield, Target,
   Zap, BarChart3, Eye, ArrowUpRight, ArrowDownRight, Crosshair,
-  Waves, AlertTriangle, Clock, ChevronRight, Loader2
+  Waves, AlertTriangle, Clock, ChevronRight, Loader2, Flame
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -307,6 +307,7 @@ const DashboardMarket = () => {
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
+  const [trending, setTrending] = useState<{ ticker: string; alerts: number; totalPremium: number; sweeps: number; bias: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLFormElement>(null);
 
@@ -331,6 +332,19 @@ const DashboardMarket = () => {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    fetch("/api/whale/market-pulse")
+      .then(r => r.json())
+      .then(d => { if (d.trending) setTrending(d.trending); })
+      .catch(() => {});
+  }, []);
+
+  const formatPremium = (val: number) => {
+    if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+    if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
+    return `$${val.toFixed(0)}`;
+  };
 
   const analyzeCallback = useCallback(async (t: string) => {
     const clean = t.toUpperCase().replace(/[^A-Z]/g, "");
@@ -856,6 +870,62 @@ const DashboardMarket = () => {
                       <span>AI Analysis</span>
                     </div>
                   </div>
+                </div>
+              </motion.div>
+            )}
+
+            {trending.length > 0 && !result && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-panel rounded-2xl border border-white/[0.08] p-5"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Flame className="h-4 w-4 text-amber-400" />
+                  <h3 className="text-sm font-bold text-foreground">Trending Tickers</h3>
+                  <span className="text-[9px] text-muted-foreground/60">
+                    Where the big money is flowing right now
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {trending.map((t) => (
+                    <button
+                      key={t.ticker}
+                      onClick={() => analyzeCallback(t.ticker)}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2.5 transition-all hover:scale-[1.02] cursor-pointer ${
+                        t.bias === "bullish" ? "bg-emerald-500/5 border border-emerald-500/10 hover:border-emerald-500/30"
+                        : t.bias === "bearish" ? "bg-red-500/5 border border-red-500/10 hover:border-red-500/30"
+                        : "bg-muted/20 border border-white/5 hover:border-white/15"
+                      }`}
+                    >
+                      <div className="text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-foreground">{t.ticker}</span>
+                          {t.bias === "bullish" ? (
+                            <TrendingUp className="h-3 w-3 text-emerald-400" />
+                          ) : t.bias === "bearish" ? (
+                            <TrendingDown className="h-3 w-3 text-red-400" />
+                          ) : (
+                            <Activity className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </div>
+                        <span className="text-[9px] text-muted-foreground">{t.alerts} alerts</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-semibold text-foreground block">{formatPremium(t.totalPremium)}</span>
+                        {t.sweeps > 0 && (
+                          <span className="text-[9px] text-amber-400 flex items-center gap-0.5 justify-end">
+                            <Zap className="h-2.5 w-2.5" />{t.sweeps}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-3 py-2 mt-2 bg-primary/5 rounded-lg border border-primary/10">
+                  <p className="text-[9px] text-muted-foreground leading-relaxed">
+                    These are the stocks where the most money is moving right now. Click any ticker to get a full AI breakdown. High premium + sweeps = the big players are making moves!
+                  </p>
                 </div>
               </motion.div>
             )}

@@ -71,7 +71,6 @@ const MarketPulse = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [expandedTip, setExpandedTip] = useState<string | null>(null);
-  const [showTrending, setShowTrending] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -284,75 +283,6 @@ const MarketPulse = () => {
         </div>
       </div>
 
-      {data.trending.length > 0 && (
-        <>
-          <button
-            onClick={() => setShowTrending(!showTrending)}
-            className="w-full flex items-center justify-between px-1 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <div className="flex items-center gap-1.5">
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
-              <span className="font-semibold">Trending Tickers</span>
-              <span className="text-[9px] text-muted-foreground/60">
-                Where the big money is flowing right now
-              </span>
-            </div>
-            {showTrending ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-
-          <AnimatePresence>
-            {showTrending && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="grid grid-cols-2 gap-1.5">
-                  {data.trending.map((t, i) => (
-                    <div
-                      key={t.ticker}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                        t.bias === "bullish" ? "bg-emerald-500/5 border border-emerald-500/10"
-                        : t.bias === "bearish" ? "bg-red-500/5 border border-red-500/10"
-                        : "bg-muted/20 border border-white/5"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-foreground">{t.ticker}</span>
-                          {t.bias === "bullish" ? (
-                            <TrendingUp className="h-3 w-3 text-emerald-400" />
-                          ) : t.bias === "bearish" ? (
-                            <TrendingDown className="h-3 w-3 text-red-400" />
-                          ) : (
-                            <Activity className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="text-[9px] text-muted-foreground">{t.alerts} alerts</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-semibold text-foreground block">{formatPremium(t.totalPremium)}</span>
-                        {t.sweeps > 0 && (
-                          <span className="text-[9px] text-amber-400 flex items-center gap-0.5 justify-end">
-                            <Zap className="h-2.5 w-2.5" />{t.sweeps}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="px-3 py-2 mt-1.5 bg-primary/5 rounded-lg border border-primary/10">
-                  <p className="text-[9px] text-muted-foreground leading-relaxed">
-                    <span className="text-primary font-bold">What are Trending Tickers?</span> These are the stocks seeing the most unusual options activity right now. High premium + sweeps often signals that big institutions are making moves. This doesn't mean you should trade them — it means they're worth watching.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
     </div>
   );
 };
