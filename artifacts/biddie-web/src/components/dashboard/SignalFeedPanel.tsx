@@ -276,11 +276,10 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     )}
                     <div className="flex items-start gap-1.5 bg-muted/20 rounded-lg px-3 py-1.5 text-xs">
                         <TrendingUp className="h-3 w-3 text-primary shrink-0 mt-0.5" />
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0">
                           <span className="text-muted-foreground">Entry: </span>
                           <span className={`font-semibold ${signal.entryTrigger ? 'text-foreground' : 'text-muted-foreground/60 italic'}`}>{signal.entryTrigger || 'Level data not available'}</span>
                         </div>
-                        <BeginnerTooltip content="The entry trigger is the exact price or condition where you'd want to get into this trade. Think of it like a starting line — you only go when the price hits this spot!" />
                       </div>
                     <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
                         <MapPin className="h-3 w-3 text-primary shrink-0" />
@@ -312,20 +311,17 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     <div className="flex items-center gap-1.5 bg-destructive/10 rounded-lg px-3 py-1.5 text-xs">
                         <ShieldX className="h-3 w-3 text-destructive shrink-0" />
                         <span className="text-muted-foreground">Invalidation:</span>
-                        <span className={`font-semibold flex-1 ${signal.invalidation ? 'text-destructive' : 'text-muted-foreground/60 italic'}`}>{signal.invalidation || 'Level data not available'}</span>
-                        <BeginnerTooltip content="The invalidation level is your safety net. If the price reaches this point, the trade idea is no longer valid and you should get out to protect your money. It's like a 'game over' line!" />
+                        <span className={`font-semibold ${signal.invalidation ? 'text-destructive' : 'text-muted-foreground/60 italic'}`}>{signal.invalidation || 'Level data not available'}</span>
                       </div>
                     <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5 text-xs">
                         <Crosshair className="h-3 w-3 text-primary shrink-0" />
                         <span className="text-muted-foreground">Key level:</span>
-                        <span className={`font-semibold flex-1 ${signal.keyLevel ? 'text-primary' : 'text-muted-foreground/60 italic'}`}>{signal.keyLevel || 'Level data not available'}</span>
-                        <BeginnerTooltip content="Key levels are important price points where the stock tends to bounce, reverse, or make big moves. Traders watch these closely — they're like invisible walls or trampolines for the price!" />
+                        <span className={`font-semibold ${signal.keyLevel ? 'text-primary' : 'text-muted-foreground/60 italic'}`}>{signal.keyLevel || 'Level data not available'}</span>
                       </div>
                     <div className="flex items-center gap-1.5 bg-accent/10 rounded-lg px-3 py-1.5 text-xs">
                         <Gauge className="h-3 w-3 text-accent shrink-0" />
                         <span className="text-muted-foreground">S/R:</span>
-                        <span className={`font-semibold flex-1 ${signal.srLevel ? 'text-accent' : 'text-muted-foreground/60 italic'}`}>{signal.srLevel || 'Level data not available'}</span>
-                        <BeginnerTooltip content="Support & Resistance (S/R) are like a floor and ceiling for the price. Support is where the price tends to stop falling (floor). Resistance is where it tends to stop rising (ceiling). If the price breaks through, big moves often follow!" />
+                        <span className={`font-semibold ${signal.srLevel ? 'text-accent' : 'text-muted-foreground/60 italic'}`}>{signal.srLevel || 'Level data not available'}</span>
                       </div>
                   </div>
 
