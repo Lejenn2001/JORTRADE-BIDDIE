@@ -589,16 +589,9 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
         <StatCard
           label="Biddie Pick Win Rate"
           value={signalStats ? `${signalStats.winRate}%` : "—"}
-          sub={signalStats ? `${signalStats.hits} hits / ${signalStats.hits + signalStats.misses} resolved` : undefined}
+          sub={signalStats ? `${signalStats.hits + signalStats.misses} resolved` : undefined}
           icon={<Target className="h-5 w-5 text-emerald-400" />}
           color="border-emerald-500/20"
-        />
-        <StatCard
-          label="Biddie Picks"
-          value={signalStats?.total || 0}
-          sub={signalStats && signalStats.pending > 0 ? `${signalStats.pending} pending` : undefined}
-          icon={<Zap className="h-5 w-5 text-primary" />}
-          color="border-primary/20"
         />
         <StatCard
           label="Your Win Rate"
@@ -614,34 +607,16 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
           icon={<Activity className="h-5 w-5 text-blue-400" />}
           color="border-blue-500/20"
         />
+        <StatCard
+          label="Pending"
+          value={userStats?.pending || 0}
+          sub={signalStats && signalStats.pending > 0 ? `${signalStats.pending} Biddie Picks pending` : undefined}
+          icon={<Zap className="h-5 w-5 text-primary" />}
+          color="border-primary/20"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-panel rounded-xl p-5 border border-white/10">
-          <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Biddie Pick Performance
-          </h3>
-          {signalStats ? (
-            <div className="flex items-center gap-6">
-              <WinRateRing rate={signalStats.winRate} size={90} />
-              <div className="flex-1 space-y-3">
-                {signalStats.byCategory && Object.entries(signalStats.byCategory).map(([cat, data]) => (
-                  <CategoryBar key={cat} category={cat} hits={data.hits} total={data.total} />
-                ))}
-                <div className="pt-2 border-t border-white/5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Misses</span>
-                    <span className="font-bold text-red-400">{signalStats.misses}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No signal data yet</p>
-          )}
-        </motion.div>
-
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
             <Trophy className="h-4 w-4 text-yellow-400" />
@@ -680,26 +655,6 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
           )}
         </motion.div>
       </div>
-
-      {topTickers.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-panel rounded-xl p-5 border border-white/10">
-          <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-            <PieChart className="h-4 w-4 text-primary" />
-            Top Tickers — Biddie Pick Accuracy
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {topTickers.map(t => (
-              <div key={t.ticker} className="bg-white/5 rounded-lg p-3 text-center">
-                <p className="text-sm font-extrabold text-foreground">{t.ticker}</p>
-                <p className={`text-lg font-extrabold ${t.winRate >= 70 ? "text-emerald-400" : t.winRate >= 50 ? "text-yellow-400" : "text-red-400"}`}>
-                  {t.winRate}%
-                </p>
-                <p className="text-[10px] text-muted-foreground">{t.hits}/{t.total} picks</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }
