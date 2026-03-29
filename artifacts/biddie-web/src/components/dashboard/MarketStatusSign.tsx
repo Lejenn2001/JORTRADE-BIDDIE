@@ -98,12 +98,26 @@ function getMarketState() {
   const s = remainingSec % 60;
   const countdown = `${h}h  ${String(m).padStart(2, "0")}m  ${String(s).padStart(2, "0")}s`;
 
-  const utcH = now.getUTCHours();
-  const utcM = now.getUTCMinutes();
-  const utcT = utcH * 60 + utcM;
+  const etMins = hour * 60 + minute;
 
-  const asiaActive = utcT >= 0 && utcT < 480 || utcT >= 1380;
-  const londonActive = utcT >= 480 && utcT < 1020;
+  const isSat = weekday === "Sat";
+  const isFri = weekday === "Fri";
+
+  const asiaActive = (() => {
+    if (isSat) return false;
+    if (isSunday && etMins < 18 * 60) return false;
+    if (isSunday && etMins >= 19 * 60) return true;
+    if (isWeekday && etMins < 4 * 60) return true;
+    if (isFri && etMins >= 19 * 60) return false;
+    if (isWeekday && etMins >= 19 * 60) return true;
+    return false;
+  })();
+
+  const londonActive = (() => {
+    if (isSat || isSunday) return false;
+    return isWeekday && etMins >= 3 * 60 && etMins < 12 * 60;
+  })();
+
   const nyActive = isWeekday && totalSec >= openSec && totalSec < closeSec;
 
   return { status, isOpen: status === "open", countdown, targetLabel, targetTime, asiaActive, londonActive, nyActive };
