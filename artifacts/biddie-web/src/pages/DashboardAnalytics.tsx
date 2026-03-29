@@ -1402,7 +1402,12 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                             )}
                           </div>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {trade.signal_created_at
+                              ? new Date(trade.signal_created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                              : new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {trade.signal_created_at && trade.signal_created_at !== trade.taken_at && (
+                              <span className="text-muted-foreground/50"> · Added {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                            )}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
