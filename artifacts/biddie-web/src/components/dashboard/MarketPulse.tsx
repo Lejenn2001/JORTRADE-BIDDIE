@@ -257,16 +257,29 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
-                  <p className="text-[10px] text-foreground/80 leading-relaxed">
-                    The Put/Call Ratio compares bearish bets (puts) to bullish bets (calls). It tells you what the crowd is thinking — are they scared or confident?
-                  </p>
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> <span className="text-foreground/70">Way more calls than puts — traders are feeling confident and betting on the upside.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> <span className="text-foreground/70">More calls than puts — leaning positive, normal upside bias.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> <span className="text-foreground/70">Roughly equal calls and puts — the market is undecided.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More puts than calls — traders are getting cautious and hedging.</span></p>
-                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Way more puts — heavy fear, everyone is buying protection.</span></p>
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-2">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      The Put/Call Ratio compares bearish bets (puts) to bullish bets (calls). It tells you what the crowd is thinking — are they scared or confident?
+                    </p>
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> <span className="text-foreground/70">Way more calls than puts — traders are feeling confident and betting on the upside.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> <span className="text-foreground/70">More calls than puts — leaning positive, normal upside bias.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> <span className="text-foreground/70">Roughly equal calls and puts — the market is undecided.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More puts than calls — traders are getting cautious and hedging.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Way more puts — heavy fear, everyone is buying protection.</span></p>
+                    </div>
+                  </div>
+                  <div className="border-t border-primary/10 pt-1.5">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      <span className="text-amber-400 font-bold">What are sweeps?</span> A sweep is when a big trader wants options so urgently they hit multiple exchanges at once to fill their order fast. It signals urgency — someone with big money wants in (or out) RIGHT NOW.
+                    </p>
+                    <div className="space-y-0.5 mt-1">
+                      <p className="text-[10px] leading-relaxed"><span className="text-foreground/50 font-bold">Under 20:</span> <span className="text-foreground/70">Quiet — low urgency, not much big-money action.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">20–50:</span> <span className="text-foreground/70">Normal — typical institutional activity.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">50–100:</span> <span className="text-foreground/70">Elevated — big players are getting active, pay attention.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">100+:</span> <span className="text-foreground/70">Very aggressive — heavy institutional urgency, something is happening.</span></p>
+                    </div>
                   </div>
                 </div>
               </motion.div>
