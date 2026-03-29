@@ -595,6 +595,50 @@ const DashboardAnalytics = () => {
                       topTickers={topTickers}
                       weeklyStats={weeklyStats}
                     />
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+                      className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-yellow-500/5 via-background to-background">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-2xl -translate-y-8 translate-x-8" />
+                      <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-yellow-400" />
+                        Your Trading Stats
+                      </h3>
+                      {userStats && userStats.total > 0 ? (
+                        <div className="flex items-center gap-5">
+                          <WinRateRing rate={userStats.winRate} size={72} />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Total Trades</span>
+                              <span className="font-bold text-foreground">{userStats.total}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">This Week</span>
+                              <span className="font-bold text-foreground">{userStats.weekWinRate}% ({userStats.weekHits}/{userStats.weekTotal})</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Win Streak</span>
+                              <span className="font-bold text-orange-400 flex items-center gap-1">
+                                {userStats.streak >= 3 && <Flame className="h-3 w-3" />}
+                                {userStats.streak}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setActiveTab("mytrades")}
+                            className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
+                          >
+                            View Details →
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                            <Trophy className="h-5 w-5 text-yellow-400/50" />
+                          </div>
+                          <p className="text-sm font-medium text-muted-foreground">No trades taken yet</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">Click "I Took This Trade" on signals to start tracking your performance</p>
+                        </div>
+                      )}
+                    </motion.div>
                   </>
                 )}
                 {activeTab === "mytrades" && (
@@ -690,7 +734,7 @@ function OverviewTab({ signalStats, topTickers, weeklyStats }: {
 
   const formatWeekLabel = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   };
 
   const getWeekColor = (winRate: number, total: number) => {
@@ -1009,7 +1053,7 @@ function PersonalWeeklyReportCard({ weeks }: { weeks: PersonalWeek[] }) {
 
   const formatWeekLabel = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   };
 
   const getWeekColor = (wr: number, total: number) => {
