@@ -211,21 +211,25 @@ const AIChatPanel = () => {
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`rounded-lg p-3 ${
+            className={`flex gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+          >
+            {msg.role === "assistant" && (
+              <img src={biddieRobot} alt="Biddie" className="w-8 h-8 rounded-full shrink-0 mt-1" />
+            )}
+            <div className={`rounded-lg p-3 flex-1 min-w-0 ${
               msg.role === "assistant"
                 ? "bg-primary/5 border border-primary/10"
                 : "bg-muted/50"
-            }`}
-          >
+            }`}>
             <div className="flex items-center gap-2 mb-1">
               {msg.role === "assistant" ? (
-                <Bot className="h-3 w-3 text-primary" />
+                <span className="text-xs font-bold text-primary">Biddie AI</span>
               ) : (
-                <User className="h-3 w-3 text-accent" />
+                <>
+                  <User className="h-3 w-3 text-accent" />
+                  <span className="text-xs font-bold text-accent">You</span>
+                </>
               )}
-              <span className={`text-xs font-bold ${msg.role === "assistant" ? "text-primary" : "text-accent"}`}>
-                {msg.role === "assistant" ? "Biddie" : "You"}
-              </span>
               <span className="text-[10px] text-muted-foreground">{msg.timestamp}</span>
             </div>
             {msg.role === "assistant" ? (
@@ -235,6 +239,7 @@ const AIChatPanel = () => {
             ) : (
               <p className="text-sm text-foreground whitespace-pre-line">{msg.content}</p>
             )}
+            </div>
           </div>
         ))}
 
