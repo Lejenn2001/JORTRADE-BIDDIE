@@ -1273,6 +1273,7 @@ Answer using the live data above. Be specific. Reference actual numbers.`;
     });
 
     logApiCall("anthropic", "biddie-chat");
+    logApiCall("replit", "biddie-chat");
     const analysis = response.content[0].type === "text" ? response.content[0].text : "";
     const isAlert = analysis.toUpperCase().includes("ALERT\n") || analysis.match(/^ALERT$/m) !== null;
 
@@ -1424,6 +1425,7 @@ router.post("/whale/community-chat", async (req, res) => {
     });
 
     logApiCall("anthropic", "community-chat");
+    logApiCall("replit", "community-chat");
     const content = response.content[0].type === "text" ? response.content[0].text : "";
     let posted = false;
     if (content && content.trim().length > 0) {
@@ -1470,6 +1472,7 @@ router.get("/whale/signal", async (_req, res) => {
     });
 
     logApiCall("anthropic", "quick-scan");
+    logApiCall("replit", "quick-scan");
     const analysis = response.content[0].type === "text" ? response.content[0].text : "";
     const isAlert = analysis.toUpperCase().startsWith("ALERT") || analysis.toUpperCase().includes("#1");
     res.json({ analysis, isAlert, timestamp: now });
@@ -2091,6 +2094,7 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
     });
 
     logApiCall("anthropic", "signal-pipeline");
+    logApiCall("replit", "signal-pipeline");
     const aiText = (aiResponse.content[0] as any)?.text ?? "";
     const jsonMatch = aiText.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
@@ -2206,6 +2210,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       });
 
       logApiCall("anthropic", "spread-pipeline");
+      logApiCall("replit", "spread-pipeline");
       const spreadText = (spreadResponse.content[0] as any)?.text ?? "";
       const spreadJsonMatch = spreadText.match(/\[[\s\S]*\]/);
       if (spreadJsonMatch) {
@@ -4360,7 +4365,7 @@ router.get("/whale/admin/api-usage", async (req, res) => {
     );
 
     const counts: Record<string, { today: number; minute: number }> = {};
-    for (const name of ["unusual_whales", "polygon", "anthropic", "discord"]) {
+    for (const name of ["unusual_whales", "polygon", "anthropic", "discord", "replit"]) {
       counts[name] = { today: 0, minute: 0 };
     }
     for (const row of (todayResult?.rows || [])) {

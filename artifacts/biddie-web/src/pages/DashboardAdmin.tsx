@@ -397,12 +397,13 @@ const DashboardAdmin = () => {
                         <Gauge className="h-5 w-5 text-primary" />
                         <h3 className="text-sm font-bold text-foreground">API Usage (Today)</h3>
                       </div>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                         {([
                           { key: "unusual_whales", label: "Unusual Whales", color: "text-emerald-400", bg: "bg-emerald-500/10" },
                           { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10" },
                           { key: "anthropic", label: "Anthropic AI", color: "text-purple-400", bg: "bg-purple-500/10" },
                           { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
+                          { key: "replit", label: "Replit", color: "text-orange-400", bg: "bg-orange-500/10" },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
                           return (
