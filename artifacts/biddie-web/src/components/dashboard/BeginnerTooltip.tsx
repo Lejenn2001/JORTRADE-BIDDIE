@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Props {
-  content: string;
+  content: ReactNode;
   size?: "sm" | "md";
   maxWidth?: number;
 }
@@ -17,7 +17,7 @@ const BeginnerTooltip = ({ content, size = "sm", maxWidth = 280 }: Props) => {
   useEffect(() => {
     if (show && ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setPosition(rect.top < 120 ? "below" : "above");
+      setPosition(rect.top < 200 ? "below" : "above");
 
       const spaceRight = window.innerWidth - rect.right;
       const spaceLeft = rect.left;
@@ -69,7 +69,7 @@ const BeginnerTooltip = ({ content, size = "sm", maxWidth = 280 }: Props) => {
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Beginner Tip</span>
               </div>
-              <p className="text-[10px] text-foreground/80 leading-relaxed">{content}</p>
+              <div className="text-[10px] text-foreground/80 leading-relaxed">{content}</div>
             </div>
           </motion.div>
         )}
