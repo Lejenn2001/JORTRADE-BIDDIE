@@ -380,7 +380,7 @@ const DashboardMarket = () => {
             <div className="space-y-1">
               <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
                 <Crosshair className="h-6 w-6 text-primary" />
-                Market Structure
+                Market View
               </h1>
               <p className="text-sm text-muted-foreground">
                 Type any ticker for a full AI-powered breakdown — flow, dark pool, key levels, and trade setup
@@ -678,7 +678,7 @@ const DashboardMarket = () => {
                     <div className="glass-panel rounded-xl p-4 border border-border/30">
                       <div className="flex items-center gap-2 mb-3">
                         <BarChart3 className="h-4 w-4 text-violet-400" />
-                        <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Market Structure</h3>
+                        <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Market View</h3>
                       </div>
                       <p className="text-sm text-muted-foreground leading-relaxed">{result.analysis.market_structure}</p>
                     </div>

@@ -203,7 +203,7 @@ const MarketChartPanel = () => {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <TrendingUp className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm text-foreground">Market Structure</span>
+          <span className="font-semibold text-sm text-foreground">Market View</span>
         </div>
         <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
           loading ? "bg-muted/50 text-muted-foreground" :
