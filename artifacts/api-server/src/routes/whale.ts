@@ -2108,7 +2108,7 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
           ? aiCategory : sig.category;
 
         const quality = evaluation.signal_quality || "moderate";
-        const pick = !evaluation.is_hedge && adjustedConf >= 9 && quality === "strong";
+        const pick = !evaluation.is_hedge && adjustedConf >= 8 && (quality === "strong" || quality === "moderate");
         return {
           ...sig,
           confidence: adjustedConf,
@@ -2322,7 +2322,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (existing && existing.rows.length > 0) continue;
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
-      const isBiddiePick = !s.is_hedge && s.confidence >= 9 && s.signal_quality === "strong";
+      const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
       await dbQuery(
         `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24)`,

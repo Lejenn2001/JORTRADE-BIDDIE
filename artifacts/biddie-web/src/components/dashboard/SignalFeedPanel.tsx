@@ -144,7 +144,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                       )}
                       {signal.aiEvaluated && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 animate-pulse uppercase tracking-wider">
-                          Biddie AI
+                          Biddie Pick
                         </span>
                       )}
                     </div>

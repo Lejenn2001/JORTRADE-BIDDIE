@@ -470,7 +470,7 @@ const DashboardAnalytics = () => {
                   <BarChart3 className="h-6 w-6 text-primary" />
                   Performance Analytics
                 </h1>
-                <p className="text-sm text-muted-foreground">Track Biddie AI Pick accuracy and your personal trading performance</p>
+                <p className="text-sm text-muted-foreground">Track Biddie Pick accuracy and your personal trading performance</p>
               </div>
 
               <div className="flex gap-1 bg-muted/30 rounded-lg p-1">
@@ -587,7 +587,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Biddie AI Pick Win Rate"
+          label="Biddie Pick Win Rate"
           value={signalStats ? `${signalStats.winRate}%` : "—"}
           sub={signalStats ? `${signalStats.hits} hits / ${signalStats.hits + signalStats.misses} resolved` : undefined}
           icon={<Target className="h-5 w-5 text-emerald-400" />}
@@ -620,7 +620,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
-            Biddie AI Pick Performance
+            Biddie Pick Performance
           </h3>
           {signalStats ? (
             <div className="flex items-center gap-6">
@@ -685,7 +685,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-panel rounded-xl p-5 border border-white/10">
           <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
             <PieChart className="h-4 w-4 text-primary" />
-            Top Tickers — Biddie AI Pick Accuracy
+            Top Tickers — Biddie Pick Accuracy
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {topTickers.map(t => (

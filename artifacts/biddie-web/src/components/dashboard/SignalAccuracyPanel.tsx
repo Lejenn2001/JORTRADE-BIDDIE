@@ -145,7 +145,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
     <div className="glass-panel rounded-xl border-border/40 overflow-hidden mb-6">
       <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2 flex-wrap">
         <Target className="h-4 w-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Biddie AI Pick Accuracy</h2>
+        <h2 className="text-sm font-semibold text-foreground">Biddie Pick Accuracy</h2>
         {uniqueLive.length > 0 && (
           <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />

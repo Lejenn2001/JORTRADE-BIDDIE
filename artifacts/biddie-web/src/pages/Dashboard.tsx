@@ -89,7 +89,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     srLevel: record.sr_level,
     targetNear: record.target_near || undefined,
     tradeStatus: record.trade_status || null,
-    aiEvaluated: true,
+    aiEvaluated: !!record.is_biddie_pick,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
     mfePercent: record.mfe_percent != null ? Number(record.mfe_percent) : null,

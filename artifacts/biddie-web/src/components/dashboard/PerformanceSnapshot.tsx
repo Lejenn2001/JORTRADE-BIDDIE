@@ -164,7 +164,7 @@ const PerformanceSnapshot = () => {
       </div>
 
       <p className="text-[9px] sm:text-[10px] text-muted-foreground/40 mt-4 pt-3 border-t border-white/5 leading-relaxed">
-        * Tracking only Biddie AI Picks — signals evaluated and scored by the AI from live options flow. Raw flow alerts are not included in these stats.
+        * Tracking only Biddie Picks — signals with conviction 80+ evaluated and scored by the AI from live options flow. Raw flow alerts are not included in these stats.
       </p>
     </motion.div>
   );
