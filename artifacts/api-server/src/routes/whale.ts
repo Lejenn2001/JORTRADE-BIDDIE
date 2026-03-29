@@ -5133,16 +5133,65 @@ router.get("/whale/trades/stats", async (req, res) => {
       if ((t as any).outcome === "hit") byCategory[cat].hits++;
     }
 
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const monday = new Date(now);
-    monday.setDate(monday.getDate() - daysSinceMonday);
-    monday.setHours(0, 0, 0, 0);
-    const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= monday);
+    const sunday = getSunday(new Date());
+    const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= sunday);
     const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
     const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit").length;
     const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
+
+    const weeklyMap: Record<string, { hits: number; misses: number; pending: number; total: number; partial_hits: number }> = {};
+    for (const t of trades) {
+      const takenAt = new Date((t as any).taken_at);
+      const ws = getSunday(takenAt);
+      const key = ws.toISOString();
+      if (!weeklyMap[key]) weeklyMap[key] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0 };
+      weeklyMap[key].total++;
+      const outcome = (t as any).outcome;
+      if (outcome === "hit") weeklyMap[key].hits++;
+      else if (outcome === "partial_hit") weeklyMap[key].partial_hits++;
+      else if (outcome === "missed") weeklyMap[key].misses++;
+      else weeklyMap[key].pending++;
+    }
+
+    const weeklyBreakdown = Object.entries(weeklyMap)
+      .map(([weekStart, data]) => {
+        const ws = new Date(weekStart);
+        const we = new Date(ws); we.setDate(we.getDate() + 7);
+        const resolved = data.hits + data.partial_hits + data.misses;
+        const wr = resolved > 0 ? Math.round(((data.hits + data.partial_hits) / resolved) * 100) : 0;
+
+        const weekTrades = trades.filter((t: any) => {
+          const d = new Date((t as any).taken_at);
+          return d >= ws && d < we;
+        });
+        const tickerMap: Record<string, { hits: number; misses: number; pending: number; total: number }> = {};
+        for (const t of weekTrades) {
+          const tk = (t as any).ticker;
+          const o = (t as any).outcome;
+          if (!tickerMap[tk]) tickerMap[tk] = { hits: 0, misses: 0, pending: 0, total: 0 };
+          tickerMap[tk].total++;
+          if (o === "hit" || o === "partial_hit") tickerMap[tk].hits++;
+          else if (o === "missed") tickerMap[tk].misses++;
+          else tickerMap[tk].pending++;
+        }
+        const topTickers = Object.entries(tickerMap)
+          .sort((a, b) => b[1].total - a[1].total)
+          .slice(0, 5)
+          .map(([ticker, d]) => ({ ticker, ...d }));
+
+        return {
+          week_start: weekStart,
+          week_end: we.toISOString(),
+          total: data.total,
+          hits: data.hits,
+          partial_hits: data.partial_hits,
+          misses: data.misses,
+          pending: data.pending,
+          win_rate: wr,
+          top_tickers: topTickers,
+        };
+      })
+      .sort((a, b) => new Date(a.week_start).getTime() - new Date(b.week_start).getTime());
 
     res.json({
       stats: {
@@ -5157,6 +5206,7 @@ router.get("/whale/trades/stats", async (req, res) => {
         weekTotal: thisWeek.length,
         byTicker,
         byCategory,
+        weeklyBreakdown,
       },
     });
   } catch (e: any) {

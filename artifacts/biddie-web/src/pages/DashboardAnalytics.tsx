@@ -21,6 +21,18 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import biddieRobot from "@/assets/biddie-robot.png";
 
+interface PersonalWeek {
+  week_start: string;
+  week_end: string;
+  total: number;
+  hits: number;
+  partial_hits: number;
+  misses: number;
+  pending: number;
+  win_rate: number;
+  top_tickers: { ticker: string; hits: number; misses: number; pending: number; total: number }[];
+}
+
 interface TradeStats {
   total: number;
   hits: number;
@@ -33,6 +45,7 @@ interface TradeStats {
   weekTotal: number;
   byTicker: Record<string, { hits: number; total: number }>;
   byCategory: Record<string, { hits: number; total: number }>;
+  weeklyBreakdown?: PersonalWeek[];
 }
 
 interface SignalStats {
