@@ -43,6 +43,10 @@ const DashboardCommunity = () => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingBroadcast = useRef<number>(0);
 
   const EMOJI_LIST = [
     "🔥","💪","👀","🚀","📈","📉","💰","🤝","😤","😏",
@@ -147,6 +151,28 @@ const DashboardCommunity = () => {
           setMessages((prev) => prev.filter((m) => m.id !== deletedId));
         }
       )
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        if (payload.user_id === session?.user?.id) return;
+        setTypingUsers((prev) => {
+          const next = new Map(prev);
+          next.set(payload.user_id, payload.name);
+          return next;
+        });
+        setTimeout(() => {
+          setTypingUsers((prev) => {
+            const next = new Map(prev);
+            next.delete(payload.user_id);
+            return next;
+          });
+        }, 3000);
+      })
+      .on("broadcast", { event: "stop_typing" }, ({ payload }) => {
+        setTypingUsers((prev) => {
+          const next = new Map(prev);
+          next.delete(payload.user_id);
+          return next;
+        });
+      })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
         setOnlineCount(Object.keys(state).length);
@@ -157,8 +183,11 @@ const DashboardCommunity = () => {
         }
       });
 
+    channelRef.current = channel;
+
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [session?.user?.id, firstName]);
 
@@ -196,12 +225,47 @@ const DashboardCommunity = () => {
     }
   };
 
+  const broadcastTyping = useCallback(() => {
+    if (!channelRef.current || !session?.user?.id) return;
+    const now = Date.now();
+    if (now - lastTypingBroadcast.current < 2000) return;
+    lastTypingBroadcast.current = now;
+    const displayName = profile?.chat_alias || profile?.full_name?.split(" ")[0] || "Someone";
+    channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: session.user.id, name: displayName },
+    });
+  }, [session?.user?.id, profile?.chat_alias, profile?.full_name]);
+
+  const broadcastStopTyping = useCallback(() => {
+    if (!channelRef.current || !session?.user?.id) return;
+    channelRef.current.send({
+      type: "broadcast",
+      event: "stop_typing",
+      payload: { user_id: session.user.id },
+    });
+  }, [session?.user?.id]);
+
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    if (val.trim()) {
+      broadcastTyping();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(broadcastStopTyping, 3000);
+    } else {
+      broadcastStopTyping();
+    }
+  };
+
   const sendMessage = async () => {
     if (!session?.user?.id) {
       toast({ title: "Please log in", description: "You need to be signed in to send messages.", variant: "destructive" });
       return;
     }
     if (!input.trim() || sending) return;
+    broadcastStopTyping();
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     const messageText = input.trim();
     setSending(true);
     const { error } = await supabase.from("chat_messages").insert({
@@ -464,6 +528,28 @@ const DashboardCommunity = () => {
               })}
             </AnimatePresence>
 
+            {typingUsers.size > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 px-1"
+              >
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1.2s" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "200ms", animationDuration: "1.2s" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "400ms", animationDuration: "1.2s" }} />
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  {(() => {
+                    const names = Array.from(typingUsers.values());
+                    if (names.length === 1) return `${names[0]} is typing`;
+                    if (names.length === 2) return `${names[0]} and ${names[1]} are typing`;
+                    return `${names.length} people are typing`;
+                  })()}
+                </span>
+              </motion.div>
+            )}
+
             {biddieThinking && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -476,11 +562,10 @@ const DashboardCommunity = () => {
                 <div className="bg-primary/10 border border-primary/25 rounded-2xl rounded-bl-sm px-3 py-2">
                   <p className="text-[11px] font-semibold mb-0.5 text-primary">Biddie AI</p>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">Biddie is analyzing</span>
                     <span className="flex gap-0.5">
-                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1.2s" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "200ms", animationDuration: "1.2s" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "400ms", animationDuration: "1.2s" }} />
                     </span>
                   </div>
                 </div>
@@ -546,9 +631,9 @@ const DashboardCommunity = () => {
             </div>
             <Input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Message as ${firstName}...`}
+              placeholder={`Message as ${profile?.chat_alias || firstName}...`}
               className="bg-muted/30 border-border/50 flex-1 focus:border-primary/50 transition-colors h-9 text-sm"
               maxLength={500}
             />
