@@ -4031,21 +4031,21 @@ router.get("/whale/market-pulse", async (_req, res) => {
     let vixLevel = "Unknown";
     let vixDescription = "";
     if (vixPrice != null) {
-      if (vixPrice < 25) {
-        vixLevel = "Low";
-        vixDescription = "VIX is the market's scared-o-meter. Right now it's in the 10-20 zone — the market is calm like a quiet lake. Traders feel safe, prices move in small baby steps, and it's smooth sailing. Great time for steady trades.";
-      } else if (vixPrice < 35) {
+      if (vixPrice < 20) {
+        vixLevel = "Very Calm";
+        vixDescription = "The VIX fear meter is at 10–15 — everything is smooth and calm. You can size up because nothing crazy is happening. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
+      } else if (vixPrice < 30) {
         vixLevel = "Normal";
-        vixDescription = "The scared-o-meter is in the 20-30 zone — like a regular day at the playground. Some ups, some downs, nothing too wild. The market is doing its thing. Options are fairly priced and most strategies work fine here.";
-      } else if (vixPrice < 45) {
-        vixLevel = "Elevated";
-        vixDescription = "The scared-o-meter is in the 30-40 zone — like thunder rumbling in the distance. Traders are getting nervous, and prices can swing bigger than usual. Time to be careful, size down, and keep wider stops.";
-      } else if (vixPrice < 55) {
-        vixLevel = "High";
-        vixDescription = "The scared-o-meter is in the 40-50 zone — like a roller coaster that won't slow down. Big swings up AND down. Options are expensive because everyone wants protection. Stay sharp and keep positions small.";
+        vixDescription = "The VIX fear meter is at 15–20 — just a regular day. Play normal size, nothing unusual. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
+      } else if (vixPrice < 40) {
+        vixLevel = "Nervous";
+        vixDescription = "The VIX fear meter is at 20–30 — things are getting shaky. Play a little smaller and be careful. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
+      } else if (vixPrice < 50) {
+        vixLevel = "Fear";
+        vixDescription = "The VIX fear meter is at 30–40 — the market is jumpy and fast. Play small and don't take big risks. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
       } else {
-        vixLevel = "Extreme";
-        vixDescription = "The scared-o-meter is above 50 — FIRE ALARM! The market is panicking, prices can move 2-5% in a single day. It's totally okay to sit this one out. Cash is a position too, and sometimes the smartest trade is no trade at all.";
+        vixLevel = "Panic";
+        vixDescription = "The VIX fear meter is at 40+ — it's chaos, like everyone running around! Play very small or don't play at all. Cash is a position too. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
       }
     }
 

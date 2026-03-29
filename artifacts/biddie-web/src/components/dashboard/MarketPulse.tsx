@@ -47,11 +47,11 @@ const formatPremium = (val: number) => {
 };
 
 const vixColorMap: Record<string, string> = {
-  Low: "text-emerald-400 bg-emerald-500/20",
+  "Very Calm": "text-emerald-400 bg-emerald-500/20",
   Normal: "text-blue-400 bg-blue-500/20",
-  Elevated: "text-amber-400 bg-amber-500/20",
-  High: "text-orange-400 bg-orange-500/20",
-  Extreme: "text-red-400 bg-red-500/20",
+  Nervous: "text-amber-400 bg-amber-500/20",
+  Fear: "text-orange-400 bg-orange-500/20",
+  Panic: "text-red-400 bg-red-500/20",
   Unknown: "text-muted-foreground bg-muted/30",
 };
 
