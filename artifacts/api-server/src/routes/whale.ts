@@ -1253,7 +1253,7 @@ router.post("/whale/chat", async (req, res) => {
   const isCasual = casualPatterns.test(message.trim()) && message.trim().split(/\s+/).length <= 8;
 
   const currentUserMessage = isCasual
-    ? `User message: "${message}"\n\nThis is a casual greeting — just be friendly and conversational. Do NOT bring up any market data, trades, or flow analysis unless the user asks.`
+    ? `User message: "${message}"\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\nThis is a casual greeting — just be friendly and conversational. Do NOT bring up any market data, trades, tickers, or flow analysis unless the user asks. Do NOT reference market action (bleeding, ripping, pumping, etc.) — you don't have live data right now. Keep it short and friendly. Be aware of what day/time it is — if the market is closed (weekends, after hours), don't pretend you're watching the tape.`
     : `User message: "${message}"
 
 --- CURRENT DATE & TRADING CALENDAR ---
