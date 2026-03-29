@@ -62,6 +62,8 @@ interface BreakoutSetup {
     expiry: string;
     expiryLabel: string;
     entry: string;
+    entryLabel?: string;
+    vwap?: string | null;
     target: string;
     targetNear?: string;
     targetFar?: string;
@@ -1152,9 +1154,19 @@ function SetupCard({
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 mb-2">
-                    <div className="text-center p-1.5 rounded-md bg-white/[0.03]">
-                      <p className="text-[9px] text-muted-foreground uppercase">Entry</p>
+                    <div className="text-center p-1.5 rounded-md bg-white/[0.03] relative group">
+                      <p className="text-[9px] text-muted-foreground uppercase flex items-center justify-center gap-1">
+                        Entry
+                        {setup.contract.entryLabel === "VWAP" && (
+                          <span className="text-[7px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold leading-none">VWAP</span>
+                        )}
+                      </p>
                       <p className="text-[11px] font-bold text-foreground">{setup.contract.entry}</p>
+                      {setup.contract.vwap && (
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[9px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                          VWAP: {setup.contract.vwap} · {setup.contract.entryLabel === "VWAP" ? "Entry at VWAP" : "Price too far from VWAP"}
+                        </span>
+                      )}
                     </div>
                     <div className="text-center p-1.5 rounded-md bg-white/[0.03] relative group">
                       <p className="text-[9px] text-muted-foreground uppercase">Target</p>

@@ -161,6 +161,8 @@ interface ContractRec {
   expiry: string;
   expiryLabel: string;
   entry: string;
+  entryLabel: string;
+  vwap: string | null;
   target: string;
   targetNear: string;
   targetFar: string;
@@ -241,6 +243,29 @@ async function fetchPolygonQuote(ticker: string): Promise<{ price: number; prevC
       prevClose: t.prevDay?.c || 0,
       volume: t.day?.v || 0,
     };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchIntradayVWAP(ticker: string): Promise<number | null> {
+  try {
+    const key = POLYGON_KEY();
+    if (!key) return null;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/5/minute/${today}/${today}?adjusted=true&sort=asc&apiKey=${key}`;
+    const res = await axios.get(url, { timeout: 8000 });
+    const bars = res.data?.results;
+    if (!Array.isArray(bars) || bars.length === 0) return null;
+    let cumTPV = 0, cumVol = 0;
+    for (const b of bars) {
+      if (b.h && b.l && b.c && b.v) {
+        cumTPV += ((b.h + b.l + b.c) / 3) * b.v;
+        cumVol += b.v;
+      }
+    }
+    return cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
   } catch {
     return null;
   }
@@ -511,6 +536,7 @@ function generateContractRec(
   target: number | null,
   breakoutTriggered: boolean,
   imminenceLabel: string | null,
+  vwap: number | null = null,
 ): ContractRec | null {
   if (direction === "neutral" || direction === "none") return null;
   if (price <= 0) return null;
@@ -566,7 +592,7 @@ function generateContractRec(
     }
   }
 
-  const entryPrice = price;
+  const entryPrice = vwap && Math.abs(vwap - price) / price < 0.02 ? vwap : price;
   const stopPrice = isBullish
     ? Math.round((price - atr * 0.5) * 100) / 100
     : Math.round((price + atr * 0.5) * 100) / 100;
@@ -588,12 +614,15 @@ function generateContractRec(
   if (!isBullish && support) parts.push(`support $${support.toFixed(2)}`);
   parts.push(`${label} expiry`);
 
+  const usedVwap = vwap && Math.abs(vwap - price) / price < 0.02;
   return {
     type,
     strike,
     expiry,
     expiryLabel: label,
     entry: `$${entryPrice.toFixed(2)}`,
+    entryLabel: usedVwap ? "VWAP" : "Market",
+    vwap: vwap ? `$${vwap.toFixed(2)}` : null,
     target: `$${targetNearPrice.toFixed(2)} – $${targetFarPrice.toFixed(2)}`,
     targetNear: `$${targetNearPrice.toFixed(2)}`,
     targetFar: `$${targetFarPrice.toFixed(2)}`,
@@ -603,7 +632,10 @@ function generateContractRec(
 }
 
 async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
-  const candles = await fetchDailyCandles(ticker, 60);
+  const [candles, vwap] = await Promise.all([
+    fetchDailyCandles(ticker, 60),
+    fetchIntradayVWAP(ticker),
+  ]);
   if (candles.length < 21) return null;
 
   const lastCandle = candles[candles.length - 1];
@@ -817,7 +849,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     targetPrice = Math.round((consolidation.supportLevel - atr) * 100) / 100;
   }
 
-  const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel);
+  const contract = generateContractRec(ticker, quote.price, atr, effectiveDir2, consolidation.resistanceLevel, consolidation.supportLevel, targetPrice, breakout.breakoutTriggered, imminenceLabel, vwap);
 
   return {
     ticker,
