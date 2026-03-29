@@ -76,10 +76,6 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
               <Users className="h-3 w-3 text-emerald-400" />
               <span className="text-[10px] font-semibold text-emerald-400">{onlineCount} online</span>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-muted-foreground">Welcome back,</p>
-              <p className="text-xs font-semibold text-foreground">{firstName} 👋</p>
-            </div>
           </div>
         </div>
       </div>
@@ -102,6 +98,11 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
             <p className="text-[11px] lg:text-xs font-semibold text-primary">Biddie AI</p>
           </div>
           <p className="text-[10px] lg:text-xs text-muted-foreground/80 italic truncate">"{quote}"</p>
+        </div>
+
+        <div className="text-right flex-shrink-0">
+          <p className="text-[10px] text-muted-foreground">Welcome back,</p>
+          <p className="text-xs font-semibold text-foreground">{firstName} 👋</p>
         </div>
       </div>
     </div>
