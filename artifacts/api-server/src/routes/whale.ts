@@ -1408,19 +1408,35 @@ router.get("/whale/admin/referrals", async (req, res) => {
       ORDER BY us.referral_code_created_at DESC NULLS LAST
     `);
 
+    const referrerIds = (allReferrers?.rows || []).map((r: any) => r.user_id);
+    const nameMap: Record<string, string> = {};
+    for (const uid of referrerIds) {
+      try {
+        const resp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${uid}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 });
+        if (resp?.data?.[0]?.full_name) nameMap[uid] = resp.data[0].full_name;
+      } catch {}
+    }
+
     const allReferrals = await dbQuery(`
-      SELECT r.referrer_id, r.referred_id, r.referred_name, r.created_at,
-        us_referrer.referral_code as referrer_code, us_referrer.chat_alias as referrer_alias,
-        p_referrer.full_name as referrer_full_name,
-        p_referred.full_name as referred_full_name,
-        p_referred.selected_plan as referred_plan
+      SELECT r.id, r.referrer_id, r.referred_id, r.referred_name, r.created_at,
+        us_referrer.referral_code as referrer_code, us_referrer.chat_alias as referrer_alias
       FROM referrals r
       LEFT JOIN user_settings us_referrer ON us_referrer.user_id = r.referrer_id
-      LEFT JOIN profiles p_referrer ON p_referrer.id::text = r.referrer_id
-      LEFT JOIN profiles p_referred ON p_referred.id::text = r.referred_id
       ORDER BY r.created_at DESC
       LIMIT 100
     `);
+
+    const referredIds = (allReferrals?.rows || []).map((r: any) => r.referred_id).filter(Boolean);
+    for (const uid of referredIds) {
+      if (nameMap[uid]) continue;
+      try {
+        const resp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${uid}&select=full_name,selected_plan`, { headers: supabaseAdminHeaders(), timeout: 5000 });
+        if (resp?.data?.[0]) {
+          nameMap[uid] = resp.data[0].full_name || "";
+          nameMap[uid + "_plan"] = resp.data[0].selected_plan || "starter";
+        }
+      } catch {}
+    }
 
     const totalReferrals = allReferrals?.rows?.length || 0;
     const totalReferrers = (allReferrers?.rows || []).filter((r: any) => parseInt(r.referral_count) > 0).length;
@@ -1461,17 +1477,45 @@ router.get("/whale/admin/referrals", async (req, res) => {
         count: parseInt(r.referral_count),
       })),
       recentReferrals: (allReferrals?.rows || []).map((r: any) => ({
+        id: r.id,
         referrerId: r.referrer_id,
         referrerCode: r.referrer_code,
-        referrerAlias: r.referrer_alias,
-        referrerName: r.referrer_full_name || null,
-        referredName: r.referred_full_name || r.referred_name,
-        referredPlan: r.referred_plan || "starter",
+        referrerName: nameMap[r.referrer_id] || r.referrer_alias || null,
+        referredName: nameMap[r.referred_id] || r.referred_name,
+        referredPlan: nameMap[r.referred_id + "_plan"] || "starter",
         createdAt: r.created_at,
       })),
     });
   } catch (err: any) {
     console.error("admin referrals error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/whale/admin/referral-code/:userId", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId || !(await isAdminUser(adminUserId))) {
+      return res.status(403).json({ error: "Admin only" });
+    }
+    const { userId } = req.params;
+    await dbQuery("UPDATE user_settings SET referral_code = NULL, referral_code_created_at = NULL WHERE user_id = $1", [userId]);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/whale/admin/referral/:referralId", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId || !(await isAdminUser(adminUserId))) {
+      return res.status(403).json({ error: "Admin only" });
+    }
+    const { referralId } = req.params;
+    await dbQuery("DELETE FROM referrals WHERE id = $1", [referralId]);
+    res.json({ ok: true });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });

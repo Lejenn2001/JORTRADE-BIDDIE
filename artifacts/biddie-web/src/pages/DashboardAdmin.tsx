@@ -66,15 +66,39 @@ const getTierLabel = (count: number) => {
 };
 
 const AdminReferralsTab = () => {
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchData = () => {
     setLoading(true);
-    fetch("/api/whale/admin/referrals")
+    fetch("/api/whale/admin/referrals", { headers: { "x-user-id": user?.id || "" } })
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
+  };
+
+  const deleteCode = async (userId: string) => {
+    if (!confirm("Remove this user's referral code?")) return;
+    setDeleting(userId);
+    try {
+      await fetch(`/api/whale/admin/referral-code/${userId}`, { method: "DELETE", headers: { "x-user-id": user?.id || "" } });
+      toast.success("Referral code removed");
+      fetchData();
+    } catch { toast.error("Failed to delete"); }
+    setDeleting(null);
+  };
+
+  const deleteReferral = async (id: number) => {
+    if (!confirm("Delete this referral record?")) return;
+    setDeleting(`ref-${id}`);
+    try {
+      await fetch(`/api/whale/admin/referral/${id}`, { method: "DELETE", headers: { "x-user-id": user?.id || "" } });
+      toast.success("Referral deleted");
+      fetchData();
+    } catch { toast.error("Failed to delete"); }
+    setDeleting(null);
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -129,20 +153,28 @@ const AdminReferralsTab = () => {
           <div className="text-center text-muted-foreground/50 py-6 text-xs">No codes generated yet</div>
         ) : (
           <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-            <div className="grid grid-cols-4 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+            <div className="grid grid-cols-5 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
               <span>Name</span>
               <span>Code</span>
               <span>Referrals</span>
               <span>Generated</span>
+              <span></span>
             </div>
             {(allCodeHolders || []).map((h: any) => (
-              <div key={h.userId} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
+              <div key={h.userId} className="grid grid-cols-5 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
                 <span className="text-foreground/70 truncate">{h.name || h.userId.slice(0, 8) + "..."}</span>
                 <span className="text-muted-foreground font-mono text-[10px]">{h.code}</span>
                 <span className="text-foreground font-bold">{h.count}</span>
                 <span className="text-muted-foreground/60 text-[10px]">
                   {h.codeCreatedAt ? new Date(h.codeCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—"}
                 </span>
+                <button
+                  onClick={() => deleteCode(h.userId)}
+                  disabled={deleting === h.userId}
+                  className="text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-30 justify-self-end"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
@@ -194,23 +226,31 @@ const AdminReferralsTab = () => {
           <div className="text-center text-muted-foreground/50 py-6 text-xs">No referrals yet</div>
         ) : (
           <div className="rounded-lg border border-white/[0.04] overflow-hidden">
-            <div className="grid grid-cols-4 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+            <div className="grid grid-cols-5 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
               <span>Referred By</span>
               <span>New User</span>
               <span>Plan</span>
               <span>Date</span>
+              <span></span>
             </div>
             {recentReferrals.map((r: any, i: number) => {
               const planLabels: Record<string, string> = { starter: "Signal Scout", pro: "Flow Pro", elite: "Whale Watch" };
               const planColors: Record<string, string> = { starter: "text-blue-400", pro: "text-violet-400", elite: "text-amber-400" };
               return (
-                <div key={i} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
+                <div key={r.id || i} className="grid grid-cols-5 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
                   <span className="text-foreground/70 truncate">{r.referrerName || r.referrerCode || "Unknown"}</span>
                   <span className="text-foreground/60 truncate">{r.referredName || "Unknown"}</span>
                   <span className={`text-[10px] font-semibold ${planColors[r.referredPlan] || "text-muted-foreground"}`}>{planLabels[r.referredPlan] || r.referredPlan || "Starter"}</span>
                   <span className="text-muted-foreground/60">
                     {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </span>
+                  <button
+                    onClick={() => deleteReferral(r.id)}
+                    disabled={deleting === `ref-${r.id}`}
+                    className="text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-30 justify-self-end"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               );
             })}
