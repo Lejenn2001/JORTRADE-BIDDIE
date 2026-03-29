@@ -142,10 +142,10 @@ const AIChatPanel = () => {
 
   if (!hasAccess) {
     return (
-      <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
+      <div className="glass-panel rounded-xl border border-purple-500/20 flex flex-col h-full">
         <div className="flex items-center justify-between p-4 border-b border-border/40">
           <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
+            <Bot className="h-4 w-4 text-purple-400" />
             <span className="font-semibold text-sm text-foreground">Biddie AI</span>
           </div>
           <span className="text-xs bg-muted/50 text-muted-foreground px-2.5 py-0.5 rounded-full flex items-center gap-1">
@@ -161,7 +161,7 @@ const AIChatPanel = () => {
           </p>
           <Link
             to="/signup"
-            className="inline-flex items-center gap-1.5 text-xs font-medium bg-primary/20 text-primary px-4 py-2 rounded-lg hover:bg-primary/30 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-medium bg-cyan-400/20 text-cyan-400 px-4 py-2 rounded-lg hover:bg-cyan-400/30 transition-colors"
           >
             Upgrade Plan
             <ArrowUpRight className="h-3 w-3" />
@@ -172,10 +172,10 @@ const AIChatPanel = () => {
   }
 
   return (
-    <div className="glass-panel rounded-xl border-glow-purple flex flex-col h-full">
+    <div className="glass-panel rounded-xl border border-purple-500/20 flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b border-border/40">
         <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-primary" />
+          <Bot className="h-4 w-4 text-purple-400" />
           <span className="font-semibold text-sm text-foreground">Biddie AI</span>
         </div>
         <div className="flex items-center gap-2">
@@ -186,8 +186,8 @@ const AIChatPanel = () => {
               <>{remaining}/{limit} left today{credits > 0 && <span className="text-amber-400 ml-1">+{credits}</span>}</>
             )}
           </span>
-          <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-xs bg-cyan-400/20 text-cyan-400 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
             Online
           </span>
           {messages.length > 0 && (
@@ -212,23 +212,23 @@ const AIChatPanel = () => {
             key={msg.id}
             className={`rounded-lg p-3 ${
               msg.role === "assistant"
-                ? "bg-primary/5 border border-primary/10"
+                ? "bg-purple-500/5 border border-purple-500/10"
                 : "bg-muted/50"
             }`}
           >
             <div className="flex items-center gap-2 mb-1">
               {msg.role === "assistant" ? (
-                <Bot className="h-3 w-3 text-primary" />
+                <Bot className="h-3 w-3 text-purple-400" />
               ) : (
-                <User className="h-3 w-3 text-accent" />
+                <User className="h-3 w-3 text-cyan-400" />
               )}
-              <span className={`text-xs font-bold ${msg.role === "assistant" ? "text-primary" : "text-accent"}`}>
+              <span className={`text-xs font-bold ${msg.role === "assistant" ? "text-purple-400" : "text-cyan-400"}`}>
                 {msg.role === "assistant" ? "Biddie" : "You"}
               </span>
               <span className="text-[10px] text-muted-foreground">{msg.timestamp}</span>
             </div>
             {msg.role === "assistant" ? (
-              <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_li]:text-sm [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_strong]:text-primary [&_h1]:text-primary [&_h2]:text-primary [&_h3]:text-foreground [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-2 [&_h2]:mb-1 [&_h3]:mb-1 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:mb-0.5">
+              <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_li]:text-sm [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_strong]:text-cyan-400 [&_h1]:text-purple-400 [&_h2]:text-purple-400 [&_h3]:text-foreground [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-2 [&_h2]:mb-1 [&_h3]:mb-1 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:mb-0.5">
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             ) : (
@@ -238,7 +238,7 @@ const AIChatPanel = () => {
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-xs text-primary">
+          <div className="flex items-center gap-2 text-xs text-purple-400">
             <Loader2 className="h-3 w-3 animate-spin" />
             Biddie is analyzing...
           </div>
@@ -251,7 +251,7 @@ const AIChatPanel = () => {
             {quickPrompts.map((q) => (
               <button
                 key={q}
-                className="text-[10px] bg-muted/50 text-muted-foreground px-2.5 py-1 rounded-full border border-border hover:border-primary/40 transition-colors"
+                className="text-[10px] bg-muted/50 text-muted-foreground px-2.5 py-1 rounded-full border border-border hover:border-cyan-400/40 transition-colors"
                 onClick={() => sendMessage(q)}
               >
                 {q}
@@ -270,7 +270,7 @@ const AIChatPanel = () => {
                 {plan !== "pro" && (
                   <Link
                     to="/signup"
-                    className="text-[10px] font-medium bg-primary/20 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/30 transition-colors inline-flex items-center gap-1"
+                    className="text-[10px] font-medium bg-cyan-400/20 text-cyan-400 px-3 py-1.5 rounded-lg hover:bg-cyan-400/30 transition-colors inline-flex items-center gap-1"
                   >
                     <ArrowUpRight className="h-2.5 w-2.5" /> Upgrade Plan
                   </Link>
@@ -335,7 +335,7 @@ const AIChatPanel = () => {
           <button
             type="submit"
             disabled={isLoading || !input.trim() || !canAsk}
-            className="bg-primary/20 text-primary rounded-lg p-2.5 hover:bg-primary/30 transition-colors shrink-0 disabled:opacity-50"
+            className="bg-cyan-400/20 text-cyan-400 rounded-lg p-2.5 hover:bg-cyan-400/30 transition-colors shrink-0 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
           </button>
