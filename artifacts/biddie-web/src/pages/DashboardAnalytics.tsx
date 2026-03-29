@@ -583,40 +583,9 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
   topTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
 }) {
-  const resolved = signalStats ? signalStats.hits + signalStats.misses : 0;
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-emerald-500/10 via-background to-background">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -translate-y-8 translate-x-8" />
-          <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-            <Target className="h-4 w-4 text-emerald-400" />
-            Biddie Pick Accuracy
-          </h3>
-          <div className="flex items-center gap-5">
-            <WinRateRing rate={signalStats?.winRate || 0} size={80} />
-            <div className="flex-1 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Resolved</span>
-                <span className="font-bold text-foreground">{resolved} picks</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Hits</span>
-                <span className="font-bold text-emerald-400">{signalStats?.hits || 0}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Misses</span>
-                <span className="font-bold text-red-400">{signalStats?.misses || 0}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Pending</span>
-                <span className="font-bold text-blue-400">{signalStats?.pending || 0}</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-yellow-500/10 via-background to-background">
           <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-2xl -translate-y-8 translate-x-8" />
