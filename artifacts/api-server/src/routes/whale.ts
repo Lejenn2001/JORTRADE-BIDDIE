@@ -4031,22 +4031,15 @@ router.get("/whale/market-pulse", async (_req, res) => {
     let vixLevel = "Unknown";
     let vixDescription = "";
     if (vixPrice != null) {
-      if (vixPrice < 20) {
-        vixLevel = "Very Calm";
-        vixDescription = "The VIX fear meter is at 10–15 — everything is smooth and calm. You can size up because nothing crazy is happening. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
-      } else if (vixPrice < 30) {
-        vixLevel = "Normal";
-        vixDescription = "The VIX fear meter is at 15–20 — just a regular day. Play normal size, nothing unusual. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
-      } else if (vixPrice < 40) {
-        vixLevel = "Nervous";
-        vixDescription = "The VIX fear meter is at 20–30 — things are getting shaky. Play a little smaller and be careful. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
-      } else if (vixPrice < 50) {
-        vixLevel = "Fear";
-        vixDescription = "The VIX fear meter is at 30–40 — the market is jumpy and fast. Play small and don't take big risks. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
-      } else {
-        vixLevel = "Panic";
-        vixDescription = "The VIX fear meter is at 40+ — it's chaos, like everyone running around! Play very small or don't play at all. Cash is a position too. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.";
-      }
+      const vixyToVix: Record<string, { level: string; desc: string }> = (() => {
+        if (vixPrice! < 15) return { level: "Very Calm", desc: "The fear meter is very calm right now. The market is smooth and easy — you can size up because nothing crazy is happening." };
+        if (vixPrice! < 22) return { level: "Normal", desc: "The fear meter is normal — just a regular day. Play normal size, nothing unusual going on." };
+        if (vixPrice! < 35) return { level: "Nervous", desc: "The fear meter is getting nervous — things are starting to get shaky. Play a little smaller and be careful out there." };
+        if (vixPrice! < 50) return { level: "Fear", desc: "The fear meter is showing fear — the market is jumpy and fast. Play small and don't take big risks right now." };
+        return { level: "Panic", desc: "The fear meter is in PANIC mode — it's chaos out there! Play very small or don't play at all. Cash is a position too." };
+      })();
+      vixLevel = vixyToVix.level;
+      vixDescription = vixyToVix.desc;
     }
 
     const flowAlerts = await fetchFlowAlerts(500);
