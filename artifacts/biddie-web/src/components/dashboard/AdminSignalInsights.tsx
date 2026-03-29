@@ -126,6 +126,7 @@ const AdminSignalInsights = () => {
   const [sortCol, setSortCol] = useState<string>("detected");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showMethodology, setShowMethodology] = useState(false);
+  const [showTickerBreakdown, setShowTickerBreakdown] = useState(false);
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -519,95 +520,6 @@ const AdminSignalInsights = () => {
         </div>
       </div>
 
-      <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
-        <button
-          onClick={() => setShowMethodology(!showMethodology)}
-          className="w-full px-5 py-4 border-b border-border/40 flex items-center gap-2 hover:bg-muted/10 transition-colors"
-        >
-          <BookOpen className="h-5 w-5 text-blue-400" />
-          <h2 className="text-lg font-bold text-foreground">Signal Verification Methodology</h2>
-          {showMethodology ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
-        </button>
-        {showMethodology && (
-          <div className="p-5 space-y-4 text-sm text-muted-foreground">
-            <div>
-              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Verification Cycle</h3>
-              <p>Every pending signal is checked on a regular interval against live Polygon.io price data. The verifier pulls the stock's price history since the signal was detected, including the current price, the highest price since detection, and the lowest price since detection.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-emerald-400 uppercase">HIT</span>
-                </div>
-                <p className="text-xs leading-relaxed">Price reached the target zone. Bullish/CALL: high reached target. Bearish/PUT: low dropped to target. Also counts if price moved 0.5%+ in the correct direction when target parsing is invalid.</p>
-              </div>
-              <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle className="h-4 w-4 text-blue-400" />
-                  <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL HIT</span>
-                </div>
-                <p className="text-xs leading-relaxed">Expired without hitting the target, but price made a significant favorable move — either 50%+ of the way to target, or 1%+ price move in the correct direction. Counts as a success in win rate.</p>
-              </div>
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-4 w-4 text-amber-400" />
-                  <span className="text-xs font-bold text-amber-400 uppercase">PENDING</span>
-                </div>
-                <p className="text-xs leading-relaxed">Signal is still active — hasn't expired, target not hit, and invalidation not breached. Excluded from win rate calculations until resolved.</p>
-              </div>
-              <div className="rounded-lg bg-zinc-500/10 border border-zinc-500/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-4 w-4 text-zinc-400" />
-                  <span className="text-xs font-bold text-zinc-400 uppercase">EXPIRED</span>
-                </div>
-                <p className="text-xs leading-relaxed">Time ran out without hitting target or invalidation, and price had minimal favorable movement (less than 50% to target and less than 1% move). Not counted as a win.</p>
-              </div>
-              <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <XCircle className="h-4 w-4 text-red-400" />
-                  <span className="text-xs font-bold text-red-400 uppercase">MISSED</span>
-                </div>
-                <p className="text-xs leading-relaxed">Invalidation level was actually breached — the thesis was wrong. Bullish: price fell to/below invalidation. Bearish: price rose to/above invalidation. Only marked after 2+ hour grace period.</p>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Key Rules</h3>
-              <ul className="space-y-1.5 text-xs">
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">1.</span>
-                  <span><span className="text-foreground font-semibold">Priority order:</span> HIT is checked first, then MISS (invalidation breach), then PARTIAL HIT / EXPIRED at expiry. If price touched the target at any point — it's a HIT.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">2.</span>
-                  <span><span className="text-foreground font-semibold">2-hour grace period:</span> A signal cannot be marked MISS until it has been active for at least 2 hours. This prevents premature resolution from market noise.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">3.</span>
-                  <span><span className="text-foreground font-semibold">Directional sanity checks:</span> Targets and invalidation levels must make directional sense. A bearish signal with a target ABOVE entry price is ignored (bad parse). Same for a bullish signal with invalidation ABOVE entry.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">4.</span>
-                  <span><span className="text-foreground font-semibold">Success Rate formula:</span> (Hits + Partial Hits) ÷ (Hits + Partial Hits + Misses + Expired). Pending signals are excluded from the calculation.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">5.</span>
-                  <span><span className="text-foreground font-semibold">Direction detection:</span> Uses option type (CALL/PUT) first. Falls back to signal_type (bullish/bearish) only if option type is missing.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3">
-              <p className="text-xs text-blue-300">
-                <span className="font-bold">Data source:</span> All price verification uses Polygon.io real-time and historical data. Signals are generated by Claude AI analyzing Unusual Whales options flow data with ICT/SMC methodology.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
       {insights.length > 0 && (
         <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
           <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
@@ -651,50 +563,57 @@ const AdminSignalInsights = () => {
       )}
 
       <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+        <button
+          onClick={() => setShowTickerBreakdown(!showTickerBreakdown)}
+          className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
+        >
           <Target className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Ticker Performance Breakdown</h2>
-        </div>
-        <div className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-            {tickerPatterns.filter(tp => tp.total >= 1).map(tp => {
-              const resolved = tp.hits + tp.misses;
-              return (
-                <div key={tp.ticker} className="bg-muted/15 rounded-lg p-3 border border-border/20">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-foreground">{tp.ticker}</span>
-                    {tp.winRate !== null ? (
-                      <span className={`text-xs font-bold ${tp.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
-                        {tp.winRate.toFixed(0)}%
-                      </span>
-                    ) : (
-                      <span className="text-xs text-amber-400">pending</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span className="text-emerald-400">{tp.hits}H</span>
-                    <span className="text-destructive">{tp.misses}M</span>
-                    <span className="text-amber-400">{tp.pending}P</span>
-                  </div>
-                  {resolved > 0 && (
-                    <div className="mt-1.5 h-1 bg-muted/30 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-emerald-400 rounded-l-full" style={{ width: `${(tp.hits / resolved) * 100}%` }} />
-                      <div className="h-full bg-destructive rounded-r-full" style={{ width: `${(tp.misses / resolved) * 100}%` }} />
+          <span className="text-[10px] text-muted-foreground ml-1">({tickerPatterns.filter(tp => tp.total >= 1).length} tickers)</span>
+          {showTickerBreakdown ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+        </button>
+        {showTickerBreakdown && (
+          <div className="p-4 border-t border-border/40">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {tickerPatterns.filter(tp => tp.total >= 1).map(tp => {
+                const resolved = tp.hits + tp.misses;
+                return (
+                  <div key={tp.ticker} className="bg-muted/15 rounded-lg p-3 border border-border/20">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-bold text-foreground">{tp.ticker}</span>
+                      {tp.winRate !== null ? (
+                        <span className={`text-xs font-bold ${tp.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
+                          {tp.winRate.toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-400">pending</span>
+                      )}
                     </div>
-                  )}
-                  <div className="flex gap-2 mt-1.5 text-[9px] text-muted-foreground/70">
-                    {(tp.callHits + tp.callMisses) > 0 && (
-                      <span>C: {tp.callHits}/{tp.callHits + tp.callMisses}</span>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span className="text-emerald-400">{tp.hits}H</span>
+                      <span className="text-destructive">{tp.misses}M</span>
+                      <span className="text-amber-400">{tp.pending}P</span>
+                    </div>
+                    {resolved > 0 && (
+                      <div className="mt-1.5 h-1 bg-muted/30 rounded-full overflow-hidden flex">
+                        <div className="h-full bg-emerald-400 rounded-l-full" style={{ width: `${(tp.hits / resolved) * 100}%` }} />
+                        <div className="h-full bg-destructive rounded-r-full" style={{ width: `${(tp.misses / resolved) * 100}%` }} />
+                      </div>
                     )}
-                    {(tp.putHits + tp.putMisses) > 0 && (
-                      <span>P: {tp.putHits}/{tp.putHits + tp.putMisses}</span>
-                    )}
+                    <div className="flex gap-2 mt-1.5 text-[9px] text-muted-foreground/70">
+                      {(tp.callHits + tp.callMisses) > 0 && (
+                        <span>C: {tp.callHits}/{tp.callHits + tp.callMisses}</span>
+                      )}
+                      {(tp.putHits + tp.putMisses) > 0 && (
+                        <span>P: {tp.putHits}/{tp.putHits + tp.putMisses}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
