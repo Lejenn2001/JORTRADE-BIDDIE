@@ -130,6 +130,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
   const [showPatternAnalysis, setShowPatternAnalysis] = useState(false);
   const [logPage, setLogPage] = useState(0);
   const [showSignalLog, setShowSignalLog] = useState(false);
+  const [showAlgorithmDocs, setShowAlgorithmDocs] = useState(false);
 
   useEffect(() => {
     const fetchSignals = async () => {
@@ -989,6 +990,194 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
           );
         })()}
         </>)}
+      </div>
+
+      <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowAlgorithmDocs(!showAlgorithmDocs)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowAlgorithmDocs(!showAlgorithmDocs); }}
+          className="flex items-center gap-3 p-5 cursor-pointer hover:bg-muted/10 transition-colors"
+        >
+          <BookOpen className="h-5 w-5 text-indigo-400" />
+          <h2 className="text-lg font-bold text-foreground">Algorithm Documentation</h2>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-bold">REFERENCE</span>
+          {showAlgorithmDocs ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+        </div>
+        {showAlgorithmDocs && (
+          <div className="p-5 pt-0 space-y-6">
+
+            <div className="bg-card/50 rounded-xl p-5 border border-border/30">
+              <h3 className="text-sm font-bold text-foreground mb-4">Signal Categories</h3>
+              <div className="space-y-4">
+                <div className="rounded-lg p-4 border border-emerald-500/20 bg-emerald-500/5">
+                  <h4 className="font-semibold text-emerald-400 text-xs mb-2">Algorithm Plays</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">Default category for signals that pass all hard filters but don't meet Whale or Spread thresholds.</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider">Hard Filters (must pass all):</p>
+                    <p>• Min <span className="text-emerald-400 font-medium">$25,000</span> total premium</p>
+                    <p>• Min <span className="text-emerald-400 font-medium">50%</span> ask-side aggression</p>
+                    <p>• Strike within <span className="text-emerald-400 font-medium">15% OTM</span> max</p>
+                    <p>• Strike not deeper than <span className="text-emerald-400 font-medium">5% ITM</span> (hedge filter)</p>
+                    <p>• Expiry within <span className="text-emerald-400 font-medium">45 days</span></p>
+                    <p>• Polygon vs UW price divergence &lt; <span className="text-emerald-400 font-medium">20%</span></p>
+                    <p>• Strike/price ratio <span className="text-emerald-400 font-medium">0.33x – 3x</span></p>
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider pt-2">Price Action Confirmation:</p>
+                    <p>• 1m/5m candles checked for engulfing, pin bars, VWAP/PDH/PDL/Pivot breaks</p>
+                    <p>• Gamma zone alignment (neg gamma = explosive, pos gamma = mean reversion)</p>
+                    <p>• VWAP position: Calls above VWAP or Puts below VWAP = "⚡ Act Now"</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg p-4 border border-blue-500/20 bg-blue-500/5">
+                  <h4 className="font-semibold text-blue-400 text-xs mb-2">Whale Plays</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">Large institutional flow. Same hard filters as Algorithm, plus premium thresholds.</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider">Classification (either condition):</p>
+                    <p>• Total premium ≥ <span className="text-blue-400 font-medium">$2,000,000</span></p>
+                    <p>• OR premium ≥ <span className="text-blue-400 font-medium">$1,000,000</span> AND (<span className="text-blue-400 font-medium">Sweep</span> OR aggression ≥ <span className="text-blue-400 font-medium">90%</span>)</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg p-4 border border-purple-500/20 bg-purple-500/5">
+                  <h4 className="font-semibold text-purple-400 text-xs mb-2">Spread Plays</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">Multi-leg options strategies with defined risk.</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider">Detection (two paths):</p>
+                    <p>• UW <span className="text-purple-400 font-medium">has_multileg = true</span> flag</p>
+                    <p>• OR AI-generated spread recs from strong Whale/Algo signals</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg p-4 border border-amber-500/20 bg-amber-500/5">
+                  <h4 className="font-semibold text-amber-400 text-xs mb-2">Biddie Picks ⭐</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">Highest-conviction signals. Must pass both algorithmic scoring AND Claude AI evaluation.</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider">All 3 must be true:</p>
+                    <p>• Claude confirms <span className="text-amber-400 font-medium">NOT a hedge</span></p>
+                    <p>• AI-adjusted confidence ≥ <span className="text-amber-400 font-medium">8 / 10</span></p>
+                    <p>• Quality rated <span className="text-amber-400 font-medium">"strong" or "moderate"</span></p>
+                    <p className="text-foreground font-semibold text-[10px] uppercase tracking-wider pt-2">Claude ICT/SMC Evaluation:</p>
+                    <p>• <span className="text-foreground font-medium">8-10:</span> Trend-aligned + Discount/Premium zone + liquidity sweep</p>
+                    <p>• <span className="text-foreground font-medium">5-8:</span> Valid reversal (CHoCH confirmed) or FVG play</p>
+                    <p>• <span className="text-foreground font-medium">3-5:</span> Counter-trend without structure, or likely hedge</p>
+                    <p>• Checks: BOS, CHoCH, FVG, Order Blocks, Liquidity Sweeps</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card/50 rounded-xl p-5 border border-border/30">
+              <h3 className="text-sm font-bold text-foreground mb-4">Confidence Scoring — Base Algorithm</h3>
+              <p className="text-[11px] text-muted-foreground mb-4">Base score starts at <span className="text-foreground font-semibold">5</span>. Top 15 candidates go to Claude for final AI refinement.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg p-3 border border-emerald-500/20 bg-emerald-500/5">
+                  <p className="text-[10px] font-bold text-emerald-400 uppercase mb-2">Score Additions</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p><span className="text-emerald-400 font-medium">+1</span> Sweep order</p>
+                    <p><span className="text-emerald-400 font-medium">+1</span> Ask aggression ≥ 80%</p>
+                    <p><span className="text-emerald-400 font-medium">+1.5</span> Ask aggression ≥ 95%</p>
+                    <p><span className="text-emerald-400 font-medium">+0.5</span> Premium ≥ $100K</p>
+                    <p><span className="text-emerald-400 font-medium">+1</span> Premium ≥ $500K</p>
+                    <p><span className="text-emerald-400 font-medium">+1.5</span> Premium ≥ $1M</p>
+                    <p><span className="text-emerald-400 font-medium">+0.5</span> Vol/OI ≥ 2x</p>
+                    <p><span className="text-emerald-400 font-medium">+1</span> Vol/OI ≥ 5x</p>
+                    <p><span className="text-emerald-400 font-medium">+0.5–1</span> ATM strike (within 2-5%)</p>
+                    <p><span className="text-emerald-400 font-medium">+1</span> Price action confirmation</p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3 border border-red-500/20 bg-red-500/5">
+                  <p className="text-[10px] font-bold text-red-400 uppercase mb-2">Score Penalties</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p><span className="text-red-400 font-medium">-1.5</span> Counter-trend (Call below VWAP, Put above VWAP)</p>
+                    <p><span className="text-red-400 font-medium">-1</span> Deep OTM strike</p>
+                  </div>
+                  <p className="text-[10px] font-bold text-blue-400 uppercase mb-2 mt-4">AI Refinement (Top 15)</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>• Claude adjusts via ICT/SMC confluence</p>
+                    <p>• Returns: is_hedge, adjusted_confidence, signal_quality</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card/50 rounded-xl p-5 border border-border/30">
+              <h3 className="text-sm font-bold text-foreground mb-4">Breakout Scanner</h3>
+              <p className="text-[11px] text-muted-foreground mb-4">Scans 40+ tickers using 60 days of daily candles + live Polygon WebSocket. Cached 5 min.</p>
+              <div className="space-y-3">
+                <div className="rounded-lg p-3 border border-cyan-500/20 bg-cyan-500/5">
+                  <p className="text-[10px] font-bold text-cyan-400 uppercase mb-2">Detection Layers & Scoring</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p><span className="text-cyan-400 font-medium">+25 pts</span> <span className="text-foreground font-medium">Squeeze:</span> BBands (2.0σ) inside Keltner (1.5 ATR)</p>
+                    <p><span className="text-cyan-400 font-medium">+15 pts</span> <span className="text-foreground font-medium">Consolidation:</span> Price within 3% range for 3+ days</p>
+                    <p><span className="text-cyan-400 font-medium">+20 pts</span> <span className="text-foreground font-medium">Volume:</span> Current &gt; 2.0x 20-day avg (+10 for &gt; 1.3x)</p>
+                    <p><span className="text-cyan-400 font-medium">+trend</span> <span className="text-foreground font-medium">Momentum:</span> EMA8 + SMA20 alignment</p>
+                    <p><span className="text-cyan-400 font-medium">+flow</span> <span className="text-foreground font-medium">Options bias:</span> Call/put ratios, sweeps, near-term weighted 1.0-1.5x</p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3 border border-amber-500/20 bg-amber-500/5">
+                  <p className="text-[10px] font-bold text-amber-400 uppercase mb-2">Breakout Trigger ("ENTER NOW")</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>1. Close crosses resistance (bull) or support (bear)</p>
+                    <p>2. Previous candle was inside the range</p>
+                    <p>3. Volume ≥ <span className="text-amber-400 font-medium">1.5x</span> 20-day average</p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3 border border-red-500/20 bg-red-500/5">
+                  <p className="text-[10px] font-bold text-red-400 uppercase mb-2">Real-Time Alerts (WebSocket)</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>• Price crosses R/S buffer (<span className="text-foreground font-medium">0.2%</span>)</p>
+                    <p>• Session vol ≥ <span className="text-red-400 font-medium">1.5x</span> expected</p>
+                    <p>• Burst vol ≥ <span className="text-red-400 font-medium">3.0x</span> (60s vs 10min)</p>
+                    <p>• Both high → <span className="text-foreground font-medium">"INSTITUTIONAL"</span> tag</p>
+                    <p>• <span className="text-foreground font-medium">15-min cooldown</span> per ticker/direction</p>
+                    <p>• Auto-suggests option contract</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card/50 rounded-xl p-5 border border-border/30">
+              <h3 className="text-sm font-bold text-foreground mb-4">Dashboard Biddie — Chat AI</h3>
+              <p className="text-[11px] text-muted-foreground mb-4">Claude Sonnet 4 (claude-sonnet-4-6). Two modes: full analysis (private) and social (community).</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg p-3 border border-purple-500/20 bg-purple-500/5">
+                  <p className="text-[10px] font-bold text-purple-400 uppercase mb-2">Data Available Per Response</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>• UW flow (premium, sweeps, aggression) — <span className="text-foreground font-medium">always</span></p>
+                    <p>• VWAP, Pivots, PDH/PDL — <span className="text-foreground font-medium">per ticker</span></p>
+                    <p>• FVGs, Order Blocks, Liquidity — <span className="text-foreground font-medium">per ticker</span></p>
+                    <p>• Dark pool — <span className="text-foreground font-medium">when requested</span></p>
+                    <p>• Sector ETFs + econ calendar — <span className="text-foreground font-medium">on "market" query</span></p>
+                    <p>• 14-day trading calendar — <span className="text-foreground font-medium">always</span></p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3 border border-purple-500/20 bg-purple-500/5">
+                  <p className="text-[10px] font-bold text-purple-400 uppercase mb-2">Trade Call Format</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>• Ticker + contract (e.g. "SPY 645 Put")</p>
+                    <p>• Entry trigger tied to VWAP/levels</p>
+                    <p>• Target + Invalidation</p>
+                    <p>• Confidence (7-10) from flow + premium</p>
+                    <p>• Position reviews: Delta, Gamma, Theta → Hold/Cut/Add</p>
+                  </div>
+                </div>
+                <div className="rounded-lg p-3 border border-purple-500/20 bg-purple-500/5 md:col-span-2">
+                  <p className="text-[10px] font-bold text-amber-400 uppercase mb-2">Personality & Guardrails</p>
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>• "Your trading bestie" — warm, casual, trader slang</p>
+                    <p>• Never suggests alternative tickers</p>
+                    <p>• Validates expiry dates against real calendar</p>
+                    <p>• If nothing good: "Sit tight, don't force it."</p>
+                    <p>• <span className="text-foreground font-medium">/whale/chat</span> = full data | <span className="text-foreground font-medium">/whale/community-chat</span> = social mode</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
       </div>
     </div>
   );
