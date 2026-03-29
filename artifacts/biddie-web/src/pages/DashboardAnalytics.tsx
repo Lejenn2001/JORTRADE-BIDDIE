@@ -1522,6 +1522,21 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                                 <span>Resolved: {new Date(trade.signal_resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                               )}
                             </div>
+                            {trade.signal_id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveTab("flow");
+                                  setTimeout(() => {
+                                    const el = document.getElementById(`signal-${trade.signal_id}`);
+                                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                  }, 300);
+                                }}
+                                className="text-[10px] text-primary hover:text-primary/80 font-semibold flex items-center gap-1 transition-colors"
+                              >
+                                View Signal <ArrowUpRight className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
                         </motion.div>
                       )}
