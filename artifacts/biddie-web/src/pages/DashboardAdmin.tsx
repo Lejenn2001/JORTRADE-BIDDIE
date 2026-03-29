@@ -878,32 +878,24 @@ const DashboardAdmin = () => {
                                 </div>
                               </td>
                               <td className="px-5 py-3.5">
-                                {config ? (
-                                  <div className="flex flex-col gap-1.5">
-                                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${config.bg} ${config.color} w-fit`}>
-                                      <config.icon className="h-3 w-3" />
-                                      {config.label}
-                                    </span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      {(["starter", "active", "pro"] as const).filter(p => p !== plan).map((p) => {
-                                        const pc = planConfig[p];
-                                        return (
-                                          <button
-                                            key={p}
-                                            disabled={updating === u.id}
-                                            onClick={() => updateUserPlan(u.id, p)}
-                                            className={`text-[10px] px-1.5 py-0.5 rounded ${pc.color} hover:bg-muted/20 transition-colors disabled:opacity-30`}
-                                            title={`Switch to ${pc.label}`}
-                                          >
-                                            <pc.icon className="h-3 w-3" />
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground/50">No plan</span>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {(["starter", "active", "pro"] as const).map((p) => {
+                                    const pc = planConfig[p];
+                                    const isActive = u.selected_plan === p;
+                                    return (
+                                      <button
+                                        key={p}
+                                        disabled={isActive || updating === u.id}
+                                        onClick={() => updateUserPlan(u.id, p)}
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-all disabled:cursor-default ${isActive ? `${pc.bg} ${pc.color}` : "border-border/30 text-muted-foreground/50 hover:border-border/60 hover:text-muted-foreground hover:bg-muted/10"}`}
+                                        title={isActive ? pc.label : `Switch to ${pc.label}`}
+                                      >
+                                        <pc.icon className="h-3 w-3" />
+                                        {isActive && <span>{pc.label.split(" ")[0]}</span>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </td>
                               <td className="px-5 py-3.5">
                                 {u.is_admin ? (
