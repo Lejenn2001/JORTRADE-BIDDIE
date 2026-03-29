@@ -223,7 +223,10 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
       ? Math.round(rtData.price * 100) / 100
       : null;
 
-    let currentPrice: number | null = polygonLive ?? (uwPrice ? Math.round(uwPrice * 100) / 100 : null);
+    let currentPrice: number | null = polygonLive ?? null;
+    if (!currentPrice && uwPrice) {
+      currentPrice = Math.round(uwPrice * 100) / 100;
+    }
     if (!currentPrice) {
       const snap = await fetchPolygonSnapshot(ticker);
       if (snap) currentPrice = Math.round(snap.price * 100) / 100;
@@ -1931,7 +1934,7 @@ async function runSignalsPipeline() {
     const direction = optType === "call" ? "bullish" : "bearish";
     const klPrice = kl?.current_price ?? null;
     const uwPrice = parseFloat(c.underlying_price) || null;
-    const price = klPrice ?? uwPrice;
+    const price = uwPrice ?? klPrice;
 
     // ── Hard filters: reject signals that aren't actionable ──
 
