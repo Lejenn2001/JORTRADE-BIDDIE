@@ -206,7 +206,16 @@ const DashboardSignals = () => {
 
   useEffect(() => {
     const highlightId = searchParams.get("highlight");
-    if (!highlightId) return;
+    if (!highlightId || signals.length === 0) return;
+
+    const target = signals.find((s: any) => s.id === highlightId);
+    if (target) {
+      const cat = (target as any).category || "algorithm";
+      if (cat === "whale") setViewTab("whale");
+      else if (cat === "spread") setViewTab("spread");
+      else setViewTab("algorithm");
+    }
+
     const timer = setTimeout(() => {
       const el = document.getElementById(`signal-${highlightId}`);
       if (el) {
@@ -214,9 +223,9 @@ const DashboardSignals = () => {
         el.classList.add("ring-2", "ring-primary/50", "rounded-xl");
         setTimeout(() => el.classList.remove("ring-2", "ring-primary/50", "rounded-xl"), 3000);
       }
-    }, 600);
+    }, 800);
     return () => clearTimeout(timer);
-  }, [searchParams]);
+  }, [searchParams, signals]);
 
   const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
     if (!user?.id) return;
