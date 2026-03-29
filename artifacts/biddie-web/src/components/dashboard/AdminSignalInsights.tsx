@@ -576,52 +576,57 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
           className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
         >
           <Target className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold text-foreground">Ticker Performance Breakdown</h2>
-          <span className="text-[10px] text-muted-foreground ml-1">({tickerPatterns.filter(tp => tp.total >= 1).length} tickers)</span>
+          <h2 className="text-lg font-bold text-foreground">Ticker Breakdown</h2>
+          <span className="text-[10px] text-muted-foreground ml-1">({tickerPatterns.filter(tp => tp.total >= 1).length} tickers across {tickerPatterns.reduce((sum, tp) => sum + tp.total, 0)} signals)</span>
           {showTickerBreakdown ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
         </button>
-        {showTickerBreakdown && (
-          <div className="p-4 border-t border-border/40">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {tickerPatterns.filter(tp => tp.total >= 1).map(tp => {
+        {showTickerBreakdown && (() => {
+          const sorted = [...tickerPatterns].filter(tp => tp.total >= 1).sort((a, b) => b.total - a.total);
+          const maxTotal = sorted.length > 0 ? sorted[0].total : 1;
+          return (
+            <div className="p-4 border-t border-border/40 space-y-1.5">
+              {sorted.map(tp => {
                 const resolved = tp.hits + tp.misses;
+                const barWidth = (tp.total / maxTotal) * 100;
                 return (
-                  <div key={tp.ticker} className="bg-muted/15 rounded-lg p-3 border border-border/20">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-foreground">{tp.ticker}</span>
-                      {tp.winRate !== null ? (
-                        <span className={`text-xs font-bold ${tp.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
-                          {tp.winRate.toFixed(0)}%
-                        </span>
-                      ) : (
-                        <span className="text-xs text-amber-400">pending</span>
-                      )}
+                  <div key={tp.ticker} className="flex items-center gap-2 group">
+                    <span className="text-xs font-bold text-foreground w-12 shrink-0 text-right">{tp.ticker}</span>
+                    <div className="flex-1 h-5 bg-muted/10 rounded overflow-hidden relative">
+                      <div className="absolute inset-0 flex" style={{ width: `${barWidth}%` }}>
+                        {tp.hits > 0 && (
+                          <div className="h-full bg-emerald-500/60" style={{ width: `${(tp.hits / tp.total) * 100}%` }} />
+                        )}
+                        {tp.misses > 0 && (
+                          <div className="h-full bg-red-500/60" style={{ width: `${(tp.misses / tp.total) * 100}%` }} />
+                        )}
+                        {tp.pending > 0 && (
+                          <div className="h-full bg-amber-500/40" style={{ width: `${(tp.pending / tp.total) * 100}%` }} />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-[10px] w-28 shrink-0">
                       <span className="text-emerald-400">{tp.hits}H</span>
                       <span className="text-destructive">{tp.misses}M</span>
                       <span className="text-amber-400">{tp.pending}P</span>
-                    </div>
-                    {resolved > 0 && (
-                      <div className="mt-1.5 h-1 bg-muted/30 rounded-full overflow-hidden flex">
-                        <div className="h-full bg-emerald-400 rounded-l-full" style={{ width: `${(tp.hits / resolved) * 100}%` }} />
-                        <div className="h-full bg-destructive rounded-r-full" style={{ width: `${(tp.misses / resolved) * 100}%` }} />
-                      </div>
-                    )}
-                    <div className="flex gap-2 mt-1.5 text-[9px] text-muted-foreground/70">
-                      {(tp.callHits + tp.callMisses) > 0 && (
-                        <span>C: {tp.callHits}/{tp.callHits + tp.callMisses}</span>
-                      )}
-                      {(tp.putHits + tp.putMisses) > 0 && (
-                        <span>P: {tp.putHits}/{tp.putHits + tp.putMisses}</span>
+                      {tp.winRate !== null ? (
+                        <span className={`font-bold ml-auto ${tp.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
+                          {tp.winRate.toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground ml-auto">—</span>
                       )}
                     </div>
                   </div>
                 );
               })}
+              <div className="flex items-center gap-3 pt-2 text-[9px] text-muted-foreground border-t border-border/20 mt-2">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/60" /> Hits</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500/60" /> Misses</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/40" /> Pending</span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
