@@ -409,25 +409,25 @@ const DashboardSignals = () => {
                 );
               })}
             </svg>
-            <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/15 via-transparent to-cyan-900/10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-900/15 via-purple-900/8 to-cyan-900/10" />
             <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
 
             <div className="relative px-6 py-7 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-emerald-400 to-cyan-500" />
+                <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-[hsl(var(--glow-blue))] via-[hsl(var(--glow-purple))] to-[hsl(var(--glow-cyan))]" />
                 <div>
                   <div className="flex items-center gap-3">
                     <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
                       DECISION ENGINE
                     </h1>
                     {wsConnected && (
-                      <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-[hsl(var(--glow-blue))]/15 text-[hsl(var(--glow-blue))] border border-[hsl(var(--glow-blue))]/30">
                         <Radio className="h-2.5 w-2.5 animate-pulse" />
                         Real-Time
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-emerald-400/80 font-semibold mt-0.5">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--glow-blue))]/80 font-semibold mt-0.5">
                     {showResolved ? `All Signals — ${totalCount} total` : `Active Signals — ${totalCount - resolvedCount} pending`}
                   </p>
                 </div>
