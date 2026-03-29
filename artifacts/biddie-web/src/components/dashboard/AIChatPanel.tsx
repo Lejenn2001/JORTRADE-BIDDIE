@@ -155,8 +155,8 @@ const AIChatPanel = () => {
           </span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 rounded-full border-2 border-muted/30 bg-muted/10 flex items-center justify-center mb-4 opacity-40">
-            <Bot className="h-8 w-8 text-muted-foreground" />
+          <div className="w-16 h-16 rounded-full border-2 border-muted/30 overflow-hidden mb-4 opacity-40 grayscale">
+            <img src={biddieRobot} alt="Biddie" className="w-full h-full object-cover object-top scale-150" />
           </div>
           <h3 className="text-foreground font-semibold text-sm mb-2">Upgrade to talk to Biddie</h3>
           <p className="text-xs text-muted-foreground mb-4 max-w-[220px]">
@@ -204,8 +204,8 @@ const AIChatPanel = () => {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
           <div className="text-center py-8">
-            <div className="w-16 h-16 rounded-full border-2 border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center mx-auto mb-3 shadow-[0_0_15px_hsl(230_85%_60%_/_0.3)]">
-              <Bot className="h-8 w-8 text-indigo-400" />
+            <div className="w-16 h-16 rounded-full border-2 border-indigo-500/30 overflow-hidden mx-auto mb-3 shadow-[0_0_15px_hsl(230_85%_60%_/_0.3)]">
+              <img src={biddieRobot} alt="Biddie" className="w-full h-full object-cover object-top scale-150" />
             </div>
             <p className="text-sm text-foreground font-medium">{greeting}</p>
             <p className="text-xs text-muted-foreground mt-2">Powered by JORTRADE</p>
