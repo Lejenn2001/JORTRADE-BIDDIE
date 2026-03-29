@@ -468,28 +468,6 @@ const DashboardAdmin = () => {
 
                     </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={exportSignalsCSV}
-                        disabled={exportingSignals}
-                        className="text-xs border-border/50 gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        {exportingSignals ? "Exporting..." : "Export Signals"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={exportCSV}
-                        disabled={users.length === 0}
-                        className="text-xs border-border/50 gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Export Users
-                      </Button>
-                    </div>
                   </>
                 );
               })()}
@@ -572,6 +550,18 @@ const DashboardAdmin = () => {
 
           {activeTab === 'signals' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportSignalsCSV}
+                  disabled={exportingSignals}
+                  className="text-xs border-border/50 gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {exportingSignals ? "Exporting..." : "Export Signal Log"}
+                </Button>
+              </div>
               <AdminSignalInsights />
 
               <button
@@ -795,7 +785,8 @@ const DashboardAdmin = () => {
 
           {activeTab === 'users' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="relative max-w-md">
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by name or email..."
@@ -803,6 +794,17 @@ const DashboardAdmin = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-muted/30 border-border/50 rounded-lg"
             />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportCSV}
+              disabled={users.length === 0}
+              className="text-xs border-border/50 gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export Users
+            </Button>
           </div>
 
           {loading ? (
@@ -935,7 +937,6 @@ const DashboardAdmin = () => {
               </div>
             </div>
           )}
-
             </motion.div>
           )}
 
