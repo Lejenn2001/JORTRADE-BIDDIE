@@ -122,32 +122,16 @@ const DashboardAdmin = () => {
     const chatRes = await supabase.from("chat_messages").select("id", { count: "exact", head: true });
     if (chatRes.count !== null) setChatCount(chatRes.count);
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const minuteAgo = new Date(Date.now() - 60 * 1000);
+    try {
+      const usageResp = await fetch("/api/whale/admin/api-usage", {
+        headers: { "x-user-id": user?.id || "" },
+      });
+      if (usageResp.ok) {
+        const usageData = await usageResp.json();
+        setApiCounts(usageData.counts || {});
+      }
+    } catch {}
 
-    const apiNames = ["unusual_whales", "polygon", "anthropic", "discord"];
-    const countsObj: Record<string, { today: number; minute: number }> = {};
-    const countPromises = apiNames.flatMap((name) => [
-      supabase
-        .from("api_usage_log" as any)
-        .select("id", { count: "exact", head: true })
-        .eq("api_name", name)
-        .gte("created_at", todayStart.toISOString())
-        .then((r: any) => ({ name, type: "today" as const, count: r.count ?? 0 })),
-      supabase
-        .from("api_usage_log" as any)
-        .select("id", { count: "exact", head: true })
-        .eq("api_name", name)
-        .gte("created_at", minuteAgo.toISOString())
-        .then((r: any) => ({ name, type: "minute" as const, count: r.count ?? 0 })),
-    ]);
-    const countResults = await Promise.all(countPromises);
-    for (const r of countResults) {
-      if (!countsObj[r.name]) countsObj[r.name] = { today: 0, minute: 0 };
-      countsObj[r.name][r.type] = r.count;
-    }
-    setApiCounts(countsObj);
 
     setLoading(false);
   };

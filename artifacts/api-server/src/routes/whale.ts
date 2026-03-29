@@ -4339,6 +4339,45 @@ router.delete("/whale/admin/signal/:id", async (req, res) => {
   }
 });
 
+router.get("/whale/admin/api-usage", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId || !(await isAdminUser(adminUserId))) {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const minuteAgo = new Date(Date.now() - 60 * 1000);
+
+    const todayResult = await dbQuery(
+      `SELECT api_name, COUNT(*)::int as count FROM api_usage_log WHERE created_at >= $1 GROUP BY api_name`,
+      [todayStart.toISOString()]
+    );
+    const minuteResult = await dbQuery(
+      `SELECT api_name, COUNT(*)::int as count FROM api_usage_log WHERE created_at >= $1 GROUP BY api_name`,
+      [minuteAgo.toISOString()]
+    );
+
+    const counts: Record<string, { today: number; minute: number }> = {};
+    for (const name of ["unusual_whales", "polygon", "anthropic", "discord"]) {
+      counts[name] = { today: 0, minute: 0 };
+    }
+    for (const row of (todayResult?.rows || [])) {
+      if (counts[row.api_name]) counts[row.api_name].today = row.count;
+      else counts[row.api_name] = { today: row.count, minute: 0 };
+    }
+    for (const row of (minuteResult?.rows || [])) {
+      if (counts[row.api_name]) counts[row.api_name].minute = row.count;
+      else counts[row.api_name] = { today: 0, minute: row.count };
+    }
+
+    res.json({ counts });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/whale/admin/system-health", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
@@ -4353,12 +4392,11 @@ router.get("/whale/admin/system-health", async (req, res) => {
         params: { apiKey: process.env["POLYGON_API_KEY"] },
         timeout: 5000,
       });
-      const price = r.data?.results?.[0]?.c;
       services.push({
         name: "Polygon.io",
         description: "All stock prices, charts, VWAP, pivot points, historical data",
         status: "ok",
-        details: price ? `Connected — SPY $${price}` : "Connected but no data",
+        details: r.data?.results?.[0] ? "Connected — price data active" : "Connected but no data",
         url: "https://polygon.io/dashboard",
         usage: "Unlimited (paid plan)",
       });
