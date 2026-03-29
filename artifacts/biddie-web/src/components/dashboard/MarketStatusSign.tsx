@@ -200,7 +200,7 @@ const MarketStatusSign = () => {
       name: "Asia",
       hours: "7 PM – 4 AM ET",
       icon: <Globe className="h-4 w-4" />,
-      active: state.asiaActive,
+      active: true, // PREVIEW: was state.asiaActive,
       activeColor: "text-cyan-400",
       activeBorder: "border-cyan-400/50",
       activeBg: "bg-cyan-500/[0.07]",
@@ -211,7 +211,7 @@ const MarketStatusSign = () => {
       name: "London",
       hours: "3 AM – 12 PM ET",
       icon: <Landmark className="h-4 w-4" />,
-      active: state.londonActive,
+      active: true, // PREVIEW: was state.londonActive,
       activeColor: "text-amber-400",
       activeBorder: "border-amber-400/50",
       activeBg: "bg-amber-500/[0.07]",
@@ -222,7 +222,7 @@ const MarketStatusSign = () => {
       name: "New York",
       hours: "9:30 AM – 4 PM ET",
       icon: <Building2 className="h-4 w-4" />,
-      active: state.nyActive,
+      active: true, // PREVIEW: was state.nyActive,
       activeColor: "text-emerald-400",
       activeBorder: "border-emerald-400/50",
       activeBg: "bg-emerald-500/[0.07]",
@@ -285,7 +285,7 @@ const MarketStatusSign = () => {
           {sessions.map((s) => (
             <div
               key={s.name}
-              className={`relative rounded-xl border px-2 py-2.5 text-center transition-all duration-500 ${
+              className={`relative rounded-xl border px-1.5 py-2 text-center transition-all duration-500 ${
                 s.active
                   ? `${s.activeBorder} ${s.activeBg} ${s.activeGlow}`
                   : "border-white/[0.12] bg-white/[0.03] opacity-40"
