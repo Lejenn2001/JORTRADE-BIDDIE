@@ -28,20 +28,28 @@ function premiumColor(val: number): string {
   return "A noteworthy trade worth keeping an eye on";
 }
 
+export function isSweep(signal: SignalInfo): boolean {
+  const desc = signal.description || "";
+  return /sweep/i.test(desc);
+}
+
 export function compactDescription(signal: SignalInfo): string {
   const desc = signal.description || "";
   const parts: string[] = [];
+
+  const sweep = isSweep(signal);
+  const sweepMatch = desc.match(/(\d+)\s*sweep/i);
 
   const premiumMatch = desc.match(/\$?([\d,.]+[KMB]?)\s*(?:premium|total)/i);
   if (premiumMatch) {
     const strike = signal.strike ? String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '') : "";
     const pc = signal.putCall === "put" ? "P" : signal.putCall === "call" ? "C" : "";
-    parts.push(`$${premiumMatch[1]} premium${strike ? ` @ $${strike}${pc}` : ""}`);
-  }
-
-  const sweepMatch = desc.match(/(\d+)\s*sweep/i);
-  if (sweepMatch) {
-    parts.push(`${sweepMatch[1]} sweep${parseInt(sweepMatch[1]) > 1 ? "s" : ""}`);
+    const label = sweep
+      ? `${sweepMatch ? sweepMatch[1] + "x " : ""}sweep`
+      : "flow";
+    parts.push(`$${premiumMatch[1]} ${label}${strike ? ` @ $${strike}${pc}` : ""}`);
+  } else {
+    parts.push(sweep ? "Sweep order" : "Options flow");
   }
 
   const aggressionMatch = desc.match(/(\d+)%\s*(?:ask\s*)?aggression/i);
@@ -76,11 +84,11 @@ export function simplifySignalDescription(signal: SignalInfo): string {
 
   if (sweepMatch) {
     const count = parseInt(sweepMatch[1]);
-    chunks.push(`A big trader placed ${count} rush order${count > 1 ? 's' : ''} (hitting every exchange at once to get in fast)`);
+    chunks.push(`SWEEP — A big trader placed ${count} rush order${count > 1 ? 's' : ''} across multiple exchanges at once to get filled fast. Sweeps show urgency — they're willing to pay more just to get in NOW`);
   } else if (premiumMatch) {
-    chunks.push(`A big trader put $${premiumMatch[1]} on the line`);
+    chunks.push(`FLOW — A big trader put $${premiumMatch[1]} on the line. Flow is a regular large order (not as urgent as a sweep, but still significant money)`);
   } else {
-    chunks.push(`Someone made a notable trade on ${ticker}`);
+    chunks.push(`FLOW — Someone made a notable options trade on ${ticker}. Flow means a large order came through the market`);
   }
 
   if (signal.putCall === "put") {
