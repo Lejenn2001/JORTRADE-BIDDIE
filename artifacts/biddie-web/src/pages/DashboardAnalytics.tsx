@@ -799,68 +799,86 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
               const wr = parseFloat(w.win_rate);
               const avgConv = parseFloat(w.avg_conviction);
               const biddieWr = parseFloat(w.biddie_pick_win_rate);
-              const resolved = w.hits + w.partial_hits + w.misses;
+              const biddieWins = w.biddie_pick_hits || 0;
+              const biddieMisses = (w.biddie_pick_total || 0) - biddieWins;
 
               return (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3"
+                  className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4"
                 >
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
                       <CalendarIcon className="h-3.5 w-3.5 text-primary" />
                       Week of {formatWeekLabel(w.week_start)} – {formatWeekLabel(w.week_end)}
                     </h4>
-                    <span className={`text-lg font-black ${
-                      wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
-                    }`}>
-                      {wr.toFixed(0)}% Win Rate
-                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-center">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 mx-auto mb-1" />
-                      <div className="text-lg font-black text-emerald-400">{w.hits + w.partial_hits}</div>
-                      <div className="text-[9px] text-muted-foreground">Wins</div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Activity className="h-3.5 w-3.5 text-blue-400" />
+                      <span className="text-xs font-bold text-foreground">All Signals</span>
+                      <span className="text-[10px] text-muted-foreground">({w.total_signals} total)</span>
+                      <span className={`ml-auto text-lg font-black ${
+                        wr >= 80 ? "text-emerald-400" : wr >= 60 ? "text-blue-400" : wr >= 40 ? "text-yellow-400" : "text-red-400"
+                      }`}>
+                        {wr.toFixed(0)}%
+                      </span>
                     </div>
-                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2.5 text-center">
-                      <XCircle className="h-4 w-4 text-red-400 mx-auto mb-1" />
-                      <div className="text-lg font-black text-red-400">{w.misses}</div>
-                      <div className="text-[9px] text-muted-foreground">Losses</div>
-                    </div>
-                    <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2.5 text-center">
-                      <Clock className="h-4 w-4 text-yellow-400 mx-auto mb-1" />
-                      <div className="text-lg font-black text-yellow-400">{w.pending + w.expired}</div>
-                      <div className="text-[9px] text-muted-foreground">Pending/Expired</div>
-                    </div>
-                    <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5 text-center">
-                      <Activity className="h-4 w-4 text-primary mx-auto mb-1" />
-                      <div className="text-lg font-black text-primary">{avgConv.toFixed(0)}</div>
-                      <div className="text-[9px] text-muted-foreground">Avg Conviction</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
+                        <div className="text-base font-black text-emerald-400">{w.hits + w.partial_hits}</div>
+                        <div className="text-[9px] text-muted-foreground">Wins</div>
+                      </div>
+                      <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-center">
+                        <XCircle className="h-3.5 w-3.5 text-red-400 mx-auto mb-0.5" />
+                        <div className="text-base font-black text-red-400">{w.misses}</div>
+                        <div className="text-[9px] text-muted-foreground">Losses</div>
+                      </div>
+                      <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2 text-center">
+                        <Clock className="h-3.5 w-3.5 text-yellow-400 mx-auto mb-0.5" />
+                        <div className="text-base font-black text-yellow-400">{w.pending + w.expired}</div>
+                        <div className="text-[9px] text-muted-foreground">Pending/Expired</div>
+                      </div>
+                      <div className="rounded-lg bg-primary/10 border border-primary/20 p-2 text-center">
+                        <Activity className="h-3.5 w-3.5 text-primary mx-auto mb-0.5" />
+                        <div className="text-base font-black text-primary">{avgConv.toFixed(0)}</div>
+                        <div className="text-[9px] text-muted-foreground">Avg Conviction</div>
+                      </div>
                     </div>
                   </div>
 
                   {w.biddie_pick_total > 0 && (
-                    <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-2 flex items-center justify-between">
+                    <div className="space-y-3 pt-2 border-t border-white/[0.06]">
                       <div className="flex items-center gap-2">
                         <Zap className="h-3.5 w-3.5 text-violet-400" />
-                        <span className="text-xs text-foreground font-semibold">Biddie Picks</span>
-                      </div>
-                      <div className="text-right">
-                        <span className={`text-sm font-black ${biddieWr >= 70 ? "text-emerald-400" : biddieWr >= 50 ? "text-yellow-400" : "text-red-400"}`}>
+                        <span className="text-xs font-bold text-foreground">Biddie Picks</span>
+                        <span className="text-[10px] text-muted-foreground">({w.biddie_pick_total} curated)</span>
+                        <span className={`ml-auto text-lg font-black ${
+                          biddieWr >= 80 ? "text-emerald-400" : biddieWr >= 60 ? "text-blue-400" : biddieWr >= 40 ? "text-yellow-400" : "text-red-400"
+                        }`}>
                           {biddieWr.toFixed(0)}%
                         </span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">
-                          ({w.biddie_pick_hits}/{w.biddie_pick_total})
-                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
+                          <div className="text-base font-black text-emerald-400">{biddieWins}</div>
+                          <div className="text-[9px] text-muted-foreground">Wins</div>
+                        </div>
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-center">
+                          <XCircle className="h-3.5 w-3.5 text-red-400 mx-auto mb-0.5" />
+                          <div className="text-base font-black text-red-400">{biddieMisses >= 0 ? biddieMisses : 0}</div>
+                          <div className="text-[9px] text-muted-foreground">Losses</div>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {w.top_tickers && w.top_tickers.length > 0 && (
-                    <div>
+                    <div className="pt-2 border-t border-white/[0.06]">
                       <p className="text-[10px] text-muted-foreground mb-1.5 font-semibold">Most Active Tickers This Week</p>
                       <div className="flex flex-wrap gap-1.5">
                         {w.top_tickers.map((t) => (
@@ -882,7 +900,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                         : wr >= 40
                         ? "⚠️ Mixed week — some hits, some misses. Every week teaches you something new!"
                         : "📉 Tough week — the market didn't cooperate. Even the best traders have off weeks. The key is staying disciplined!"}
-                      {" "}This week had {w.total_signals} signals with an average conviction of {avgConv.toFixed(0)}/100.
+                      {" "}This week had {w.total_signals} signals ({w.biddie_pick_total || 0} Biddie picks) with an average conviction of {avgConv.toFixed(0)}/100.
                     </p>
                   </div>
                 </motion.div>
