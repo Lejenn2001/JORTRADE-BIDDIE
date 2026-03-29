@@ -771,11 +771,6 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                         : getWeekColor(wr, pickTotal)
                     }`}
                   >
-                    {isCurrentWeek && (
-                      <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 animate-pulse">
-                        NOW
-                      </span>
-                    )}
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[10px] text-muted-foreground">
                         {formatWeekLabel(week.week_start)} – {formatWeekLabel(week.week_end)}
