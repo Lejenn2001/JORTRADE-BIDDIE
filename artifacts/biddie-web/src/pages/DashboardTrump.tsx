@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   RefreshCw, Clock, ExternalLink, Heart,
   MessageCircle, Repeat2, Loader2, AlertTriangle,
-  TrendingUp, TrendingDown, Minus
+  TrendingUp, TrendingDown, Minus, Bell, BellOff
 } from "lucide-react";
 import biddieRobot from "@/assets/biddie-robot.png";
 
@@ -50,6 +50,30 @@ const DashboardTrump = () => {
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const stored = localStorage.getItem(`alert_prefs_${user.id}`);
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        setSubscribed(prefs.alertTrumpFeed ?? false);
+      }
+    } catch {}
+  }, [user?.id]);
+
+  const toggleSubscribe = () => {
+    if (!user?.id) return;
+    const newVal = !subscribed;
+    setSubscribed(newVal);
+    try {
+      const stored = localStorage.getItem(`alert_prefs_${user.id}`);
+      const prefs = stored ? JSON.parse(stored) : {};
+      prefs.alertTrumpFeed = newVal;
+      localStorage.setItem(`alert_prefs_${user.id}`, JSON.stringify(prefs));
+    } catch {}
+  };
 
   const fetchPosts = useCallback(async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
@@ -151,13 +175,26 @@ const DashboardTrump = () => {
                       Updated {formatTime(lastFetch)}
                     </span>
                   )}
-                  <button
-                    onClick={() => fetchPosts(true)}
-                    disabled={refreshing}
-                    className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-50"
-                  >
-                    <RefreshCw className={`h-4 w-4 text-white ${refreshing ? "animate-spin" : ""}`} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={toggleSubscribe}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold border transition-all ${
+                        subscribed
+                          ? "bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/25"
+                          : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {subscribed ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+                      {subscribed ? "Subscribed" : "Subscribe"}
+                    </button>
+                    <button
+                      onClick={() => fetchPosts(true)}
+                      disabled={refreshing}
+                      className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-4 w-4 text-white ${refreshing ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
