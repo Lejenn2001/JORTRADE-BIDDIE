@@ -156,7 +156,7 @@ const AIChatPanel = () => {
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 rounded-full border-2 border-muted/30 overflow-hidden mb-4 opacity-40 grayscale">
-            <img src={biddieRobot} alt="Biddie" className="w-full h-full object-cover object-top scale-150" />
+            <img src={biddieRobot} alt="Biddie" className="w-[180%] h-auto -ml-[40%] -mt-[5%]" />
           </div>
           <h3 className="text-foreground font-semibold text-sm mb-2">Upgrade to talk to Biddie</h3>
           <p className="text-xs text-muted-foreground mb-4 max-w-[220px]">
@@ -205,7 +205,7 @@ const AIChatPanel = () => {
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="w-16 h-16 rounded-full border-2 border-indigo-500/30 overflow-hidden mx-auto mb-3 shadow-[0_0_15px_hsl(230_85%_60%_/_0.3)]">
-              <img src={biddieRobot} alt="Biddie" className="w-full h-full object-cover object-top scale-150" />
+              <img src={biddieRobot} alt="Biddie" className="w-[180%] h-auto -ml-[40%] -mt-[5%]" />
             </div>
             <p className="text-sm text-foreground font-medium">{greeting}</p>
             <p className="text-xs text-muted-foreground mt-2">Powered by JORTRADE</p>
