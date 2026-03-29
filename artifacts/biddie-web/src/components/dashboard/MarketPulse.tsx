@@ -192,7 +192,7 @@ const MarketPulse = () => {
             className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-3"
           >
             {expandedTip === "vix" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {expandedTip === "vix" ? "Hide levels" : "View VIX levels"}
+            {expandedTip === "vix" ? "Hide details" : "What does this mean?"}
           </button>
           <AnimatePresence>
             {expandedTip === "vix" && (
@@ -203,12 +203,17 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5 space-y-0.5">
-                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15:</span> <span className="text-foreground/70">Very low volatility — favorable for position sizing up.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20:</span> <span className="text-foreground/70">Normal range — standard risk parameters.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30:</span> <span className="text-foreground/70">Elevated — reduce size, widen stops.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40:</span> <span className="text-foreground/70">High fear — minimal exposure, quick scalps only.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+:</span> <span className="text-foreground/70">Extreme — consider sitting out or hedging only.</span></p>
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
+                  <p className="text-[10px] text-foreground/80 leading-relaxed">
+                    The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.
+                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">10–15 Very Calm:</span> <span className="text-foreground/70">Market is smooth — size up, nothing crazy happening.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">15–20 Normal:</span> <span className="text-foreground/70">Regular day — play normal size.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">20–30 Nervous:</span> <span className="text-foreground/70">Getting shaky — play smaller, be careful.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-orange-400 font-bold">30–40 Fear:</span> <span className="text-foreground/70">Jumpy and fast — play small, no big risks.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">40+ Panic:</span> <span className="text-foreground/70">Chaos — play very small or don't play at all.</span></p>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -246,7 +251,7 @@ const MarketPulse = () => {
             className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-3"
           >
             {expandedTip === "sentiment" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {expandedTip === "sentiment" ? "Hide levels" : "View P/C levels"}
+            {expandedTip === "sentiment" ? "Hide details" : "What does this mean?"}
           </button>
           <AnimatePresence>
             {expandedTip === "sentiment" && (
@@ -257,12 +262,35 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-muted/10 rounded-lg border border-white/5 space-y-0.5">
-                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7:</span> <span className="text-foreground/70">Very bullish — heavy call skew, strong upside conviction.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9:</span> <span className="text-foreground/70">Bullish — call premium dominates, favorable bias.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1:</span> <span className="text-foreground/70">Neutral — balanced flow, no clear directional edge.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3:</span> <span className="text-foreground/70">Bearish — put premium elevated, hedging activity rising.</span></p>
-                  <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3:</span> <span className="text-foreground/70">Very bearish — heavy put skew, significant downside protection.</span></p>
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-2">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      Imagine a classroom voting. Calls = kids voting "prices go UP!" and Puts = kids voting "prices go DOWN!" The Put/Call Ratio tells you which side has more votes.
+                    </p>
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> <span className="text-foreground/70">Almost everyone is voting UP — the class is super confident!</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> <span className="text-foreground/70">More kids voting UP than DOWN — feeling good.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> <span className="text-foreground/70">About half and half — nobody knows what's next.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More kids voting DOWN — getting worried.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Almost everyone is voting DOWN — the class is scared!</span></p>
+                    </div>
+                  </div>
+                  <div className="border-t border-primary/10 pt-1.5 space-y-1">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      <span className="text-primary font-bold">Money vs Rush Orders:</span> Think of it like this — the MONEY (premium) shows you who brought the most lunch money to bet. The SWEEPS show you who is running to place their bet first. Sometimes the kid with the most money bets DOWN, but the kids rushing to the front are all betting UP — that's why you watch both!
+                    </p>
+                  </div>
+                  <div className="border-t border-primary/10 pt-1.5">
+                    <p className="text-[10px] text-foreground/80 leading-relaxed">
+                      <span className="text-amber-400 font-bold">What are sweeps?</span> Imagine a kid who wants ALL the candy at every store in the mall at the same time. A sweep is when a big trader sends orders to every exchange at once because they want in RIGHT NOW. It means someone with a lot of money is in a hurry!
+                    </p>
+                    <div className="space-y-0.5 mt-1">
+                      <p className="text-[10px] leading-relaxed"><span className="text-foreground/50 font-bold">Under 20:</span> <span className="text-foreground/70">Quiet — the big kids are sitting down, nothing urgent.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">20–50:</span> <span className="text-foreground/70">Normal — some big kids are moving around, regular activity.</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-amber-400 font-bold">50–100:</span> <span className="text-foreground/70">Busy — the big kids are running around, pay attention!</span></p>
+                      <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">100+:</span> <span className="text-foreground/70">Chaos — everyone is sprinting, something BIG is happening!</span></p>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
