@@ -59,6 +59,7 @@ const SignalAlerts = () => {
       { key: "zeroDTE", label: "0DTE Plays", enabled: extra.alertZeroDTE ?? false },
       { key: "marketPulse", label: "Market Pulse Updates", enabled: extra.alertMarketPulse ?? false },
       { key: "outcomes", label: "Signal Outcomes", enabled: extra.alertOutcomes ?? true },
+      { key: "trumpFeed", label: "Trump Feed", enabled: extra.alertTrumpFeed ?? false },
     ]);
   }, [user?.id]);
 

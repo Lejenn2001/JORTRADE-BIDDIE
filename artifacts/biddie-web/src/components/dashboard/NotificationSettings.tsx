@@ -23,6 +23,7 @@ const NotificationSettings = () => {
   const [alertZeroDTE, setAlertZeroDTE] = useState(false);
   const [alertMarketPulse, setAlertMarketPulse] = useState(false);
   const [alertOutcomes, setAlertOutcomes] = useState(true);
+  const [alertTrumpFeed, setAlertTrumpFeed] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -57,6 +58,7 @@ const NotificationSettings = () => {
           setAlertZeroDTE(extra.alertZeroDTE ?? false);
           setAlertMarketPulse(extra.alertMarketPulse ?? false);
           setAlertOutcomes(extra.alertOutcomes ?? true);
+          setAlertTrumpFeed(extra.alertTrumpFeed ?? false);
         } catch {}
       }
     } catch (err) {
@@ -90,6 +92,7 @@ const NotificationSettings = () => {
         alertZeroDTE,
         alertMarketPulse,
         alertOutcomes,
+        alertTrumpFeed,
       }));
 
       if (error) throw error;
@@ -307,6 +310,13 @@ const NotificationSettings = () => {
               <p className="text-xs text-muted-foreground">Get notified when a signal hits or misses its target</p>
             </div>
             <Switch checked={alertOutcomes} onCheckedChange={setAlertOutcomes} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Trump Feed</p>
+              <p className="text-xs text-muted-foreground">Truth Social posts with potential market impact</p>
+            </div>
+            <Switch checked={alertTrumpFeed} onCheckedChange={setAlertTrumpFeed} />
           </div>
         </div>
       </div>
