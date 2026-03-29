@@ -100,10 +100,6 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
           <p className="text-[10px] lg:text-xs text-muted-foreground/80 italic truncate">"{quote}"</p>
         </div>
 
-        <div className="text-right flex-shrink-0">
-          <p className="text-[10px] text-muted-foreground">Welcome back,</p>
-          <p className="text-xs font-semibold text-foreground">{firstName} 👋</p>
-        </div>
       </div>
     </div>
   );
