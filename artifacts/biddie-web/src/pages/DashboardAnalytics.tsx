@@ -102,6 +102,7 @@ interface UserTrade {
   invalidation?: string;
   signal_created_at?: string;
   signal_resolved_at?: string;
+  is_biddie_pick?: boolean;
 }
 
 interface HistoricalSignal {
@@ -1418,6 +1419,9 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                                 : trade.category === "spread" ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
                                 : "bg-[hsl(230,85%,60%,0.1)] text-[hsl(230,85%,70%)] border-[hsl(230,85%,60%,0.2)]"
                               }`}>{trade.category}</span>
+                            )}
+                            {trade.is_biddie_pick && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold border bg-amber-500/10 text-amber-400 border-amber-500/20">Biddie Pick</span>
                             )}
                           </div>
                           <p className="text-[10px] text-muted-foreground mt-0.5">
