@@ -445,7 +445,7 @@ const DashboardAdmin = () => {
                             <div key={svc.key} className={`rounded-lg p-3 ${svc.bg} border border-border/20`}>
                               <p className={`text-[11px] font-medium ${svc.color} mb-1`}>{svc.label}</p>
                               <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">{(svc as any).sub || (svc.key === 'discord' ? `~${c.minute} / 30 per 60s` : `${c.minute}/min`)}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{(svc as any).sub || (svc.key === 'discord' ? `${c.minute} / 30 per 60 sec` : `${c.minute}/min`)}</p>
                             </div>
                           );
                         })}
