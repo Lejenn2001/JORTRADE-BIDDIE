@@ -757,7 +757,7 @@ function SetupSection({
         <span className={`font-bold text-xs ${accent.split(" ")[0]}`}>{label}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${accent}`}>{count}</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3">
         {setups.map((setup, i) => (
           <motion.div
             key={setup.ticker}
