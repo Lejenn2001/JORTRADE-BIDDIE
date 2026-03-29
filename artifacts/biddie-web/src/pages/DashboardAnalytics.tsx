@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
+import biddieRobot from "@/assets/biddie-robot.png";
 
 interface TradeStats {
   total: number;
@@ -919,13 +920,11 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
           <div className="absolute inset-0 bg-gradient-to-br from-[hsl(270,60%,40%,0.06)] via-transparent to-[hsl(230,85%,60%,0.04)] pointer-events-none" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[radial-gradient(circle,hsl(270,75%,40%,0.08)_0%,transparent_60%)] pointer-events-none" />
           <div className="relative">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[hsl(270,60%,40%,0.15)] to-[hsl(230,85%,60%,0.1)] border border-[hsl(270,60%,40%,0.2)] flex items-center justify-center">
-              <Activity className="h-8 w-8 text-[hsl(270,75%,65%)]" />
-            </div>
+            <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mx-auto mb-4 opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-500 drop-shadow-[0_0_15px_hsl(230_85%_60%_/_0.3)]" />
             <h3 className="text-lg font-bold text-foreground">No Trades Yet</h3>
             <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-              Go to the Signals tab and click "I Took This Trade" on any signal you follow.
-              Your personal win rate and stats will automatically build here.
+              Head to the Signals tab and click "I Took This Trade" on any signal you follow.
+              Your stats will start building here automatically!
             </p>
           </div>
         </div>

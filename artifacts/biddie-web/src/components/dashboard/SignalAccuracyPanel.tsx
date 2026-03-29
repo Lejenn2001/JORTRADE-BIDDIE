@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
+import biddieRobot from "@/assets/biddie-robot.png";
 
 interface SignalOutcome {
   id: string;
@@ -312,8 +313,9 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
               <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-xs">Loading...</td></tr>
             )}
             {!loading && allSignals.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-xs">
-                No signals tracked yet. Signals are auto-logged when detected from live flow data.
+              <tr><td colSpan={6} className="px-4 py-10 text-center">
+                <img src={biddieRobot} alt="Biddie" className="w-14 h-14 mx-auto mb-3 opacity-40 grayscale" />
+                <p className="text-xs text-muted-foreground">No signals tracked yet. Biddie auto-logs signals when detected from live flow data.</p>
               </td></tr>
             )}
             {allSignals.slice(0, 30).map((o) => (

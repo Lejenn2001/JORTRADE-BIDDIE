@@ -10,6 +10,7 @@ import {
   ChevronRight, BarChart3, Crosshair, Minus, Bell, Radio,
   Info, ChevronDown, Plus, X, CheckCircle2, Eye
 } from "lucide-react";
+import biddieRobot from "@/assets/biddie-robot.png";
 
 interface FlowBias {
   direction: "bullish" | "bearish" | "neutral";
@@ -616,12 +617,12 @@ const DashboardBreakout = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="glass-panel rounded-xl p-8 text-center"
+                  className="glass-panel rounded-xl p-10 text-center"
                 >
-                  <Minus className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                  <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mx-auto mb-4 opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-500 drop-shadow-[0_0_15px_hsl(230_85%_60%_/_0.3)]" />
                   <p className="text-base font-bold text-foreground">No Active Setups</p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                    No tickers showing squeeze or consolidation patterns right now. Quality setups appear 10-20% of the time.
+                    Biddie doesn't see any squeeze or consolidation patterns right now. Quality setups appear 10-20% of the time — check back soon!
                   </p>
                 </motion.div>
               )}

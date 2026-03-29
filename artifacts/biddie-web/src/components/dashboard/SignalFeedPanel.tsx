@@ -5,6 +5,7 @@ import type { MarketSignal } from "@/hooks/useMarketData";
 import type { PriceInfo } from "@/hooks/useRealtimePrices";
 import SignalLegend from "./SignalLegend";
 import ConvictionScoreRing from "./ConvictionScoreRing";
+import biddieRobot from "@/assets/biddie-robot.png";
 
 interface Props {
   signals: MarketSignal[];
@@ -80,9 +81,10 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
           ))}
         </div>
       ) : displaySignals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <p className="text-sm text-muted-foreground">No signals detected yet</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">Signals update during market hours (9:30 AM – 4 PM ET)</p>
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <img src={biddieRobot} alt="Biddie" className="w-16 h-16 mb-3 opacity-40 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-500 drop-shadow-[0_0_12px_hsl(230_85%_60%_/_0.3)]" />
+          <p className="text-sm font-semibold text-foreground">No Signals Right Now</p>
+          <p className="text-xs text-muted-foreground mt-1">Biddie scans for setups during market hours (9:30 AM – 4 PM ET)</p>
         </div>
       ) : (
         <div className="space-y-3">
