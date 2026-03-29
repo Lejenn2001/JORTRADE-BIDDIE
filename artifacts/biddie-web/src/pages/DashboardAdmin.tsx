@@ -437,7 +437,7 @@ const DashboardAdmin = () => {
                         {([
                           { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10", sub: "unlimited" },
                           { key: "anthropic", label: "Anthropic (Claude)", color: "text-purple-400", bg: "bg-purple-500/10", sub: "pay-per-use" },
-                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10", sub: "30 / 60 seconds" },
+                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
                           { key: "replit", label: "Replit", color: "text-orange-400", bg: "bg-orange-500/10" },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
@@ -445,7 +445,7 @@ const DashboardAdmin = () => {
                             <div key={svc.key} className={`rounded-lg p-3 ${svc.bg} border border-border/20`}>
                               <p className={`text-[11px] font-medium ${svc.color} mb-1`}>{svc.label}</p>
                               <p className="text-xl font-bold text-foreground">{c.today.toLocaleString()}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">{(svc as any).sub || `${c.minute}/min`}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{(svc as any).sub || (svc.key === 'discord' ? `~${c.minute} / 30 per 60s` : `${c.minute}/min`)}</p>
                             </div>
                           );
                         })}
