@@ -78,13 +78,16 @@ export function simplifySignalDescription(signal: SignalInfo): string {
 
   const desc = signal.description || "";
 
-  const sweepMatch = desc.match(/(\d+)\s*sweep/i);
+  const sweep = isSweep({ description: desc });
+  const sweepCountMatch = desc.match(/(\d+)\s*sweep/i);
   const premiumMatch = desc.match(/\$?([\d,.]+[KMB]?)\s*(?:premium|total)/i);
   const aggressionMatch = desc.match(/(\d+)%\s*(?:ask\s*)?aggression/i);
 
-  if (sweepMatch) {
-    const count = parseInt(sweepMatch[1]);
-    chunks.push(`SWEEP — A big trader placed ${count} rush order${count > 1 ? 's' : ''} across multiple exchanges at once to get filled fast. Sweeps show urgency — they're willing to pay more just to get in NOW`);
+  if (sweep) {
+    const countPart = sweepCountMatch
+      ? `${parseInt(sweepCountMatch[1])} rush order${parseInt(sweepCountMatch[1]) > 1 ? 's' : ''}`
+      : "a rush order";
+    chunks.push(`SWEEP — A big trader placed ${countPart} across multiple exchanges at once to get filled fast. Sweeps show urgency — they're willing to pay more just to get in NOW`);
   } else if (premiumMatch) {
     chunks.push(`FLOW — A big trader put $${premiumMatch[1]} on the line. Flow is a regular large order (not as urgent as a sweep, but still significant money)`);
   } else {
@@ -130,7 +133,7 @@ export function simplifySignalDescription(signal: SignalInfo): string {
 
   const premiumVal = premiumMatch ? parsePremiumValue(premiumMatch[1]) : 0;
 
-  if (premiumMatch && sweepMatch) {
+  if (premiumMatch && sweep) {
     chunks.push(`Total money on the line: $${premiumMatch[1]}. ${premiumColor(premiumVal)}`);
   } else if (premiumMatch && premiumVal > 0) {
     chunks.push(premiumColor(premiumVal));
