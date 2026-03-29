@@ -77,7 +77,7 @@ const ChatRoomHeader = ({ onlineCount, firstName }: ChatRoomHeaderProps) => {
               <span className="text-[10px] font-semibold text-emerald-400">{onlineCount} online</span>
             </div>
             <div className="hidden md:block text-right">
-              <p className="text-[10px] text-muted-foreground">Welcome back</p>
+              <p className="text-[10px] text-muted-foreground">Welcome back,</p>
               <p className="text-xs font-semibold text-foreground">{firstName} 👋</p>
             </div>
           </div>
