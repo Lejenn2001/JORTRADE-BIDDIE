@@ -154,6 +154,7 @@ const DashboardBreakout = () => {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const alertPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [watchedTickers, setWatchedTickers] = useState<Set<string>>(loadWatched);
+  const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
   const prevAlertsRef = useRef<string[]>([]);
   const [customTickerInput, setCustomTickerInput] = useState("");
   const [customTickers, setCustomTickers] = useState<string[]>([]);
@@ -230,6 +231,54 @@ const DashboardBreakout = () => {
       return next;
     });
   }, []);
+
+  const fetchUserAlerts = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const resp = await fetch(`/api/alerts?userId=${user.id}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setAlertTickers(new Set(data.alerts.filter((a: any) => a.active).map((a: any) => a.ticker)));
+      }
+    } catch {}
+  }, [user]);
+
+  const toggleAlert = useCallback(async (setup: BreakoutSetup, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+
+    if (alertTickers.has(setup.ticker)) {
+      try {
+        const resp = await fetch(`/api/alerts?userId=${user.id}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const existing = data.alerts.find((a: any) => a.ticker === setup.ticker && a.active);
+          if (existing) {
+            await fetch(`/api/alerts/${existing.id}`, { method: "DELETE" });
+            setAlertTickers(prev => { const next = new Set(prev); next.delete(setup.ticker); return next; });
+          }
+        }
+      } catch {}
+    } else {
+      const dir = setup.thesis?.direction || (setup.breakoutDirection !== "none" ? setup.breakoutDirection : "neutral");
+      const isBullish = dir === "bullish" || dir === "neutral";
+      try {
+        const resp = await fetch("/api/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            ticker: setup.ticker,
+            targetPrice: setup.breakoutPrice || setup.resistanceLevel || setup.currentPrice,
+            direction: isBullish ? "above" : "below",
+          }),
+        });
+        if (resp.ok) {
+          setAlertTickers(prev => new Set(prev).add(setup.ticker));
+        }
+      } catch {}
+    }
+  }, [user, alertTickers]);
 
   const runScan = useCallback(async (force?: boolean) => {
     setLoading(true);
@@ -315,6 +364,7 @@ const DashboardBreakout = () => {
     runScan();
     fetchAlerts();
     fetchCustomTickers();
+    fetchUserAlerts();
     alertPollRef.current = setInterval(fetchAlerts, 15000);
 
     if (user) {
@@ -333,7 +383,7 @@ const DashboardBreakout = () => {
     }
 
     return () => { if (alertPollRef.current) clearInterval(alertPollRef.current); };
-  }, [runScan, fetchAlerts, fetchCustomTickers, user]);
+  }, [runScan, fetchAlerts, fetchCustomTickers, fetchUserAlerts, user]);
 
   const timeSinceStr = lastScan
     ? `${Math.floor((Date.now() - lastScan.getTime()) / 60000)}m ago`
@@ -593,6 +643,8 @@ const DashboardBreakout = () => {
                           onToggle={() => setExpandedTicker(expandedTicker === setup.ticker ? null : setup.ticker)}
                           watched={watchedTickers.has(setup.ticker)}
                           onWatch={(e) => toggleWatch(setup.ticker, e)}
+                          hasAlert={alertTickers.has(setup.ticker)}
+                          onAlert={(e) => toggleAlert(setup, e)}
                           taken={takenTrades.has(buildTradeKey(setup))}
                           taking={takingTrade === setup.ticker}
                           onTake={(e) => handleTakeTrade(setup, e)}
@@ -726,7 +778,7 @@ const DashboardBreakout = () => {
 
 function SetupSection({
   label, icon, count, accentColor, setups, expandedTicker, setExpandedTicker,
-  watchedTickers, toggleWatch, takenTrades, takingTrade, handleTakeTrade, buildTradeKey, user
+  watchedTickers, toggleWatch, alertTickers, toggleAlert, takenTrades, takingTrade, handleTakeTrade, buildTradeKey, user
 }: {
   label: string;
   icon: React.ReactNode;
@@ -737,6 +789,8 @@ function SetupSection({
   setExpandedTicker: (t: string | null) => void;
   watchedTickers: Set<string>;
   toggleWatch: (t: string, e: React.MouseEvent) => void;
+  alertTickers: Set<string>;
+  toggleAlert: (s: BreakoutSetup, e: React.MouseEvent) => void;
   takenTrades: Set<string>;
   takingTrade: string | null;
   handleTakeTrade: (s: BreakoutSetup, e: React.MouseEvent) => void;
@@ -772,6 +826,8 @@ function SetupSection({
               onToggle={() => setExpandedTicker(expandedTicker === setup.ticker ? null : setup.ticker)}
               watched={watchedTickers.has(setup.ticker)}
               onWatch={(e) => toggleWatch(setup.ticker, e)}
+              hasAlert={alertTickers.has(setup.ticker)}
+              onAlert={(e) => toggleAlert(setup, e)}
               taken={takenTrades.has(buildTradeKey(setup))}
               taking={takingTrade === setup.ticker}
               onTake={(e) => handleTakeTrade(setup, e)}
@@ -787,13 +843,15 @@ function SetupSection({
 }
 
 function SetupCard({
-  setup, expanded, onToggle, watched, onWatch, taken, taking, onTake, user, buildTradeKey, takenTrades
+  setup, expanded, onToggle, watched, onWatch, hasAlert, onAlert, taken, taking, onTake, user, buildTradeKey, takenTrades
 }: {
   setup: BreakoutSetup;
   expanded: boolean;
   onToggle: () => void;
   watched: boolean;
   onWatch: (e: React.MouseEvent) => void;
+  hasAlert: boolean;
+  onAlert: (e: React.MouseEvent) => void;
   taken: boolean;
   taking: boolean;
   onTake: (e: React.MouseEvent) => void;
@@ -846,15 +904,15 @@ function SetupCard({
           </div>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={onWatch}
+              onClick={onAlert}
               className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all border ${
-                watched
-                  ? "bg-primary/20 border-primary/50 text-primary"
-                  : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary/70"
+                hasAlert
+                  ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                  : "bg-white/[0.03] border-white/[0.08] text-muted-foreground hover:border-amber-500/30 hover:text-amber-400/70"
               }`}
-              title={watched ? "Stop watching" : "Watch for breakout"}
+              title={hasAlert ? "Remove alert" : "Set alert"}
             >
-              <Bell className={`h-3 w-3 ${watched ? "fill-current" : ""}`} />
+              <Bell className={`h-3 w-3 ${hasAlert ? "fill-current" : ""}`} />
             </button>
             <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
           </div>
@@ -1117,15 +1175,15 @@ function SetupCard({
               )}
 
               <button
-                onClick={onWatch}
+                onClick={onAlert}
                 className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-bold text-xs transition-all border ${
-                  watched
-                    ? "bg-primary/20 border-primary/50 text-primary hover:bg-primary/30"
-                    : "bg-white/[0.04] border-white/[0.08] text-muted-foreground hover:border-primary/30 hover:text-primary hover:bg-primary/5"
+                  hasAlert
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-400 hover:bg-amber-500/30"
+                    : "bg-white/[0.04] border-white/[0.08] text-muted-foreground hover:border-amber-500/30 hover:text-amber-400 hover:bg-amber-500/5"
                 }`}
               >
-                <Bell className={`h-3.5 w-3.5 ${watched ? "fill-current" : ""}`} />
-                {watched ? `Watching ${setup.ticker}` : `Watch ${setup.ticker} for Alert`}
+                <Bell className={`h-3.5 w-3.5 ${hasAlert ? "fill-current" : ""}`} />
+                {hasAlert ? `Alert Set for ${setup.ticker}` : `Set Alert for ${setup.ticker}`}
               </button>
             </div>
           </motion.div>
