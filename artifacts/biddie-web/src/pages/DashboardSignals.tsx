@@ -537,7 +537,6 @@ const DashboardSignals = () => {
                     <div className="flex items-center gap-2 px-1">
                       {meta.icon}
                       <span className="font-bold text-xs sm:text-sm text-emerald-400">{meta.label}</span>
-                      <span className="text-[10px] text-muted-foreground hidden sm:inline">— {meta.description}</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full ml-auto">
                         {sectionSignals.length}
                       </span>
