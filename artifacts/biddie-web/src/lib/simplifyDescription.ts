@@ -49,8 +49,13 @@ export function compactDescription(signal: SignalInfo): string {
     parts.push(`${aggressionMatch[1]}% ask aggression`);
   }
 
+  const priceAtMatch = desc.match(/Price at \$([\d,.]+)/i);
   const vwapMatch = desc.match(/(above|below)\s*VWAP\s*\(?\$?([\d,.]+)\)?/i);
-  if (vwapMatch) {
+  if (priceAtMatch && vwapMatch) {
+    parts.push(`$${priceAtMatch[1]} ${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
+  } else if (priceAtMatch) {
+    parts.push(`Price at $${priceAtMatch[1]}`);
+  } else if (vwapMatch) {
     parts.push(`${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
   }
 
