@@ -130,14 +130,10 @@ function freshnessLabel(scannedAt?: string): { label: string; color: string } {
 }
 
 function statusTag(setup: BreakoutSetup): { label: string; colors: string; pulse?: boolean } {
-  if (setup.score >= 75 || setup.breakoutTriggered) return { label: "BREAKOUT", colors: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40", pulse: true };
-  if (setup.score >= 55) return { label: "IMMINENT", colors: "bg-blue-500/20 text-blue-400 border-blue-500/40", pulse: true };
-  if (setup.score >= 35) {
-    const detail = setup.squeezeActive ? "SQUEEZE BUILDING" : "BUILDING";
-    return { label: detail, colors: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" };
-  }
-  if (setup.squeezeActive) return { label: "EARLY SQUEEZE", colors: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" };
-  return { label: "EARLY SETUP", colors: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" };
+  if (setup.score >= 75 || setup.breakoutTriggered) return { label: "ENTER NOW", colors: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40", pulse: true };
+  if (setup.score >= 55) return { label: "BREAKOUT IMMINENT", colors: "bg-blue-500/20 text-blue-400 border-blue-500/40", pulse: true };
+  if (setup.score >= 35) return { label: "WATCH & SET ALERT", colors: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30" };
+  return { label: "ON YOUR RADAR", colors: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" };
 }
 
 const cardVariants = {
