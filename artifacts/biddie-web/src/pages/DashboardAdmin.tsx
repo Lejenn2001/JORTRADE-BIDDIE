@@ -67,6 +67,10 @@ const DashboardAdmin = () => {
   const [chatCount, setChatCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users'>('overview');
   const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
+  const [replitCredits, setReplitCredits] = useState("242.89");
+  const [replitCreditsDate, setReplitCreditsDate] = useState("3/29");
+  const [editingCredits, setEditingCredits] = useState(false);
+  const [creditInput, setCreditInput] = useState("");
   const [systemHealth, setSystemHealth] = useState<{ name: string; description: string; status: string; details: string; url: string; usage?: string }[]>([]);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthChecked, setHealthChecked] = useState(false);
@@ -129,6 +133,8 @@ const DashboardAdmin = () => {
       if (usageResp.ok) {
         const usageData = await usageResp.json();
         setApiCounts(usageData.counts || {});
+        if (usageData.replitCredits) setReplitCredits(usageData.replitCredits);
+        if (usageData.replitCreditsDate) setReplitCreditsDate(usageData.replitCreditsDate);
       }
     } catch {}
 
@@ -438,7 +444,6 @@ const DashboardAdmin = () => {
                           { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10", sub: "unlimited" },
                           { key: "anthropic", label: "Anthropic (Claude)", color: "text-purple-400", bg: "bg-purple-500/10", sub: "pay-per-use" },
                           { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
-                          { key: "replit", label: "Replit", color: "text-orange-400", bg: "bg-orange-500/10", sub: "$242.89 remaining (3/29)" },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
                           return (
@@ -451,6 +456,49 @@ const DashboardAdmin = () => {
                             </div>
                           );
                         })}
+                        <div
+                          className="rounded-lg p-3 bg-orange-500/10 border border-border/20 cursor-pointer hover:border-orange-400/40 transition-colors"
+                          onClick={() => { if (!editingCredits) { setCreditInput(replitCredits); setEditingCredits(true); } }}
+                        >
+                          <p className="text-[11px] font-medium text-orange-400 mb-1">Replit</p>
+                          {editingCredits ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-lg font-bold text-foreground">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={creditInput}
+                                onChange={(e) => setCreditInput(e.target.value)}
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter') {
+                                    try {
+                                      const resp = await fetch("/api/whale/admin/replit-credits", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json", "x-user-id": user?.id || "" },
+                                        body: JSON.stringify({ credits: creditInput }),
+                                      });
+                                      if (resp.ok) {
+                                        const data = await resp.json();
+                                        setReplitCredits(data.credits);
+                                        setReplitCreditsDate(data.date);
+                                        toast.success("Credits updated");
+                                      }
+                                    } catch { toast.error("Failed to update"); }
+                                    setEditingCredits(false);
+                                  } else if (e.key === 'Escape') { setEditingCredits(false); }
+                                }}
+                                className="w-20 bg-transparent border-b border-orange-400/50 text-lg font-bold text-foreground outline-none"
+                                autoFocus
+                              />
+                              <p className="text-[9px] text-muted-foreground">Enter to save</p>
+                            </div>
+                          ) : (
+                            <div className="flex items-baseline gap-1">
+                              <p className="text-xl font-bold text-foreground">${replitCredits}</p>
+                              <p className="text-[10px] text-muted-foreground">remaining ({replitCreditsDate})</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 

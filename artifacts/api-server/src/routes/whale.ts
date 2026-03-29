@@ -4378,7 +4378,46 @@ router.get("/whale/admin/api-usage", async (req, res) => {
       else counts[row.api_name] = { today: 0, minute: avgPerMin };
     }
 
-    res.json({ counts });
+    const creditsResult = await pool.query(
+      `SELECT key, value FROM app_settings WHERE key IN ('replit_credits', 'replit_credits_date')`
+    );
+    const creditSettings: Record<string, string> = {};
+    for (const row of (creditsResult?.rows || [])) {
+      creditSettings[row.key] = row.value;
+    }
+
+    res.json({
+      counts,
+      replitCredits: creditSettings.replit_credits || "0",
+      replitCreditsDate: creditSettings.replit_credits_date || "",
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/admin/replit-credits", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    const adminCheck = await pool.query(`SELECT role FROM users WHERE id = $1`, [adminUserId]);
+    if (!adminCheck?.rows?.[0] || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const { credits, date } = req.body;
+    if (credits === undefined) return res.status(400).json({ error: "credits required" });
+
+    const now = date || new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+    await pool.query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ('replit_credits', $1, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [String(credits)]
+    );
+    await pool.query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ('replit_credits_date', $1, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [now]
+    );
+
+    res.json({ ok: true, credits: String(credits), date: now });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
