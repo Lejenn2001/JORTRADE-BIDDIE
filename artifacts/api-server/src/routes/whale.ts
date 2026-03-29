@@ -4092,19 +4092,19 @@ router.get("/whale/market-pulse", async (_req, res) => {
       putCallRatio = totalCallPrem > 0 ? Math.round((totalPutPrem / totalCallPrem) * 100) / 100 : (totalPutPrem > 0 ? 99 : 0);
       if (putCallRatio < 0.5) {
         sentimentLabel = "Very Bullish";
-        sentimentDescription = "Traders are heavily buying calls over puts, signaling strong upside expectations. The market is confident.";
+        sentimentDescription = "Almost everyone is betting prices go UP! The crowd is super confident right now — way more money flowing into calls than puts.";
       } else if (putCallRatio < 0.8) {
         sentimentLabel = "Bullish";
-        sentimentDescription = "More call buying than put buying. Money is flowing toward upside bets, suggesting optimism.";
+        sentimentDescription = "More money is betting on prices going UP than DOWN. The mood is positive — traders are feeling good about the market.";
       } else if (putCallRatio <= 1.2) {
         sentimentLabel = "Neutral";
-        sentimentDescription = "Put and call activity is balanced. No strong directional conviction from options flow.";
+        sentimentDescription = "It's about 50/50 right now — half betting UP, half betting DOWN. Nobody really knows what's next. The market is undecided.";
       } else if (putCallRatio <= 1.8) {
         sentimentLabel = "Bearish";
-        sentimentDescription = "More put buying than calls. Traders are hedging or betting on downside. Proceed with caution.";
+        sentimentDescription = "More money is betting prices go DOWN than UP. Traders are getting nervous and buying protection. Be careful out there.";
       } else {
         sentimentLabel = "Very Bearish";
-        sentimentDescription = "Heavy put buying signals significant downside fear. Could indicate upcoming selling pressure or a hedging event.";
+        sentimentDescription = "Way more money is betting DOWN than UP — traders are scared and buying lots of protection. The crowd thinks prices are heading lower.";
       }
     }
 
