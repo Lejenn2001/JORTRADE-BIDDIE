@@ -2108,7 +2108,7 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
           ? aiCategory : sig.category;
 
         const quality = evaluation.signal_quality || "moderate";
-        const pick = !evaluation.is_hedge && adjustedConf >= 7 && (quality === "strong" || quality === "moderate");
+        const pick = !evaluation.is_hedge && adjustedConf >= 9 && quality === "strong";
         return {
           ...sig,
           confidence: adjustedConf,
@@ -2290,7 +2290,8 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
-  const responseData = { signals: signals.slice(0, 20), count: Math.min(signals.length, 20), timestamp: now };
+  const biddiePicks = signals.filter((s) => s.is_biddie_pick);
+  const responseData = { signals: biddiePicks.slice(0, 20), count: Math.min(biddiePicks.length, 20), signalCount: signals.length, timestamp: now };
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
@@ -2321,7 +2322,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (existing && existing.rows.length > 0) continue;
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
-      const isBiddiePick = !s.is_hedge && s.confidence >= 7 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
+      const isBiddiePick = !s.is_hedge && s.confidence >= 9 && s.signal_quality === "strong";
       await dbQuery(
         `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24)`,
