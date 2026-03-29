@@ -782,9 +782,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           ) : (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
           )}
-          {signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (
+          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 70 ? (
+            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
+          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 70) ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
-          )}
+          ) : null}
           {signal.source === "live" ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">Live</span>
           ) : null}
