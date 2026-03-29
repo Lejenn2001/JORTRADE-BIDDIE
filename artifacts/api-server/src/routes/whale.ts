@@ -4348,15 +4348,15 @@ router.get("/whale/admin/api-usage", async (req, res) => {
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const minuteAgo = new Date(Date.now() - 60 * 1000);
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
 
     const todayResult = await dbQuery(
       `SELECT api_name, COUNT(*)::int as count FROM api_usage_log WHERE created_at >= $1 GROUP BY api_name`,
       [todayStart.toISOString()]
     );
-    const minuteResult = await dbQuery(
+    const recentResult = await dbQuery(
       `SELECT api_name, COUNT(*)::int as count FROM api_usage_log WHERE created_at >= $1 GROUP BY api_name`,
-      [minuteAgo.toISOString()]
+      [tenMinsAgo.toISOString()]
     );
 
     const counts: Record<string, { today: number; minute: number }> = {};
@@ -4367,9 +4367,10 @@ router.get("/whale/admin/api-usage", async (req, res) => {
       if (counts[row.api_name]) counts[row.api_name].today = row.count;
       else counts[row.api_name] = { today: row.count, minute: 0 };
     }
-    for (const row of (minuteResult?.rows || [])) {
-      if (counts[row.api_name]) counts[row.api_name].minute = row.count;
-      else counts[row.api_name] = { today: 0, minute: row.count };
+    for (const row of (recentResult?.rows || [])) {
+      const avgPerMin = Math.round(row.count / 10);
+      if (counts[row.api_name]) counts[row.api_name].minute = avgPerMin;
+      else counts[row.api_name] = { today: 0, minute: avgPerMin };
     }
 
     res.json({ counts });

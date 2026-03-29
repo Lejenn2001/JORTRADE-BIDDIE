@@ -425,7 +425,7 @@ const DashboardAdmin = () => {
                                 </div>
                               )}
                               <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {svc.limitPerMin ? `${c.minute} / ${svc.limitPerMin} per min` : `${c.minute} per min`}
+                                {svc.limitPerMin ? `~${c.minute} / ${svc.limitPerMin} per min` : `~${c.minute} per min`}
                               </p>
                             </div>
                           );
