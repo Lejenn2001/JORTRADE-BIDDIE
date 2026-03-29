@@ -256,6 +256,7 @@ const DashboardBreakout = () => {
           if (existing) {
             await fetch(`/api/alerts/${existing.id}`, { method: "DELETE" });
             setAlertTickers(prev => { const next = new Set(prev); next.delete(setup.ticker); return next; });
+            window.dispatchEvent(new Event("refresh-alerts"));
           }
         }
       } catch {}
@@ -275,6 +276,7 @@ const DashboardBreakout = () => {
         });
         if (resp.ok) {
           setAlertTickers(prev => new Set(prev).add(setup.ticker));
+          window.dispatchEvent(new Event("refresh-alerts"));
         }
       } catch {}
     }

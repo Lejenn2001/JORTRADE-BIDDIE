@@ -93,11 +93,14 @@ const SignalAlerts = () => {
       setShowPanel(true);
       setTab("active");
     };
+    const handleRefresh = () => { fetchUserAlerts(); fetchNotifications(); };
     window.addEventListener("open-alerts-panel", handleOpenPanel);
+    window.addEventListener("refresh-alerts", handleRefresh);
 
     return () => {
       clearInterval(pollInterval);
       window.removeEventListener("open-alerts-panel", handleOpenPanel);
+      window.removeEventListener("refresh-alerts", handleRefresh);
     };
   }, [user?.id, fetchNotifications, fetchUserAlerts]);
 
@@ -124,6 +127,7 @@ const SignalAlerts = () => {
     try {
       await fetch(`/api/alerts/${id}?userId=${user.id}`, { method: "DELETE" });
       setUserAlerts((prev) => prev.filter((a) => a.id !== id));
+      window.dispatchEvent(new Event("refresh-alerts"));
     } catch {}
   };
 
