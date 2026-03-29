@@ -58,12 +58,12 @@ const vixColorMap: Record<string, string> = {
 };
 
 const sentimentColorMap: Record<string, string> = {
-  "Very Bullish": "text-emerald-400",
-  "Bullish": "text-emerald-400",
-  "Neutral": "text-blue-400",
-  "Bearish": "text-red-400",
-  "Very Bearish": "text-red-400",
-  "Unavailable": "text-muted-foreground",
+  "Very Bullish": "text-emerald-400 bg-emerald-500/20",
+  "Bullish": "text-emerald-400 bg-emerald-500/20",
+  "Neutral": "text-blue-400 bg-blue-500/20",
+  "Bearish": "text-red-400 bg-red-500/20",
+  "Very Bearish": "text-red-400 bg-red-500/20",
+  "Unavailable": "text-muted-foreground bg-muted/30",
 };
 
 const MarketPulse = () => {
@@ -228,7 +228,7 @@ const MarketPulse = () => {
               <span className="text-sm font-bold text-foreground">
                 {data.sentiment.putCallRatio.toFixed(2)}
               </span>
-              <span className={`text-[9px] font-bold ${sentimentColorMap[data.sentiment.label] || "text-muted-foreground"}`}>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${sentimentColorMap[data.sentiment.label] || "text-muted-foreground bg-muted/30"}`}>
                 {data.sentiment.label}
               </span>
             </div>
