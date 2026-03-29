@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Target, Flame, Trophy, TrendingUp,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
-  ArrowUpRight, ArrowDownRight, Loader2,
+  ArrowUpRight, ArrowDownRight, Loader2, Lightbulb, EyeOff,
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -57,6 +57,25 @@ interface UserTrade {
   target: string;
   price_at_signal: number | null;
   signal_type: string | null;
+  entry_price?: number | null;
+}
+
+interface HistoricalSignal {
+  id: string;
+  ticker: string;
+  signal_type: string;
+  put_call: string;
+  confidence: number;
+  strike: string;
+  outcome: string;
+  created_at: string;
+  detected_at: string;
+  resolved_at: string | null;
+  category: string;
+  price_at_signal: number | null;
+  target_price: string | null;
+  is_biddie_pick: boolean;
+  direction: string;
 }
 
 
@@ -375,6 +394,7 @@ const DashboardAnalytics = () => {
   const [userStats, setUserStats] = useState<TradeStats | null>(null);
   const [signalStats, setSignalStats] = useState<SignalStats | null>(null);
   const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
+  const [allSignals, setAllSignals] = useState<HistoricalSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "pnl">("overview");
 
@@ -403,6 +423,7 @@ const DashboardAnalytics = () => {
         if (tradesData.trades) setUserTrades(tradesData.trades);
 
         if (historyData.signals) {
+          setAllSignals(historyData.signals);
           const picks = historyData.signals.filter((s: any) => s.is_biddie_pick);
           const resolved = picks.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
@@ -505,7 +526,7 @@ const DashboardAnalytics = () => {
                   </>
                 )}
                 {activeTab === "mytrades" && (
-                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} getPrice={getPrice} />
+                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} getPrice={getPrice} allSignals={allSignals} />
                 )}
                 {activeTab === "pnl" && (
                   <PnLTab />
@@ -676,10 +697,88 @@ function calcPercentToTarget(
   return Math.max(0, Math.min(pct, 100));
 }
 
-function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
+function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[]) {
+  const insights: { text: string; type: "positive" | "warning" | "neutral" }[] = [];
+  if (userTrades.length < 3) return insights;
+
+  const dayStats: Record<string, { wins: number; losses: number; total: number }> = {};
+  const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  for (const t of userTrades) {
+    if (!t.signal_outcome || t.signal_outcome === "pending") continue;
+    const day = DAYS_FULL[new Date(t.taken_at).getDay()];
+    if (!dayStats[day]) dayStats[day] = { wins: 0, losses: 0, total: 0 };
+    dayStats[day].total++;
+    if (t.signal_outcome === "hit" || t.signal_outcome === "partial_hit") dayStats[day].wins++;
+    else dayStats[day].losses++;
+  }
+
+  let worstDay = "", worstRate = 100, bestDay = "", bestRate = 0;
+  for (const [day, s] of Object.entries(dayStats)) {
+    if (s.total < 2) continue;
+    const rate = Math.round((s.wins / s.total) * 100);
+    if (rate < worstRate) { worstRate = rate; worstDay = day; }
+    if (rate > bestRate) { bestRate = rate; bestDay = day; }
+  }
+  if (worstDay && worstRate < 40) insights.push({ text: `You tend to lose on ${worstDay}s (${worstRate}% win rate)`, type: "warning" });
+  if (bestDay && bestRate >= 60) insights.push({ text: `Your best day is ${bestDay} (${bestRate}% win rate)`, type: "positive" });
+
+  if (userTopTickers.length > 0) {
+    const best = userTopTickers.reduce((a, b) => b.winRate > a.winRate && b.total >= 2 ? b : a, userTopTickers[0]);
+    if (best.winRate >= 60 && best.total >= 2) insights.push({ text: `Your best ticker is ${best.ticker} (${best.winRate}% over ${best.total} trades)`, type: "positive" });
+    const worst = userTopTickers.reduce((a, b) => b.winRate < a.winRate && b.total >= 2 ? b : a, userTopTickers[0]);
+    if (worst.winRate < 40 && worst.total >= 2 && worst.ticker !== best.ticker) insights.push({ text: `Watch out for ${worst.ticker} — only ${worst.winRate}% win rate`, type: "warning" });
+  }
+
+  const catStats: Record<string, { wins: number; total: number }> = {};
+  for (const t of userTrades) {
+    if (!t.signal_outcome || t.signal_outcome === "pending") continue;
+    const cat = t.category || "algorithm";
+    if (!catStats[cat]) catStats[cat] = { wins: 0, total: 0 };
+    catStats[cat].total++;
+    if (t.signal_outcome === "hit" || t.signal_outcome === "partial_hit") catStats[cat].wins++;
+  }
+  const catLabels: Record<string, string> = { algorithm: "Algorithm signals", whale: "Whale flow signals", spread: "Spread signals" };
+  for (const [cat, s] of Object.entries(catStats)) {
+    if (s.total < 3) continue;
+    const rate = Math.round((s.wins / s.total) * 100);
+    if (rate >= 70) insights.push({ text: `${catLabels[cat] || cat} are working well for you (${rate}%)`, type: "positive" });
+    else if (rate < 30) insights.push({ text: `${catLabels[cat] || cat} have a low hit rate for you (${rate}%)`, type: "warning" });
+  }
+
+  const resolvedTrades = userTrades.filter(t => t.signal_outcome === "hit" || t.signal_outcome === "partial_hit" || t.signal_outcome === "missed");
+  if (resolvedTrades.length >= 5) {
+    const recent5 = resolvedTrades.slice(0, 5);
+    const recentWins = recent5.filter(t => t.signal_outcome === "hit" || t.signal_outcome === "partial_hit").length;
+    if (recentWins >= 4) insights.push({ text: `You're on fire — ${recentWins}/5 recent trades were winners`, type: "positive" });
+    else if (recentWins <= 1) insights.push({ text: `Rough stretch — only ${recentWins}/5 recent trades hit. Consider being more selective`, type: "warning" });
+  }
+
+  return insights.slice(0, 4);
+}
+
+function computeMissedOpportunities(userTrades: UserTrade[], allSignals: HistoricalSignal[]) {
+  const takenIds = new Set(userTrades.map(t => t.signal_id));
+  const missed = allSignals.filter(s =>
+    s.is_biddie_pick &&
+    (s.outcome === "hit" || s.outcome === "partial_hit") &&
+    !takenIds.has(String(s.id))
+  );
+
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const missedThisWeek = missed.filter(s => new Date(s.resolved_at || s.detected_at) >= weekAgo);
+
+  return { missed: missed.slice(0, 5), missedThisWeek, totalMissed: missed.length };
+}
+
+function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSignals }: {
   userStats: TradeStats | null; userTrades: UserTrade[]; userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   getPrice: (ticker: string) => PriceInfo | null;
+  allSignals: HistoricalSignal[];
 }) {
+  const insights = useMemo(() => computeLearningInsights(userTrades, userTopTickers), [userTrades, userTopTickers]);
+  const missedData = useMemo(() => computeMissedOpportunities(userTrades, allSignals), [userTrades, allSignals]);
+
   return (
     <div className="space-y-6">
       {userStats && userStats.total > 0 ? (
@@ -690,6 +789,80 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
             <StatCard label="Losses" value={userStats.misses} icon={<XCircle className="h-5 w-5 text-red-400" />} color="border-red-500/20" />
             <StatCard label="Pending" value={userStats.pending} icon={<Clock className="h-5 w-5 text-yellow-400" />} color="border-yellow-500/20" />
           </div>
+
+          {insights.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+              className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-amber-500/10 via-background to-background">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl -translate-y-8 translate-x-8" />
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-amber-400" />
+                Learning Insights
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">AI-POWERED</span>
+              </h3>
+              <div className="space-y-2">
+                {insights.map((insight, i) => (
+                  <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.05 }}
+                    className={`flex items-start gap-3 rounded-lg px-3 py-2.5 ${
+                      insight.type === "positive" ? "bg-emerald-500/10 border border-emerald-500/20"
+                      : insight.type === "warning" ? "bg-red-500/10 border border-red-500/20"
+                      : "bg-white/5 border border-white/10"
+                    }`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                      insight.type === "positive" ? "bg-emerald-500/20" : insight.type === "warning" ? "bg-red-500/20" : "bg-white/10"
+                    }`}>
+                      {insight.type === "positive" ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Flame className="h-3 w-3 text-red-400" />}
+                    </div>
+                    <p className="text-xs text-foreground font-medium leading-relaxed">{insight.text}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {missedData.totalMissed > 0 && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-violet-500/10 via-background to-background">
+              <div className="absolute bottom-0 left-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl translate-y-12 -translate-x-12" />
+              <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+                <EyeOff className="h-4 w-4 text-violet-400" />
+                Missed Opportunities
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                {missedData.missedThisWeek.length > 0
+                  ? `You missed ${missedData.missedThisWeek.length} winner${missedData.missedThisWeek.length > 1 ? "s" : ""} this week`
+                  : `${missedData.totalMissed} winning Biddie Pick${missedData.totalMissed > 1 ? "s" : ""} you didn't take`}
+              </p>
+              <div className="space-y-2">
+                {missedData.missed.map((signal, i) => (
+                  <motion.div key={signal.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.05 }}
+                    className="flex items-center gap-3 bg-white/[0.03] rounded-lg px-3 py-2 border border-white/5 hover:border-white/15 transition-colors">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      signal.direction === "bullish" || signal.signal_type === "bullish" ? "bg-emerald-500/20" : "bg-red-500/20"
+                    }`}>
+                      {signal.direction === "bullish" || signal.signal_type === "bullish"
+                        ? <ArrowUpRight className="h-3.5 w-3.5 text-emerald-400" />
+                        : <ArrowDownRight className="h-3.5 w-3.5 text-red-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-foreground">{signal.ticker}</span>
+                        {signal.strike && <span className="text-[10px] text-muted-foreground">${signal.strike} {signal.put_call}</span>}
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">HIT</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(signal.detected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {signal.target_price ? ` · Target: ${signal.target_price}` : ""}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-emerald-400">Winner</div>
+                      <div className="text-[10px] text-muted-foreground">Not taken</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {userTopTickers.length > 0 && (
             <div className="glass-panel rounded-xl p-5 border border-white/10">
@@ -771,11 +944,11 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice }: {
                         </p>
                       </div>
                       <div className={`text-xs font-bold px-2 py-1 rounded-md ${
-                        trade.signal_outcome === "hit" ? "bg-emerald-500/20 text-emerald-400"
+                        trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit" ? "bg-emerald-500/20 text-emerald-400"
                         : trade.signal_outcome === "missed" ? "bg-red-500/20 text-red-400"
                         : "bg-yellow-500/20 text-yellow-400"
                       }`}>
-                        {trade.signal_outcome === "hit" ? "WIN" : trade.signal_outcome === "missed" ? "LOSS" : "PENDING"}
+                        {trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit" ? "WIN" : trade.signal_outcome === "missed" ? "LOSS" : "PENDING"}
                       </div>
                     </div>
 
