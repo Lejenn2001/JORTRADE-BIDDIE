@@ -219,7 +219,7 @@ const MarketPulse = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground">Put/Call</span>
+                <span className="text-[10px] text-muted-foreground">Put/Call Ratio</span>
               </div>
               <Info className="h-3 w-3 text-muted-foreground/50" />
             </div>
@@ -232,6 +232,16 @@ const MarketPulse = () => {
               </span>
             </div>
           </button>
+          <div className="px-3 py-1.5 rounded-lg bg-muted/10">
+            <p className="text-[10px] text-foreground/70 leading-relaxed">
+              {data.sentiment.description}
+            </p>
+            <div className="flex gap-3 mt-1 text-[9px]">
+              <span className="text-emerald-400">Calls: {formatPremium(data.sentiment.totalCallPremium)}</span>
+              <span className="text-red-400">Puts: {formatPremium(data.sentiment.totalPutPremium)}</span>
+              <span className="text-amber-400">{data.sentiment.sweepCount} sweeps</span>
+            </div>
+          </div>
           <AnimatePresence>
             {expandedTip === "sentiment" && (
               <motion.div
@@ -241,17 +251,16 @@ const MarketPulse = () => {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    <span className="text-primary font-bold">What is Put/Call Ratio?</span> Compares bearish bets (puts) to bullish bets (calls). Below 0.8 = bullish sentiment. Above 1.2 = bearish sentiment.
+                <div className="px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 space-y-1.5">
+                  <p className="text-[10px] text-foreground/80 leading-relaxed">
+                    The Put/Call Ratio compares bearish bets (puts) to bullish bets (calls). It tells you what the crowd is thinking — are they scared or confident?
                   </p>
-                  <p className="text-[10px] text-foreground/80 mt-1 leading-relaxed">
-                    {data.sentiment.description}
-                  </p>
-                  <div className="flex gap-3 mt-1.5 text-[9px]">
-                    <span className="text-emerald-400">Calls: {formatPremium(data.sentiment.totalCallPremium)}</span>
-                    <span className="text-red-400">Puts: {formatPremium(data.sentiment.totalPutPremium)}</span>
-                    <span className="text-amber-400">{data.sentiment.sweepCount} sweeps</span>
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">Below 0.7 Very Bullish:</span> <span className="text-foreground/70">Way more calls than puts — traders are feeling confident and betting on the upside.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-emerald-400 font-bold">0.7–0.9 Bullish:</span> <span className="text-foreground/70">More calls than puts — leaning positive, normal upside bias.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-blue-400 font-bold">0.9–1.1 Neutral:</span> <span className="text-foreground/70">Roughly equal calls and puts — the market is undecided.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">1.1–1.3 Bearish:</span> <span className="text-foreground/70">More puts than calls — traders are getting cautious and hedging.</span></p>
+                    <p className="text-[10px] leading-relaxed"><span className="text-red-400 font-bold">Above 1.3 Very Bearish:</span> <span className="text-foreground/70">Way more puts — heavy fear, everyone is buying protection.</span></p>
                   </div>
                 </div>
               </motion.div>
