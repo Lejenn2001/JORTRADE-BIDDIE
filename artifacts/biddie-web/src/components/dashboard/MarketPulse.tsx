@@ -171,17 +171,15 @@ const MarketPulse = () => {
               <BeginnerTooltip
                 content={
                   <div className="space-y-1.5">
-                    <p>The VIX is like a "fear meter" for the market — when it's low, everything is calm and easy, and when it's high, things get wild and scary. When the market falls, VIX usually goes up, meaning more fear and bigger, faster moves.</p>
+                    <p>The VIX is like a "fear meter" — when it's low, the market is calm. When it's high, things get wild and scary. Low = safe to size up. High = play small!</p>
                     <div className="space-y-0.5">
-                      <p><span className="text-emerald-400 font-bold">10–15 Very Calm:</span> Market is smooth — size up, nothing crazy happening.</p>
-                      <p><span className="text-blue-400 font-bold">15–20 Normal:</span> Regular day — play normal size.</p>
-                      <p><span className="text-amber-400 font-bold">20–30 Nervous:</span> Getting shaky — play smaller, be careful.</p>
-                      <p><span className="text-orange-400 font-bold">30–40 Fear:</span> Jumpy and fast — play small, no big risks.</p>
-                      <p><span className="text-red-400 font-bold">40+ Panic:</span> Chaos — play very small or don't play at all.</p>
+                      <p><span className="text-emerald-400 font-bold">10–20:</span> Calm to normal — safe to play regular size.</p>
+                      <p><span className="text-amber-400 font-bold">20–30:</span> Getting shaky — be careful, play smaller.</p>
+                      <p><span className="text-red-400 font-bold">30+:</span> Fear/panic — play very small or sit out.</p>
                     </div>
                   </div>
                 }
-                maxWidth={280}
+                maxWidth={260}
               />
             </div>
             <div className="flex items-center gap-2 mt-1">
