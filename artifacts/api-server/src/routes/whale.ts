@@ -5170,6 +5170,11 @@ router.get("/whale/trades/stats", async (req, res) => {
       else weeklyMap[key].pending++;
     }
 
+    const currentWeekKey = sunday.toISOString();
+    if (!weeklyMap[currentWeekKey]) {
+      weeklyMap[currentWeekKey] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0 };
+    }
+
     const weeklyBreakdown = Object.entries(weeklyMap)
       .map(([weekStart, data]) => {
         const ws = new Date(weekStart);
