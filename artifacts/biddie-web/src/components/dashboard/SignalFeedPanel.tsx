@@ -160,35 +160,37 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   </div>
                 )}
 
-                <div className="px-3 py-1.5 flex items-center gap-1.5 flex-wrap border-b border-white/[0.04]">
-                  <div className="flex items-center gap-1.5">
+                <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
+                  isWhaleCard ? "bg-blue-500/15" : isSpreadCard ? "bg-violet-500/15" : isCall ? "bg-primary/15" : "bg-destructive/15"
+                }`}>
+                  <div className="flex items-center gap-2 flex-wrap">
                     {signal.category === "whale" ? (
-                      <Waves className="h-3.5 w-3.5 text-blue-400" />
+                      <Waves className="h-3 w-3 text-blue-400" />
                     ) : signal.category === "spread" ? (
-                      <Target className="h-3.5 w-3.5 text-violet-400" />
+                      <Target className="h-3 w-3 text-violet-400" />
                     ) : (
-                      <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                      <Zap className="h-3 w-3 text-emerald-400" />
                     )}
-                    <span className={`text-[10px] font-bold tracking-widest uppercase ${catColor}`}>
+                    <span className={`text-[11px] font-bold tracking-widest uppercase ${catColor}`}>
                       {categoryLabel}
                     </span>
+                    {is0DTE ? (
+                      <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+                    ) : (
+                      <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+                    )}
+                    {showMoveOver ? (
+                      <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
+                    ) : showBuyNow ? (
+                      <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
+                    ) : null}
+                    {signal.aiEvaluated && (
+                      <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">
+                        Biddie Pick
+                      </span>
+                    )}
                   </div>
-                  {is0DTE ? (
-                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
-                  ) : (
-                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
-                  )}
-                  {showMoveOver ? (
-                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
-                  ) : showBuyNow ? (
-                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
-                  ) : null}
-                  {signal.aiEvaluated && (
-                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 animate-pulse uppercase tracking-wider">
-                      Biddie Pick
-                    </span>
-                  )}
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 ml-auto">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <Clock className="h-2.5 w-2.5" />
                     {signal.timestamp}
                   </span>
