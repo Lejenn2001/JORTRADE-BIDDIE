@@ -417,10 +417,10 @@ const DashboardAdmin = () => {
                                 </p>
                               </div>
                               {dayPct !== null && (
-                                <div className="w-full h-1 rounded-full bg-border/30 mt-1.5 mb-1">
+                                <div className="w-full h-1.5 rounded-full bg-border/30 mt-1.5 mb-1 overflow-hidden">
                                   <div
                                     className={`h-full rounded-full transition-all ${dayPct > 80 ? 'bg-red-400' : dayPct > 50 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                                    style={{ width: `${Math.max(dayPct, 2)}%` }}
+                                    style={{ width: `${Math.max(dayPct, 3)}%` }}
                                   />
                                 </div>
                               )}
