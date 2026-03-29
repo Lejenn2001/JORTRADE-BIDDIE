@@ -357,7 +357,7 @@ const DashboardBreakout = () => {
                   Breakout Scanner
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Volatility squeeze detection + consolidation breakouts across {result ? result.tickersScanned : "40+"} tickers
+                  Real-time breakout detection across {result ? result.tickersScanned : "40+"} tickers
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -532,7 +532,7 @@ const DashboardBreakout = () => {
                     </div>
                     <div className="text-center space-y-1">
                       <p className="text-base font-bold text-foreground">Scanning Tickers</p>
-                      <p className="text-xs text-muted-foreground">Squeeze detection, consolidation analysis, volume confirmation</p>
+                      <p className="text-xs text-muted-foreground">Analyzing price action, volume, and consolidation patterns</p>
                     </div>
                   </div>
                 </motion.div>
@@ -862,6 +862,12 @@ function SetupCard({
               <>
                 <span className="text-border">|</span>
                 <span className="text-muted-foreground/70">Squeeze since {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+              </>
+            )}
+            {setup.scannedAt && (
+              <>
+                <span className="text-border">|</span>
+                <span className="text-muted-foreground/70">Posted {new Date(setup.scannedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(setup.scannedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" })}</span>
               </>
             )}
           </div>
