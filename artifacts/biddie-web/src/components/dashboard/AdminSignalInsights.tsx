@@ -5,7 +5,7 @@ import {
   CheckCircle, XCircle, Clock, TrendingUp, TrendingDown,
   BarChart3, AlertTriangle, Lightbulb, ChevronDown, ChevronUp,
   Target, Activity, Zap, BookOpen, Info, Loader2,
-  ArrowUp, ArrowDown, Timer, Crosshair, ExternalLink
+  ArrowUp, ArrowDown, Timer, Crosshair, ExternalLink, Download
 } from "lucide-react";
 
 interface Signal {
@@ -89,7 +89,7 @@ interface PatternInsight {
   detail: string;
 }
 
-const AdminSignalInsights = () => {
+const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; exporting?: boolean }) => {
   const navigate = useNavigate();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -622,6 +622,16 @@ const AdminSignalInsights = () => {
             <Zap className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold text-foreground">Full Signal Log</h2>
             <span className="text-[10px] text-muted-foreground">({filteredSignals.length} signals)</span>
+            {onExport && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onExport(); }}
+                disabled={exporting}
+                className="ml-2 inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+              >
+                <Download className="h-3 w-3" />
+                {exporting ? "Exporting..." : "Export CSV"}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {(["all", "hit", "partial_hit", "missed", "expired", "pending"] as const).map(f => {
