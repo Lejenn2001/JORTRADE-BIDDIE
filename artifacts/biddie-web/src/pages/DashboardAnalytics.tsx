@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  BarChart3, Target, Flame, Trophy, TrendingUp,
+  BarChart3, Flame, Trophy, TrendingUp,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
   ArrowUpRight, ArrowDownRight, Loader2, Lightbulb,
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet, ExternalLink
@@ -527,7 +527,7 @@ const DashboardAnalytics = () => {
                   </>
                 )}
                 {activeTab === "mytrades" && (
-                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} getPrice={getPrice} allSignals={allSignals} />
+                  <MyTradesTab userStats={userStats} userTrades={userTrades} userTopTickers={userTopTickers} allSignals={allSignals} />
                 )}
                 {activeTab === "pnl" && (
                   <PnLTab />
@@ -688,25 +688,6 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers }: {
   );
 }
 
-function parseTargetPrice(target?: string): number | null {
-  if (!target) return null;
-  const match = target.match(/\$?([\d,]+(?:\.\d+)?)/);
-  if (!match) return null;
-  return parseFloat(match[1].replace(/,/g, ""));
-}
-
-function calcPercentToTarget(
-  entryPrice: number,
-  currentPrice: number,
-  targetPrice: number,
-  isBullish: boolean
-): number {
-  const totalMove = isBullish ? targetPrice - entryPrice : entryPrice - targetPrice;
-  if (totalMove <= 0) return 0;
-  const currentMove = isBullish ? currentPrice - entryPrice : entryPrice - currentPrice;
-  const pct = (currentMove / totalMove) * 100;
-  return Math.max(0, Math.min(pct, 100));
-}
 
 function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[]) {
   const insights: { text: string; type: "positive" | "warning" | "neutral" }[] = [];
@@ -768,9 +749,8 @@ function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { tick
 }
 
 
-function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSignals }: {
+function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
   userStats: TradeStats | null; userTrades: UserTrade[]; userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
-  getPrice: (ticker: string) => PriceInfo | null;
   allSignals: HistoricalSignal[];
 }) {
   const navigate = useNavigate();
@@ -871,28 +851,9 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
               </h3>
               <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
                 {userTrades.slice(0, 20).map((trade, i) => {
-                  const targetPrice = parseTargetPrice(trade.target);
-                  const alertPrice = trade.price_at_signal ? Number(trade.price_at_signal) : null;
-                  const entryPrice = trade.entry_price ? Number(trade.entry_price) : alertPrice;
-                  const priceInfo = getPrice(trade.ticker);
-                  const currentPrice = priceInfo?.price ?? null;
-                  const isBullish = (trade.signal_type || trade.direction) === "bullish";
                   const isWin = trade.signal_outcome === "hit" || trade.signal_outcome === "partial_hit";
                   const isLoss = trade.signal_outcome === "missed";
-                  const isPending = !isWin && !isLoss;
-                  const showProgress = isPending && entryPrice && currentPrice && targetPrice;
-
-                  let pct = 0;
-                  let label = "0% to Target";
-                  let currentMove = 0;
-
-                  if (showProgress) {
-                    pct = calcPercentToTarget(entryPrice!, currentPrice!, targetPrice!, isBullish);
-                    const pctRounded = Math.round(pct);
-                    label = pct >= 100 ? "Target Reached!" : `${pctRounded}% to Target`;
-                    currentMove = isBullish ? currentPrice! - entryPrice! : entryPrice! - currentPrice!;
-                  }
-
+                  const isBullish = (trade.signal_type || trade.direction) === "bullish";
                   const borderGlow = isWin ? "border-l-emerald-500/60" : isLoss ? "border-l-red-500/60" : "border-l-[hsl(270,75%,60%,0.4)]";
 
                   return (
@@ -946,38 +907,6 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
                         </div>
                       </div>
 
-                      {showProgress && (
-                        <div className="rounded-lg px-3 py-2.5 space-y-1.5 ml-12 bg-gradient-to-r from-[hsl(270,60%,40%,0.06)] to-[hsl(230,85%,60%,0.04)] border border-white/[0.04]">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <Target className="h-3 w-3 text-[hsl(270,75%,65%)]" />
-                              <span className={`text-[11px] font-bold ${pct >= 100 ? "text-emerald-400" : "text-foreground"}`}>
-                                {label}
-                              </span>
-                            </div>
-                            <span className={`text-[10px] font-semibold ${currentMove >= 0 ? "text-emerald-400" : "text-destructive"}`}>
-                              {currentMove >= 0 ? "+" : ""}${Math.abs(currentMove).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="w-full h-2 bg-white/[0.04] rounded-full overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${
-                                pct >= 100 ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                                : pct >= 50 ? "bg-gradient-to-r from-[hsl(230,85%,60%)] to-[hsl(270,75%,60%)]"
-                                : "bg-gradient-to-r from-[hsl(270,60%,45%)] to-[hsl(230,70%,55%)]"
-                              }`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(pct, 100)}%` }}
-                              transition={{ duration: 0.8, ease: "easeOut" }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-[9px] text-muted-foreground">
-                            <span>Entry: ${entryPrice!.toFixed(2)}</span>
-                            <span className="text-foreground font-medium">${currentPrice!.toFixed(2)}</span>
-                            <span>Target: ${targetPrice!.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      )}
                     </motion.div>
                   );
                 })}
