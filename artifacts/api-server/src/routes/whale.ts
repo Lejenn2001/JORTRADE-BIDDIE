@@ -1520,6 +1520,73 @@ router.delete("/whale/admin/referral/:referralId", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/backfill-biddie-picks", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId || !(await isAdminUser(adminUserId))) {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const updated = await dbQuery(
+      `UPDATE signal_outcomes SET is_biddie_pick = true
+       WHERE confidence >= 8 AND is_biddie_pick = false
+       AND signal_quality IS NULL
+       RETURNING id`
+    );
+    const count = updated?.rows?.length || 0;
+
+    const deleteOld = await dbQuery(
+      `DELETE FROM weekly_signal_stats WHERE week_start::date NOT IN (
+        SELECT date_trunc('week', d)::date FROM generate_series('2026-03-01'::date, CURRENT_DATE, '1 day') d
+        WHERE EXTRACT(DOW FROM d) = 0
+      ) AND week_start < CURRENT_DATE
+      RETURNING id`
+    );
+
+    const weeks = await dbQuery(
+      `SELECT DISTINCT date_trunc('week', detected_at + interval '1 day') - interval '1 day' as week_start
+       FROM signal_outcomes ORDER BY week_start`
+    );
+
+    let statsUpdated = 0;
+    for (const w of (weeks?.rows || [])) {
+      const ws = new Date(w.week_start);
+      const we = new Date(ws); we.setDate(we.getDate() + 7);
+      const stats = await dbQuery(
+        `SELECT 
+          COUNT(*) as total, 
+          COUNT(*) FILTER (WHERE outcome = 'hit') as hits,
+          COUNT(*) FILTER (WHERE outcome = 'miss') as misses,
+          COUNT(*) FILTER (WHERE outcome = 'partial_hit') as partial_hits,
+          COUNT(*) FILTER (WHERE outcome = 'expired') as expired,
+          COUNT(*) FILTER (WHERE outcome = 'pending') as pending,
+          COALESCE(AVG(conviction_score), 0) as avg_conviction,
+          COUNT(*) FILTER (WHERE is_biddie_pick) as bp_total,
+          COUNT(*) FILTER (WHERE is_biddie_pick AND outcome IN ('hit','partial_hit')) as bp_hits
+         FROM signal_outcomes WHERE detected_at >= $1 AND detected_at < $2`,
+        [ws.toISOString(), we.toISOString()]
+      );
+      const r = stats?.rows?.[0];
+      if (!r || parseInt(r.total) === 0) continue;
+
+      const denom = parseInt(r.bp_hits) + (parseInt(r.bp_total) - parseInt(r.bp_hits) - parseInt(r.pending || '0'));
+      const bpWinRate = denom > 0 ? (parseInt(r.bp_hits) / denom * 100) : 0;
+
+      await dbQuery(
+        `UPDATE weekly_signal_stats SET 
+          biddie_pick_hits = $1, biddie_pick_total = $2, biddie_pick_win_rate = $3
+         WHERE week_start::date = $4::date`,
+        [parseInt(r.bp_hits), parseInt(r.bp_total), bpWinRate.toFixed(2), ws.toISOString()]
+      );
+      statsUpdated++;
+    }
+
+    res.json({ ok: true, signalsUpdated: count, weeklyStatsUpdated: statsUpdated, oldRowsDeleted: deleteOld?.rows?.length || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Community Chat Endpoint ──────────────────────────────────────────────────────
 
 const COMMUNITY_SYSTEM = `You are Biddie AI — a friend hanging out in the JORTRADE group chat. You're part of the crew. You are NOT a trading terminal or analysis bot here. You're a homie who happens to know trading.
