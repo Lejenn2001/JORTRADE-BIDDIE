@@ -140,9 +140,6 @@ const DashboardTrump = () => {
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground/60 mt-3 max-w-md">
-                    Live posts from Truth Social. Biddie analyzes each post for potential market sentiment and DJT stock movement.
-                  </p>
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
