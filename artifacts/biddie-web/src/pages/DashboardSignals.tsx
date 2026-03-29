@@ -204,6 +204,20 @@ const DashboardSignals = () => {
       .catch(() => {});
   }, [user?.id]);
 
+  useEffect(() => {
+    const highlightId = searchParams.get("highlight");
+    if (!highlightId) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`signal-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-primary/50", "rounded-xl");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary/50", "rounded-xl"), 3000);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [searchParams]);
+
   const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
     if (!user?.id) return;
     const isTaken = takenSignalIds.has(signal.id);
@@ -547,7 +561,7 @@ const DashboardSignals = () => {
                     </div>
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
-                        <motion.div key={`${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                        <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                         </motion.div>
                       ))}
@@ -579,7 +593,7 @@ const DashboardSignals = () => {
                   </div>
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
-                      <motion.div key={`w-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                      <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                       </motion.div>
                     ))}
@@ -611,7 +625,7 @@ const DashboardSignals = () => {
                   </div>
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
-                      <motion.div key={`s-${signal.id}-${i}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                      <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                       </motion.div>
                     ))}
