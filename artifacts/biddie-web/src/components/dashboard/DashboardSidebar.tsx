@@ -77,7 +77,7 @@ const DashboardSidebar = () => {
         </button>
 
         <Link to="/" className="flex items-center px-2 mb-8">
-          <img src={jortradeLogo} alt="JORTRADE" className="h-24 w-auto" />
+          <img src={jortradeLogo} alt="JORTRADE" className="h-32 w-auto" />
         </Link>
 
         <nav className="flex-1 space-y-1">
