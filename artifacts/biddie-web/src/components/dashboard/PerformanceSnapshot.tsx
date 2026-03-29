@@ -138,7 +138,11 @@ const PerformanceSnapshot = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-5 sm:gap-8 mb-5">
+      <div className="grid grid-cols-5 gap-3 sm:gap-6 mb-5">
+        <div className="text-center py-3 rounded-xl bg-white/[0.03]">
+          <div className="text-2xl sm:text-3xl font-extrabold text-foreground">{totalWeekHits + totalWeekLosses + totalWeekPending}</div>
+          <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">Total</div>
+        </div>
         <div className="text-center py-3 rounded-xl bg-white/[0.03]">
           <div className={`text-2xl sm:text-3xl font-extrabold ${weekWinRate >= 60 ? "text-emerald-400" : weekWinRate >= 40 ? "text-yellow-400" : "text-red-400"}`}>{weekWinRate}%</div>
           <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">Win Rate</div>
