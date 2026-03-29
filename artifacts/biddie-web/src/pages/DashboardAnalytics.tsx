@@ -779,7 +779,7 @@ function OverviewTab({ userStats, signalStats, topTickers, userTopTickers, weekl
                       {wr.toFixed(0)}%
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {week.total_signals} signals · {totalWins}W / {week.misses}L
+                      {week.total_signals} signals · {totalWins}W / {week.misses}L / {week.pending + week.expired}P
                     </div>
                     <div className="mt-1.5 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                       <div
