@@ -593,9 +593,10 @@ function generateContractRec(
   }
 
   const entryPrice = vwap && Math.abs(vwap - price) / price < 0.02 ? vwap : price;
+  const stopDist = Math.min(atr * 0.5, price * 0.02);
   const stopPrice = isBullish
-    ? Math.round((price - atr * 0.5) * 100) / 100
-    : Math.round((price + atr * 0.5) * 100) / 100;
+    ? Math.round((price - stopDist) * 100) / 100
+    : Math.round((price + stopDist) * 100) / 100;
   const targetNearPrice = target
     ?? (isBullish
       ? Math.round((price + atr * 1.0) * 100) / 100
