@@ -437,7 +437,7 @@ const DashboardAdmin = () => {
                         {([
                           { key: "polygon", label: "Polygon.io", color: "text-blue-400", bg: "bg-blue-500/10", sub: "unlimited" },
                           { key: "anthropic", label: "Anthropic (Claude)", color: "text-purple-400", bg: "bg-purple-500/10", sub: "pay-per-use" },
-                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10" },
+                          { key: "discord", label: "Discord", color: "text-amber-400", bg: "bg-amber-500/10", sub: "30 / 60 seconds" },
                           { key: "replit", label: "Replit", color: "text-orange-400", bg: "bg-orange-500/10" },
                         ]).map((svc) => {
                           const c = apiCounts[svc.key] || { today: 0, minute: 0 };
