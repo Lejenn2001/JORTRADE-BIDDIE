@@ -7,7 +7,7 @@ export type UserPlan = "starter" | "active" | "pro" | null;
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: { full_name: string; selected_plan: UserPlan } | null;
+  profile: { full_name: string; selected_plan: UserPlan; created_at: string } | null;
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -29,14 +29,14 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<{ full_name: string; selected_plan: UserPlan } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string; selected_plan: UserPlan; created_at: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, selected_plan")
+      .select("full_name, selected_plan, created_at")
       .eq("id", userId)
       .single();
     if (data) {
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!data.selected_plan) {
         supabase.from("profiles").update({ selected_plan: "starter" }).eq("id", userId).then(() => {});
       }
-      setProfile({ full_name: data.full_name, selected_plan: plan });
+      setProfile({ full_name: data.full_name, selected_plan: plan, created_at: data.created_at });
     }
 
     try {
