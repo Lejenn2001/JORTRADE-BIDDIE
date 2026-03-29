@@ -340,24 +340,39 @@ const Dashboard = () => {
                 </button>
                 <div className="relative flex items-center gap-4 px-5 py-4">
                   <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10 shrink-0" />
-                  <div className="space-y-1.5 min-w-0">
+                  <div className="space-y-2 min-w-0">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-indigo-400" />
                       <span className="text-sm font-bold text-foreground">Welcome to JORTRADE!</span>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      New to trading? No worries! Look for the{" "}
+                      Great to have you with me! JORTRADE is packed with goodies — real-time whale flow, AI-powered signals, and tools built for every level of trader.
+                      Look around, explore the Decision Engine, and hover over the{" "}
                       <span className="inline-flex items-center gap-0.5 align-middle">
                         <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
                       </span>
-                      {" "}icon next to signals — hover over it for quick beginner tips that explain everything in plain English. I'm here to help you learn as you go!
+                      {" "}icons for quick tips along the way.
                     </p>
-                    <button
-                      onClick={dismissWelcome}
-                      className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider"
-                    >
-                      Got it, let's trade!
-                    </button>
+                    <div className="flex items-center gap-3 pt-0.5">
+                      <button
+                        onClick={dismissWelcome}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-xs font-bold text-indigo-300 hover:text-indigo-200 transition-all uppercase tracking-wider"
+                      >
+                        <span>Got it, let's trade!</span>
+                        <span className="text-sm">→</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          dismissWelcome();
+                          const chatEl = document.querySelector('[data-chat-input]') as HTMLInputElement;
+                          if (chatEl) { chatEl.focus(); chatEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg hover:bg-white/5 border border-white/10 text-xs font-medium text-muted-foreground hover:text-foreground transition-all"
+                      >
+                        <span>Talk to Biddie first</span>
+                        <span className="text-sm">💬</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>

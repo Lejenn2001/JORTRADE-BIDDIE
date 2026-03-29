@@ -326,6 +326,7 @@ const AIChatPanel = () => {
       <form onSubmit={handleSubmit} className="p-3 border-t border-border/40">
         <div className="flex items-center gap-2">
           <Input
+            data-chat-input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={canAsk ? "Ask Biddie anything..." : "Daily limit reached"}
