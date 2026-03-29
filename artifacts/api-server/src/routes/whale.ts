@@ -4008,38 +4008,47 @@ router.get("/whale/market-pulse", async (_req, res) => {
     let vixPrice: number | null = null;
     let vixChange: number | null = null;
 
-    const vixyData = priceMonitor.getPrice("VIXY");
-    if (vixyData?.price) {
-      vixPrice = vixyData.price;
-      vixChange = vixyData.changePercent ?? null;
-    }
+    try {
+      const gfResp = await axios.get("https://www.google.com/finance/quote/VIX:INDEXCBOE", {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+        timeout: 5000,
+      });
+      const html = gfResp.data as string;
+      const priceMatch = html.match(/data-last-price="([\d.]+)"/);
+      const changeMatch = html.match(/data-percent-change="(-?[\d.]+)"/);
+      if (priceMatch) {
+        vixPrice = parseFloat(priceMatch[1]);
+        if (changeMatch) vixChange = parseFloat(changeMatch[1]);
+      }
+    } catch {}
 
     if (!vixPrice) {
-      try {
-        const vixyResp = await axios.get(`https://api.polygon.io/v2/aggs/ticker/VIXY/prev`, {
-          params: { apiKey: process.env["POLYGON_API_KEY"] },
-          timeout: 5000,
-        });
-        const r = vixyResp.data?.results?.[0];
-        if (r) {
-          vixPrice = r.c;
-          if (r.o) vixChange = ((r.c - r.o) / r.o) * 100;
-        }
-      } catch {}
+      const vixyData = priceMonitor.getPrice("VIXY");
+      if (vixyData?.price) {
+        vixPrice = vixyData.price;
+        vixChange = vixyData.changePercent ?? null;
+      }
     }
 
     let vixLevel = "Unknown";
     let vixDescription = "";
     if (vixPrice != null) {
-      const vixyToVix: Record<string, { level: string; desc: string }> = (() => {
-        if (vixPrice! < 15) return { level: "Very Calm", desc: "The fear meter is very calm right now. The market is smooth and easy — you can size up because nothing crazy is happening." };
-        if (vixPrice! < 22) return { level: "Normal", desc: "The fear meter is normal — just a regular day. Play normal size, nothing unusual going on." };
-        if (vixPrice! < 35) return { level: "Nervous", desc: "The fear meter is getting nervous — things are starting to get shaky. Play a little smaller and be careful out there." };
-        if (vixPrice! < 50) return { level: "Fear", desc: "The fear meter is showing fear — the market is jumpy and fast. Play small and don't take big risks right now." };
-        return { level: "Panic", desc: "The fear meter is in PANIC mode — it's chaos out there! Play very small or don't play at all. Cash is a position too." };
-      })();
-      vixLevel = vixyToVix.level;
-      vixDescription = vixyToVix.desc;
+      if (vixPrice < 15) {
+        vixLevel = "Very Calm";
+        vixDescription = "The fear meter is very calm right now. The market is smooth and easy — you can size up because nothing crazy is happening.";
+      } else if (vixPrice < 20) {
+        vixLevel = "Normal";
+        vixDescription = "The fear meter is normal — just a regular day. Play normal size, nothing unusual going on.";
+      } else if (vixPrice < 30) {
+        vixLevel = "Nervous";
+        vixDescription = "The fear meter is getting nervous — things are starting to get shaky. Play a little smaller and be careful out there.";
+      } else if (vixPrice < 40) {
+        vixLevel = "Fear";
+        vixDescription = "The fear meter is showing fear — the market is jumpy and fast. Play small and don't take big risks right now.";
+      } else {
+        vixLevel = "Panic";
+        vixDescription = "The fear meter is in PANIC mode — it's chaos out there! Play very small or don't play at all. Cash is a position too.";
+      }
     }
 
     const flowAlerts = await fetchFlowAlerts(500);

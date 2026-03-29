@@ -167,7 +167,7 @@ const MarketPulse = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground">Volatility (VIXY)</span>
+                <span className="text-[10px] text-muted-foreground">Volatility (VIX)</span>
               </div>
               <Info className="h-3 w-3 text-muted-foreground/50" />
             </div>
