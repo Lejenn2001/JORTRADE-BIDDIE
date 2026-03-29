@@ -106,24 +106,33 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
             const isSpreadCard = signal.category === "spread";
             const isCall = signal.type === "bullish";
             const glowClass = signal.aiEvaluated
-              ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20"
+              ? "shadow-[0_0_12px_-3px_rgba(16,185,129,0.35)] border-emerald-400/50"
               : isWhaleCard
               ? score >= 85
-                ? "shadow-[0_0_15px_-3px_rgba(59,130,246,0.4)] border-blue-500/40"
-                : "shadow-[0_0_10px_-3px_rgba(59,130,246,0.25)] border-blue-500/30"
+                ? "shadow-[0_0_10px_-3px_rgba(59,130,246,0.3)] border-blue-500/35"
+                : "border-blue-500/25"
               : isSpreadCard
               ? score >= 85
-                ? "shadow-[0_0_15px_-3px_rgba(139,92,246,0.4)] border-violet-500/40"
-                : "shadow-[0_0_10px_-3px_rgba(139,92,246,0.25)] border-violet-500/30"
+                ? "shadow-[0_0_10px_-3px_rgba(139,92,246,0.3)] border-violet-500/35"
+                : "border-violet-500/25"
               : score >= 85
-              ? "shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)] border-primary/40"
+              ? "shadow-[0_0_10px_-3px_hsl(var(--primary)/0.3)] border-primary/35"
               : score >= 70
-              ? "shadow-[0_0_10px_-3px_hsl(var(--primary)/0.25)] border-primary/30"
+              ? "border-primary/25"
               : isCall
               ? "border-primary/20"
               : "border-destructive/20";
 
             const bgClass = isWhaleCard ? "bg-blue-500/5" : isSpreadCard ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5";
+
+            const is0DTE = (() => {
+              if (!signal.expiry) return false;
+              const exp = new Date(signal.expiry);
+              return !isNaN(exp.getTime()) && exp.toISOString().split("T")[0] === new Date().toISOString().split("T")[0];
+            })();
+            const mfe = signal.mfePercent ?? null;
+            const showBuyNow = score >= 80 && !is0DTE && (mfe == null || mfe < 70);
+            const showMoveOver = !is0DTE && mfe != null && mfe >= 70;
 
             return (
               <motion.div
@@ -151,30 +160,41 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                   </div>
                 )}
 
-                <div className="px-4 py-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {signal.category === "whale" ? (
-                        <Waves className="h-3.5 w-3.5 text-blue-400" />
-                      ) : signal.category === "spread" ? (
-                        <Target className="h-3.5 w-3.5 text-violet-400" />
-                      ) : (
-                        <Zap className="h-3.5 w-3.5 text-emerald-400" />
-                      )}
-                      <span className={`text-[10px] font-bold tracking-widest uppercase ${catColor}`}>
-                        {categoryLabel}
-                      </span>
-                      {signal.aiEvaluated && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 animate-pulse uppercase tracking-wider">
-                          Biddie Pick
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-2.5 w-2.5" />
-                      {signal.timestamp}
+                <div className="px-3 py-1.5 flex items-center gap-1.5 flex-wrap border-b border-white/[0.04]">
+                  <div className="flex items-center gap-1.5">
+                    {signal.category === "whale" ? (
+                      <Waves className="h-3.5 w-3.5 text-blue-400" />
+                    ) : signal.category === "spread" ? (
+                      <Target className="h-3.5 w-3.5 text-violet-400" />
+                    ) : (
+                      <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                    )}
+                    <span className={`text-[10px] font-bold tracking-widest uppercase ${catColor}`}>
+                      {categoryLabel}
                     </span>
                   </div>
+                  {is0DTE ? (
+                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+                  ) : (
+                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+                  )}
+                  {showMoveOver ? (
+                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
+                  ) : showBuyNow ? (
+                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
+                  ) : null}
+                  {signal.aiEvaluated && (
+                    <span className="inline-flex items-center h-5 text-[9px] font-bold px-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 animate-pulse uppercase tracking-wider">
+                      Biddie Pick
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 ml-auto">
+                    <Clock className="h-2.5 w-2.5" />
+                    {signal.timestamp}
+                  </span>
+                </div>
+
+                <div className="px-4 py-3 space-y-3">
 
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0">
