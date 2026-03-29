@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Target, Flame, Trophy, TrendingUp,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
-  ArrowUpRight, ArrowDownRight, Loader2, Lightbulb, EyeOff,
+  ArrowUpRight, ArrowDownRight, Loader2, Lightbulb,
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -756,20 +756,6 @@ function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { tick
   return insights.slice(0, 4);
 }
 
-function computeMissedOpportunities(userTrades: UserTrade[], allSignals: HistoricalSignal[]) {
-  const takenIds = new Set(userTrades.map(t => t.signal_id));
-  const missed = allSignals.filter(s =>
-    s.is_biddie_pick &&
-    (s.outcome === "hit" || s.outcome === "partial_hit") &&
-    !takenIds.has(String(s.id))
-  );
-
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const missedThisWeek = missed.filter(s => new Date(s.resolved_at || s.detected_at) >= weekAgo);
-
-  return { missed: missed.slice(0, 5), missedThisWeek, totalMissed: missed.length };
-}
 
 function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSignals }: {
   userStats: TradeStats | null; userTrades: UserTrade[]; userTopTickers: { ticker: string; hits: number; total: number; winRate: number }[];
@@ -777,7 +763,6 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
   allSignals: HistoricalSignal[];
 }) {
   const insights = useMemo(() => computeLearningInsights(userTrades, userTopTickers), [userTrades, userTopTickers]);
-  const missedData = useMemo(() => computeMissedOpportunities(userTrades, allSignals), [userTrades, allSignals]);
 
   return (
     <div className="space-y-6">
@@ -813,51 +798,6 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, getPrice, allSigna
                       {insight.type === "positive" ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Flame className="h-3 w-3 text-red-400" />}
                     </div>
                     <p className="text-xs text-foreground font-medium leading-relaxed">{insight.text}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {missedData.totalMissed > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-violet-500/10 via-background to-background">
-              <div className="absolute bottom-0 left-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl translate-y-12 -translate-x-12" />
-              <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
-                <EyeOff className="h-4 w-4 text-violet-400" />
-                Missed Opportunities
-              </h3>
-              <p className="text-xs text-muted-foreground mb-3">
-                {missedData.missedThisWeek.length > 0
-                  ? `You missed ${missedData.missedThisWeek.length} winner${missedData.missedThisWeek.length > 1 ? "s" : ""} this week`
-                  : `${missedData.totalMissed} winning Biddie Pick${missedData.totalMissed > 1 ? "s" : ""} you didn't take`}
-              </p>
-              <div className="space-y-2">
-                {missedData.missed.map((signal, i) => (
-                  <motion.div key={signal.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.05 }}
-                    className="flex items-center gap-3 bg-white/[0.03] rounded-lg px-3 py-2 border border-white/5 hover:border-white/15 transition-colors">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                      signal.direction === "bullish" || signal.signal_type === "bullish" ? "bg-emerald-500/20" : "bg-red-500/20"
-                    }`}>
-                      {signal.direction === "bullish" || signal.signal_type === "bullish"
-                        ? <ArrowUpRight className="h-3.5 w-3.5 text-emerald-400" />
-                        : <ArrowDownRight className="h-3.5 w-3.5 text-red-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-foreground">{signal.ticker}</span>
-                        {signal.strike && <span className="text-[10px] text-muted-foreground">${signal.strike} {signal.put_call}</span>}
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">HIT</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(signal.detected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        {signal.target_price ? ` · Target: ${signal.target_price}` : ""}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-emerald-400">Winner</div>
-                      <div className="text-[10px] text-muted-foreground">Not taken</div>
-                    </div>
                   </motion.div>
                 ))}
               </div>
