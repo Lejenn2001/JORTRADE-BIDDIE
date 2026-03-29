@@ -1308,12 +1308,12 @@ router.get("/whale/user-settings", async (req, res) => {
       const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
       const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
       referralCode = await generateUniqueReferralCode(name);
-      await dbQuery("UPDATE user_settings SET referral_code = $1 WHERE user_id = $2", [referralCode, userId]);
+      await dbQuery("UPDATE user_settings SET referral_code = $1, referral_code_created_at = NOW() WHERE user_id = $2", [referralCode, userId]);
     } else if (!row) {
       const nameResp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 }).catch(() => null);
       const name = nameResp?.data?.[0]?.full_name?.split(" ")[0] || "JORT";
       referralCode = await generateUniqueReferralCode(name);
-      await dbQuery("INSERT INTO user_settings (user_id, referral_code) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET referral_code = $2", [userId, referralCode]);
+      await dbQuery("INSERT INTO user_settings (user_id, referral_code, referral_code_created_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id) DO UPDATE SET referral_code = $2, referral_code_created_at = NOW()", [userId, referralCode]);
     }
 
     const referralCount = await dbQuery("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = $1", [userId]);
@@ -1401,13 +1401,11 @@ router.get("/whale/referrals", async (req, res) => {
 router.get("/whale/admin/referrals", async (req, res) => {
   try {
     const allReferrers = await dbQuery(`
-      SELECT us.user_id, us.referral_code, us.chat_alias,
-        p.full_name as referrer_name,
+      SELECT us.user_id, us.referral_code, us.chat_alias, us.referral_code_created_at,
         (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) as referral_count
       FROM user_settings us
-      LEFT JOIN profiles p ON p.id::text = us.user_id
       WHERE us.referral_code IS NOT NULL
-      ORDER BY (SELECT COUNT(*) FROM referrals r WHERE r.referrer_id = us.user_id) DESC
+      ORDER BY us.referral_code_created_at DESC NULLS LAST
     `);
 
     const allReferrals = await dbQuery(`
@@ -1442,11 +1440,24 @@ router.get("/whale/admin/referrals", async (req, res) => {
       totalReferrers,
       totalCodes,
       tierBreakdown,
-      topReferrers: (allReferrers?.rows || []).slice(0, 20).map((r: any) => ({
+      allCodeHolders: await Promise.all((allReferrers?.rows || []).map(async (r: any) => {
+        let name = null;
+        try {
+          const resp = await axios.get(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${r.user_id}&select=full_name`, { headers: supabaseAdminHeaders(), timeout: 5000 });
+          name = resp?.data?.[0]?.full_name || null;
+        } catch {}
+        return {
+          userId: r.user_id,
+          code: r.referral_code,
+          name,
+          codeCreatedAt: r.referral_code_created_at,
+          count: parseInt(r.referral_count),
+        };
+      })),
+      topReferrers: (allReferrers?.rows || []).filter((r: any) => parseInt(r.referral_count) > 0).slice(0, 20).map((r: any) => ({
         userId: r.user_id,
         code: r.referral_code,
         alias: r.chat_alias,
-        name: r.referrer_name || null,
         count: parseInt(r.referral_count),
       })),
       recentReferrals: (allReferrals?.rows || []).map((r: any) => ({

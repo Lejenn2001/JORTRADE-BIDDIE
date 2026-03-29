@@ -83,7 +83,7 @@ const AdminReferralsTab = () => {
     return <div className="text-center text-muted-foreground py-12">Loading referral data...</div>;
   }
 
-  const { totalReferrals, totalReferrers, totalCodes, tierBreakdown, topReferrers, recentReferrals } = data;
+  const { totalReferrals, totalReferrers, totalCodes, tierBreakdown, topReferrers, recentReferrals, allCodeHolders } = data;
 
   const tierColors: Record<string, string> = {
     launch: "bg-blue-500/15 text-blue-400",
@@ -119,6 +119,34 @@ const AdminReferralsTab = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-border/30 bg-card/50 p-5">
+        <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+          <Copy className="w-4 h-4 text-violet-400" /> Referral Code Holders
+        </h3>
+        {(allCodeHolders || []).length === 0 ? (
+          <div className="text-center text-muted-foreground/50 py-6 text-xs">No codes generated yet</div>
+        ) : (
+          <div className="rounded-lg border border-white/[0.04] overflow-hidden">
+            <div className="grid grid-cols-4 text-[10px] text-muted-foreground/50 font-semibold uppercase tracking-wider px-3 py-2 border-b border-white/[0.04] bg-white/[0.01]">
+              <span>Name</span>
+              <span>Code</span>
+              <span>Referrals</span>
+              <span>Generated</span>
+            </div>
+            {(allCodeHolders || []).map((h: any) => (
+              <div key={h.userId} className="grid grid-cols-4 text-xs px-3 py-2.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors items-center">
+                <span className="text-foreground/70 truncate">{h.name || h.userId.slice(0, 8) + "..."}</span>
+                <span className="text-muted-foreground font-mono text-[10px]">{h.code}</span>
+                <span className="text-foreground font-bold">{h.count}</span>
+                <span className="text-muted-foreground/60 text-[10px]">
+                  {h.codeCreatedAt ? new Date(h.codeCreatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-border/30 bg-card/50 p-5">
