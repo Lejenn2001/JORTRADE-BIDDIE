@@ -327,15 +327,35 @@ const DashboardAdmin = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <Shield className="h-6 w-6" />
-                Admin Panel
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">Manage your platform</p>
-            </div>
-            <div className="flex items-center gap-2">
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)]">
+            <svg className="absolute inset-0 w-full h-full opacity-[0.35]" viewBox="0 0 800 200" preserveAspectRatio="none">
+              {[40, 90, 140, 190, 240, 290, 340, 390, 440, 490, 540, 590, 640, 690, 740].map((x, i) => {
+                const heights = [60, 45, 80, 35, 70, 90, 50, 65, 40, 85, 55, 75, 30, 60, 45];
+                const tops = [70, 85, 50, 95, 60, 30, 80, 65, 90, 45, 75, 55, 100, 70, 85];
+                const green = i % 3 !== 0;
+                return (
+                  <g key={i}>
+                    <line x1={x} y1={tops[i] - 15} x2={x} y2={tops[i] + heights[i] + 15} stroke={green ? "#dc2626" : "#991b1b"} strokeWidth="1" />
+                    <rect x={x - 8} y={tops[i]} width="16" height={heights[i]} fill={green ? "#dc2626" : "#991b1b"} rx="1" />
+                  </g>
+                );
+              })}
+            </svg>
+            <div className="absolute inset-0 bg-gradient-to-r from-red-900/15 via-transparent to-red-900/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[hsl(232,30%,7%)] via-transparent to-transparent" />
+
+            <div className="relative px-6 py-7 flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-8 rounded-full bg-gradient-to-b from-red-400 to-red-700" />
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-[0.15em] uppercase bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
+                    ADMIN PANEL
+                  </h1>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-red-400/80 font-semibold mt-0.5">
+                    Platform Control
+                  </p>
+                </div>
+              </div>
               <Link to="/ecosystem">
                 <Button size="sm" variant="outline" className="text-xs gap-2 border-border/50">
                   <Globe className="h-3.5 w-3.5" /> Ecosystem
