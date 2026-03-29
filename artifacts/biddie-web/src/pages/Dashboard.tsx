@@ -10,6 +10,9 @@ import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
 import { useRealtimePrices } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
 import MarketPulse from "@/components/dashboard/MarketPulse";
+import { HelpCircle, X, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import biddieRobot from "@/assets/biddie-robot.png";
 
 const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
   signal.convictionScore ?? Math.round(signal.confidence * 10);
@@ -104,6 +107,16 @@ const Dashboard = () => {
   const [persistedLoading, setPersistedLoading] = useState(true);
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
+
+  const welcomeKey = user?.id ? `biddie_welcomed_${user.id}` : null;
+  const [showWelcome, setShowWelcome] = useState(() => {
+    if (!welcomeKey) return false;
+    return !localStorage.getItem(welcomeKey);
+  });
+  const dismissWelcome = () => {
+    setShowWelcome(false);
+    if (welcomeKey) localStorage.setItem(welcomeKey, "true");
+  };
 
   useEffect(() => {
     const loadTodaysLiveSignals = async () => {
@@ -308,6 +321,49 @@ const Dashboard = () => {
           </div>
 
           <MarketStatusSign />
+
+          <AnimatePresence>
+            {showWelcome && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                transition={{ duration: 0.3 }}
+                className="relative overflow-hidden rounded-xl border border-indigo-500/20 bg-gradient-to-r from-indigo-950/60 via-[hsl(232,30%,10%)] to-purple-950/40"
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent" />
+                <button
+                  onClick={dismissWelcome}
+                  className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+                <div className="relative flex items-center gap-4 px-5 py-4">
+                  <img src={biddieRobot} alt="Biddie" className="w-14 h-14 rounded-full border-2 border-indigo-500/30 shadow-lg shadow-indigo-500/10 shrink-0" />
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-indigo-400" />
+                      <span className="text-sm font-bold text-foreground">Welcome to JORTRADE!</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      New to trading? No worries! Look for the{" "}
+                      <span className="inline-flex items-center gap-0.5 align-middle">
+                        <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                      </span>
+                      {" "}icon next to signals — hover over it for quick beginner tips that explain everything in plain English. I'm here to help you learn as you go!
+                    </p>
+                    <button
+                      onClick={dismissWelcome}
+                      className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider"
+                    >
+                      Got it, let's trade!
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <MarketPulse />
 
           <div className="grid lg:grid-cols-5 gap-4 lg:gap-6">
