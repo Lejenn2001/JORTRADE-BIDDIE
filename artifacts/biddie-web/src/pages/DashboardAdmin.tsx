@@ -770,54 +770,6 @@ const DashboardAdmin = () => {
                       </div>
                     </div>
                   </div>
-
-
-                  <div className="glass-panel rounded-xl p-6 border-border/40">
-                    <h3 className="text-lg font-bold text-foreground mb-4">Subscription Tiers</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Star className="h-4 w-4 text-blue-400" />
-                          <h4 className="font-semibold text-blue-400">Signal Scout</h4>
-                        </div>
-                        <ul className="text-xs text-muted-foreground space-y-1.5">
-                          <li>Community chat access</li>
-                          <li>Biddie AI: 10 questions/day</li>
-                          <li>Can purchase credit packs</li>
-                        </ul>
-                      </div>
-                      <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Zap className="h-4 w-4 text-amber-400" />
-                          <h4 className="font-semibold text-amber-400">Active Trader</h4>
-                        </div>
-                        <ul className="text-xs text-muted-foreground space-y-1.5">
-                          <li>Full dashboard access</li>
-                          <li>Biddie AI: 25 questions/day</li>
-                          <li>Can purchase credit packs</li>
-                        </ul>
-                      </div>
-                      <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Crown className="h-4 w-4 text-purple-400" />
-                          <h4 className="font-semibold text-purple-400">Pro Trader</h4>
-                        </div>
-                        <ul className="text-xs text-muted-foreground space-y-1.5">
-                          <li>Full dashboard access</li>
-                          <li>Biddie AI: 50 questions/day</li>
-                          <li>Can purchase credit packs</li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="mt-4 bg-card/50 rounded-lg p-4 border border-border/30">
-                      <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
-                      <div className="flex gap-4 text-xs text-muted-foreground">
-                        <span>10 credits — $4.99</span>
-                        <span>25 credits — $9.99</span>
-                        <span>50 credits — $17.99</span>
-                      </div>
-                    </div>
-                  </div>
                 </motion.div>
               )}
               </div>
@@ -978,6 +930,53 @@ const DashboardAdmin = () => {
               </div>
             </div>
           )}
+
+          <div className="glass-panel rounded-xl p-6 border-border/40">
+            <h3 className="text-lg font-bold text-foreground mb-4">Subscription Tiers</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-card/50 rounded-lg p-4 border border-blue-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Star className="h-4 w-4 text-blue-400" />
+                  <h4 className="font-semibold text-blue-400">Signal Scout</h4>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1.5">
+                  <li>Community chat access</li>
+                  <li>Biddie AI: 10 questions/day</li>
+                  <li>Can purchase credit packs</li>
+                </ul>
+              </div>
+              <div className="bg-card/50 rounded-lg p-4 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="h-4 w-4 text-amber-400" />
+                  <h4 className="font-semibold text-amber-400">Active Trader</h4>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1.5">
+                  <li>Full dashboard access</li>
+                  <li>Biddie AI: 25 questions/day</li>
+                  <li>Can purchase credit packs</li>
+                </ul>
+              </div>
+              <div className="bg-card/50 rounded-lg p-4 border border-purple-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Crown className="h-4 w-4 text-purple-400" />
+                  <h4 className="font-semibold text-purple-400">Pro Trader</h4>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1.5">
+                  <li>Full dashboard access</li>
+                  <li>Biddie AI: 50 questions/day</li>
+                  <li>Can purchase credit packs</li>
+                </ul>
+              </div>
+            </div>
+            <div className="mt-4 bg-card/50 rounded-lg p-4 border border-border/30">
+              <h4 className="font-semibold text-foreground mb-2">Credit Packs (All Tiers)</h4>
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span>10 credits — $4.99</span>
+                <span>25 credits — $9.99</span>
+                <span>50 credits — $17.99</span>
+              </div>
+            </div>
+          </div>
             </motion.div>
           )}
 
