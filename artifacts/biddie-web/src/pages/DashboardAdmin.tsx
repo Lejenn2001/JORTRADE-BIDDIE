@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity } from "lucide-react";
+import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban } from "lucide-react";
 
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import { Link } from "react-router-dom";
@@ -45,6 +45,7 @@ interface UserProfile {
   selected_plan: string | null;
   created_at: string;
   is_admin?: boolean;
+  is_suspended?: boolean;
 }
 
 const planConfig = {
@@ -123,7 +124,13 @@ const DashboardAdmin = () => {
     );
     const adminIds = new Set(adminChecks.filter(c => c.isAdmin).map(c => c.id));
 
-    setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id) })));
+    const { data: suspendedRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "suspended");
+    const suspendedIds = new Set((suspendedRoles || []).map(r => r.user_id));
+
+    setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id), is_suspended: suspendedIds.has(p.id) })));
 
     const chatRes = await supabase.from("chat_messages").select("id", { count: "exact", head: true });
     if (chatRes.count !== null) setChatCount(chatRes.count);
@@ -205,6 +212,23 @@ const DashboardAdmin = () => {
       setUsers(prev => prev.filter(u => u.id !== userId));
     }
     setConfirmDelete(null);
+    setUpdating(null);
+  };
+
+  const toggleSuspend = async (userId: string, currentlySuspended: boolean) => {
+    setUpdating(userId);
+    try {
+      if (currentlySuspended) {
+        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "suspended");
+        toast.success("User reactivated");
+      } else {
+        await supabase.from("user_roles").insert({ user_id: userId, role: "suspended" });
+        toast.success("User suspended");
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_suspended: !currentlySuspended } : u));
+    } catch (e: any) {
+      toast.error("Failed to update suspension: " + (e?.message || "Unknown error"));
+    }
     setUpdating(null);
   };
 
@@ -859,7 +883,7 @@ const DashboardAdmin = () => {
                           const isOnline = onlineUsers.has(u.id);
 
                           return (
-                            <tr key={u.id} className="border-b border-border/20 hover:bg-muted/10 transition-colors group">
+                            <tr key={u.id} className={`border-b border-border/20 hover:bg-muted/10 transition-colors group ${u.is_suspended ? "opacity-60" : ""}`}>
                               <td className="px-5 py-3.5">
                                 <div className="flex items-center gap-3">
                                   <div className="relative">
@@ -906,15 +930,31 @@ const DashboardAdmin = () => {
                                 </div>
                               </td>
                               <td className="px-5 py-3.5">
-                                {u.is_admin ? (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-full">
-                                    <ShieldCheck className="h-3 w-3" /> Admin
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted/20 border border-border/30 px-2.5 py-1 rounded-full">
-                                    <Circle className="h-2.5 w-2.5" /> Member
-                                  </span>
-                                )}
+                                <div className="flex flex-col gap-1.5">
+                                  {u.is_suspended ? (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-red-400 bg-red-500/15 border border-red-500/30 px-2.5 py-1 rounded-full w-fit">
+                                      <Ban className="h-3 w-3" /> Suspended
+                                    </span>
+                                  ) : u.is_admin ? (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-full w-fit">
+                                      <ShieldCheck className="h-3 w-3" /> Admin
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted/20 border border-border/30 px-2.5 py-1 rounded-full w-fit">
+                                      <Circle className="h-2.5 w-2.5" /> Member
+                                    </span>
+                                  )}
+                                  {!isSelf && (
+                                    <button
+                                      disabled={updating === u.id}
+                                      onClick={() => toggleSuspend(u.id, !!u.is_suspended)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded transition-colors disabled:opacity-30 w-fit ${u.is_suspended ? "text-emerald-400 hover:bg-emerald-500/10" : "text-red-400 hover:bg-red-500/10"}`}
+                                      title={u.is_suspended ? "Reactivate user" : "Suspend user"}
+                                    >
+                                      {u.is_suspended ? "Reactivate" : "Suspend"}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-5 py-3.5 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
                               <td className="px-5 py-3.5 text-right">
