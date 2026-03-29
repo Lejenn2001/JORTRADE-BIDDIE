@@ -5,7 +5,7 @@ import {
   BarChart3, Flame, Trophy, TrendingUp,
   CheckCircle2, XCircle, Clock, Zap, Activity, PieChart,
   ArrowUpRight, ArrowDownRight, Loader2, Lightbulb,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Plus, Trash2, Wallet, ExternalLink
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Calendar as CalendarIcon, Plus, Trash2, Wallet, ExternalLink, Target, ShieldX, DollarSign
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -97,6 +97,11 @@ interface UserTrade {
   price_at_signal: number | null;
   signal_type: string | null;
   entry_price?: number | null;
+  expiry?: string;
+  entry_trigger?: string;
+  invalidation?: string;
+  signal_created_at?: string;
+  signal_resolved_at?: string;
 }
 
 interface HistoricalSignal {
@@ -437,6 +442,7 @@ const DashboardAnalytics = () => {
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "mytrades" | "pnl">("overview");
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1374,14 +1380,18 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                   const isLoss = trade.signal_outcome === "missed";
                   const isBullish = (trade.signal_type || trade.direction) === "bullish";
                   const borderGlow = isWin ? "border-l-emerald-500/60" : isLoss ? "border-l-red-500/60" : "border-l-[hsl(270,75%,60%,0.4)]";
+                  const isExpanded = expandedTradeId === trade.id;
 
                   return (
                     <motion.div key={trade.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.05 * Math.min(i, 10) }}
-                      className={`relative rounded-lg border border-white/[0.06] border-l-2 ${borderGlow} bg-gradient-to-r from-white/[0.03] to-transparent hover:from-white/[0.06] transition-all duration-200 px-4 py-3 space-y-2`}>
-                      <div className="flex items-center gap-3">
+                      className={`relative rounded-lg border border-white/[0.06] border-l-2 ${borderGlow} bg-gradient-to-r from-white/[0.03] to-transparent hover:from-white/[0.06] transition-all duration-200`}>
+                      <div
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+                        onClick={() => setExpandedTradeId(isExpanded ? null : trade.id)}
+                      >
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                           isBullish
                             ? "bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 text-emerald-400 shadow-[0_0_12px_hsl(142,71%,45%,0.15)]"
@@ -1405,9 +1415,6 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                             {trade.signal_created_at
                               ? new Date(trade.signal_created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                               : new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                            {trade.signal_created_at && trade.signal_created_at !== trade.taken_at && (
-                              <span className="text-muted-foreground/50"> · Added {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                            )}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1418,19 +1425,87 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                           }`}>
                             {isWin ? "WIN" : isLoss ? "LOSS" : "PENDING"}
                           </div>
-                          <button
-                            onClick={() => {
-                              const resolved = trade.signal_outcome !== "pending" ? "true" : "false";
-                              navigate(`/dashboard/signals?search=${encodeURIComponent(trade.ticker)}&resolved=${resolved}`);
-                            }}
-                            className="w-7 h-7 rounded-md flex items-center justify-center border border-white/[0.08] bg-white/[0.03] hover:bg-[hsl(270,60%,40%,0.15)] hover:border-[hsl(270,60%,40%,0.3)] transition-all text-muted-foreground hover:text-[hsl(270,75%,70%)]"
-                            title="View Signal"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </button>
+                          {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                         </div>
                       </div>
 
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-t border-white/[0.06] px-4 py-3"
+                        >
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Direction</p>
+                                <p className={`text-xs font-bold ${isBullish ? "text-emerald-400" : "text-red-400"}`}>
+                                  {isBullish ? "Bullish" : "Bearish"} {trade.option_type ? `(${trade.option_type})` : ""}
+                                </p>
+                              </div>
+                              {trade.strike && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Strike</p>
+                                  <p className="text-xs font-semibold text-foreground">${trade.strike}</p>
+                                </div>
+                              )}
+                              {trade.expiry && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Expiry</p>
+                                  <p className="text-xs font-semibold text-foreground">
+                                    {new Date(trade.expiry + "T00:00:00").toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                </div>
+                              )}
+                              {trade.entry_trigger && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Entry Trigger</p>
+                                  <p className="text-xs font-semibold text-emerald-400">{trade.entry_trigger}</p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2.5">
+                              {trade.target && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Target</p>
+                                  <p className="text-xs font-semibold text-emerald-400">{trade.target}</p>
+                                </div>
+                              )}
+                              {trade.invalidation && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Invalidation</p>
+                                  <p className="text-xs font-semibold text-red-400">{trade.invalidation}</p>
+                                </div>
+                              )}
+                              {trade.price_at_signal && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Price at Signal</p>
+                                  <p className="text-xs font-semibold text-foreground">${trade.price_at_signal}</p>
+                                </div>
+                              )}
+                              {trade.conviction_score && (
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Conviction</p>
+                                  <p className="text-xs font-semibold text-foreground">{trade.conviction_score}%</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between">
+                            <div className="flex items-center gap-4 text-[10px] text-muted-foreground/60">
+                              <span>Signal: {trade.signal_created_at
+                                ? new Date(trade.signal_created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : "—"}</span>
+                              <span>Added: {new Date(trade.taken_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                              {trade.signal_resolved_at && (
+                                <span>Resolved: {new Date(trade.signal_resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
                     </motion.div>
                   );
                 })}
