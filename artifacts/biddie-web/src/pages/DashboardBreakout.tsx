@@ -673,23 +673,35 @@ const DashboardBreakout = () => {
                       </div>
                       <div className="border-t border-white/[0.06] pt-3">
                         <p className="font-semibold text-foreground text-[11px] mb-2">Breakout Readiness Score (0–100)</p>
-                        <p className="text-[10px] text-muted-foreground mb-2">The higher the score, the more ready a ticker is to make an explosive move. Multiple signals stacking together push the score higher.</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-                          <div className="p-2 rounded-lg bg-zinc-500/10 border border-zinc-500/20">
-                            <p className="font-bold text-zinc-400 mb-0.5">20–35</p>
-                            <p className="text-muted-foreground">Early signs — one factor present like a near-squeeze or tight range</p>
+                        <p className="text-[10px] text-muted-foreground mb-2">The higher the score, the more ready a ticker is to make an explosive move. This is NOT an entry signal — it tells you how close a ticker is to breaking out.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                          <div className="p-2.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-black text-zinc-400">20–35</span>
+                              <span className="font-bold text-zinc-300">Watch &amp; Set Alert</span>
+                            </div>
+                            <p className="text-muted-foreground">Early signs of a setup forming. Hit the bell icon to watch this ticker — you'll be alerted if it breaks out. Do NOT enter a trade yet.</p>
                           </div>
-                          <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                            <p className="font-bold text-yellow-400 mb-0.5">35–55</p>
-                            <p className="text-muted-foreground">Building — squeeze active with consolidation or volume picking up</p>
+                          <div className="p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-black text-yellow-400">35–55</span>
+                              <span className="font-bold text-yellow-300">Prepare Your Plan</span>
+                            </div>
+                            <p className="text-muted-foreground">Squeeze or consolidation is active. Review the contract recommendation and decide your position size. Be ready — breakout could come within hours.</p>
                           </div>
-                          <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                            <p className="font-bold text-blue-400 mb-0.5">55–75</p>
-                            <p className="text-muted-foreground">High pressure — multiple factors aligned, breakout likely soon</p>
+                          <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-black text-blue-400">55–75</span>
+                              <span className="font-bold text-blue-300">High Alert — Breakout Imminent</span>
+                            </div>
+                            <p className="text-muted-foreground">Multiple factors aligned and price is near a key level. Stay glued to this ticker. When the breakout alert fires with volume confirmation, that's your entry.</p>
                           </div>
-                          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                            <p className="font-bold text-emerald-400 mb-0.5">75–100</p>
-                            <p className="text-muted-foreground">Breakout firing — confirmed move with volume, full setup triggered</p>
+                          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-black text-emerald-400">75–100</span>
+                              <span className="font-bold text-emerald-300">Breakout Confirmed — Enter Now</span>
+                            </div>
+                            <p className="text-muted-foreground">Price has broken through resistance/support with volume behind it. The breakout alert card above shows the trade. This is the entry moment.</p>
                           </div>
                         </div>
                       </div>
