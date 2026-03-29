@@ -33,19 +33,22 @@ export function simplifySignalDescription(signal: SignalInfo): string {
     parts.push(`Someone made a notable trade on ${ticker}`);
   }
 
-  const betType = signal.putCall === "put"
-    ? "betting the price drops"
-    : signal.putCall === "call"
-      ? "betting the price rises"
-      : `expecting ${ticker} to ${direction}`;
-
-  parts.push(betType);
-
-  if (signal.strike) {
-    const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '');
-    if (cleanStrike) {
-      parts[parts.length - 1] += ` past $${cleanStrike.replace('$', '')}`;
+  if (signal.putCall === "put") {
+    if (signal.strike) {
+      const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
+      parts.push(`on a $${cleanStrike} put — they profit if ${ticker} keeps falling`);
+    } else {
+      parts.push(`betting ${ticker} goes lower`);
     }
+  } else if (signal.putCall === "call") {
+    if (signal.strike) {
+      const cleanStrike = signal.strike.replace(/[^$\d.,]/g, '').replace('$', '');
+      parts.push(`on a $${cleanStrike} call — they profit if ${ticker} keeps rising`);
+    } else {
+      parts.push(`betting ${ticker} goes higher`);
+    }
+  } else {
+    parts.push(`expecting ${ticker} to ${direction}`);
   }
 
   if (aggressionMatch) {
