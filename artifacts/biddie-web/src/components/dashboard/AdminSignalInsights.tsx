@@ -36,6 +36,8 @@ interface Signal {
   entry_price?: number | null;
   key_level?: string | null;
   sr_level?: string | null;
+  is_biddie_pick?: boolean;
+  signal_quality?: string | null;
 }
 
 interface SignalDetail {
@@ -838,7 +840,14 @@ const AdminSignalInsights = () => {
                           </span>
                         </span>
                       </td>
-                      <td className="px-4 py-2 font-bold text-foreground">{s.ticker}</td>
+                      <td className="px-4 py-2 font-bold text-foreground">
+                        <span className="flex items-center gap-1.5">
+                          {s.ticker}
+                          {s.is_biddie_pick && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">Pick</span>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-2">
                         <span className="text-xs font-medium text-foreground whitespace-nowrap">
                           {(() => {

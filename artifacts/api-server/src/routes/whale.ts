@@ -2107,13 +2107,16 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
         const finalCategory = (aiCategory === "whale" || aiCategory === "spread" || aiCategory === "algorithm")
           ? aiCategory : sig.category;
 
+        const quality = evaluation.signal_quality || "moderate";
+        const pick = !evaluation.is_hedge && adjustedConf >= 7 && (quality === "strong" || quality === "moderate");
         return {
           ...sig,
           confidence: adjustedConf,
           category: finalCategory,
           is_hedge: !!evaluation.is_hedge,
           hedge_reason: evaluation.hedge_reason || null,
-          signal_quality: evaluation.signal_quality || "moderate",
+          signal_quality: quality,
+          is_biddie_pick: pick,
           reason: evaluation.is_hedge
             ? `⚠️ LIKELY HEDGE: ${evaluation.hedge_reason}. ${sig.reason}`
             : sig.reason,
@@ -2318,16 +2321,17 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (existing && existing.rows.length > 0) continue;
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
+      const isBiddiePick = !s.is_hedge && s.confidence >= 7 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24)`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
           s.current_price || null, s.key_level || null, s.sr_level || null,
-          s.target_near || null, initialStatus
+          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null
         ]
       );
     } catch {}
@@ -2507,7 +2511,8 @@ router.get("/whale/signals/calendar", async (req, res) => {
               target AS target_price, invalidation, entry_trigger, direction,
               max_favorable_price, mfe_percent, max_adverse_price,
               entry_price_reached, invalidation_breached, pct_past_invalidation,
-              time_at_target, entry_price, key_level, sr_level
+              time_at_target, entry_price, key_level, sr_level,
+              is_biddie_pick, signal_quality
        FROM signal_outcomes
        WHERE signal_source = 'replit'
        ORDER BY detected_at DESC

@@ -41,6 +41,8 @@ export const signalOutcomes = pgTable("signal_outcomes", {
   tradeStatus: varchar("trade_status", { length: 20 }).default("watching"),
   statusUpdatedAt: timestamp("status_updated_at", { withTimezone: true }),
   entryHitAt: timestamp("entry_hit_at", { withTimezone: true }),
+  isBiddiePick: boolean("is_biddie_pick").default(false),
+  signalQuality: varchar("signal_quality", { length: 20 }),
 }, (table) => [
   index("idx_signal_outcomes_ticker").on(table.ticker),
   index("idx_signal_outcomes_category").on(table.category),

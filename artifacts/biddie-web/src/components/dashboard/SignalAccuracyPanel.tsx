@@ -73,7 +73,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
       const resp = await fetch('/api/whale/signals/calendar?limit=500');
       if (resp.ok) {
         const result = await resp.json();
-        if (result.signals) setOutcomes(result.signals as any);
+        if (result.signals) setOutcomes(result.signals.filter((s: any) => s.is_biddie_pick) as any);
       }
     } catch (e) {
       console.warn('Failed to fetch signal outcomes:', e);

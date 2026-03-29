@@ -25,8 +25,9 @@ const PerformanceSnapshot = () => {
       try {
         const resp = await fetch('/api/whale/signals/calendar?limit=500');
         const result = resp.ok ? await resp.json() : null;
-        const data = result?.signals;
-        if (!data) return;
+        const raw = result?.signals;
+        if (!raw) return;
+        const data = raw.filter((s: any) => s.is_biddie_pick);
 
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
