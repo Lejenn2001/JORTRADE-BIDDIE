@@ -1461,7 +1461,7 @@ function MyTradesTab({ userStats, userTrades, userTopTickers, allSignals }: {
                               {trade.strike && (
                                 <div>
                                   <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Strike</p>
-                                  <p className="text-xs font-semibold text-foreground">${trade.strike}</p>
+                                  <p className="text-xs font-semibold text-foreground">{String(trade.strike).startsWith('$') ? trade.strike : `$${trade.strike}`}</p>
                                 </div>
                               )}
                               {trade.expiry && (
