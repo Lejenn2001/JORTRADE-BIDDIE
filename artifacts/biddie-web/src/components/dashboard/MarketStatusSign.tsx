@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Globe, Building2, Landmark } from "lucide-react";
+import { useWeather } from "@/hooks/useWeather";
 
 function getETNow() {
   const now = new Date();
@@ -192,6 +193,7 @@ const MarketStatusSign = () => {
   }, []);
 
   const cfg = statusConfig[state.status];
+  const { weather } = useWeather();
 
   const sessions = [
     {
@@ -254,6 +256,16 @@ const MarketStatusSign = () => {
                 {state.dateStr} EST
               </div>
             </div>
+
+            {weather && (
+              <div className="flex items-center gap-1.5 ml-4 pl-4 border-l border-white/10">
+                <span className="text-lg">{weather.icon}</span>
+                <div>
+                  <p className="text-xs font-semibold text-foreground">{weather.temp}°F</p>
+                  <p className="text-[9px] text-muted-foreground">{weather.location}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="text-right">
