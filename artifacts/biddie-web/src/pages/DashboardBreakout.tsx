@@ -12,6 +12,13 @@ import {
 } from "lucide-react";
 import biddieRobot from "@/assets/biddie-robot.png";
 
+const DEFAULT_WATCHLIST = [
+  "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "SPY", "QQQ",
+  "NFLX", "COIN", "MARA", "RIOT", "PLTR", "SOFI", "NIO", "BABA", "BA", "DIS",
+  "JPM", "GS", "V", "MA", "XOM", "CVX", "GLD", "SLV", "TLT", "IWM",
+  "MRVL", "MU", "INTC", "AVGO", "CRM", "SNOW", "NET", "DKNG", "UBER", "ABNB",
+];
+
 interface FlowBias {
   direction: "bullish" | "bearish" | "neutral";
   callPremium: number;
@@ -157,6 +164,8 @@ const DashboardBreakout = () => {
   const [alerts, setAlerts] = useState<BreakoutAlertData[]>([]);
   const [monitoring, setMonitoring] = useState<AlertsResponse["monitoring"] | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [showTrackedTickers, setShowTrackedTickers] = useState(false);
+  const [showSuggestInput, setShowSuggestInput] = useState(false);
   const alertPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [watchedTickers, setWatchedTickers] = useState<Set<string>>(loadWatched);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
@@ -798,6 +807,107 @@ const DashboardBreakout = () => {
                             <p className="text-muted-foreground">It broke. Price pushed through the key level with heavy volume behind it. The alert card above has the trade details — this is the entry moment.</p>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="rounded-xl border border-white/[0.06] bg-card/50 backdrop-blur-sm overflow-hidden">
+              <button
+                onClick={() => setShowTrackedTickers(!showTrackedTickers)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+              >
+                <span className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <Eye className="h-3.5 w-3.5 text-primary" />
+                  Tracked Tickers ({DEFAULT_WATCHLIST.length + customTickers.length})
+                </span>
+                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showTrackedTickers ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {showTrackedTickers && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 space-y-3">
+                      <p className="text-[11px] text-muted-foreground">These {DEFAULT_WATCHLIST.length} stocks are scanned every 5 minutes for squeeze, consolidation, and breakout setups.</p>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {DEFAULT_WATCHLIST.map((t) => (
+                          <span key={t} className="px-2 py-1 text-[10px] font-bold text-foreground bg-white/[0.05] border border-white/[0.08] rounded-md">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+
+                      {customTickers.length > 0 && (
+                        <div className="border-t border-white/[0.06] pt-3">
+                          <p className="text-[10px] font-semibold text-primary mb-2">Your Custom Tickers</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {customTickers.map((t) => (
+                              <span key={t} className="px-2 py-1 text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 rounded-md flex items-center gap-1.5">
+                                {t}
+                                <button
+                                  onClick={() => removeCustomTicker(t)}
+                                  className="text-primary/50 hover:text-red-400 transition-colors"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="border-t border-white/[0.06] pt-3">
+                        {!showSuggestInput ? (
+                          <button
+                            onClick={() => setShowSuggestInput(true)}
+                            className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-primary bg-primary/10 hover:bg-primary/15 border border-primary/20 rounded-lg transition-colors"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Suggest More Tickers
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-[10px] text-muted-foreground">Add a ticker to the scanner (up to 30 custom)</p>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={customTickerInput}
+                                onChange={(e) => setCustomTickerInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => { if (e.key === "Enter") addCustomTicker(); }}
+                                placeholder="e.g. SMCI"
+                                maxLength={5}
+                                className="flex-1 px-3 py-1.5 text-[11px] bg-white/[0.04] border border-white/[0.1] rounded-lg text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40"
+                              />
+                              <button
+                                onClick={addCustomTicker}
+                                disabled={addingTicker || !customTickerInput.trim()}
+                                className="px-3 py-1.5 text-[11px] font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                              >
+                                {addingTicker ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                                Add
+                              </button>
+                              <button
+                                onClick={() => { setShowSuggestInput(false); setCustomTickerInput(""); }}
+                                className="px-2 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            {tickerMessage && (
+                              <p className={`text-[10px] font-semibold ${tickerMessage.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+                                {tickerMessage.text}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
