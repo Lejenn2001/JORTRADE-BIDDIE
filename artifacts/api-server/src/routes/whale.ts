@@ -5142,7 +5142,7 @@ router.get("/whale/trades/stats", async (req, res) => {
     const weeklyMap: Record<string, { hits: number; misses: number; pending: number; total: number; partial_hits: number }> = {};
     for (const t of trades) {
       const takenAt = new Date((t as any).taken_at);
-      const ws = getSunday(takenAt);
+      const ws = getTradeWeekStart(takenAt);
       const key = ws.toISOString();
       if (!weeklyMap[key]) weeklyMap[key] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0 };
       weeklyMap[key].total++;
@@ -5156,13 +5156,13 @@ router.get("/whale/trades/stats", async (req, res) => {
     const weeklyBreakdown = Object.entries(weeklyMap)
       .map(([weekStart, data]) => {
         const ws = new Date(weekStart);
-        const we = new Date(ws); we.setDate(we.getDate() + 7);
+        const we = new Date(ws); we.setDate(we.getDate() + 8);
         const resolved = data.hits + data.partial_hits + data.misses;
         const wr = resolved > 0 ? Math.round(((data.hits + data.partial_hits) / resolved) * 100) : 0;
 
         const weekTrades = trades.filter((t: any) => {
           const d = new Date((t as any).taken_at);
-          return d >= ws && d < we;
+          return getTradeWeekStart(d).toISOString() === weekStart;
         });
         const tickerMap: Record<string, { hits: number; misses: number; pending: number; total: number }> = {};
         for (const t of weekTrades) {
@@ -5224,6 +5224,18 @@ router.get("/whale/health", (_req, res) => {
 });
 
 // ── Weekly Signal Stats Snapshot ──────────────────────────────────────────────────
+
+function getTradeWeekStart(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  if (day === 0) {
+    date.setDate(date.getDate() - 7);
+  } else {
+    date.setDate(date.getDate() - day);
+  }
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 function getSunday(d: Date): Date {
   const date = new Date(d);
