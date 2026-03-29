@@ -53,6 +53,7 @@ interface BreakoutSetup {
   imminenceScore: number;
   directionContext?: string | null;
   scannedAt?: string;
+  squeezeFirstSeen?: string;
   thesis?: BreakoutThesis;
   contract?: {
     type: "CALL" | "PUT";
@@ -579,62 +580,31 @@ const DashboardBreakout = () => {
                   exit={{ opacity: 0 }}
                   className="space-y-5"
                 >
-                  {activeBreakouts.length > 0 && (
-                    <SetupSection
-                      label="Active Breakouts"
-                      icon={<Zap className="h-3.5 w-3.5 text-emerald-400" />}
-                      count={activeBreakouts.length}
-                      accentColor="emerald"
-                      setups={activeBreakouts}
-                      expandedTicker={expandedTicker}
-                      setExpandedTicker={setExpandedTicker}
-                      watchedTickers={watchedTickers}
-                      toggleWatch={toggleWatch}
-                      takenTrades={takenTrades}
-                      takingTrade={takingTrade}
-                      handleTakeTrade={handleTakeTrade}
-                      buildTradeKey={buildTradeKey}
-                      user={user}
-                    />
-                  )}
-
-                  {squeezeSetups.length > 0 && (
-                    <SetupSection
-                      label="Squeeze Active"
-                      icon={<Activity className="h-3.5 w-3.5 text-yellow-400" />}
-                      count={squeezeSetups.length}
-                      accentColor="yellow"
-                      setups={squeezeSetups}
-                      expandedTicker={expandedTicker}
-                      setExpandedTicker={setExpandedTicker}
-                      watchedTickers={watchedTickers}
-                      toggleWatch={toggleWatch}
-                      takenTrades={takenTrades}
-                      takingTrade={takingTrade}
-                      handleTakeTrade={handleTakeTrade}
-                      buildTradeKey={buildTradeKey}
-                      user={user}
-                    />
-                  )}
-
-                  {buildingSetups.length > 0 && (
-                    <SetupSection
-                      label="Building Pressure"
-                      icon={<Eye className="h-3.5 w-3.5 text-blue-400" />}
-                      count={buildingSetups.length}
-                      accentColor="blue"
-                      setups={buildingSetups}
-                      expandedTicker={expandedTicker}
-                      setExpandedTicker={setExpandedTicker}
-                      watchedTickers={watchedTickers}
-                      toggleWatch={toggleWatch}
-                      takenTrades={takenTrades}
-                      takingTrade={takingTrade}
-                      handleTakeTrade={handleTakeTrade}
-                      buildTradeKey={buildTradeKey}
-                      user={user}
-                    />
-                  )}
+                  <div className="space-y-2">
+                    {[...result.setups].sort((a, b) => b.score - a.score).map((setup, i) => (
+                      <motion.div
+                        key={setup.ticker}
+                        custom={i}
+                        initial="hidden"
+                        animate="visible"
+                        variants={cardVariants}
+                      >
+                        <SetupCard
+                          setup={setup}
+                          expanded={expandedTicker === setup.ticker}
+                          onToggle={() => setExpandedTicker(expandedTicker === setup.ticker ? null : setup.ticker)}
+                          watched={watchedTickers.has(setup.ticker)}
+                          onWatch={(e) => toggleWatch(setup.ticker, e)}
+                          taken={takenTrades.has(buildTradeKey(setup))}
+                          taking={takingTrade === setup.ticker}
+                          onTake={(e) => handleTakeTrade(setup, e)}
+                          user={user}
+                          buildTradeKey={buildTradeKey}
+                          takenTrades={takenTrades}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -889,6 +859,12 @@ function SetupCard({
               <>
                 <span className="text-border">→</span>
                 <span className="font-semibold text-primary">Target ${setup.targetPrice.toFixed(2)}</span>
+              </>
+            )}
+            {setup.squeezeFirstSeen && (
+              <>
+                <span className="text-border">|</span>
+                <span className="text-muted-foreground/70">Squeeze since {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
               </>
             )}
           </div>

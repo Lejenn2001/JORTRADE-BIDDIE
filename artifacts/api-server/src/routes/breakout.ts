@@ -849,6 +849,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
 let cachedResults: SqueezeResult[] = [];
 let lastScanTime = 0;
 const SCAN_INTERVAL = 5 * 60 * 1000;
+const squeezeFirstSeen: Map<string, string> = new Map();
 
 async function runFullScan(): Promise<SqueezeResult[]> {
   const now = Date.now();
@@ -886,6 +887,23 @@ async function runFullScan(): Promise<SqueezeResult[]> {
   }
 
   results.sort((a, b) => b.score - a.score);
+
+  const activeSqueezeTickers = new Set<string>();
+  for (const r of results) {
+    if (r.squeezeActive) {
+      activeSqueezeTickers.add(r.ticker);
+      if (!squeezeFirstSeen.has(r.ticker)) {
+        squeezeFirstSeen.set(r.ticker, new Date().toISOString());
+      }
+      (r as any).squeezeFirstSeen = squeezeFirstSeen.get(r.ticker);
+    }
+  }
+  for (const [ticker] of squeezeFirstSeen) {
+    if (!activeSqueezeTickers.has(ticker)) {
+      squeezeFirstSeen.delete(ticker);
+    }
+  }
+
   cachedResults = results;
   lastScanTime = Date.now();
   console.log(`[breakout] Scan complete: ${Date.now() - t0}ms, ${results.length} setups found`);
