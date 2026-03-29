@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
+import { compactDescription } from "@/lib/simplifyDescription";
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
@@ -883,20 +884,8 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
 
-        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
-          {(() => {
-            const desc = signal.description || "";
-            const priceMatch = desc.match(/Price at \$[\d,.]+/);
-            if (!priceMatch) return desc;
-            const idx = desc.indexOf(priceMatch[0]);
-            return (
-              <>
-                {desc.slice(0, idx)}
-                <span className="font-bold text-amber-400">{priceMatch[0]}</span>
-                {desc.slice(idx + priceMatch[0].length)}
-              </>
-            );
-          })()}
+        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed line-clamp-2">
+          {compactDescription(signal)}
         </p>
 
         <div className="relative grid grid-cols-1 gap-1.5 text-[11px] sm:text-xs">

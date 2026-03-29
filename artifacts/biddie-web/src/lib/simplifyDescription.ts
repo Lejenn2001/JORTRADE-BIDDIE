@@ -28,6 +28,36 @@ function premiumColor(val: number): string {
   return "A noteworthy trade worth keeping an eye on";
 }
 
+export function compactDescription(signal: SignalInfo): string {
+  const desc = signal.description || "";
+  const parts: string[] = [];
+
+  const premiumMatch = desc.match(/\$?([\d,.]+[KMB]?)\s*(?:premium|total)/i);
+  if (premiumMatch) {
+    const strike = signal.strike ? String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '') : "";
+    const pc = signal.putCall === "put" ? "P" : signal.putCall === "call" ? "C" : "";
+    parts.push(`$${premiumMatch[1]} premium${strike ? ` @ $${strike}${pc}` : ""}`);
+  }
+
+  const sweepMatch = desc.match(/(\d+)\s*sweep/i);
+  if (sweepMatch) {
+    parts.push(`${sweepMatch[1]} sweep${parseInt(sweepMatch[1]) > 1 ? "s" : ""}`);
+  }
+
+  const aggressionMatch = desc.match(/(\d+)%\s*(?:ask\s*)?aggression/i);
+  if (aggressionMatch) {
+    parts.push(`${aggressionMatch[1]}% ask aggression`);
+  }
+
+  const vwapMatch = desc.match(/(above|below)\s*VWAP\s*\(?\$?([\d,.]+)\)?/i);
+  if (vwapMatch) {
+    parts.push(`${vwapMatch[1]} VWAP ($${vwapMatch[2]})`);
+  }
+
+  if (parts.length === 0) return desc;
+  return parts.join(". ") + ".";
+}
+
 export function simplifySignalDescription(signal: SignalInfo): string {
   const chunks: string[] = [];
 
