@@ -281,11 +281,11 @@ const MarketStatusSign = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {sessions.map((s) => (
             <div
               key={s.name}
-              className={`relative rounded-lg border px-1 py-1.5 text-center transition-all duration-500 ${
+              className={`relative rounded-lg border px-0.5 py-1.5 text-center transition-all duration-500 ${
                 s.active
                   ? `${s.activeBorder} ${s.activeBg} ${s.activeGlow}`
                   : "border-white/[0.12] bg-white/[0.03] opacity-40"
