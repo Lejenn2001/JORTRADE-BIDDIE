@@ -835,10 +835,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
   const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
+  const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${glowClass} ${
-      isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isExpired ? "bg-zinc-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass} ${
+      hasUpdatedLogic ? "bg-yellow-500/8" : isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isExpired ? "bg-zinc-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     } ${review?.status === "correct" ? "ring-2 ring-emerald-400/40" : review?.status === "wrong" ? "ring-2 ring-red-400/40" : ""}`}>
       {review && (
         <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
@@ -1077,8 +1078,10 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
             const isGamma = tagUpper.includes('GAMMA');
             const isWhaleTag = tagUpper.includes('WHALE');
+            const isUpdated = tagUpper.includes('UPDATED LOGIC');
             let tagStyle = "bg-muted/50 text-muted-foreground";
-            if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
+            if (isUpdated) tagStyle = "bg-yellow-500/30 text-yellow-300 font-bold";
+            else if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
             else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
             else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
             else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
