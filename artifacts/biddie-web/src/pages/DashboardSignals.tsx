@@ -203,6 +203,7 @@ const DashboardSignals = () => {
   const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
+  const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -228,29 +229,6 @@ const DashboardSignals = () => {
       })
       .catch(() => {});
   }, [user?.id]);
-
-  useEffect(() => {
-    const highlightId = searchParams.get("highlight");
-    if (!highlightId || signals.length === 0) return;
-
-    const target = signals.find((s: any) => s.id === highlightId);
-    if (target) {
-      const cat = (target as any).category || "algorithm";
-      if (cat === "whale") setViewTab("whale");
-      else if (cat === "spread") setViewTab("spread");
-      else setViewTab("algorithm");
-    }
-
-    const timer = setTimeout(() => {
-      const el = document.getElementById(`signal-${highlightId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("ring-2", "ring-primary/50", "rounded-xl");
-        setTimeout(() => el.classList.remove("ring-2", "ring-primary/50", "rounded-xl"), 3000);
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [searchParams, signals]);
 
   const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
     if (!user?.id) return;
@@ -380,7 +358,28 @@ const DashboardSignals = () => {
   const loading = liveLoading && dbLoading;
   const signals = allSignals;
 
-  const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
+  useEffect(() => {
+    const highlightId = searchParams.get("highlight");
+    if (!highlightId || signals.length === 0) return;
+
+    const target = signals.find((s: any) => s.id === highlightId);
+    if (target) {
+      const cat = (target as any).category || "algorithm";
+      if (cat === "whale") setViewTab("whale");
+      else if (cat === "spread") setViewTab("spread");
+      else setViewTab("algorithm");
+    }
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`signal-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-primary/50", "rounded-xl");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary/50", "rounded-xl"), 3000);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchParams, signals]);
 
   const filtered = useMemo(() => {
     let list = [...signals];
