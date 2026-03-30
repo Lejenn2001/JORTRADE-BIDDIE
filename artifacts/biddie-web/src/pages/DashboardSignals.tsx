@@ -99,6 +99,11 @@ function dbRecordToSignal(record: any): MarketSignal {
   const tags: string[] = [];
   if (putCall) tags.push(putCall === 'call' ? 'Call Flow' : 'Put Flow');
   if (convictionScore >= 70) tags.push('⚡ HIGH CONVICTION');
+  if (Array.isArray(record.tags)) {
+    for (const t of record.tags) {
+      if (!tags.includes(t)) tags.push(t);
+    }
+  }
 
   const createdAt = record.detected_at || record.created_at || '';
   const timestamp = createdAt ? formatTimestamp(createdAt) : 'Today';
