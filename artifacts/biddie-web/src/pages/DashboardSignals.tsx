@@ -6,7 +6,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, ThumbsUp, ThumbsDown, MessageSquare, X, RotateCcw, AlertTriangle } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
@@ -189,7 +189,7 @@ function formatTimestamp(isoStr: string): string {
 const DashboardSignals = () => {
   const { signals: liveSignals, loading: liveLoading } = useMarketData();
   const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -203,8 +203,6 @@ const DashboardSignals = () => {
   const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
-  const [reviews, setReviews] = useState<Record<string, { status: string; note: string | null }>>({});
-  const [reviewFilter, setReviewFilter] = useState<"all" | "correct" | "wrong" | "unreviewed">("all");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -230,16 +228,6 @@ const DashboardSignals = () => {
       })
       .catch(() => {});
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!isAdmin || !user?.id) return;
-    fetch(`/api/whale/admin/signal-reviews?userId=${user.id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.reviews) setReviews(data.reviews);
-      })
-      .catch(() => {});
-  }, [isAdmin, user?.id]);
 
   useEffect(() => {
     const highlightId = searchParams.get("highlight");
@@ -301,28 +289,6 @@ const DashboardSignals = () => {
       setTakingId(null);
     }
   }, [user?.id, takenSignalIds]);
-
-  const handleReview = useCallback(async (signalId: string, status: string, note?: string) => {
-    if (!user?.id) return;
-    try {
-      const res = await fetch("/api/whale/admin/signal-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": user.id },
-        body: JSON.stringify({ signalId, status, note }),
-      });
-      if (res.ok) {
-        setReviews(prev => {
-          const next = { ...prev };
-          if (status === "pending") {
-            delete next[signalId];
-          } else {
-            next[signalId] = { status, note: note || null };
-          }
-          return next;
-        });
-      }
-    } catch {}
-  }, [user?.id]);
 
   const handleOpenAlert = useCallback((signal: MarketSignal) => {
     const livePrice = getPrice?.(signal.ticker);
@@ -434,16 +400,6 @@ const DashboardSignals = () => {
       list = list.filter((s) => s.putCall === filterType);
     }
 
-    if (isAdmin && reviewFilter !== "all") {
-      list = list.filter(s => {
-        const r = reviews[s.id];
-        if (reviewFilter === "unreviewed") return !r;
-        if (reviewFilter === "correct") return r?.status === "correct";
-        if (reviewFilter === "wrong") return r?.status === "wrong";
-        return true;
-      });
-    }
-
     list.sort((a, b) => {
       const dateA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
       const dateB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
@@ -451,7 +407,7 @@ const DashboardSignals = () => {
     });
 
     return list;
-  }, [signals, search, filterType, showResolved, isAdmin, reviewFilter, reviews]);
+  }, [signals, search, filterType, showResolved]);
 
   const resolvedCount = useMemo(() => {
     return signals.filter(s => s.outcome && s.outcome !== "pending").length;
@@ -600,26 +556,6 @@ const DashboardSignals = () => {
               >
                 {showResolved ? "Hide Resolved" : `Show Resolved (${resolvedCount})`}
               </button>
-              {isAdmin && (
-                <>
-                  <span className="w-px h-4 bg-amber-500/30 mx-1" />
-                  {(["all", "unreviewed", "correct", "wrong"] as const).map(f => {
-                    const labels = { all: "All Reviews", unreviewed: "Unreviewed", correct: "Correct", wrong: "Wrong" };
-                    const colors = {
-                      all: reviewFilter === f ? "bg-amber-500/20 text-amber-300" : "text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10",
-                      unreviewed: reviewFilter === f ? "bg-zinc-500/20 text-zinc-300" : "text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10",
-                      correct: reviewFilter === f ? "bg-emerald-500/20 text-emerald-300" : "text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10",
-                      wrong: reviewFilter === f ? "bg-red-500/20 text-red-300" : "text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10",
-                    };
-                    const counts = { all: Object.keys(reviews).length, unreviewed: signals.filter(s => !reviews[s.id]).length, correct: Object.values(reviews).filter(r => r.status === "correct").length, wrong: Object.values(reviews).filter(r => r.status === "wrong").length };
-                    return (
-                      <button key={f} onClick={() => setReviewFilter(f)} className={`px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${colors[f]}`}>
-                        {labels[f]} {f !== "all" ? `(${counts[f]})` : ""}
-                      </button>
-                    );
-                  })}
-                </>
-              )}
             </div>
           </div>
 
@@ -661,7 +597,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -695,7 +631,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -729,7 +665,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -834,9 +770,7 @@ const DashboardSignals = () => {
   );
 };
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, review, onReview }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; review?: { status: string; note: string | null }; onReview?: (signalId: string, status: string, note?: string) => void }) {
-  const [showNoteInput, setShowNoteInput] = useState(false);
-  const [noteText, setNoteText] = useState(review?.note || "");
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -871,15 +805,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
   return (
     <div className={`rounded-xl border overflow-hidden transition-shadow relative ${hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass} ${
       hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
-    } ${review?.status === "correct" ? "ring-2 ring-emerald-400/40" : review?.status === "wrong" ? "ring-2 ring-red-400/40" : ""}`}>
-      {review && (
-        <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-          review.status === "correct" ? "bg-emerald-500/30 text-emerald-300" : "bg-red-500/30 text-red-300"
-        }`}>
-          {review.status === "correct" ? <ThumbsUp className="h-2.5 w-2.5" /> : <ThumbsDown className="h-2.5 w-2.5" />}
-          {review.status === "correct" ? "OK" : "FIX"}
-        </div>
-      )}
+    }`}>
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
@@ -1159,93 +1085,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                 </>
               )}
             </button>
-          </div>
-        )}
-
-        {isAdmin && onReview && (
-          <div className="pt-2 mt-2 border-t border-amber-500/20">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Review:</span>
-              <button
-                onClick={() => { onReview(signal.id, "correct"); setShowNoteInput(false); }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
-                  review?.status === "correct"
-                    ? "bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-400/50"
-                    : "bg-white/5 text-muted-foreground hover:bg-emerald-500/15 hover:text-emerald-400"
-                }`}
-              >
-                <ThumbsUp className="h-3 w-3" />
-                Correct
-              </button>
-              <button
-                onClick={() => { onReview(signal.id, "wrong"); setShowNoteInput(true); }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
-                  review?.status === "wrong"
-                    ? "bg-red-500/30 text-red-300 ring-1 ring-red-400/50"
-                    : "bg-white/5 text-muted-foreground hover:bg-red-500/15 hover:text-red-400"
-                }`}
-              >
-                <ThumbsDown className="h-3 w-3" />
-                Wrong
-              </button>
-              {review && (
-                <button
-                  onClick={() => { onReview(signal.id, "pending"); setShowNoteInput(false); setNoteText(""); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-white/5 text-muted-foreground hover:bg-zinc-500/15 hover:text-zinc-400 transition-all"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Clear
-                </button>
-              )}
-              {!showNoteInput && (
-                <button
-                  onClick={() => setShowNoteInput(true)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-white/5 text-muted-foreground hover:bg-amber-500/15 hover:text-amber-400 transition-all ml-auto"
-                >
-                  <MessageSquare className="h-3 w-3" />
-                  Note
-                </button>
-              )}
-            </div>
-            {showNoteInput && (
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="What's wrong? (e.g., entry was wrong, shouldn't be a hit)"
-                  className="flex-1 text-[11px] px-2.5 py-1.5 rounded-md bg-black/30 border border-amber-500/20 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && noteText.trim()) {
-                      onReview(signal.id, review?.status || "wrong", noteText.trim());
-                      setShowNoteInput(false);
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (noteText.trim()) {
-                      onReview(signal.id, review?.status || "wrong", noteText.trim());
-                    }
-                    setShowNoteInput(false);
-                  }}
-                  className="px-2.5 py-1.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-all"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setShowNoteInput(false)}
-                  className="px-1.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground transition-all"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-            {review?.note && !showNoteInput && (
-              <div className="mt-1.5 text-[10px] text-amber-400/70 italic px-1">
-                Note: {review.note}
-              </div>
-            )}
           </div>
         )}
       </div>
