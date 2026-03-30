@@ -920,6 +920,23 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           {signal.reviewNote && <span className="text-[10px] text-red-300/70 ml-1">— {signal.reviewNote}</span>}
         </div>
       )}
+      {(() => {
+        if (!signal.createdAt) return null;
+        const signalDate = new Date(signal.createdAt);
+        const nowET = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const todayET = new Date(nowET.getFullYear(), nowET.getMonth(), nowET.getDate());
+        const signalET = new Date(signalDate.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const signalDay = new Date(signalET.getFullYear(), signalET.getMonth(), signalET.getDate());
+        if (signalDay >= todayET) return null;
+        const dayName = signalET.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/New_York" });
+        const dateStr = signalET.toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/New_York" });
+        return (
+          <div className="px-3 sm:px-4 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">Signal from {dayName} {dateStr}</span>
+          </div>
+        );
+      })()}
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
