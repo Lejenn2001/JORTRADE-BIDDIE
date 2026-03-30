@@ -2080,7 +2080,6 @@ async function runSignalsPipeline() {
     const hasKeyLevels = !!(vwap || pivot || pdh || pdl || r1 || s1);
 
     if (optType === "call") {
-      // CALL: entry near VWAP/support, invalidation = closest support below, target above
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price >= vwap && distToVwap < 0.005) {
@@ -2096,7 +2095,7 @@ async function runSignalsPipeline() {
         entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
         if (price >= pivot) actNow = true;
       } else {
-        entryTrigger = `Level data not available`;
+        entryTrigger = `Data Not Available`;
       }
       // Invalidation: closest support below current price (tight stop)
       if (price && hasKeyLevels) {
@@ -2111,10 +2110,10 @@ async function runSignalsPipeline() {
           const closest = supportLevels[0];
           invalidation = `Below ${closest.name} at $${closest.level.toFixed(2)}`;
         } else {
-          invalidation = `Level data not available`;
+          invalidation = `Data Not Available`;
         }
       } else {
-        invalidation = `Level data not available`;
+        invalidation = `Data Not Available`;
       }
       // CALL Target: must be ABOVE current price — use strike only if it's above price
       // Gather all resistance levels above price as potential targets
@@ -2136,13 +2135,12 @@ async function runSignalsPipeline() {
         target = `$${(price * 1.02).toFixed(2)}`;
         targetNear = `$${(price * 1.04).toFixed(2)}`;
       } else {
-        target = `Level data not available`;
+        target = `Data Not Available`;
         targetNear = "";
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      // PUT: entry near VWAP/resistance, invalidation = closest resistance above, target below
       if (vwap && price) {
         const distToVwap = Math.abs(price - vwap) / price;
         if (price <= vwap && distToVwap < 0.005) {
@@ -2158,9 +2156,8 @@ async function runSignalsPipeline() {
         entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
         if (price <= pivot) actNow = true;
       } else {
-        entryTrigger = `Level data not available`;
+        entryTrigger = `Data Not Available`;
       }
-      // Invalidation: closest resistance above current price (tight stop)
       if (price && hasKeyLevels) {
         const resistanceLevels = [
           vwap ? { level: vwap, name: "VWAP" } : null,
@@ -2173,13 +2170,11 @@ async function runSignalsPipeline() {
           const closest = resistanceLevels[0];
           invalidation = `Above ${closest.name} at $${closest.level.toFixed(2)}`;
         } else {
-          invalidation = `Level data not available`;
+          invalidation = `Data Not Available`;
         }
       } else {
-        invalidation = `Level data not available`;
+        invalidation = `Data Not Available`;
       }
-      // PUT Target: must be BELOW current price — use strike only if it's below price
-      // Gather all support levels below price as potential targets
       const putTargetCandidates = [
         strike < price ? { level: strike, name: "strike" } : null,
         pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
@@ -2199,27 +2194,51 @@ async function runSignalsPipeline() {
         target = `$${(price * 0.98).toFixed(2)}`;
         targetNear = `$${(price * 0.96).toFixed(2)}`;
       } else {
-        target = `Level data not available`;
+        target = `Data Not Available`;
         targetNear = "";
       }
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
-    // Act Now flag — price is at the right level and flow confirms direction
-    // Final validation: target must be in the correct direction relative to price
-    if (price) {
+    if (price && !target.includes("Data Not Available")) {
       const targetVal = parseFloat(target.replace(/[^0-9.]/g, '')) || 0;
       const targetNearVal = parseFloat(targetNear.replace(/[^0-9.]/g, '')) || 0;
-      if (optType === "call" && targetVal > 0 && targetVal <= price) {
-        target = `$${(price * 1.02).toFixed(2)}`;
-        if (targetNearVal <= price) targetNear = `$${(price * 1.04).toFixed(2)}`;
-        console.log(`[signals] FIXED ${ticker} CALL target: was below price, reset to ${target}`);
+      if (optType === "call" && targetVal > 0) {
+        if (targetVal <= price) {
+          target = hasKeyLevels ? `$${(price * 1.02).toFixed(2)}` : "Data Not Available";
+          if (targetNearVal <= price) targetNear = hasKeyLevels ? `$${(price * 1.04).toFixed(2)}` : "";
+          console.log(`[signals] FIXED ${ticker} CALL target: was below price, reset to ${target}`);
+        } else if (targetVal > 0 && Math.abs(targetVal - price) / price < 0.005) {
+          target = hasKeyLevels ? `$${(price * 1.02).toFixed(2)}` : "Data Not Available";
+          targetNear = hasKeyLevels ? `$${(price * 1.04).toFixed(2)}` : "";
+          console.log(`[signals] FIXED ${ticker} CALL target: too close to price, reset to ${target}`);
+        }
       }
-      if (optType === "put" && targetVal > 0 && targetVal >= price) {
-        target = `$${(price * 0.98).toFixed(2)}`;
-        if (targetNearVal >= price) targetNear = `$${(price * 0.96).toFixed(2)}`;
-        console.log(`[signals] FIXED ${ticker} PUT target: was above price, reset to ${target}`);
+      if (optType === "put" && targetVal > 0) {
+        if (targetVal >= price) {
+          target = hasKeyLevels ? `$${(price * 0.98).toFixed(2)}` : "Data Not Available";
+          if (targetNearVal >= price) targetNear = hasKeyLevels ? `$${(price * 0.96).toFixed(2)}` : "";
+          console.log(`[signals] FIXED ${ticker} PUT target: was above price, reset to ${target}`);
+        } else if (targetVal > 0 && Math.abs(targetVal - price) / price < 0.005) {
+          target = hasKeyLevels ? `$${(price * 0.98).toFixed(2)}` : "Data Not Available";
+          targetNear = hasKeyLevels ? `$${(price * 0.96).toFixed(2)}` : "";
+          console.log(`[signals] FIXED ${ticker} PUT target: too close to price, reset to ${target}`);
+        }
+      }
+
+      if (entryTrigger !== "Data Not Available") {
+        const entryVal = parseFloat(entryTrigger.replace(/[^0-9.]/g, '')) || 0;
+        if (entryVal > 0 && targetVal > 0) {
+          if (optType === "call" && entryVal > targetVal) {
+            entryTrigger = "Data Not Available";
+            console.log(`[signals] FIXED ${ticker} CALL: entry was above target, set to Data Not Available`);
+          }
+          if (optType === "put" && entryVal < targetVal) {
+            entryTrigger = "Data Not Available";
+            console.log(`[signals] FIXED ${ticker} PUT: entry was below target, set to Data Not Available`);
+          }
+        }
       }
     }
 
