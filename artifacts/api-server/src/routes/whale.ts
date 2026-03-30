@@ -4990,11 +4990,19 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
     if (!Array.isArray(updates)) return res.status(400).json({ error: "updates must be an array" });
     let updated = 0;
     for (const u of updates) {
-      const result = await dbQuery(
-        `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7 WHERE id = $1`,
-        [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation]
-      );
-      if (result?.rowCount) updated++;
+      if (u.tags) {
+        const result = await dbQuery(
+          `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7, tags = $8::text[] WHERE id = $1`,
+          [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation, u.tags]
+        );
+        if (result?.rowCount) updated++;
+      } else {
+        const result = await dbQuery(
+          `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7 WHERE id = $1`,
+          [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation]
+        );
+        if (result?.rowCount) updated++;
+      }
     }
     res.json({ success: true, updated });
   } catch (e: any) {

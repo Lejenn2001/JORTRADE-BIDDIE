@@ -655,12 +655,23 @@ export function useMarketData() {
             premium: `$${premium}`,
             putCall: putCall as 'call' | 'put',
             suggestedTrade: `Buy ${ticker} $${strikeLabel} ${putCall === 'call' ? 'Calls' : 'Puts'}${expiry && expiry !== 'N/A' ? ` expiring ${expiry}` : ''}`,
-            entryTrigger: isBullish ? `Break above $${strikeLabel} with volume` : `Break below $${strikeLabel} with volume`,
-            invalidation: `$${(rawStrike * (isBullish ? 0.97 : 1.03)).toFixed(2)}`,
-            keyLevel: `$${(rawStrike * (isBullish ? 0.99 : 1.01)).toFixed(2)}`,
-            targetZone: isBullish 
-              ? `$${(rawStrike * 1.02).toFixed(2)} – $${(rawStrike * 1.05).toFixed(2)}`
-              : `$${(rawStrike * 0.95).toFixed(2)} – $${(rawStrike * 0.98).toFixed(2)}`,
+            entryTrigger: stockPrice
+              ? (isBullish ? `Near $${stockPrice.toFixed(2)}` : `Near $${stockPrice.toFixed(2)}`)
+              : (isBullish ? `Above $${strikeLabel}` : `Below $${strikeLabel}`),
+            invalidation: stockPrice
+              ? `$${(stockPrice * (isBullish ? 0.98 : 1.02)).toFixed(2)}`
+              : `$${(rawStrike * (isBullish ? 0.97 : 1.03)).toFixed(2)}`,
+            keyLevel: stockPrice
+              ? `$${stockPrice.toFixed(2)}`
+              : `$${(rawStrike * (isBullish ? 0.99 : 1.01)).toFixed(2)}`,
+            targetZone: stockPrice
+              ? (isBullish
+                ? `$${(stockPrice * 1.02).toFixed(2)} – $${(stockPrice * 1.05).toFixed(2)}`
+                : `$${(stockPrice * 0.95).toFixed(2)} – $${(stockPrice * 0.98).toFixed(2)}`)
+              : (isBullish 
+                ? `$${(rawStrike * 1.02).toFixed(2)} – $${(rawStrike * 1.05).toFixed(2)}`
+                : `$${(rawStrike * 0.95).toFixed(2)} – $${(rawStrike * 0.98).toFixed(2)}`),
+            priceAtSignal: stockPrice || undefined,
           } as SignalWithMeta;
         });
 
