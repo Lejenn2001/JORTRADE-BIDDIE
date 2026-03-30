@@ -119,7 +119,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **API Endpoints**: `GET /api/whale/user-settings` (returns alias + referral_code + count), `POST /api/whale/user-settings` (update alias), `POST /api/whale/referral/apply` (apply ref code at signup), `GET /api/whale/referrals` (list referrals)
 - **Two-sided incentive**: Referrer earns tier rewards, referred user gets 10% off first paid month
 
-## Signal Entry/Target/Invalidation Algorithm v2 (LOCKED — March 30, 2026)
+## Signal Algorithm: JORTRADE FINAL (LOCKED — March 30, 2026)
 
 **⚠️ DO NOT MODIFY without explicit user approval. Full spec in `.local/signal_logic_changelog.md`.**
 
