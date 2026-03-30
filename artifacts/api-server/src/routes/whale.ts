@@ -2896,7 +2896,7 @@ router.get("/whale/signals/calendar", async (req, res) => {
               so.is_biddie_pick, so.signal_quality,
               sr.status AS review_status, sr.note AS review_note
        FROM signal_outcomes so
-       LEFT JOIN signal_reviews sr ON sr.signal_id = so.id
+       LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text
        WHERE so.signal_source = 'replit'
        ORDER BY so.detected_at DESC
        LIMIT $1`,
@@ -3158,7 +3158,7 @@ router.get("/whale/signals/history", async (req, res) => {
         SELECT DISTINCT ON (ticker, category, strike, option_type) * FROM signal_outcomes
         WHERE signal_source = 'replit'
         ORDER BY ticker, category, strike, option_type, confidence DESC, detected_at DESC
-      ) d LEFT JOIN signal_reviews sr ON sr.signal_id = d.id
+      ) d LEFT JOIN signal_reviews sr ON sr.signal_id = d.id::text
       ORDER BY d.detected_at DESC LIMIT $1`,
       [limit]
     );
