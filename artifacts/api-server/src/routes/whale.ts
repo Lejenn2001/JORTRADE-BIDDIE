@@ -3411,26 +3411,32 @@ router.post("/whale/verify-signals", async (_req, res) => {
         }
       }
 
-      if (!outcome && isExpired) {
-        let mfePctCalc: number | null = null;
-        if (refPrice > 0 && target.low && target.high) {
-          const tgtP = isBullish ? target.low : target.high;
-          const denom = Math.abs(tgtP - refPrice);
-          if (denom > 0) {
-            const favorable = isBullish ? (history.highSince - refPrice) : (refPrice - history.lowSince);
-            mfePctCalc = (favorable / denom) * 100;
-          }
-        }
-        const mfePricePct = refPrice > 0
-          ? (isBullish ? ((history.highSince - refPrice) / refPrice) * 100 : ((refPrice - history.lowSince) / refPrice) * 100)
-          : 0;
-
-        if (mfePctCalc !== null && mfePctCalc >= 50) {
-          outcome = "partial_hit";
-        } else if (mfePricePct >= 1.0) {
-          outcome = "partial_hit";
+      const expiryPlusClose = expiryDate ? new Date(expiryDate.getTime() + 20 * 60 * 60 * 1000) : null;
+      const isActuallyExpired = expiryPlusClose ? expiryPlusClose < now : false;
+      if (!outcome && (isExpired || isActuallyExpired)) {
+        if (!isActuallyExpired) {
+          // Option hasn't expired yet — don't mark expired/partial_hit
         } else {
-          outcome = "expired";
+          let mfePctCalc: number | null = null;
+          if (refPrice > 0 && target.low && target.high) {
+            const tgtP = isBullish ? target.low : target.high;
+            const denom = Math.abs(tgtP - refPrice);
+            if (denom > 0) {
+              const favorable = isBullish ? (history.highSince - refPrice) : (refPrice - history.lowSince);
+              mfePctCalc = (favorable / denom) * 100;
+            }
+          }
+          const mfePricePct = refPrice > 0
+            ? (isBullish ? ((history.highSince - refPrice) / refPrice) * 100 : ((refPrice - history.lowSince) / refPrice) * 100)
+            : 0;
+
+          if (mfePctCalc !== null && mfePctCalc >= 50) {
+            outcome = "partial_hit";
+          } else if (mfePricePct >= 1.0) {
+            outcome = "partial_hit";
+          } else {
+            outcome = "expired";
+          }
         }
       }
 
@@ -4185,26 +4191,32 @@ async function realtimeVerifySignals() {
         }
       }
 
-      if (!outcome && isExpired) {
-        let mfePctCalc2: number | null = null;
-        if (refPrice2 > 0 && target_val.low && target_val.high) {
-          const tgtP = isBullish ? target_val.low : target_val.high;
-          const denom = Math.abs(tgtP - refPrice2);
-          if (denom > 0) {
-            const favorable = isBullish ? (history.highSince - refPrice2) : (refPrice2 - history.lowSince);
-            mfePctCalc2 = (favorable / denom) * 100;
-          }
-        }
-        const mfePricePct2 = refPrice2 > 0
-          ? (isBullish ? ((history.highSince - refPrice2) / refPrice2) * 100 : ((refPrice2 - history.lowSince) / refPrice2) * 100)
-          : 0;
-
-        if (mfePctCalc2 !== null && mfePctCalc2 >= 50) {
-          outcome = "partial_hit";
-        } else if (mfePricePct2 >= 1.0) {
-          outcome = "partial_hit";
+      const expiryPlusClose2 = expiryDate ? new Date(expiryDate.getTime() + 20 * 60 * 60 * 1000) : null;
+      const isActuallyExpired2 = expiryPlusClose2 ? expiryPlusClose2 < now : false;
+      if (!outcome && (isExpired || isActuallyExpired2)) {
+        if (!isActuallyExpired2) {
+          // Option hasn't expired yet — don't mark expired/partial_hit
         } else {
-          outcome = "expired";
+          let mfePctCalc2: number | null = null;
+          if (refPrice2 > 0 && target_val.low && target_val.high) {
+            const tgtP = isBullish ? target_val.low : target_val.high;
+            const denom = Math.abs(tgtP - refPrice2);
+            if (denom > 0) {
+              const favorable = isBullish ? (history.highSince - refPrice2) : (refPrice2 - history.lowSince);
+              mfePctCalc2 = (favorable / denom) * 100;
+            }
+          }
+          const mfePricePct2 = refPrice2 > 0
+            ? (isBullish ? ((history.highSince - refPrice2) / refPrice2) * 100 : ((refPrice2 - history.lowSince) / refPrice2) * 100)
+            : 0;
+
+          if (mfePctCalc2 !== null && mfePctCalc2 >= 50) {
+            outcome = "partial_hit";
+          } else if (mfePricePct2 >= 1.0) {
+            outcome = "partial_hit";
+          } else {
+            outcome = "expired";
+          }
         }
       }
 
@@ -4987,6 +4999,9 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
       if (u.trade_status !== undefined && u.trade_status !== null) {
         setClauses.push(`trade_status = $${paramIdx++}`);
         params.push(u.trade_status);
+      }
+      if (u.clear_resolved === true) {
+        setClauses.push(`resolved_at = NULL`);
       }
 
       if (setClauses.length === 0) continue;
