@@ -144,21 +144,22 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                 className={`rounded-xl border overflow-visible transition-all ${glowClass} ${bgClass}`}
               >
                 {(() => {
-                  if (!signal.createdAt) return null;
-                  const signalDate = new Date(signal.createdAt);
-                  const nowET = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-                  const todayET = new Date(nowET.getFullYear(), nowET.getMonth(), nowET.getDate());
-                  const signalET = new Date(signalDate.toLocaleString("en-US", { timeZone: "America/New_York" }));
-                  const signalDay = new Date(signalET.getFullYear(), signalET.getMonth(), signalET.getDate());
-                  if (signalDay >= todayET) return null;
-                  const dayName = signalET.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/New_York" });
-                  const dateStr = signalET.toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/New_York" });
-                  return (
-                    <div className="px-4 py-1 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2">
-                      <Clock className="h-3 w-3 text-amber-400" />
-                      <span className="text-[9px] font-bold tracking-widest text-amber-400 uppercase">Signal from {dayName} {dateStr}</span>
-                    </div>
-                  );
+                  try {
+                    if (!signal.createdAt) return null;
+                    const signalDate = new Date(signal.createdAt);
+                    if (isNaN(signalDate.getTime())) return null;
+                    const todayStr = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+                    const signalStr = signalDate.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+                    if (signalStr >= todayStr) return null;
+                    const dayName = signalDate.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/New_York" });
+                    const dateStr = signalDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "America/New_York" });
+                    return (
+                      <div className="px-4 py-1 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2">
+                        <Clock className="h-3 w-3 text-amber-400" />
+                        <span className="text-[9px] font-bold tracking-widest text-amber-400 uppercase">Signal from {dayName} {dateStr}</span>
+                      </div>
+                    );
+                  } catch { return null; }
                 })()}
                 {signal.priceConfirmed && (
                   <div className="px-4 py-1 bg-emerald-500/15 border-b border-emerald-500/20 flex items-center gap-2">
