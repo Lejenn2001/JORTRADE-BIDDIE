@@ -2094,84 +2094,41 @@ async function runSignalsPipeline() {
     const hasKeyLevels = !!(vwap || pivot || pdh || pdl || r1 || s1);
 
     if (optType === "call") {
-      if (vwap && price) {
-        const distToVwap = Math.abs(price - vwap) / price;
-        if (price >= vwap) {
-          entryTrigger = distToVwap < 0.005
-            ? `At VWAP $${vwap.toFixed(2)}`
-            : `Above VWAP at $${vwap.toFixed(2)}`;
-          actNow = true;
+      if (price) {
+        entryTrigger = isWhaleFlow
+          ? `Whale sweep at $${price.toFixed(2)}`
+          : `Near $${price.toFixed(2)}`;
+        actNow = true;
 
-          const supportLevels = [
-            { level: vwap, name: "VWAP" },
-            pdl ? { level: pdl, name: "PDL" } : null,
-            s1 ? { level: s1, name: "S1" } : null,
-            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
-          supportLevels.sort((a, b) => b.level - a.level);
-          invalidation = supportLevels.length > 0
-            ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
-            : `Data Not Available`;
+        const callTargets = [
+          vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
+          strike > price ? { level: strike, name: "Strike" } : null,
+          pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
+          r1 && r1 > price ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l);
+        callTargets.sort((a, b) => a.level - b.level);
 
-          const callTargets = [
-            strike > price ? { level: strike, name: "Strike" } : null,
-            pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
-            r1 && r1 > price ? { level: r1, name: "R1" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          callTargets.sort((a, b) => a.level - b.level);
-
-          if (callTargets.length >= 2) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-          } else if (callTargets.length === 1) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
-          } else {
-            target = `$${(price * 1.02).toFixed(2)}`;
-            targetNear = `$${(price * 1.04).toFixed(2)}`;
-          }
+        if (callTargets.length >= 2) {
+          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+          targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
+        } else if (callTargets.length === 1) {
+          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+          targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
         } else {
-          entryTrigger = isWhaleFlow
-            ? `Whale sweep at $${price.toFixed(2)}`
-            : `Near $${price.toFixed(2)}`;
-          actNow = true;
-
-          const callTargets = [
-            vwap > price ? { level: vwap, name: "VWAP" } : null,
-            strike > price ? { level: strike, name: "Strike" } : null,
-            pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
-            r1 && r1 > price ? { level: r1, name: "R1" } : null,
-            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          callTargets.sort((a, b) => a.level - b.level);
-
-          if (callTargets.length >= 2) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-          } else if (callTargets.length === 1) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
-          } else {
-            target = `$${(price * 1.02).toFixed(2)}`;
-            targetNear = `$${(price * 1.04).toFixed(2)}`;
-          }
-
-          const supportLevels = [
-            pdl ? { level: pdl, name: "PDL" } : null,
-            s1 ? { level: s1, name: "S1" } : null,
-            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
-          supportLevels.sort((a, b) => b.level - a.level);
-          invalidation = supportLevels.length > 0
-            ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
-            : `Below $${(price * 0.98).toFixed(2)}`;
+          target = `$${(price * 1.02).toFixed(2)}`;
+          targetNear = `$${(price * 1.04).toFixed(2)}`;
         }
-      } else if (pivot && price) {
-        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-        actNow = price >= pivot;
-        target = r1 ? `R1 at $${r1.toFixed(2)}` : `$${(price * 1.02).toFixed(2)}`;
-        targetNear = `$${(price * 1.04).toFixed(2)}`;
-        invalidation = s1 ? `Below S1 at $${s1.toFixed(2)}` : `Below $${(price * 0.98).toFixed(2)}`;
+
+        const supportLevels = [
+          pdl ? { level: pdl, name: "PDL" } : null,
+          s1 ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+        supportLevels.sort((a, b) => b.level - a.level);
+        invalidation = supportLevels.length > 0
+          ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
+          : `Below $${(price * 0.98).toFixed(2)}`;
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
@@ -2181,84 +2138,41 @@ async function runSignalsPipeline() {
       keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
-      if (vwap && price) {
-        const distToVwap = Math.abs(price - vwap) / price;
-        if (price <= vwap) {
-          entryTrigger = distToVwap < 0.005
-            ? `At VWAP $${vwap.toFixed(2)}`
-            : `Below VWAP at $${vwap.toFixed(2)}`;
-          actNow = true;
+      if (price) {
+        entryTrigger = isWhaleFlow
+          ? `Whale sweep at $${price.toFixed(2)}`
+          : `Near $${price.toFixed(2)}`;
+        actNow = true;
 
-          const resistanceLevels = [
-            { level: vwap, name: "VWAP" },
-            pdh ? { level: pdh, name: "PDH" } : null,
-            r1 ? { level: r1, name: "R1" } : null,
-            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
-          resistanceLevels.sort((a, b) => a.level - b.level);
-          invalidation = resistanceLevels.length > 0
-            ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
-            : `Data Not Available`;
+        const putTargets = [
+          vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
+          strike < price ? { level: strike, name: "Strike" } : null,
+          pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
+          s1 && s1 < price ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l);
+        putTargets.sort((a, b) => b.level - a.level);
 
-          const putTargets = [
-            strike < price ? { level: strike, name: "Strike" } : null,
-            pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
-            s1 && s1 < price ? { level: s1, name: "S1" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          putTargets.sort((a, b) => b.level - a.level);
-
-          if (putTargets.length >= 2) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-          } else if (putTargets.length === 1) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
-          } else {
-            target = `$${(price * 0.98).toFixed(2)}`;
-            targetNear = `$${(price * 0.96).toFixed(2)}`;
-          }
+        if (putTargets.length >= 2) {
+          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+          targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
+        } else if (putTargets.length === 1) {
+          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+          targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
         } else {
-          entryTrigger = isWhaleFlow
-            ? `Whale sweep at $${price.toFixed(2)}`
-            : `Near $${price.toFixed(2)}`;
-          actNow = true;
-
-          const putTargets = [
-            vwap < price ? { level: vwap, name: "VWAP" } : null,
-            strike < price ? { level: strike, name: "Strike" } : null,
-            pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
-            s1 && s1 < price ? { level: s1, name: "S1" } : null,
-            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          putTargets.sort((a, b) => b.level - a.level);
-
-          if (putTargets.length >= 2) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-          } else if (putTargets.length === 1) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
-          } else {
-            target = `$${(price * 0.98).toFixed(2)}`;
-            targetNear = `$${(price * 0.96).toFixed(2)}`;
-          }
-
-          const resistanceLevels = [
-            pdh ? { level: pdh, name: "PDH" } : null,
-            r1 ? { level: r1, name: "R1" } : null,
-            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
-          resistanceLevels.sort((a, b) => a.level - b.level);
-          invalidation = resistanceLevels.length > 0
-            ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
-            : `Above $${(price * 1.02).toFixed(2)}`;
+          target = `$${(price * 0.98).toFixed(2)}`;
+          targetNear = `$${(price * 0.96).toFixed(2)}`;
         }
-      } else if (pivot && price) {
-        entryTrigger = `Near Pivot at $${pivot.toFixed(2)}`;
-        actNow = price <= pivot;
-        target = s1 ? `S1 at $${s1.toFixed(2)}` : `$${(price * 0.98).toFixed(2)}`;
-        targetNear = `$${(price * 0.96).toFixed(2)}`;
-        invalidation = r1 ? `Above R1 at $${r1.toFixed(2)}` : `Above $${(price * 1.02).toFixed(2)}`;
+
+        const resistanceLevels = [
+          pdh ? { level: pdh, name: "PDH" } : null,
+          r1 ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+        resistanceLevels.sort((a, b) => a.level - b.level);
+        invalidation = resistanceLevels.length > 0
+          ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
+          : `Above $${(price * 1.02).toFixed(2)}`;
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
