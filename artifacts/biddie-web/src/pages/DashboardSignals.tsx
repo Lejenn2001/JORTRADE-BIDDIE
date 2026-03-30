@@ -559,6 +559,26 @@ const DashboardSignals = () => {
             </span>
           </div>
 
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search ticker (SPY, TSLA, QQQ...)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value.toUpperCase())}
+              className="pl-9 pr-9 h-10 bg-muted/30 border-border/40 text-sm font-semibold tracking-wider placeholder:text-muted-foreground/50 placeholder:font-normal placeholder:tracking-normal focus-visible:ring-emerald-500/40"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           {/* Filters */}
           <div className="glass-panel rounded-xl p-3 flex flex-col sm:flex-row gap-2">
             <div className="flex items-center gap-1.5">
