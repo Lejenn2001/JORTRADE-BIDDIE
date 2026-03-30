@@ -115,6 +115,16 @@ const SEED_ADMIN_IDS = [
         UNIQUE(message_id, user_id, emoji)
       )`
     );
+    await dbQuery(
+      `CREATE TABLE IF NOT EXISTS signal_reviews (
+        id SERIAL PRIMARY KEY,
+        signal_id TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        note TEXT,
+        reviewed_by TEXT NOT NULL,
+        reviewed_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+    );
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles`);
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
@@ -5477,6 +5487,44 @@ router.post("/whale/admin/revert-signal-prices", async (req, res) => {
     }
 
     res.json({ ok: true, updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/whale/admin/signal-reviews", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] as string || req.query.userId as string;
+    if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin only" });
+    const result = await dbQuery(`SELECT signal_id, status, note, reviewed_at FROM signal_reviews ORDER BY reviewed_at DESC`);
+    const reviewMap: Record<string, { status: string; note: string | null; reviewed_at: string }> = {};
+    for (const r of result.rows) {
+      reviewMap[r.signal_id] = { status: r.status, note: r.note, reviewed_at: r.reviewed_at };
+    }
+    res.json({ reviews: reviewMap });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/whale/admin/signal-review", async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"] as string;
+    if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin only" });
+    const { signalId, status, note } = req.body as { signalId: string; status: string; note?: string };
+    if (!signalId || !status) return res.status(400).json({ error: "signalId and status required" });
+    if (!["correct", "wrong", "pending"].includes(status)) return res.status(400).json({ error: "status must be correct, wrong, or pending" });
+    if (status === "pending") {
+      await dbQuery(`DELETE FROM signal_reviews WHERE signal_id = $1`, [signalId]);
+    } else {
+      await dbQuery(
+        `INSERT INTO signal_reviews (signal_id, status, note, reviewed_by, reviewed_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (signal_id) DO UPDATE SET status = $2, note = $3, reviewed_by = $4, reviewed_at = NOW()`,
+        [signalId, status, note || null, userId]
+      );
+    }
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
