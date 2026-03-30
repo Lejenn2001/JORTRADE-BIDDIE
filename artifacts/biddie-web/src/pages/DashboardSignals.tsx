@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -11,48 +11,26 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
+import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription } from "@/lib/simplifyDescription";
-
-class SignalErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
-  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[SignalCard Error]", error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
-          <AlertTriangle className="h-5 w-5 text-red-400 mx-auto mb-2" />
-          <p className="text-xs text-red-300">Card failed to render</p>
-          <button onClick={() => this.setState({ hasError: false, error: null })} className="text-[10px] text-red-400 underline mt-1">Retry</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
 
-const ALGO_SECTION_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
+const ALGO_SECTION_META = {
   buy_now: {
     label: "🔥 ACT NOW",
-    icon: <Zap className="h-4 w-4 text-emerald-400" />,
+    iconComponent: Zap,
+    iconClass: "h-4 w-4 text-emerald-400",
     description: "Price confirmed — act immediately",
   },
   short_term: {
     label: "⚡ 1–3 DAY TRADE",
-    icon: <Clock className="h-4 w-4 text-emerald-400" />,
+    iconComponent: Clock,
+    iconClass: "h-4 w-4 text-emerald-400",
     description: "Algorithm-detected setups with short-term expiry",
   },
-};
+} as const;
 
 
 const cardVariants = {
@@ -319,17 +297,6 @@ const DashboardSignals = () => {
   }, [user?.id, alertSignal, alertPrice, alertCondition, toast]);
 
   useEffect(() => {
-    if (showResolved) return;
-    const hasRecentlyResolved = signals.some(s => {
-      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
-      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
-    });
-    if (!hasRecentlyResolved) return;
-    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
-    return () => clearInterval(interval);
-  }, [signals, showResolved]);
-
-  useEffect(() => {
     const loadRecentSignals = async () => {
       setDbLoading(true);
       try {
@@ -379,6 +346,17 @@ const DashboardSignals = () => {
     if (isAdmin) return allSignals;
     return allSignals.filter(s => s.reviewStatus !== "wrong");
   }, [allSignals, isAdmin]);
+
+  useEffect(() => {
+    if (showResolved) return;
+    const hasRecentlyResolved = signals.some(s => {
+      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
+      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
+    });
+    if (!hasRecentlyResolved) return;
+    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
+    return () => clearInterval(interval);
+  }, [signals, showResolved]);
 
   const handleReviewChange = useCallback((signalId: string, status: "correct" | "wrong" | null) => {
     setDbSignals(prev => prev.map(s => s.id === signalId ? { ...s, reviewStatus: status } : s));
@@ -638,7 +616,7 @@ const DashboardSignals = () => {
                 return (
                   <div key={timeframe} className="space-y-3">
                     <div className="flex items-center gap-2 px-1">
-                      {meta.icon}
+                      <meta.iconComponent className={meta.iconClass} />
                       <span className="font-bold text-xs sm:text-sm text-emerald-400">{meta.label}</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full ml-auto">
                         {sectionSignals.length}
