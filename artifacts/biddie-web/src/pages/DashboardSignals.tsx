@@ -6,7 +6,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle, ThumbsUp, ThumbsDown, MessageSquare, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
@@ -194,7 +194,7 @@ function formatTimestamp(isoStr: string): string {
 const DashboardSignals = () => {
   const { signals: liveSignals, loading: liveLoading } = useMarketData();
   const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [dbSignals, setDbSignals] = useState<MarketSignal[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -601,7 +601,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -635,7 +635,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -669,7 +669,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -774,7 +774,99 @@ const DashboardSignals = () => {
   );
 };
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean }) {
+function AdminReviewPanel({ signalId, userId }: { signalId: string; userId: string }) {
+  const [status, setStatus] = useState<"correct" | "wrong" | "pending" | null>(null);
+  const [note, setNote] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [showNote, setShowNote] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/whale/admin/signal-reviews", { headers: { "x-user-id": userId } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.reviews && data.reviews[signalId]) {
+          setStatus(data.reviews[signalId].status as any);
+          setSavedNote(data.reviews[signalId].note || "");
+          setNote(data.reviews[signalId].note || "");
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [signalId, userId]);
+
+  const save = async (newStatus: "correct" | "wrong" | "pending") => {
+    setSaving(true);
+    try {
+      await fetch("/api/whale/admin/signal-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ signalId, status: newStatus, note: note || undefined }),
+      });
+      setStatus(newStatus === "pending" ? null : newStatus);
+      setSavedNote(note);
+    } catch {}
+    setSaving(false);
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="pt-2 mt-2 border-t border-white/10">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground font-medium">Review:</span>
+        <button
+          onClick={() => save(status === "correct" ? "pending" : "correct")}
+          disabled={saving}
+          className={`p-1 rounded transition-colors ${status === "correct" ? "bg-emerald-500/20 text-emerald-400" : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"}`}
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => save(status === "wrong" ? "pending" : "wrong")}
+          disabled={saving}
+          className={`p-1 rounded transition-colors ${status === "wrong" ? "bg-red-500/20 text-red-400" : "text-muted-foreground hover:text-red-400 hover:bg-red-500/10"}`}
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => setShowNote(!showNote)}
+          className={`p-1 rounded transition-colors ${showNote || savedNote ? "bg-blue-500/20 text-blue-400" : "text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"}`}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+        </button>
+        {status && (
+          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${status === "correct" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+            {status}
+          </span>
+        )}
+        {saving && <span className="text-[9px] text-muted-foreground animate-pulse">saving...</span>}
+      </div>
+      {showNote && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Add a note..."
+            className="flex-1 text-[11px] bg-muted/30 border border-white/10 rounded-md px-2 py-1 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40"
+            onKeyDown={(e) => { if (e.key === "Enter" && status) save(status); }}
+          />
+          <button
+            onClick={() => { if (status) save(status); else save("correct"); }}
+            disabled={saving}
+            className="p-1 rounded text-primary hover:bg-primary/10 transition-colors"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -1090,6 +1182,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               )}
             </button>
           </div>
+        )}
+        {isAdmin && userId && (
+          <AdminReviewPanel signalId={signal.id} userId={userId} />
         )}
       </div>
     </div>
