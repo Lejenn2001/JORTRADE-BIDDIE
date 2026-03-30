@@ -4904,19 +4904,46 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
     if (!Array.isArray(updates)) return res.status(400).json({ error: "updates must be an array" });
     let updated = 0;
     for (const u of updates) {
-      if (u.tags) {
-        const result = await dbQuery(
-          `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7, tags = $8::text[] WHERE id = $1`,
-          [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation, u.tags]
-        );
-        if (result?.rowCount) updated++;
-      } else {
-        const result = await dbQuery(
-          `UPDATE signal_outcomes SET target = $2, target_near = $3, key_level = $4, sr_level = $5, entry_trigger = $6, invalidation = $7 WHERE id = $1`,
-          [u.id, u.target, u.target_near, u.key_level, u.sr_level, u.entry_trigger, u.invalidation]
-        );
-        if (result?.rowCount) updated++;
+      const setClauses: string[] = [];
+      const params: any[] = [u.id];
+      let paramIdx = 2;
+
+      if (u.entry_trigger !== undefined && u.entry_trigger !== null) {
+        setClauses.push(`entry_trigger = $${paramIdx++}`);
+        params.push(u.entry_trigger);
       }
+      if (u.invalidation !== undefined && u.invalidation !== null) {
+        setClauses.push(`invalidation = $${paramIdx++}`);
+        params.push(u.invalidation);
+      }
+      if (u.target !== undefined && u.target !== null) {
+        setClauses.push(`target = $${paramIdx++}`);
+        params.push(u.target);
+      }
+      if (u.target_near !== undefined && u.target_near !== null) {
+        setClauses.push(`target_near = $${paramIdx++}`);
+        params.push(u.target_near);
+      }
+      if (u.key_level !== undefined && u.key_level !== null) {
+        setClauses.push(`key_level = $${paramIdx++}`);
+        params.push(u.key_level);
+      }
+      if (u.sr_level !== undefined && u.sr_level !== null) {
+        setClauses.push(`sr_level = $${paramIdx++}`);
+        params.push(u.sr_level);
+      }
+      if (u.tags && Array.isArray(u.tags)) {
+        setClauses.push(`tags = array_cat(tags, $${paramIdx++}::text[])`);
+        params.push(u.tags);
+      }
+
+      if (setClauses.length === 0) continue;
+
+      const result = await dbQuery(
+        `UPDATE signal_outcomes SET ${setClauses.join(', ')} WHERE id = $1`,
+        params
+      );
+      if (result?.rowCount) updated++;
     }
     res.json({ success: true, updated });
   } catch (e: any) {
