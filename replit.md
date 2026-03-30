@@ -119,6 +119,16 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **API Endpoints**: `GET /api/whale/user-settings` (returns alias + referral_code + count), `POST /api/whale/user-settings` (update alias), `POST /api/whale/referral/apply` (apply ref code at signup), `GET /api/whale/referrals` (list referrals)
 - **Two-sided incentive**: Referrer earns tier rewards, referred user gets 10% off first paid month
 
+## Signal Entry/Target/Invalidation Algorithm (LOCKED — March 30, 2026)
+
+**⚠️ DO NOT MODIFY without explicit user approval. Full spec in `.local/signal_logic_changelog.md`.**
+
+- **Entry**: ALWAYS `Near $[actual stock price]` (or `Whale sweep at $X` for whale flows). NEVER use VWAP/PDH/Strike as entry.
+- **Invalidation**: 2% from actual price, or closest support/resistance level. Calls: `Below $[price*0.98]` or PDL/S1/Pivot. Puts: `Above $[price*1.02]` or PDH/R1/Pivot. NEVER mirror VWAP.
+- **Target**: Must point in correct direction. Calls: levels ABOVE price (VWAP, Strike, PDH, R1). Puts: levels BELOW price (VWAP, Strike, PDL, S1). Fallback: 2%/5% from price.
+- **Server code**: `whale.ts` scoreSignal function (~line 2099). **Frontend code**: `useMarketData.ts` (~line 658).
+- **Validation safety net**: After computing, verifies CALL target > price and PUT target < price; resets to 2%/4% if wrong.
+
 ## Trump Feed
 
 - **Trump Truth Social Monitor** (`/dashboard/trump`): Polls CNN's public Truth Social archive (`ix.cnn.io/data/truth-social/truth_archive.json`) every 5 minutes
