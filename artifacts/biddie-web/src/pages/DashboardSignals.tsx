@@ -322,7 +322,7 @@ const DashboardSignals = () => {
     if (showResolved) return;
     const hasRecentlyResolved = signals.some(s => {
       if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
-      return Date.now() - new Date(s.resolvedAt).getTime() < 90_000;
+      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
     });
     if (!hasRecentlyResolved) return;
     const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
@@ -417,7 +417,7 @@ const DashboardSignals = () => {
         if (!o || o === "pending") return true;
         if (s.resolvedAt) {
           const resolvedTime = new Date(s.resolvedAt).getTime();
-          if (now - resolvedTime < 90_000) return true;
+          if (now - resolvedTime < 300_000) return true;
         }
         return false;
       });
@@ -926,7 +926,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
   const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
-  const isRecentlyResolved = !!(signal.resolvedAt && (Date.now() - new Date(signal.resolvedAt).getTime() < 90_000));
+  const isRecentlyResolved = !!(signal.resolvedAt && (Date.now() - new Date(signal.resolvedAt).getTime() < 300_000));
   const isCelebrating = isRecentlyResolved && isWinner;
 
   return (
