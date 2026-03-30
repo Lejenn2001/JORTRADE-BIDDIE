@@ -2095,10 +2095,28 @@ async function runSignalsPipeline() {
 
     if (optType === "call") {
       if (price) {
-        entryTrigger = isWhaleFlow
-          ? `Whale sweep at $${price.toFixed(2)}`
-          : `Near $${price.toFixed(2)}`;
-        actNow = true;
+        if (isWhaleFlow) {
+          entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+          actNow = true;
+        } else if (vwap) {
+          const distToVwap = Math.abs(price - vwap) / price;
+          if (distToVwap < 0.005) {
+            entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = true;
+          } else if (price > vwap) {
+            entryTrigger = `Above VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = true;
+          } else {
+            entryTrigger = `On bounce from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = false;
+          }
+        } else if (pivot) {
+          entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+          actNow = price >= pivot;
+        } else {
+          entryTrigger = `Near $${price.toFixed(2)}`;
+          actNow = true;
+        }
 
         const callTargets = [
           vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
@@ -2139,10 +2157,28 @@ async function runSignalsPipeline() {
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
       if (price) {
-        entryTrigger = isWhaleFlow
-          ? `Whale sweep at $${price.toFixed(2)}`
-          : `Near $${price.toFixed(2)}`;
-        actNow = true;
+        if (isWhaleFlow) {
+          entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+          actNow = true;
+        } else if (vwap) {
+          const distToVwap = Math.abs(price - vwap) / price;
+          if (distToVwap < 0.005) {
+            entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = true;
+          } else if (price < vwap) {
+            entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = true;
+          } else {
+            entryTrigger = `On rejection from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            actNow = false;
+          }
+        } else if (pivot) {
+          entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+          actNow = price <= pivot;
+        } else {
+          entryTrigger = `Near $${price.toFixed(2)}`;
+          actNow = true;
+        }
 
         const putTargets = [
           vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
