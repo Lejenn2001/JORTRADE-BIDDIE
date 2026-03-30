@@ -94,6 +94,7 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     aiEvaluated: !!record.is_biddie_pick,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
+    resolvedAt: record.resolved_at || null,
     mfePercent: record.mfe_percent != null ? Number(record.mfe_percent) : null,
     maxFavorablePrice: record.max_favorable_price != null ? Number(record.max_favorable_price) : null,
   };

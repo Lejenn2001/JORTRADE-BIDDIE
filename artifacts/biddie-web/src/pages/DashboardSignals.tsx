@@ -203,6 +203,7 @@ const DashboardSignals = () => {
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [showResolved, setShowResolved] = useState(searchParams.get("resolved") === "true");
+  const [, setResolvedTick] = useState(0);
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
   const [alertSignal, setAlertSignal] = useState<MarketSignal | null>(null);
@@ -318,6 +319,17 @@ const DashboardSignals = () => {
   }, [user?.id, alertSignal, alertPrice, alertCondition, toast]);
 
   useEffect(() => {
+    if (showResolved) return;
+    const hasRecentlyResolved = signals.some(s => {
+      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
+      return Date.now() - new Date(s.resolvedAt).getTime() < 90_000;
+    });
+    if (!hasRecentlyResolved) return;
+    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
+    return () => clearInterval(interval);
+  }, [signals, showResolved]);
+
+  useEffect(() => {
     const loadRecentSignals = async () => {
       setDbLoading(true);
       try {
@@ -399,9 +411,15 @@ const DashboardSignals = () => {
     let list = [...signals];
 
     if (!showResolved) {
+      const now = Date.now();
       list = list.filter((s) => {
         const o = s.outcome;
-        return !o || o === "pending";
+        if (!o || o === "pending") return true;
+        if (s.resolvedAt) {
+          const resolvedTime = new Date(s.resolvedAt).getTime();
+          if (now - resolvedTime < 90_000) return true;
+        }
+        return false;
       });
     }
 
@@ -908,11 +926,39 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
   const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
+  const isRecentlyResolved = !!(signal.resolvedAt && (Date.now() - new Date(signal.resolvedAt).getTime() < 90_000));
+  const isCelebrating = isRecentlyResolved && isWinner;
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass} ${
-      hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${
+      isCelebrating
+        ? "shadow-[0_0_30px_-3px_rgba(234,179,8,0.7),0_0_60px_-5px_rgba(16,185,129,0.4)] border-yellow-400/80 ring-2 ring-yellow-400/50 animate-pulse"
+        : hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass
+    } ${
+      isCelebrating ? "bg-gradient-to-r from-yellow-500/20 via-emerald-500/15 to-yellow-500/20" : hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
+      {isCelebrating && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/10 to-transparent animate-[shimmer_2s_ease-in-out_infinite]" />
+          <div className="absolute top-1 left-[10%] text-lg animate-bounce" style={{ animationDelay: "0s" }}>🎰</div>
+          <div className="absolute top-1 left-[30%] text-lg animate-bounce" style={{ animationDelay: "0.3s" }}>💰</div>
+          <div className="absolute top-1 left-[50%] text-lg animate-bounce" style={{ animationDelay: "0.6s" }}>🔥</div>
+          <div className="absolute top-1 left-[70%] text-lg animate-bounce" style={{ animationDelay: "0.9s" }}>✨</div>
+          <div className="absolute top-1 left-[90%] text-lg animate-bounce" style={{ animationDelay: "1.2s" }}>🎯</div>
+        </div>
+      )}
+      {isCelebrating && (
+        <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-yellow-500/20 via-emerald-500/20 to-yellow-500/20 border-b border-yellow-400/30 flex items-center justify-center gap-2">
+          <span className="text-sm font-black tracking-wider text-yellow-300 uppercase animate-pulse">
+            {signal.outcome === "hit" ? "🎯 TARGET HIT! 🎯" : "⚡ PARTIAL HIT! ⚡"}
+          </span>
+        </div>
+      )}
+      {isRecentlyResolved && isExpired && (
+        <div className="px-3 sm:px-4 py-1.5 bg-zinc-500/15 border-b border-zinc-500/20 flex items-center justify-center gap-2">
+          <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">Signal Expired — Removing shortly</span>
+        </div>
+      )}
       {isAdmin && signal.reviewStatus === "wrong" && (
         <div className="px-3 sm:px-4 py-1.5 bg-red-500/20 border-b border-red-500/30 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-400" />

@@ -68,6 +68,7 @@ export interface MarketSignal {
   } | null;
   reviewStatus?: "correct" | "wrong" | null;
   reviewNote?: string | null;
+  resolvedAt?: string | null;
 }
 
 export interface TickerData {
