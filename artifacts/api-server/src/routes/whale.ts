@@ -2114,8 +2114,8 @@ async function runSignalsPipeline() {
           entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
           actNow = price >= pivot;
         } else {
-          entryTrigger = `Near $${price.toFixed(2)}`;
-          actNow = true;
+          entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
+          actNow = false;
         }
 
         const callTargets = [
@@ -2176,8 +2176,8 @@ async function runSignalsPipeline() {
           entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
           actNow = price <= pivot;
         } else {
-          entryTrigger = `Near $${price.toFixed(2)}`;
-          actNow = true;
+          entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
+          actNow = false;
         }
 
         const putTargets = [

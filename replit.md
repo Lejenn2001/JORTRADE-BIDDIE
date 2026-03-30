@@ -123,7 +123,7 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 
 **⚠️ DO NOT MODIFY without explicit user approval. Full spec in `.local/signal_logic_changelog.md`.**
 
-- **Entry (Hybrid VWAP + Price)**: Shows VWAP context AND actual price together. CALL: `Above VWAP ($X) — Near $Y` (act now), `On bounce from VWAP ($X) — Near $Y` (wait). PUT: `Below VWAP ($X) — Near $Y` (act now), `On rejection from VWAP ($X) — Near $Y` (wait). Whale flows: `Whale sweep at $X`. No VWAP fallback: `Near $X`.
+- **Entry (Hybrid VWAP + Price)**: Shows VWAP context AND actual price together. CALL: `Above VWAP ($X) — Near $Y` (act now), `On bounce from VWAP ($X) — Near $Y` (wait). PUT: `Below VWAP ($X) — Near $Y` (act now), `On rejection from VWAP ($X) — Near $Y` (wait). Whale flows: `Whale sweep at $X`. No VWAP fallback: `Near $X (no VWAP data)` — NO Act Now tag.
 - **Invalidation**: Closest support/resistance level (PDL/S1/Pivot for calls, PDH/R1/Pivot for puts). Fallback: 2% from price. VWAP excluded from invalidation.
 - **Target**: Must point in correct direction with named levels. Calls: ABOVE price (VWAP, Strike, PDH, R1). Puts: BELOW price (VWAP, Strike, PDL, S1). Fallback: 2%/4% from price.
 - **Server code**: `whale.ts` scoreSignal function (~line 2099). **Frontend code**: `useMarketData.ts` (~line 658, uses flat `Near $X` since no VWAP on live alerts).
