@@ -4972,6 +4972,14 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
         setClauses.push(`tags = array_cat(tags, $${paramIdx++}::text[])`);
         params.push(u.tags);
       }
+      if (u.outcome !== undefined && u.outcome !== null) {
+        setClauses.push(`outcome = $${paramIdx++}`);
+        params.push(u.outcome);
+      }
+      if (u.trade_status !== undefined && u.trade_status !== null) {
+        setClauses.push(`trade_status = $${paramIdx++}`);
+        params.push(u.trade_status);
+      }
 
       if (setClauses.length === 0) continue;
 
