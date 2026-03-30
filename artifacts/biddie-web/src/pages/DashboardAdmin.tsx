@@ -277,9 +277,32 @@ function FlaggedSignalsPanel() {
         const reviewsData = await reviewsResp.json();
         const signalsData = await signalsResp.json();
         const reviews = reviewsData.reviews || {};
-        const wrongIds = Object.entries(reviews).filter(([, r]: any) => r.status === "wrong").map(([id]: any) => id);
-        const wrongSignals = (signalsData.signals || []).filter((s: any) => wrongIds.includes(s.id));
+        const wrongEntries = Object.entries(reviews).filter(([, r]: any) => r.status === "wrong");
+        const wrongIds = wrongEntries.map(([id]: any) => id);
+        const allSignals = signalsData.signals || [];
+        const wrongSignals = allSignals.filter((s: any) => wrongIds.includes(s.id));
         wrongSignals.forEach((s: any) => { s.review_note = reviews[s.id]?.note || null; });
+        const matchedIds = new Set(wrongSignals.map((s: any) => s.id));
+        const unmatchedWrong = wrongEntries.filter(([id]) => !matchedIds.has(id));
+        unmatchedWrong.forEach(([id, r]: any) => {
+          const parts = id.replace(/^replit-/, "").split("-");
+          const ticker = parts[0] || id;
+          const strike = parts[1] || "";
+          wrongSignals.push({
+            id,
+            ticker,
+            strike,
+            option_type: null,
+            expiry: null,
+            detected_at: r.updated_at || null,
+            entry_trigger: null,
+            target: null,
+            invalidation: null,
+            price_at_signal: null,
+            review_note: r.note || null,
+            _fromReviewOnly: true,
+          });
+        });
         setFlagged(wrongSignals);
       } catch {}
       setLoading(false);
@@ -317,14 +340,15 @@ function FlaggedSignalsPanel() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-foreground">{s.ticker}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${s.option_type === 'call' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {s.option_type && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${s.option_type === 'call' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
                     {(s.option_type || '').toUpperCase()}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">${s.strike}</span>
+                  </span>}
+                  {s.strike && <span className="text-[10px] text-muted-foreground">${s.strike}</span>}
                   {s.expiry && <span className="text-[10px] text-muted-foreground">{s.expiry}</span>}
+                  {s._fromReviewOnly && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">LIVE SIGNAL</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">{new Date(s.detected_at || s.created_at).toLocaleDateString()}</span>
+                  {(s.detected_at || s.created_at) && <span className="text-[10px] text-muted-foreground">{new Date(s.detected_at || s.created_at).toLocaleDateString()}</span>}
                   <Link to={`/dashboard/signals?highlight=${s.id}`} className="text-[10px] text-blue-400 hover:underline flex items-center gap-1">
                     <ExternalLink className="h-3 w-3" /> View
                   </Link>
