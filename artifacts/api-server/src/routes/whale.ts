@@ -20,6 +20,30 @@ function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+const MARKET_HOLIDAYS: Set<string> = new Set([
+  "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
+  "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07",
+  "2026-11-26", "2026-12-25",
+  "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
+  "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06",
+  "2027-11-25", "2027-12-24",
+]);
+
+function isMarketHoliday(dateStr: string): boolean {
+  return MARKET_HOLIDAYS.has(dateStr);
+}
+
+function adjustExpiryForHolidays(dateStr: string): string {
+  let d = new Date(dateStr + "T12:00:00");
+  for (let i = 0; i < 5; i++) {
+    const iso = fmtDate(d);
+    const dow = d.getDay();
+    if (dow >= 1 && dow <= 5 && !isMarketHoliday(iso)) return iso;
+    d.setDate(d.getDate() - 1);
+  }
+  return dateStr;
+}
+
 interface PolygonBar {
   open: number; high: number; low: number; close: number; volume: number; timestamp: number;
 }
@@ -2246,35 +2270,43 @@ async function runSignalsPipeline() {
     if (confirmation?.gamma_zone === "negative") reason += " Negative gamma zone — moves will be amplified.";
     if (confirmation?.confirmed) reason += ` Price action confirmed: ${confirmation.pattern}.`;
 
+    const adjustedExpiryISO = expiryDate ? adjustExpiryForHolidays(expiryDate) : expiryDate;
     const expiryFormatted = (() => {
       try {
-        const d = new Date(expiryDate + "T12:00:00");
+        const d = new Date(adjustedExpiryISO + "T12:00:00");
         return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-      } catch { return expiryDate; }
+      } catch { return adjustedExpiryISO; }
     })();
 
     const smartExpiry = (() => {
       const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
       const dayOfWeek = et.getDay();
       const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+      const todayISO = fmtDate(et);
+      const todayIsHoliday = isMarketHoliday(todayISO);
       const ZERO_DTE = new Set(["SPY","QQQ","IWM","AAPL","MSFT","AMZN","META","NVDA","TSLA","GOOGL","AMD","NFLX","GLD","TLT","XOM","JPM","DIS","BA","V","MA","COIN"]);
       const has0DTE = ZERO_DTE.has(ticker);
       const isMWF = dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5;
       const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-      if (daysOut <= 2 && has0DTE && isWeekday) {
+      if (daysOut <= 2 && has0DTE && isWeekday && !todayIsHoliday) {
         if (ticker === "SPY" || ticker === "QQQ" || ticker === "IWM" || isMWF) {
           return { expiry: fmt(et), label: "0DTE" };
         }
         const tom = new Date(et); tom.setDate(tom.getDate() + 1);
-        if (tom.getDay() === 0) tom.setDate(tom.getDate() + 1);
+        const tomISO = fmtDate(tom);
+        if (tom.getDay() === 0 || isMarketHoliday(tomISO)) tom.setDate(tom.getDate() + 1);
         if (tom.getDay() === 6) tom.setDate(tom.getDate() + 2);
+        const tom2ISO = fmtDate(tom);
+        if (isMarketHoliday(tom2ISO)) tom.setDate(tom.getDate() + 1);
         return { expiry: fmt(tom), label: "1DTE" };
       }
       if (daysOut <= 7) return { expiry: expiryFormatted, label: "This week" };
       const fri = new Date(et);
       const duf = (5 - dayOfWeek + 7) % 7 || 7;
       fri.setDate(fri.getDate() + duf);
+      const friISO = fmtDate(fri);
+      if (isMarketHoliday(friISO)) fri.setDate(fri.getDate() - 1);
       return { expiry: fmt(fri), label: "Weekly" };
     })();
 
