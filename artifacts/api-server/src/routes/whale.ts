@@ -3901,6 +3901,8 @@ RULES:
 - Don't repeat yourself — each post should be new information
 - If nothing is worth posting about, respond with exactly: NOTHING_NOTABLE`;
 
+let morningPostedDate = "";
+
 function startFlowMonitor() {
   if (flowMonitorStarted) return;
   flowMonitorStarted = true;
@@ -3919,18 +3921,20 @@ function startFlowMonitor() {
     if (hour !== 7 || minute < 0 || minute > 15) return;
 
     const today = new Date().toISOString().split("T")[0];
+    if (morningPostedDate === today) return;
+
     try {
       const existCheck = await axios.get(
         `${SUPABASE_URL}/rest/v1/chat_messages?user_id=eq.${BIDDIE_USER_ID}&created_at=gte.${today}T00:00:00Z&limit=1`,
         { headers: supabaseAdminHeaders(), timeout: 5000 }
       );
-      if (existCheck.data?.length > 0) return;
+      if (existCheck.data?.length > 0) { morningPostedDate = today; return; }
     } catch {
       const existingResult = await dbQuery(
         `SELECT id FROM chat_messages WHERE user_id = $1 AND created_at >= $2 LIMIT 1`,
         [BIDDIE_USER_ID, `${today}T00:00:00Z`]
       );
-      if (existingResult && existingResult.rows.length > 0) return;
+      if (existingResult && existingResult.rows.length > 0) { morningPostedDate = today; return; }
     }
 
     try {
@@ -3945,6 +3949,7 @@ function startFlowMonitor() {
       const content = response.content[0].type === "text" ? response.content[0].text : "";
       const posted = await postBiddieToChat(content);
       if (posted) {
+        morningPostedDate = today;
         lastBiddiePost = Date.now();
         console.log(`[Biddie morning] Posted at ${now}`);
       } else {
