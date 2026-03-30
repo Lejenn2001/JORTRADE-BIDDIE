@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, Component, type ReactNode, type ErrorInfo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -6,12 +6,37 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, ThumbsUp, ThumbsDown, MessageSquare, X, RotateCcw } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, ThumbsUp, ThumbsDown, MessageSquare, X, RotateCcw, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
 import { compactDescription } from "@/lib/simplifyDescription";
+
+class SignalErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[SignalCard Error]", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
+          <AlertTriangle className="h-5 w-5 text-red-400 mx-auto mb-2" />
+          <p className="text-xs text-red-300">Card failed to render</p>
+          <button onClick={() => this.setState({ hasError: false, error: null })} className="text-[10px] text-red-400 underline mt-1">Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
@@ -635,7 +660,9 @@ const DashboardSignals = () => {
                     <div className="space-y-3">
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                          <SignalErrorBoundary>
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                          </SignalErrorBoundary>
                         </motion.div>
                       ))}
                     </div>
@@ -667,7 +694,9 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                        <SignalErrorBoundary>
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                        </SignalErrorBoundary>
                       </motion.div>
                     ))}
                   </div>
@@ -699,7 +728,9 @@ const DashboardSignals = () => {
                   <div className="space-y-3">
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                        <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                        <SignalErrorBoundary>
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} review={reviews[signal.id]} onReview={handleReview} />
+                        </SignalErrorBoundary>
                       </motion.div>
                     ))}
                   </div>
@@ -1222,4 +1253,25 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
   );
 }
 
-export default DashboardSignals;
+function DashboardSignalsWithBoundary() {
+  return (
+    <SignalErrorBoundary
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center p-8">
+            <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto mb-4" />
+            <h2 className="text-lg font-bold text-foreground mb-2">Signals page encountered an error</h2>
+            <p className="text-sm text-muted-foreground mb-4">Try refreshing the page.</p>
+            <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <DashboardSignals />
+    </SignalErrorBoundary>
+  );
+}
+
+export default DashboardSignalsWithBoundary;
