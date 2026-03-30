@@ -839,7 +839,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-shadow relative ${hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass} ${
-      hasUpdatedLogic ? "bg-yellow-500/8" : isWinner ? "bg-emerald-500/8" : isLoser ? "bg-red-500/8" : isExpired ? "bg-zinc-500/8" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+      hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     } ${review?.status === "correct" ? "ring-2 ring-emerald-400/40" : review?.status === "wrong" ? "ring-2 ring-red-400/40" : ""}`}>
       {review && (
         <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
