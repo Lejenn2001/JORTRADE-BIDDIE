@@ -172,6 +172,8 @@ function dbRecordToSignal(record: any): MarketSignal {
       return undefined;
     })(),
     spreadDetails: record.spread_details || null,
+    reviewStatus: record.review_status || null,
+    reviewNote: record.review_note || null,
   };
 }
 
@@ -361,7 +363,14 @@ const DashboardSignals = () => {
   }, [liveSignals, dbSignals]);
 
   const loading = liveLoading && dbLoading;
-  const signals = allSignals;
+  const signals = useMemo(() => {
+    if (isAdmin) return allSignals;
+    return allSignals.filter(s => s.reviewStatus !== "wrong");
+  }, [allSignals, isAdmin]);
+
+  const handleReviewChange = useCallback((signalId: string, status: "correct" | "wrong" | null) => {
+    setDbSignals(prev => prev.map(s => s.id === signalId ? { ...s, reviewStatus: status } : s));
+  }, []);
 
   useEffect(() => {
     const highlightId = searchParams.get("highlight");
@@ -601,7 +610,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -635,7 +644,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -669,7 +678,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -774,7 +783,7 @@ const DashboardSignals = () => {
   );
 };
 
-function AdminReviewPanel({ signalId, userId }: { signalId: string; userId: string }) {
+function AdminReviewPanel({ signalId, userId, onReviewChange }: { signalId: string; userId: string; onReviewChange?: (status: "correct" | "wrong" | null) => void }) {
   const [status, setStatus] = useState<"correct" | "wrong" | "pending" | null>(null);
   const [note, setNote] = useState("");
   const [savedNote, setSavedNote] = useState("");
@@ -804,8 +813,10 @@ function AdminReviewPanel({ signalId, userId }: { signalId: string; userId: stri
         headers: { "Content-Type": "application/json", "x-user-id": userId },
         body: JSON.stringify({ signalId, status: newStatus, note: note || undefined }),
       });
-      setStatus(newStatus === "pending" ? null : newStatus);
+      const resolved = newStatus === "pending" ? null : newStatus;
+      setStatus(resolved);
       setSavedNote(note);
+      onReviewChange?.(resolved as any);
     } catch {}
     setSaving(false);
   };
@@ -866,7 +877,7 @@ function AdminReviewPanel({ signalId, userId }: { signalId: string; userId: stri
   );
 }
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -902,6 +913,13 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
     <div className={`rounded-xl border overflow-hidden transition-shadow relative ${hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass} ${
       hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
     }`}>
+      {isAdmin && signal.reviewStatus === "wrong" && (
+        <div className="px-3 sm:px-4 py-1.5 bg-red-500/20 border-b border-red-500/30 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+          <span className="text-[10px] font-bold tracking-wider text-red-400 uppercase">Flagged — Hidden from users</span>
+          {signal.reviewNote && <span className="text-[10px] text-red-300/70 ml-1">— {signal.reviewNote}</span>}
+        </div>
+      )}
       {/* Price Confirmed Banner */}
       {signal.priceConfirmed && (
         <div className="px-3 sm:px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-500/30 flex items-center gap-2">
@@ -1184,7 +1202,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           </div>
         )}
         {isAdmin && userId && (
-          <AdminReviewPanel signalId={signal.id} userId={userId} />
+          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} />
         )}
       </div>
     </div>

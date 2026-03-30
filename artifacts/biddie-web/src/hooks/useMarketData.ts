@@ -66,6 +66,8 @@ export interface MarketSignal {
     max_loss: number | null;
     probability: number | null;
   } | null;
+  reviewStatus?: "correct" | "wrong" | null;
+  reviewNote?: string | null;
 }
 
 export interface TickerData {

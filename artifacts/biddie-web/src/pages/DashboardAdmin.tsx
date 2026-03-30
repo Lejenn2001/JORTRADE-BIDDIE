@@ -261,6 +261,91 @@ const AdminReferralsTab = () => {
   );
 };
 
+function FlaggedSignalsPanel() {
+  const [flagged, setFlagged] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [reviewsResp, signalsResp] = await Promise.all([
+          fetch("/api/whale/admin/signal-reviews", { headers: { "x-user-id": user?.id || "" } }),
+          fetch("/api/whale/signals/history?limit=200"),
+        ]);
+        const reviewsData = await reviewsResp.json();
+        const signalsData = await signalsResp.json();
+        const reviews = reviewsData.reviews || {};
+        const wrongIds = Object.entries(reviews).filter(([, r]: any) => r.status === "wrong").map(([id]: any) => id);
+        const wrongSignals = (signalsData.signals || []).filter((s: any) => wrongIds.includes(s.id));
+        wrongSignals.forEach((s: any) => { s.review_note = reviews[s.id]?.note || null; });
+        setFlagged(wrongSignals);
+      } catch {}
+      setLoading(false);
+    }
+    load();
+  }, [user?.id]);
+
+  if (loading) return null;
+  if (flagged.length === 0) return (
+    <div className="glass-panel rounded-xl border-border/40 p-5">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+        <h2 className="text-lg font-bold text-foreground">Flagged for Review</h2>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">ALL CLEAR</span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">No signals flagged. Mark any signal as incorrect on the Signals page to add it here.</p>
+    </div>
+  );
+
+  return (
+    <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-5 py-4 flex items-center gap-2 hover:bg-muted/10 transition-colors"
+      >
+        <AlertTriangle className="h-5 w-5 text-red-400" />
+        <h2 className="text-lg font-bold text-foreground">Flagged for Review</h2>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">{flagged.length}</span>
+        {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto" />}
+      </button>
+      {expanded && (
+        <div className="p-5 border-t border-border/40 space-y-3">
+          {flagged.map((s: any) => (
+            <div key={s.id} className="rounded-lg bg-red-500/5 border border-red-500/20 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-foreground">{s.ticker}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${s.option_type === 'call' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {(s.option_type || '').toUpperCase()}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">${s.strike}</span>
+                  {s.expiry && <span className="text-[10px] text-muted-foreground">{s.expiry}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">{new Date(s.detected_at || s.created_at).toLocaleDateString()}</span>
+                  <Link to={`/dashboard/signals?highlight=${s.id}`} className="text-[10px] text-blue-400 hover:underline flex items-center gap-1">
+                    <ExternalLink className="h-3 w-3" /> View
+                  </Link>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-[11px]">
+                <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{s.entry_trigger || `$${Number(s.price_at_signal).toFixed(2)}`}</span></div>
+                <div><span className="text-muted-foreground">Target:</span> <span className="text-foreground">{s.target || 'N/A'}</span></div>
+                <div><span className="text-muted-foreground">Invalidation:</span> <span className="text-foreground">{s.invalidation || 'N/A'}</span></div>
+              </div>
+              {s.review_note && (
+                <div className="mt-2 text-[11px] text-red-300/70 italic">Note: {s.review_note}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DashboardAdmin = () => {
   const { isAdmin, user } = useAuth();
   const onlineUsers = usePresenceTracker();
@@ -852,6 +937,8 @@ const DashboardAdmin = () => {
           {activeTab === 'signals' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <AdminSignalInsights onExport={exportSignalsCSV} exporting={exportingSignals} />
+
+              <FlaggedSignalsPanel />
 
               <div className="glass-panel rounded-xl border-border/40 overflow-hidden">
               <button

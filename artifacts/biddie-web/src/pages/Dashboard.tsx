@@ -146,7 +146,7 @@ const Dashboard = () => {
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 
-        setPersistedSignals((result.signals ?? []).map(recordToDashboardSignal));
+        setPersistedSignals((result.signals ?? []).filter((s: any) => s.review_status !== 'wrong').map(recordToDashboardSignal));
       } catch (error) {
         console.warn("Failed to load persisted dashboard signals:", error);
         setPersistedSignals([]);

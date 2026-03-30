@@ -2887,16 +2887,18 @@ router.get("/whale/signals/calendar", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
     const result = await dbQuery(
-      `SELECT id, ticker, signal_type, option_type AS "put_call", confidence, strike, expiry,
-              outcome, created_at, detected_at, resolved_at, category, price_at_signal,
-              target AS target_price, invalidation, entry_trigger, direction,
-              max_favorable_price, mfe_percent, max_adverse_price,
-              entry_price_reached, invalidation_breached, pct_past_invalidation,
-              time_at_target, entry_price, key_level, sr_level,
-              is_biddie_pick, signal_quality
-       FROM signal_outcomes
-       WHERE signal_source = 'replit'
-       ORDER BY detected_at DESC
+      `SELECT so.id, so.ticker, so.signal_type, so.option_type AS "put_call", so.confidence, so.strike, so.expiry,
+              so.outcome, so.created_at, so.detected_at, so.resolved_at, so.category, so.price_at_signal,
+              so.target AS target_price, so.invalidation, so.entry_trigger, so.direction,
+              so.max_favorable_price, so.mfe_percent, so.max_adverse_price,
+              so.entry_price_reached, so.invalidation_breached, so.pct_past_invalidation,
+              so.time_at_target, so.entry_price, so.key_level, so.sr_level,
+              so.is_biddie_pick, so.signal_quality,
+              sr.status AS review_status, sr.note AS review_note
+       FROM signal_outcomes so
+       LEFT JOIN signal_reviews sr ON sr.signal_id = so.id
+       WHERE so.signal_source = 'replit'
+       ORDER BY so.detected_at DESC
        LIMIT $1`,
       [limit]
     );
@@ -3152,11 +3154,12 @@ router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
-      `SELECT * FROM (
+      `SELECT d.*, sr.status AS review_status, sr.note AS review_note FROM (
         SELECT DISTINCT ON (ticker, category, strike, option_type) * FROM signal_outcomes
         WHERE signal_source = 'replit'
         ORDER BY ticker, category, strike, option_type, confidence DESC, detected_at DESC
-      ) deduped ORDER BY detected_at DESC LIMIT $1`,
+      ) d LEFT JOIN signal_reviews sr ON sr.signal_id = d.id
+      ORDER BY d.detected_at DESC LIMIT $1`,
       [limit]
     );
     const countResult = await dbQuery(
