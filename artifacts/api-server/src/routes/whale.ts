@@ -5528,10 +5528,11 @@ router.get("/whale/admin/signal-reviews", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] as string || req.query.userId as string;
     if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin only" });
-    const result = await dbQuery(`SELECT signal_id, status, note, reviewed_at FROM signal_reviews ORDER BY reviewed_at DESC`);
-    const reviewMap: Record<string, { status: string; note: string | null; reviewed_at: string }> = {};
+    await dbQuery(`ALTER TABLE signal_reviews ADD COLUMN IF NOT EXISTS signal_meta JSONB`).catch(() => {});
+    const result = await dbQuery(`SELECT signal_id, status, note, reviewed_at, signal_meta FROM signal_reviews ORDER BY reviewed_at DESC`);
+    const reviewMap: Record<string, { status: string; note: string | null; reviewed_at: string; signal_meta?: any }> = {};
     for (const r of result.rows) {
-      reviewMap[r.signal_id] = { status: r.status, note: r.note, reviewed_at: r.reviewed_at };
+      reviewMap[r.signal_id] = { status: r.status, note: r.note, reviewed_at: r.reviewed_at, signal_meta: r.signal_meta || null };
     }
     res.json({ reviews: reviewMap });
   } catch (err: any) {
@@ -5543,17 +5544,18 @@ router.post("/whale/admin/signal-review", async (req, res) => {
   try {
     const userId = req.headers["x-user-id"] as string;
     if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin only" });
-    const { signalId, status, note } = req.body as { signalId: string; status: string; note?: string };
+    const { signalId, status, note, signalMeta } = req.body as { signalId: string; status: string; note?: string; signalMeta?: any };
     if (!signalId || !status) return res.status(400).json({ error: "signalId and status required" });
     if (!["correct", "wrong", "pending"].includes(status)) return res.status(400).json({ error: "status must be correct, wrong, or pending" });
     if (status === "pending") {
       await dbQuery(`DELETE FROM signal_reviews WHERE signal_id = $1`, [signalId]);
     } else {
+      const metaJson = signalMeta ? JSON.stringify(signalMeta) : null;
       await dbQuery(
-        `INSERT INTO signal_reviews (signal_id, status, note, reviewed_by, reviewed_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (signal_id) DO UPDATE SET status = $2, note = $3, reviewed_by = $4, reviewed_at = NOW()`,
-        [signalId, status, note || null, userId]
+        `INSERT INTO signal_reviews (signal_id, status, note, reviewed_by, reviewed_at, signal_meta)
+         VALUES ($1, $2, $3, $4, NOW(), $5)
+         ON CONFLICT (signal_id) DO UPDATE SET status = $2, note = $3, reviewed_by = $4, reviewed_at = NOW(), signal_meta = COALESCE($5, signal_reviews.signal_meta)`,
+        [signalId, status, note || null, userId, metaJson]
       );
     }
     res.json({ ok: true });

@@ -270,35 +270,41 @@ function FlaggedSignalsPanel() {
   useEffect(() => {
     async function load() {
       try {
-        const [reviewsResp, signalsResp] = await Promise.all([
+        const [reviewsResp, signalsResp, liveResp] = await Promise.all([
           fetch("/api/whale/admin/signal-reviews", { headers: { "x-user-id": user?.id || "" } }),
           fetch("/api/whale/signals/history?limit=200"),
+          fetch("/api/whale/signals").catch(() => null),
         ]);
         const reviewsData = await reviewsResp.json();
         const signalsData = await signalsResp.json();
+        const liveData = liveResp ? await liveResp.json().catch(() => ({ signals: [] })) : { signals: [] };
         const reviews = reviewsData.reviews || {};
         const wrongEntries = Object.entries(reviews).filter(([, r]: any) => r.status === "wrong");
         const wrongIds = wrongEntries.map(([id]: any) => id);
-        const allSignals = signalsData.signals || [];
-        const wrongSignals = allSignals.filter((s: any) => wrongIds.includes(s.id));
+        const allSignals = [...(signalsData.signals || []), ...(liveData.signals || [])];
+        const seenIds = new Set<string>();
+        const deduped = allSignals.filter((s: any) => { if (seenIds.has(s.id)) return false; seenIds.add(s.id); return true; });
+        const wrongSignals = deduped.filter((s: any) => wrongIds.includes(s.id));
         wrongSignals.forEach((s: any) => { s.review_note = reviews[s.id]?.note || null; });
         const matchedIds = new Set(wrongSignals.map((s: any) => s.id));
         const unmatchedWrong = wrongEntries.filter(([id]) => !matchedIds.has(id));
         unmatchedWrong.forEach(([id, r]: any) => {
+          const meta = r.signal_meta || {};
           const parts = id.replace(/^replit-/, "").split("-");
-          const ticker = parts[0] || id;
-          const strike = parts[1] || "";
+          const ticker = meta.ticker || parts[0] || id;
+          const strike = meta.strike || parts[1] || "";
           wrongSignals.push({
             id,
             ticker,
             strike,
-            option_type: null,
-            expiry: null,
-            detected_at: r.updated_at || null,
-            entry_trigger: null,
-            target: null,
-            invalidation: null,
+            option_type: meta.option_type || null,
+            expiry: meta.expiry || null,
+            detected_at: meta.detected_at || r.reviewed_at || null,
+            entry_trigger: meta.entry_trigger || null,
+            target: meta.target || null,
+            invalidation: meta.invalidation || null,
             price_at_signal: null,
+            category: meta.category || null,
             review_note: r.note || null,
             _fromReviewOnly: true,
           });
@@ -355,7 +361,7 @@ function FlaggedSignalsPanel() {
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-3 text-[11px]">
-                <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{s.entry_trigger || `$${Number(s.price_at_signal).toFixed(2)}`}</span></div>
+                <div><span className="text-muted-foreground">Entry:</span> <span className="text-foreground">{s.entry_trigger || (s.price_at_signal ? `$${Number(s.price_at_signal).toFixed(2)}` : 'N/A')}</span></div>
                 <div><span className="text-muted-foreground">Target:</span> <span className="text-foreground">{s.target || 'N/A'}</span></div>
                 <div><span className="text-muted-foreground">Invalidation:</span> <span className="text-foreground">{s.invalidation || 'N/A'}</span></div>
               </div>

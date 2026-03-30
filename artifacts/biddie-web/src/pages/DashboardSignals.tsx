@@ -783,7 +783,7 @@ const DashboardSignals = () => {
   );
 };
 
-function AdminReviewPanel({ signalId, userId, onReviewChange }: { signalId: string; userId: string; onReviewChange?: (status: "correct" | "wrong" | null) => void }) {
+function AdminReviewPanel({ signalId, userId, onReviewChange, signalMeta }: { signalId: string; userId: string; onReviewChange?: (status: "correct" | "wrong" | null) => void; signalMeta?: any }) {
   const [status, setStatus] = useState<"correct" | "wrong" | "pending" | null>(null);
   const [note, setNote] = useState("");
   const [savedNote, setSavedNote] = useState("");
@@ -811,7 +811,7 @@ function AdminReviewPanel({ signalId, userId, onReviewChange }: { signalId: stri
       await fetch("/api/whale/admin/signal-review", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-user-id": userId },
-        body: JSON.stringify({ signalId, status: newStatus, note: note || undefined }),
+        body: JSON.stringify({ signalId, status: newStatus, note: note || undefined, signalMeta: signalMeta || undefined }),
       });
       const resolved = newStatus === "pending" ? null : newStatus;
       setStatus(resolved);
@@ -1219,7 +1219,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           </div>
         )}
         {isAdmin && userId && (
-          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} />
+          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} signalMeta={{ ticker: signal.ticker, strike: signal.strike, option_type: signal.putCall, expiry: signal.expiry, entry_trigger: signal.entry, target: signal.target, invalidation: signal.invalidation, category: signal.category, detected_at: signal.createdAt }} />
         )}
       </div>
     </div>
