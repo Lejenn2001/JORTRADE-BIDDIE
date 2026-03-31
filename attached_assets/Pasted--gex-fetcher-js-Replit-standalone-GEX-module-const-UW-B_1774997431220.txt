@@ -1,0 +1,78 @@
+// gex-fetcher.js — Replit standalone GEX module
+const UW_BASE = 'https://api.unusualwhales.com/api';
+const UW_KEY = process.env.UNUSUAL_WHALES_API_KEY;
+
+async function fetchGexLevels(ticker = 'SPX') {
+  const headers = { Authorization: `Bearer ${UW_KEY}`, Accept: 'application/json' };
+
+  const res = await fetch(`${UW_BASE}/stock/${ticker}/spot-exposures`, { headers });
+  if (!res.ok) throw new Error(`UW spot-exposures failed: ${res.status}`);
+  const json = await res.json();
+  const spotData = json.data || [];
+
+  // Also fetch current price from flow
+  const flowRes = await fetch(`${UW_BASE}/stock/${ticker}/flow-recent`, { headers });
+  const flowData = flowRes.ok ? await flowRes.json() : { data: [] };
+  const flowRecords = Array.isArray(flowData) ? flowData : flowData.data || [];
+  const currentPrice = parseFloat(flowRecords[0]?.underlying_price || '0');
+
+  return extractGexLevels(spotData, currentPrice);
+}
+
+function extractGexLevels(spotData, currentPrice) {
+  const parsed = spotData
+    .map(d => ({
+      price: parseFloat(d.price || '0'),
+      gexOI: parseFloat(d.gamma_per_one_percent_move_oi || '0'),
+      gexDir: parseFloat(d.gamma_per_one_percent_move_dir || '0'),
+    }))
+    .filter(d => d.price > 0)
+    .sort((a, b) => a.price - b.price);
+
+  if (!parsed.length) return null;
+
+  // Gamma flip — where GEX crosses zero
+  let gammaFlip = null;
+  for (let i = 1; i < parsed.length; i++) {
+    if ((parsed[i - 1].gexDir <= 0 && parsed[i].gexDir > 0) ||
+        (parsed[i - 1].gexDir >= 0 && parsed[i].gexDir < 0)) {
+      const p1 = parsed[i - 1], p2 = parsed[i];
+      const ratio = Math.abs(p1.gexDir) / (Math.abs(p1.gexDir) + Math.abs(p2.gexDir));
+      gammaFlip = Math.round((p1.price + ratio * (p2.price - p1.price)) * 100) / 100;
+      break;
+    }
+  }
+
+  // Call wall = highest positive GEX above price
+  const above = parsed.filter(d => d.price >= currentPrice);
+  const callWall = above.length
+    ? above.reduce((max, d) => d.gexOI > max.gexOI ? d : max, above[0])
+    : null;
+
+  // Put wall = most negative GEX below price
+  const below = parsed.filter(d => d.price < currentPrice);
+  const putWall = below.length
+    ? below.reduce((min, d) => d.gexOI < min.gexOI ? d : min, below[0])
+    : null;
+
+  // Key magnet = highest absolute GEX
+  const keyMagnet = parsed.reduce((max, d) =>
+    Math.abs(d.gexOI) > Math.abs(max.gexOI) ? d : max, parsed[0]);
+
+  const dealerPositioning = currentPrice > (gammaFlip || 0)
+    ? 'Long Gamma (suppresses moves)'
+    : 'Short Gamma (amplifies moves)';
+
+  return {
+    gammaFlip,
+    callWall: callWall ? { price: callWall.price, gex: callWall.gexOI } : null,
+    putWall: putWall ? { price: putWall.price, gex: putWall.gexOI } : null,
+    keyMagnet: { price: keyMagnet.price, gex: keyMagnet.gexOI },
+    dealerPositioning,
+  };
+}
+
+// Usage example:
+// fetchGexLevels('SPX').then(console.log);
+
+module.exports = { fetchGexLevels, extractGexLevels };
