@@ -5111,6 +5111,38 @@ router.post("/whale/admin/cleanup-bad-signals", async (_req, res) => {
   }
 });
 
+router.post("/whale/admin/insert-test-signals", async (req, res) => {
+  try {
+    const { adminSecret, signals } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(signals)) return res.status(400).json({ error: "signals must be an array" });
+    let inserted = 0;
+    for (const s of signals) {
+      try {
+        await dbQuery(
+          `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, gamma_zone, gamma_description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24, $25, $26)`,
+          [
+            s.ticker, s.signal_type, "replit", s.strike, s.expiry, s.premium,
+            s.option_type, s.direction, s.confidence, s.conviction_score,
+            s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
+            s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
+            s.price_at_signal || null, s.key_level || null, s.sr_level || null,
+            s.target_near || null, s.trade_status || "watching", s.is_biddie_pick ?? true,
+            s.signal_quality || null, s.gamma_zone || null, s.gamma_description || null
+          ]
+        );
+        inserted++;
+      } catch (e: any) {
+        console.error(`[admin] insert test signal failed:`, e.message);
+      }
+    }
+    res.json({ success: true, inserted });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/dedup-signals", async (req, res) => {
   try {
     const { adminSecret } = req.body;
