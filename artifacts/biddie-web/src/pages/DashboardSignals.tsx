@@ -453,9 +453,35 @@ const DashboardSignals = () => {
     return filtered.filter(s => s.category === 'spread');
   }, [filtered]);
 
-  const spxSignals = useMemo(() => {
+  const pipelineSpx = useMemo(() => {
     return filtered.filter(s => s.ticker === 'SPX' || s.ticker === 'SPXW');
   }, [filtered]);
+
+  const [dbSpxSignals, setDbSpxSignals] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadSpxFromDb = async () => {
+      try {
+        const res = await fetch('/api/whale/spx-signals');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.signals) setDbSpxSignals(data.signals);
+        }
+      } catch {}
+    };
+    loadSpxFromDb();
+    const interval = setInterval(loadSpxFromDb, 180_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const spxSignals = useMemo(() => {
+    const pipelineIds = new Set(pipelineSpx.map((s: any) => s.id));
+    const merged = [...pipelineSpx];
+    for (const s of dbSpxSignals) {
+      if (!pipelineIds.has(s.id)) merged.push(s);
+    }
+    return merged.sort((a: any, b: any) => new Date(b.detected_at || 0).getTime() - new Date(a.detected_at || 0).getTime());
+  }, [pipelineSpx, dbSpxSignals]);
 
   useEffect(() => {
     const loadGex = async () => {

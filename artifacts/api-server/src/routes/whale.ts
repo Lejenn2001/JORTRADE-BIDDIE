@@ -5941,6 +5941,50 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
   }
 }
 
+router.get("/whale/spx-signals", async (_req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT * FROM signal_outcomes 
+       WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit'
+       AND trade_status NOT IN ('expired')
+       ORDER BY detected_at DESC LIMIT 50`
+    );
+    const signals = (result?.rows || []).map((r: any) => ({
+      id: r.id,
+      ticker: r.ticker,
+      signal_type: r.signal_type,
+      signal_source: r.signal_source,
+      strike: r.strike ? parseFloat(r.strike) : null,
+      expiry: r.expiry,
+      premium: r.premium ? parseFloat(r.premium) : null,
+      option_type: r.option_type,
+      direction: r.direction,
+      confidence: r.confidence,
+      conviction_score: r.conviction_score,
+      category: r.category,
+      reason: r.reason,
+      entry_trigger: r.entry_trigger,
+      target: r.target,
+      target_near: r.target_near,
+      invalidation: r.invalidation,
+      key_level: r.key_level,
+      sr_level: r.sr_level,
+      tags: r.tags || [],
+      spread_details: r.spread_details,
+      price_at_signal: r.price_at_signal ? parseFloat(r.price_at_signal) : null,
+      trade_status: r.trade_status,
+      is_biddie_pick: r.is_biddie_pick,
+      signal_quality: r.signal_quality,
+      gamma_zone: r.gamma_zone,
+      gamma_description: r.gamma_description,
+      detected_at: r.detected_at,
+    }));
+    res.json({ signals, count: signals.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/whale/gex/spx", async (_req, res) => {
   try {
     const gex = await fetchSpxGex();
