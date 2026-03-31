@@ -1968,7 +1968,7 @@ async function runSignalsPipeline() {
     const direction = optType === "call" ? "bullish" : "bearish";
     const klPrice = kl?.current_price ?? null;
     const uwPrice = parseFloat(c.underlying_price) || null;
-    const price = klPrice ?? uwPrice;
+    const price = spxTickers.has(ticker) ? (uwPrice ?? klPrice) : (klPrice ?? uwPrice);
 
     // ── Hard filters: reject signals that aren't actionable ──
 
