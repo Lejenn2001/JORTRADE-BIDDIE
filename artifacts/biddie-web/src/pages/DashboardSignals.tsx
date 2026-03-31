@@ -162,6 +162,8 @@ function dbRecordToSignal(record: any): MarketSignal {
     spreadDetails: record.spread_details || null,
     reviewStatus: record.review_status || null,
     reviewNote: record.review_note || null,
+    gammaZone: record.gamma_zone || undefined,
+    gammaDescription: record.gamma_description || undefined,
   };
 }
 
@@ -847,25 +849,33 @@ const DashboardSignals = () => {
                   </div>
                   <div className="space-y-3">
                     {spxSignals.map((signal, i) => {
-                      let gexContext: string | undefined;
-                      if (gexData && signal.strike) {
+                      let enrichedSignal = signal;
+                      if (!signal.gammaDescription && gexData && signal.strike) {
                         const strike = Number(String(signal.strike).replace(/[^0-9.]/g, ""));
+                        let gexContext: string | undefined;
+                        let gexZone: "positive" | "negative" | "neutral" | undefined;
                         if (gexData.callWall && Math.abs(strike - gexData.callWall.price) / gexData.callWall.price < 0.005) {
                           gexContext = `Near call wall at $${gexData.callWall.price.toLocaleString()}`;
+                          gexZone = "positive";
                         } else if (gexData.putWall && Math.abs(strike - gexData.putWall.price) / gexData.putWall.price < 0.005) {
                           gexContext = `Near put wall at $${gexData.putWall.price.toLocaleString()}`;
+                          gexZone = "negative";
                         } else if (gexData.gammaFlip && Math.abs(strike - gexData.gammaFlip) / gexData.gammaFlip < 0.005) {
                           gexContext = `Near gamma flip at $${gexData.gammaFlip.toLocaleString()}`;
+                          gexZone = "neutral";
                         } else if (gexData.gammaFlip) {
-                          gexContext = strike > gexData.gammaFlip
-                            ? `Above gamma flip — long gamma territory`
-                            : `Below gamma flip — short gamma territory`;
+                          if (strike > gexData.gammaFlip) {
+                            gexContext = `Above gamma flip — long gamma territory`;
+                            gexZone = "positive";
+                          } else {
+                            gexContext = `Below gamma flip — short gamma territory`;
+                            gexZone = "negative";
+                          }
+                        }
+                        if (gexContext) {
+                          enrichedSignal = { ...signal, gammaDescription: gexContext, gammaZone: gexZone };
                         }
                       }
-                      const parsedStrike = signal.strike ? Number(String(signal.strike).replace(/[^0-9.]/g, "")) : 0;
-                      const enrichedSignal = gexContext
-                        ? { ...signal, gammaDescription: gexContext, gammaZone: gexData && gexData.gammaFlip && parsedStrike > gexData.gammaFlip ? "positive" as const : "negative" as const }
-                        : signal;
                       return (
                         <motion.div key={`spx-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
