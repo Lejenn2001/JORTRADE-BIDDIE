@@ -5752,4 +5752,131 @@ router.post("/whale/trump-posts/refresh", async (_req, res) => {
   }
 });
 
+// ── SPX Gamma Exposure (GEX) ─────────────────────────────────────────────────
+interface GexLevels {
+  gammaFlip: number | null;
+  callWall: { price: number; gex: number } | null;
+  putWall: { price: number; gex: number } | null;
+  keyMagnet: { price: number; gex: number };
+  dealerPositioning: string;
+  currentPrice: number;
+  updatedAt: string;
+}
+
+let gexCache: GexLevels | null = null;
+let gexCacheTime = 0;
+const GEX_CACHE_TTL = 180_000;
+
+async function fetchSpxGex(): Promise<GexLevels | null> {
+  const now = Date.now();
+  if (gexCache && now - gexCacheTime < GEX_CACHE_TTL) return gexCache;
+
+  try {
+    const headers = { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}`, Accept: "application/json" };
+
+    const [spotRes, flowRes] = await Promise.all([
+      fetch(`${UW_BASE}/api/stock/SPX/spot-exposures`, { headers }),
+      fetch(`${UW_BASE}/api/stock/SPX/flow-recent`, { headers }),
+    ]);
+
+    if (!spotRes.ok) {
+      console.error(`[gex] spot-exposures failed: ${spotRes.status}`);
+      return gexCache;
+    }
+
+    const spotJson = await spotRes.json();
+    const spotData = spotJson.data || [];
+
+    let currentPrice = 0;
+    if (flowRes.ok) {
+      const flowJson = await flowRes.json();
+      const flowRecords = Array.isArray(flowJson) ? flowJson : flowJson.data || [];
+      currentPrice = parseFloat(flowRecords[0]?.underlying_price || "0");
+    }
+
+    if (!currentPrice) {
+      try {
+        const polyRes = await fetch(POLYGON_SNAPSHOT_TICKER("SPY"));
+        if (polyRes.ok) {
+          const polyData = await polyRes.json();
+          const spyPrice = polyData?.ticker?.lastTrade?.p || polyData?.ticker?.day?.c || 0;
+          currentPrice = spyPrice * 10;
+        }
+      } catch {}
+    }
+
+    const parsed = spotData
+      .map((d: any) => ({
+        price: parseFloat(d.price || "0"),
+        gexOI: parseFloat(d.gamma_per_one_percent_move_oi || "0"),
+        gexDir: parseFloat(d.gamma_per_one_percent_move_dir || "0"),
+      }))
+      .filter((d: any) => d.price > 0)
+      .sort((a: any, b: any) => a.price - b.price);
+
+    if (!parsed.length) return gexCache;
+
+    if (currentPrice <= 0) {
+      console.warn("[gex] Could not determine SPX current price, returning stale cache");
+      return gexCache;
+    }
+
+    let gammaFlip: number | null = null;
+    for (let i = 1; i < parsed.length; i++) {
+      if ((parsed[i - 1].gexDir <= 0 && parsed[i].gexDir > 0) ||
+          (parsed[i - 1].gexDir >= 0 && parsed[i].gexDir < 0)) {
+        const p1 = parsed[i - 1], p2 = parsed[i];
+        const ratio = Math.abs(p1.gexDir) / (Math.abs(p1.gexDir) + Math.abs(p2.gexDir));
+        gammaFlip = Math.round((p1.price + ratio * (p2.price - p1.price)) * 100) / 100;
+        break;
+      }
+    }
+
+    const above = parsed.filter((d: any) => d.price >= currentPrice);
+    const callWall = above.length
+      ? above.reduce((max: any, d: any) => d.gexOI > max.gexOI ? d : max, above[0])
+      : null;
+
+    const below = parsed.filter((d: any) => d.price < currentPrice);
+    const putWall = below.length
+      ? below.reduce((min: any, d: any) => d.gexOI < min.gexOI ? d : min, below[0])
+      : null;
+
+    const keyMagnet = parsed.reduce((max: any, d: any) =>
+      Math.abs(d.gexOI) > Math.abs(max.gexOI) ? d : max, parsed[0]);
+
+    const dealerPositioning = currentPrice > (gammaFlip || 0)
+      ? "Long Gamma (suppresses moves)"
+      : "Short Gamma (amplifies moves)";
+
+    gexCache = {
+      gammaFlip,
+      callWall: callWall ? { price: callWall.price, gex: callWall.gexOI } : null,
+      putWall: putWall ? { price: putWall.price, gex: putWall.gexOI } : null,
+      keyMagnet: { price: keyMagnet.price, gex: keyMagnet.gexOI },
+      dealerPositioning,
+      currentPrice,
+      updatedAt: new Date().toISOString(),
+    };
+    gexCacheTime = now;
+    console.log(`[gex] SPX GEX updated: flip=${gammaFlip}, callWall=${callWall?.price}, putWall=${putWall?.price}, magnet=${keyMagnet.price}, dealer=${dealerPositioning}`);
+    return gexCache;
+  } catch (err: any) {
+    console.error("[gex] fetchSpxGex error:", err.message);
+    return gexCache;
+  }
+}
+
+router.get("/whale/gex/spx", async (_req, res) => {
+  try {
+    const gex = await fetchSpxGex();
+    if (!gex) {
+      return res.json({ gex: null, error: "GEX data not available" });
+    }
+    res.json({ gex });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

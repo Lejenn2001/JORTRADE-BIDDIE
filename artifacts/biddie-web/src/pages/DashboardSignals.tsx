@@ -15,7 +15,17 @@ import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription } from "@/lib/simplifyDescription";
 
 type FilterType = "all" | "call" | "put";
-type ViewTab = "algorithm" | "whale" | "spread";
+type ViewTab = "algorithm" | "whale" | "spread" | "spx";
+
+interface GexData {
+  gammaFlip: number | null;
+  callWall: { price: number; gex: number } | null;
+  putWall: { price: number; gex: number } | null;
+  keyMagnet: { price: number; gex: number };
+  dealerPositioning: string;
+  currentPrice: number;
+  updatedAt: string;
+}
 
 const ALGO_SECTION_META = {
   buy_now: {
@@ -190,6 +200,8 @@ const DashboardSignals = () => {
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
   const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
+  const [gexData, setGexData] = useState<GexData | null>(null);
+  const [gexLoading, setGexLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -369,7 +381,9 @@ const DashboardSignals = () => {
     const target = signals.find((s: any) => s.id === highlightId);
     if (target) {
       const cat = (target as any).category || "algorithm";
-      if (cat === "whale") setViewTab("whale");
+      const ticker = (target as any).ticker || "";
+      if (ticker === "SPX" || ticker === "SPXW") setViewTab("spx");
+      else if (cat === "whale") setViewTab("whale");
       else if (cat === "spread") setViewTab("spread");
       else setViewTab("algorithm");
     }
@@ -437,9 +451,31 @@ const DashboardSignals = () => {
     return filtered.filter(s => s.category === 'spread');
   }, [filtered]);
 
+  const spxSignals = useMemo(() => {
+    return filtered.filter(s => s.ticker === 'SPX' || s.ticker === 'SPXW');
+  }, [filtered]);
+
+  useEffect(() => {
+    const loadGex = async () => {
+      setGexLoading(true);
+      try {
+        const res = await fetch('/api/whale/gex/spx');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.gex) setGexData(data.gex);
+        }
+      } catch {}
+      setGexLoading(false);
+    };
+    loadGex();
+    const interval = setInterval(loadGex, 180_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const algoCount = algorithmSignals.buy_now.length + algorithmSignals.short_term.length;
   const whaleCount = whaleSignals.length;
   const spreadCount = spreadSignals.length;
+  const spxCount = spxSignals.length;
   const totalCount = signals.length;
 
   return (
@@ -531,6 +567,20 @@ const DashboardSignals = () => {
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                 viewTab === "spread" ? "bg-violet-500/30" : "bg-muted/50"
               }`}>{spreadCount}</span>
+            </button>
+            <button
+              onClick={() => setViewTab("spx")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewTab === "spx"
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
+                  : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <Gauge className="h-4 w-4" />
+              SPX / GEX
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                viewTab === "spx" ? "bg-cyan-500/30" : "bg-muted/50"
+              }`}>{spxCount}</span>
             </button>
             <span className="ml-auto text-xs text-muted-foreground font-semibold">
               Total: <span className="text-foreground">{totalCount}</span>
@@ -703,6 +753,130 @@ const DashboardSignals = () => {
               )}
             </>
           )}
+
+          {viewTab === "spx" && (
+            <>
+              <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-[hsl(232,30%,7%)] to-slate-950/30 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Gauge className="h-5 w-5 text-cyan-400" />
+                  <span className="font-bold text-sm text-cyan-400 tracking-wide">SPX GAMMA EXPOSURE</span>
+                  {gexLoading && <span className="text-[9px] text-muted-foreground animate-pulse ml-2">updating...</span>}
+                  {gexData && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      SPX ${gexData.currentPrice.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+
+                {!gexData && !gexLoading && (
+                  <p className="text-xs text-muted-foreground">GEX data not available — check back during market hours.</p>
+                )}
+
+                {gexData && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Gamma Flip</div>
+                      <div className="text-lg font-black text-cyan-400 mt-0.5">
+                        {gexData.gammaFlip ? `$${gexData.gammaFlip.toLocaleString()}` : "N/A"}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">
+                        {gexData.gammaFlip && gexData.currentPrice > gexData.gammaFlip
+                          ? `${((gexData.currentPrice - gexData.gammaFlip) / gexData.gammaFlip * 100).toFixed(1)}% above`
+                          : gexData.gammaFlip
+                          ? `${((gexData.gammaFlip - gexData.currentPrice) / gexData.currentPrice * 100).toFixed(1)}% below`
+                          : ""}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Call Wall</div>
+                      <div className="text-lg font-black text-emerald-400 mt-0.5">
+                        {gexData.callWall ? `$${gexData.callWall.price.toLocaleString()}` : "N/A"}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">Resistance — dealers sell here</div>
+                    </div>
+
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Put Wall</div>
+                      <div className="text-lg font-black text-red-400 mt-0.5">
+                        {gexData.putWall ? `$${gexData.putWall.price.toLocaleString()}` : "N/A"}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">Support — dealers buy here</div>
+                    </div>
+
+                    <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Key Magnet</div>
+                      <div className="text-lg font-black text-amber-400 mt-0.5">
+                        ${gexData.keyMagnet.price.toLocaleString()}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">Highest GEX concentration</div>
+                    </div>
+                  </div>
+                )}
+
+                {gexData && (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold ${
+                    gexData.dealerPositioning.includes("Long")
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : "bg-red-500/10 text-red-400 border border-red-500/20"
+                  }`}>
+                    <MapPin className="h-3.5 w-3.5" />
+                    Dealer Positioning: {gexData.dealerPositioning}
+                  </div>
+                )}
+              </div>
+
+              {spxCount === 0 && !loading && (
+                <div className="glass-panel rounded-xl p-8 text-center border border-cyan-500/20">
+                  <Gauge className="h-8 w-8 text-cyan-400/40 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No SPX/SPXW signals detected yet. SPX flow signals appear here when institutional activity is detected on the S&P 500 index.</p>
+                </div>
+              )}
+
+              {spxSignals.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Gauge className="h-4 w-4 text-cyan-400" />
+                    <span className="font-bold text-xs sm:text-sm text-cyan-400">SPX INDEX SIGNALS</span>
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">— S&P 500 with gamma context</span>
+                    <span className="text-[10px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded-full ml-auto">
+                      {spxSignals.length}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {spxSignals.map((signal, i) => {
+                      let gexContext: string | undefined;
+                      if (gexData && signal.strike) {
+                        const strike = Number(String(signal.strike).replace(/[^0-9.]/g, ""));
+                        if (gexData.callWall && Math.abs(strike - gexData.callWall.price) / gexData.callWall.price < 0.005) {
+                          gexContext = `Near call wall at $${gexData.callWall.price.toLocaleString()}`;
+                        } else if (gexData.putWall && Math.abs(strike - gexData.putWall.price) / gexData.putWall.price < 0.005) {
+                          gexContext = `Near put wall at $${gexData.putWall.price.toLocaleString()}`;
+                        } else if (gexData.gammaFlip && Math.abs(strike - gexData.gammaFlip) / gexData.gammaFlip < 0.005) {
+                          gexContext = `Near gamma flip at $${gexData.gammaFlip.toLocaleString()}`;
+                        } else if (gexData.gammaFlip) {
+                          gexContext = strike > gexData.gammaFlip
+                            ? `Above gamma flip — long gamma territory`
+                            : `Below gamma flip — short gamma territory`;
+                        }
+                      }
+                      const parsedStrike = signal.strike ? Number(String(signal.strike).replace(/[^0-9.]/g, "")) : 0;
+                      const enrichedSignal = gexContext
+                        ? { ...signal, gammaDescription: gexContext, gammaZone: gexData && gexData.gammaFlip && parsedStrike > gexData.gammaFlip ? "positive" as const : "negative" as const }
+                        : signal;
+                      return (
+                        <motion.div key={`spx-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
+                          <SignalErrorBoundary>
+                            <SpxSignalCard signal={enrichedSignal} gexData={gexData} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          </SignalErrorBoundary>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </main>
 
         <AnimatePresence>
@@ -798,6 +972,108 @@ const DashboardSignals = () => {
     </div>
   );
 };
+
+function SpxSignalCard({ signal, gexData, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; gexData: GexData | null; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
+  const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
+  const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
+
+  return (
+    <div className={`rounded-xl border overflow-hidden transition-shadow ${
+      score >= 85
+        ? "shadow-[0_0_15px_-3px_rgba(6,182,212,0.4)] border-cyan-500/40"
+        : "shadow-[0_0_10px_-3px_rgba(6,182,212,0.25)] border-cyan-500/30"
+    } ${isCall ? "bg-cyan-500/5" : "bg-red-500/5"}`}>
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-black tracking-wider text-cyan-300">{signal.ticker}</span>
+              <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
+                isCall ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+              }`}>
+                {isCall ? "CALL" : "PUT"}
+              </span>
+              {signal.strike && <span className="text-xs text-muted-foreground">${signal.strike}</span>}
+              {signal.expiry && <span className="text-xs text-muted-foreground">{signal.expiry}</span>}
+              {signal.category === 'whale' && (
+                <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">WHALE</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{compactDescription(signal)}</p>
+          </div>
+          <ConvictionScoreRing score={score} label={signal.convictionLabel || "Conviction"} size="sm" />
+        </div>
+
+        {signal.gammaDescription && (
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold ${
+            signal.gammaZone === "positive"
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              : "bg-red-500/10 text-red-400 border border-red-500/20"
+          }`}>
+            <Crosshair className="h-3 w-3 flex-shrink-0" />
+            {signal.gammaDescription}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          {signal.entryTrigger && (
+            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
+              <span className="text-muted-foreground">Entry:</span>{" "}
+              <span className="text-foreground font-medium">{signal.entryTrigger}</span>
+            </div>
+          )}
+          {signal.targetZone && (
+            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
+              <span className="text-muted-foreground">Target:</span>{" "}
+              <span className="text-foreground font-medium">{signal.targetZone}</span>
+            </div>
+          )}
+          {signal.invalidation && (
+            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
+              <span className="text-muted-foreground">Invalidation:</span>{" "}
+              <span className="text-foreground font-medium">{signal.invalidation}</span>
+            </div>
+          )}
+          {signal.premium && (
+            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
+              <span className="text-muted-foreground">Premium:</span>{" "}
+              <span className="text-foreground font-medium">{signal.premium}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={() => onTakeTrade?.(signal)}
+            disabled={isTaking}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+              isTaken
+                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                : "bg-muted/30 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 border border-white/10"
+            }`}
+          >
+            {isTaken ? <><Check className="h-3 w-3" /> Taken</> : <><Plus className="h-3 w-3" /> Take Trade</>}
+          </button>
+          <button
+            onClick={() => onSetAlert?.(signal)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+              hasAlert
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                : "bg-muted/30 text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 border border-white/10"
+            }`}
+          >
+            <Bell className="h-3 w-3" />
+          </button>
+          <span className="ml-auto text-[10px] text-muted-foreground">{signal.timestamp}</span>
+        </div>
+
+        {isAdmin && userId && (
+          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} />
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AdminReviewPanel({ signalId, userId, onReviewChange, signalMeta }: { signalId: string; userId: string; onReviewChange?: (status: "correct" | "wrong" | null) => void; signalMeta?: any }) {
   const [status, setStatus] = useState<"correct" | "wrong" | "pending" | null>(null);

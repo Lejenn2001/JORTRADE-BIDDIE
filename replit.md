@@ -47,7 +47,8 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - Features include:
     - User authentication via Supabase (email/password, Google/Apple OAuth).
     - Dashboard with tabs for Chat, Decision Engine (signals), Market, P&L, Analytics, Breakout Scanner, Trump Feed, Community, and Settings.
-    - Displays various signal categories (Algorithm Plays, Whale Plays, Spreads & Butterflies) with real-time data.
+    - Displays various signal categories (Algorithm Plays, Whale Plays, Spreads & Butterflies, SPX/GEX) with real-time data.
+    - SPX/GEX tab: Dedicated S&P 500 index tab with real-time Gamma Exposure data (gamma flip, call wall, put wall, key magnet, dealer positioning) from Unusual Whales spot-exposures API. SPX signals are enriched with GEX proximity context.
     - Performance tracking for signals and user trades.
     - AI-powered ticker analysis, integrating options flow, dark pool, and key levels.
     - Breakout scanner with Bollinger Band/Keltner Channel squeeze detection and real-time alerts.
