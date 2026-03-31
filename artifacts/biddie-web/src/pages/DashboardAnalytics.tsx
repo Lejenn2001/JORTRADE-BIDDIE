@@ -744,10 +744,20 @@ interface DayStats {
   tickers: Record<string, { hits: number; misses: number; pending: number; total: number }>;
 }
 
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function signalDateStr(s: HistoricalSignal): string {
+  const raw = s.detected_at || s.created_at;
+  const d = new Date(raw);
+  return toLocalDateStr(d);
+}
+
 function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats> {
   const byDay: Record<string, DayStats> = {};
   for (const s of signals) {
-    const dateStr = (s.detected_at || s.created_at).slice(0, 10);
+    const dateStr = signalDateStr(s);
     if (!byDay[dateStr]) {
       byDay[dateStr] = { date: dateStr, total: 0, hits: 0, misses: 0, pending: 0, winRate: 0, tickers: {} };
     }
@@ -772,17 +782,17 @@ function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats
 
 function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) {
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = toLocalDateStr(now);
 
   const dayOfWeek = now.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(now);
   monday.setDate(monday.getDate() + mondayOffset);
-  const mondayStr = monday.toISOString().slice(0, 10);
+  const mondayStr = toLocalDateStr(monday);
 
-  const todaySignals = allSignals.filter(s => (s.detected_at || s.created_at).slice(0, 10) === todayStr);
+  const todaySignals = allSignals.filter(s => signalDateStr(s) === todayStr);
   const weekSignals = allSignals.filter(s => {
-    const d = (s.detected_at || s.created_at).slice(0, 10);
+    const d = signalDateStr(s);
     return d >= mondayStr && d <= todayStr;
   });
 
@@ -870,8 +880,8 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
   const startPad = firstDay.getDay();
   const totalDays = lastDay.getDate();
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const prevMonth = () => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); };
+  const nextMonth = () => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); };
 
   const getDayColor = (stats: DayStats | undefined) => {
     if (!stats || stats.total === 0) return "";
@@ -891,7 +901,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
     return "text-red-400";
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalDateStr(new Date());
 
   return (
     <motion.div
