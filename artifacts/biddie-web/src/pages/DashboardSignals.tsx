@@ -1020,6 +1020,8 @@ function SpxSignalCard({ signal, gexData, isTaken, isTaking, onTakeTrade, getPri
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold ${
             signal.gammaZone === "positive"
               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              : signal.gammaZone === "neutral"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
               : "bg-red-500/10 text-red-400 border border-red-500/20"
           }`}>
             <Crosshair className="h-3 w-3 flex-shrink-0" />
