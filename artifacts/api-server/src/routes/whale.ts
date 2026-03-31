@@ -5075,6 +5075,10 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
       if (u.clear_resolved === true) {
         setClauses.push(`resolved_at = NULL`);
       }
+      if (u.detected_at !== undefined && u.detected_at !== null) {
+        setClauses.push(`detected_at = $${paramIdx++}`);
+        params.push(u.detected_at);
+      }
 
       if (setClauses.length === 0) continue;
 
