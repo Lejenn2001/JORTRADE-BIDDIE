@@ -5079,6 +5079,18 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
         setClauses.push(`detected_at = $${paramIdx++}`);
         params.push(u.detected_at);
       }
+      if (u.price_at_signal !== undefined && u.price_at_signal !== null) {
+        setClauses.push(`price_at_signal = $${paramIdx++}`);
+        params.push(u.price_at_signal);
+      }
+      if (u.reason !== undefined && u.reason !== null) {
+        setClauses.push(`reason = $${paramIdx++}`);
+        params.push(u.reason);
+      }
+      if (u.gamma_description !== undefined && u.gamma_description !== null) {
+        setClauses.push(`gamma_description = $${paramIdx++}`);
+        params.push(u.gamma_description);
+      }
 
       if (setClauses.length === 0) continue;
 
