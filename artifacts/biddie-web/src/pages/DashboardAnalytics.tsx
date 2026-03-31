@@ -790,10 +790,15 @@ function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) 
   monday.setDate(monday.getDate() + mondayOffset);
   const mondayStr = toLocalDateStr(monday);
 
+  const friday = new Date(monday);
+  friday.setDate(friday.getDate() + 4);
+  const fridayStr = toLocalDateStr(friday);
+  const weekEndStr = todayStr < fridayStr ? todayStr : fridayStr;
+
   const todaySignals = allSignals.filter(s => signalDateStr(s) === todayStr);
   const weekSignals = allSignals.filter(s => {
     const d = signalDateStr(s);
-    return d >= mondayStr && d <= todayStr;
+    return d >= mondayStr && d <= weekEndStr;
   });
 
   const computeBlock = (sigs: HistoricalSignal[]) => {
@@ -959,7 +964,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
                     ? "border-primary/50 bg-primary/15 ring-1 ring-primary/30"
                     : hasData
                     ? `${getDayColor(stats)} hover:scale-[1.05] cursor-pointer`
-                    : "border-transparent hover:border-white/5"
+                    : "border-white/5 bg-white/[0.02]"
                 } ${isToday ? "ring-1 ring-cyan-400/40" : ""}`}
               >
                 <div className={`text-[10px] font-bold mt-1 ${isToday ? "text-cyan-400" : hasData ? "text-foreground" : "text-muted-foreground/30"}`}>
