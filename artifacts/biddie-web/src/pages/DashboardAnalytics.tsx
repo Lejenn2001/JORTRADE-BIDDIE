@@ -602,6 +602,7 @@ const DashboardAnalytics = () => {
                       signalStats={signalStats}
                       topTickers={topTickers}
                       weeklyStats={weeklyStats}
+                      allSignals={allSignals}
                     />
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
                       className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-yellow-500/5 via-background to-background">
@@ -733,10 +734,319 @@ function CategoryBar({ category, hits, total }: { category: string; hits: number
   );
 }
 
-function OverviewTab({ signalStats, topTickers, weeklyStats }: {
+interface DayStats {
+  date: string;
+  total: number;
+  hits: number;
+  misses: number;
+  pending: number;
+  winRate: number;
+  tickers: Record<string, { hits: number; misses: number; pending: number; total: number }>;
+}
+
+function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats> {
+  const byDay: Record<string, DayStats> = {};
+  for (const s of signals) {
+    const dateStr = (s.detected_at || s.created_at).slice(0, 10);
+    if (!byDay[dateStr]) {
+      byDay[dateStr] = { date: dateStr, total: 0, hits: 0, misses: 0, pending: 0, winRate: 0, tickers: {} };
+    }
+    const day = byDay[dateStr];
+    day.total++;
+    if (s.outcome === "hit" || s.outcome === "partial_hit") day.hits++;
+    else if (s.outcome === "missed") day.misses++;
+    else day.pending++;
+
+    if (!day.tickers[s.ticker]) day.tickers[s.ticker] = { hits: 0, misses: 0, pending: 0, total: 0 };
+    day.tickers[s.ticker].total++;
+    if (s.outcome === "hit" || s.outcome === "partial_hit") day.tickers[s.ticker].hits++;
+    else if (s.outcome === "missed") day.tickers[s.ticker].misses++;
+    else day.tickers[s.ticker].pending++;
+  }
+  for (const day of Object.values(byDay)) {
+    const resolved = day.hits + day.misses;
+    day.winRate = resolved > 0 ? Math.round((day.hits / resolved) * 100) : -1;
+  }
+  return byDay;
+}
+
+function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  const dayOfWeek = now.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(monday.getDate() + mondayOffset);
+  const mondayStr = monday.toISOString().slice(0, 10);
+
+  const todaySignals = allSignals.filter(s => (s.detected_at || s.created_at).slice(0, 10) === todayStr);
+  const weekSignals = allSignals.filter(s => {
+    const d = (s.detected_at || s.created_at).slice(0, 10);
+    return d >= mondayStr && d <= todayStr;
+  });
+
+  const computeBlock = (sigs: HistoricalSignal[]) => {
+    const total = sigs.length;
+    const hits = sigs.filter(s => s.outcome === "hit" || s.outcome === "partial_hit").length;
+    const misses = sigs.filter(s => s.outcome === "missed").length;
+    const pending = total - hits - misses;
+    const resolved = hits + misses;
+    const winRate = resolved > 0 ? Math.round((hits / resolved) * 100) : -1;
+    return { total, hits, misses, pending, winRate };
+  };
+
+  const today = computeBlock(todaySignals);
+  const week = computeBlock(weekSignals);
+
+  const rateColor = (r: number) => r >= 70 ? "text-emerald-400" : r >= 50 ? "text-blue-400" : r >= 0 ? "text-yellow-400" : "text-muted-foreground";
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {[
+        { label: "Today", icon: <Zap className="h-4 w-4 text-amber-400" />, data: today, accent: "border-amber-500/20", glow: "bg-amber-500/5" },
+        { label: "This Week", icon: <CalendarIcon className="h-4 w-4 text-blue-400" />, data: week, accent: "border-blue-500/20", glow: "bg-blue-500/5" },
+      ].map(({ label, icon, data, accent, glow }) => (
+        <motion.div
+          key={label}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`relative overflow-hidden rounded-xl p-4 border ${accent} bg-[hsl(232,30%,8%,0.8)] backdrop-blur-md`}
+        >
+          <div className={`absolute top-0 right-0 w-28 h-28 ${glow} rounded-full blur-2xl -translate-y-8 translate-x-8`} />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-3">
+              {icon}
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider">{label}</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{data.total} signals</span>
+            </div>
+            {data.total > 0 ? (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`text-3xl font-black ${rateColor(data.winRate)}`}>
+                    {data.winRate >= 0 ? `${data.winRate}%` : "—"}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {data.winRate >= 0 ? "win rate" : "all pending"}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-1.5 text-center">
+                    <div className="text-sm font-black text-emerald-400">{data.hits}</div>
+                    <div className="text-[9px] text-muted-foreground">Wins</div>
+                  </div>
+                  <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-1.5 text-center">
+                    <div className="text-sm font-black text-red-400">{data.misses}</div>
+                    <div className="text-[9px] text-muted-foreground">Losses</div>
+                  </div>
+                  <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-1.5 text-center">
+                    <div className="text-sm font-black text-yellow-400">{data.pending}</div>
+                    <div className="text-[9px] text-muted-foreground">Pending</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-3">
+                <p className="text-xs text-muted-foreground/60">No signals yet</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<DayStats | null>(null);
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const dailyStats = useMemo(() => computeDailyStats(allSignals), [allSignals]);
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startPad = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const getDayColor = (stats: DayStats | undefined) => {
+    if (!stats || stats.total === 0) return "";
+    if (stats.winRate < 0) return "bg-blue-500/10 border-blue-500/20";
+    if (stats.winRate >= 70) return "bg-emerald-500/15 border-emerald-500/30";
+    if (stats.winRate >= 50) return "bg-blue-500/15 border-blue-500/30";
+    if (stats.winRate >= 30) return "bg-yellow-500/15 border-yellow-500/30";
+    return "bg-red-500/15 border-red-500/30";
+  };
+
+  const getDayTextColor = (stats: DayStats | undefined) => {
+    if (!stats || stats.total === 0) return "text-muted-foreground/40";
+    if (stats.winRate < 0) return "text-blue-400";
+    if (stats.winRate >= 70) return "text-emerald-400";
+    if (stats.winRate >= 50) return "text-blue-400";
+    if (stats.winRate >= 30) return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.08 }}
+      className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-cyan-500/5 via-background to-background"
+    >
+      <div className="absolute top-0 left-0 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl -translate-y-12 -translate-x-12" />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <CalendarIcon className="h-4 w-4 text-cyan-400" />
+            Daily Signal Calendar
+          </h3>
+          <div className="flex items-center gap-2">
+            <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <span className="text-xs font-bold text-foreground min-w-[100px] text-center">
+              {new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </span>
+            <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+            <div key={d} className="text-[9px] text-center text-muted-foreground/60 font-semibold py-1">{d}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: startPad }).map((_, i) => (
+            <div key={`pad-${i}`} className="h-12" />
+          ))}
+          {Array.from({ length: totalDays }).map((_, i) => {
+            const day = i + 1;
+            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const stats = dailyStats[dateStr];
+            const isToday = dateStr === todayStr;
+            const isSelected = selectedDay?.date === dateStr;
+            const hasData = stats && stats.total > 0;
+
+            return (
+              <button
+                key={day}
+                onClick={() => {
+                  if (hasData) setSelectedDay(isSelected ? null : stats);
+                }}
+                className={`relative h-12 rounded-lg border text-center transition-all ${
+                  isSelected
+                    ? "border-primary/50 bg-primary/15 ring-1 ring-primary/30"
+                    : hasData
+                    ? `${getDayColor(stats)} hover:scale-[1.05] cursor-pointer`
+                    : "border-transparent hover:border-white/5"
+                } ${isToday ? "ring-1 ring-cyan-400/40" : ""}`}
+              >
+                <div className={`text-[10px] font-bold mt-1 ${isToday ? "text-cyan-400" : hasData ? "text-foreground" : "text-muted-foreground/30"}`}>
+                  {day}
+                </div>
+                {hasData && (
+                  <>
+                    <div className={`text-[10px] font-black ${getDayTextColor(stats)}`}>
+                      {stats.winRate >= 0 ? `${stats.winRate}%` : "—"}
+                    </div>
+                    <div className="text-[8px] text-muted-foreground/60">{stats.total}s</div>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-3 mt-3 text-[9px] text-muted-foreground/50">
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400/40" /> 70%+</div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400/40" /> 50-69%</div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400/40" /> 30-49%</div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400/40" /> &lt;30%</div>
+          <div className="flex items-center gap-1 ml-auto"><span className="w-2 h-2 rounded ring-1 ring-cyan-400/40" /> Today</div>
+        </div>
+
+        {selectedDay && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
+                <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+                {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+              </h4>
+              <button onClick={() => setSelectedDay(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Close</button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className={`text-2xl font-black ${
+                selectedDay.winRate >= 70 ? "text-emerald-400" : selectedDay.winRate >= 50 ? "text-blue-400" : selectedDay.winRate >= 30 ? "text-yellow-400" : selectedDay.winRate >= 0 ? "text-red-400" : "text-muted-foreground"
+              }`}>
+                {selectedDay.winRate >= 0 ? `${selectedDay.winRate}%` : "—"}
+              </div>
+              <span className="text-[10px] text-muted-foreground">{selectedDay.total} signals</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
+                <div className="text-base font-black text-emerald-400">{selectedDay.hits}</div>
+                <div className="text-[9px] text-muted-foreground">Wins</div>
+              </div>
+              <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-center">
+                <XCircle className="h-3.5 w-3.5 text-red-400 mx-auto mb-0.5" />
+                <div className="text-base font-black text-red-400">{selectedDay.misses}</div>
+                <div className="text-[9px] text-muted-foreground">Losses</div>
+              </div>
+              <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2 text-center">
+                <Clock className="h-3.5 w-3.5 text-yellow-400 mx-auto mb-0.5" />
+                <div className="text-base font-black text-yellow-400">{selectedDay.pending}</div>
+                <div className="text-[9px] text-muted-foreground">Pending</div>
+              </div>
+            </div>
+
+            {Object.keys(selectedDay.tickers).length > 0 && (
+              <div className="pt-2 border-t border-white/[0.06]">
+                <p className="text-[10px] text-muted-foreground mb-1.5 font-semibold">Tickers This Day</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(selectedDay.tickers)
+                    .sort((a, b) => b[1].total - a[1].total)
+                    .slice(0, 12)
+                    .map(([ticker, t]) => (
+                      <span key={ticker} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-muted/20 border border-white/5">
+                        <span className="text-foreground">{ticker}</span>
+                        <span className="text-emerald-400 ml-1.5">{t.hits}W</span>
+                        <span className="text-red-400 ml-1">{t.misses}L</span>
+                        {t.pending > 0 && <span className="text-yellow-400 ml-1">{t.pending}P</span>}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
   signalStats: SignalStats | null;
   topTickers: { ticker: string; hits: number; total: number; winRate: number }[];
   weeklyStats: WeeklyStats[];
+  allSignals: HistoricalSignal[];
 }) {
   const [selectedWeek, setSelectedWeek] = useState<WeeklyStats | null>(null);
 
@@ -776,6 +1086,10 @@ function OverviewTab({ signalStats, topTickers, weeklyStats }: {
 
   return (
     <div className="space-y-5">
+      <TodayThisWeekCards allSignals={allSignals} />
+
+      <DailySignalCalendar allSignals={allSignals} />
+
       {signalStats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard label="Total Signals" value={signalStats.total} icon={<Activity className="h-5 w-5 text-blue-400" />} color="border-blue-500/20" />
