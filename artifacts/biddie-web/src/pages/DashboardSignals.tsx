@@ -818,7 +818,9 @@ const DashboardSignals = () => {
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold ${
                     gexData.dealerPositioning.includes("Long")
                       ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      : gexData.dealerPositioning.includes("Short")
+                      ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                      : "bg-muted/20 text-muted-foreground border border-white/10"
                   }`}>
                     <MapPin className="h-3.5 w-3.5" />
                     Dealer Positioning: {gexData.dealerPositioning}

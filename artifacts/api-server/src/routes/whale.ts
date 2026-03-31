@@ -2700,6 +2700,46 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   }
   signals = dedupedSignals;
 
+  const spxTickers = new Set(["SPX", "SPXW"]);
+  const hasSpxSignals = signals.some(s => spxTickers.has(s.ticker));
+  if (hasSpxSignals) {
+    try {
+      const gex = await fetchSpxGex();
+      if (gex && gex.currentPrice > 0) {
+        for (const s of signals) {
+          if (!spxTickers.has(s.ticker)) continue;
+          const strike = s.strike || 0;
+          if (strike <= 0) continue;
+
+          if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
+            s.gamma_description = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
+            s.gamma_zone = "positive";
+            if (!s.tags.includes("GEX Call Wall")) s.tags.push("GEX Call Wall");
+          } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
+            s.gamma_description = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
+            s.gamma_zone = "negative";
+            if (!s.tags.includes("GEX Put Wall")) s.tags.push("GEX Put Wall");
+          } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
+            s.gamma_description = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
+            s.gamma_zone = "neutral";
+            if (!s.tags.includes("GEX Flip Zone")) s.tags.push("GEX Flip Zone");
+          } else if (gex.gammaFlip) {
+            if (strike > gex.gammaFlip) {
+              s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
+              s.gamma_zone = "positive";
+            } else {
+              s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
+              s.gamma_zone = "negative";
+            }
+          }
+        }
+        console.log(`[signals] GEX enrichment applied to SPX/SPXW signals`);
+      }
+    } catch (gexErr: any) {
+      console.warn(`[signals] GEX enrichment failed:`, gexErr.message);
+    }
+  }
+
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
@@ -5845,7 +5885,9 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
     const keyMagnet = parsed.reduce((max: any, d: any) =>
       Math.abs(d.gexOI) > Math.abs(max.gexOI) ? d : max, parsed[0]);
 
-    const dealerPositioning = currentPrice > (gammaFlip || 0)
+    const dealerPositioning = gammaFlip === null
+      ? "Unknown (gamma flip not determined)"
+      : currentPrice > gammaFlip
       ? "Long Gamma (suppresses moves)"
       : "Short Gamma (amplifies moves)";
 
