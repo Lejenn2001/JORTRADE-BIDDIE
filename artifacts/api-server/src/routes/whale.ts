@@ -5492,6 +5492,20 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/refresh-signals", async (req, res) => {
+  try {
+    const { adminSecret } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    signalsCache = null;
+    console.log("[admin] Cache cleared, forcing pipeline re-run...");
+    const data = await runSignalsPipeline();
+    const algoCount = data?.signals?.filter((s: any) => s.signal_type === "algorithm").length || 0;
+    res.json({ success: true, totalSignals: data?.signals?.length || 0, algorithmSignals: algoCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/dedup-signals", async (req, res) => {
   try {
     const { adminSecret } = req.body;
