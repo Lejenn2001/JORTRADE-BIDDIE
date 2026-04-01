@@ -2841,6 +2841,137 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
     }
   }
 
+  // ── GEX Enrichment for Algorithm Plays (non-SPX tickers) ──
+  const algoSignals = signals.filter(s => s.category === "algorithm" && !spxTickers.has(s.ticker));
+  const algoTickers = [...new Set(algoSignals.map(s => s.ticker))];
+  const GEX_ELIGIBLE = new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG"]);
+  const gexTickers = algoTickers.filter(t => GEX_ELIGIBLE.has(t));
+
+  if (gexTickers.length > 0) {
+    try {
+      const gexResults = await Promise.allSettled(
+        gexTickers.map(t => fetchTickerGex(t))
+      );
+      const tickerGex: Record<string, GexLevels> = {};
+      gexTickers.forEach((t, i) => {
+        const r = gexResults[i];
+        if (r.status === "fulfilled" && r.value) tickerGex[t] = r.value;
+      });
+
+      for (const s of algoSignals) {
+        const gex = tickerGex[s.ticker];
+        if (!gex || !gex.currentPrice) continue;
+
+        const price = s.current_price || gex.currentPrice;
+        const optType = s.option_type;
+
+        // 1. Confidence adjustment based on gamma positioning
+        if (gex.gammaFlip) {
+          const inNegGamma = price < gex.gammaFlip;
+          const inPosGamma = price > gex.gammaFlip;
+
+          if (optType === "call" && inNegGamma) {
+            s.confidence = Math.min(10, (s.confidence || 5) + 1);
+            if (!s.tags.includes("GEX Boost")) s.tags.push("GEX Boost");
+          } else if (optType === "put" && inNegGamma) {
+            s.confidence = Math.min(10, (s.confidence || 5) + 1);
+            if (!s.tags.includes("GEX Boost")) s.tags.push("GEX Boost");
+          } else if (optType === "call" && inPosGamma && gex.callWall) {
+            const distToCallWall = (gex.callWall.price - price) / price;
+            if (distToCallWall < 0.01 && distToCallWall >= 0) {
+              s.confidence = Math.max(5, (s.confidence || 5) - 1);
+              if (!s.tags.includes("Near Call Wall")) s.tags.push("Near Call Wall");
+            }
+          } else if (optType === "put" && inPosGamma) {
+            s.confidence = Math.max(5, (s.confidence || 5) - 1);
+            if (!s.tags.includes("GEX Headwind")) s.tags.push("GEX Headwind");
+          }
+        }
+
+        // 2. Use GEX walls as target/invalidation levels
+        if (optType === "call" && gex.callWall && gex.callWall.price > price) {
+          const callWallPrice = gex.callWall.price;
+          const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
+          if (!existingTargetVal || callWallPrice < existingTargetVal) {
+            s.target_near = s.target;
+            s.target = `Call Wall at $${callWallPrice.toFixed(2)}`;
+          } else if (!s.target_near || callWallPrice > existingTargetVal) {
+            s.target_near = `Call Wall at $${callWallPrice.toFixed(2)}`;
+          }
+        }
+        if (optType === "put" && gex.putWall && gex.putWall.price < price) {
+          const putWallPrice = gex.putWall.price;
+          const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
+          if (!existingTargetVal || putWallPrice > existingTargetVal) {
+            s.target_near = s.target;
+            s.target = `Put Wall at $${putWallPrice.toFixed(2)}`;
+          } else if (!s.target_near || putWallPrice < existingTargetVal) {
+            s.target_near = `Put Wall at $${putWallPrice.toFixed(2)}`;
+          }
+        }
+
+        // 3. Gamma flip as invalidation reinforcement
+        if (gex.gammaFlip) {
+          if (optType === "call" && gex.gammaFlip < price) {
+            const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
+            if (gex.gammaFlip > existingInvVal || !existingInvVal) {
+              s.invalidation = `Below gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+            }
+          }
+          if (optType === "put" && gex.gammaFlip > price) {
+            const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
+            if (gex.gammaFlip < existingInvVal || !existingInvVal) {
+              s.invalidation = `Above gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+            }
+          }
+        }
+
+        // 4. Set gamma zone and description
+        if (gex.gammaFlip) {
+          if (price > gex.gammaFlip) {
+            s.gamma_zone = "positive";
+            s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma, moves suppressed. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+          } else {
+            s.gamma_zone = "negative";
+            s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma, moves amplified. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+          }
+        }
+
+        // 5. Entry trigger enhancement with GEX context
+        if (gex.gammaFlip && s.entry_trigger && !s.entry_trigger.includes("Whale sweep")) {
+          const gammaCtx = price > gex.gammaFlip ? "Long gamma" : "Short gamma";
+          s.entry_trigger = s.entry_trigger + ` [${gammaCtx}]`;
+        }
+
+        // 6. Reason enhancement
+        if (gex.gammaFlip) {
+          const zone = price > gex.gammaFlip ? "positive (suppressed)" : "negative (amplified)";
+          s.reason = (s.reason || "") + ` GEX: ${zone} gamma zone, flip at $${gex.gammaFlip}.`;
+        }
+
+        if (!s.tags.includes("Negative Gamma") && !s.tags.includes("Positive Gamma")) {
+          if (s.gamma_zone === "negative") s.tags.push("Negative Gamma");
+          if (s.gamma_zone === "positive") s.tags.push("Positive Gamma");
+        }
+      }
+
+      // Recalculate biddie pick status after GEX confidence adjustments
+      for (const s of algoSignals) {
+        if (tickerGex[s.ticker]) {
+          const wasNotPick = !s.is_biddie_pick;
+          const newIsBiddie = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
+          if (wasNotPick && newIsBiddie) {
+            s.is_biddie_pick = true;
+          }
+        }
+      }
+
+      console.log(`[signals] GEX enrichment applied to ${algoSignals.length} algorithm plays across ${Object.keys(tickerGex).length} tickers: ${Object.keys(tickerGex).join(', ')}`);
+    } catch (gexErr: any) {
+      console.warn(`[signals] Algorithm GEX enrichment failed:`, gexErr.message);
+    }
+  }
+
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
@@ -6292,6 +6423,105 @@ interface GexLevels {
 let gexCache: GexLevels | null = null;
 let gexCacheTime = 0;
 const GEX_CACHE_TTL = 180_000;
+
+const tickerGexCache: Record<string, { data: GexLevels; time: number }> = {};
+const TICKER_GEX_TTL = 300_000;
+
+async function fetchTickerGex(ticker: string): Promise<GexLevels | null> {
+  const now = Date.now();
+  const cached = tickerGexCache[ticker];
+  if (cached && now - cached.time < TICKER_GEX_TTL) return cached.data;
+
+  try {
+    const headers = { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}`, Accept: "application/json" };
+    const spotRes = await fetch(`${UW_BASE}/api/stock/${ticker}/spot-exposures`, { headers });
+    if (!spotRes.ok) {
+      console.warn(`[gex] ${ticker} spot-exposures failed: ${spotRes.status}`);
+      return cached?.data ?? null;
+    }
+
+    const spotJson = await spotRes.json();
+    const spotData = spotJson.data || [];
+
+    let currentPrice = 0;
+    try {
+      const polyRes = await fetch(POLYGON_SNAPSHOT_TICKER(ticker));
+      if (polyRes.ok) {
+        const polyData = await polyRes.json();
+        currentPrice = polyData?.ticker?.lastTrade?.p || polyData?.ticker?.day?.c || 0;
+      }
+    } catch {}
+
+    if (!currentPrice) {
+      try {
+        const flowRes = await fetch(`${UW_BASE}/api/stock/${ticker}/flow-recent`, { headers });
+        if (flowRes.ok) {
+          const flowJson = await flowRes.json();
+          const flowRecords = Array.isArray(flowJson) ? flowJson : flowJson.data || [];
+          currentPrice = parseFloat(flowRecords[0]?.underlying_price || "0");
+        }
+      } catch {}
+    }
+
+    const parsed = spotData
+      .map((d: any) => ({
+        price: parseFloat(d.price || "0"),
+        gexOI: parseFloat(d.gamma_per_one_percent_move_oi || "0"),
+        gexDir: parseFloat(d.gamma_per_one_percent_move_dir || "0"),
+      }))
+      .filter((d: any) => d.price > 0)
+      .sort((a: any, b: any) => a.price - b.price);
+
+    if (!parsed.length || currentPrice <= 0) return cached?.data ?? null;
+
+    let gammaFlip: number | null = null;
+    for (let i = 1; i < parsed.length; i++) {
+      if ((parsed[i - 1].gexDir <= 0 && parsed[i].gexDir > 0) ||
+          (parsed[i - 1].gexDir >= 0 && parsed[i].gexDir < 0)) {
+        const p1 = parsed[i - 1], p2 = parsed[i];
+        const ratio = Math.abs(p1.gexDir) / (Math.abs(p1.gexDir) + Math.abs(p2.gexDir));
+        gammaFlip = Math.round((p1.price + ratio * (p2.price - p1.price)) * 100) / 100;
+        break;
+      }
+    }
+
+    const above = parsed.filter((d: any) => d.price >= currentPrice);
+    const callWall = above.length
+      ? above.reduce((max: any, d: any) => d.gexOI > max.gexOI ? d : max, above[0])
+      : null;
+
+    const below = parsed.filter((d: any) => d.price < currentPrice);
+    const putWall = below.length
+      ? below.reduce((min: any, d: any) => d.gexOI < min.gexOI ? d : min, below[0])
+      : null;
+
+    const keyMagnet = parsed.reduce((max: any, d: any) =>
+      Math.abs(d.gexOI) > Math.abs(max.gexOI) ? d : max, parsed[0]);
+
+    const dealerPositioning = gammaFlip === null
+      ? "Unknown"
+      : currentPrice > gammaFlip
+      ? "Long Gamma (suppresses moves)"
+      : "Short Gamma (amplifies moves)";
+
+    const result: GexLevels = {
+      gammaFlip,
+      callWall: callWall ? { price: callWall.price, gex: callWall.gexOI } : null,
+      putWall: putWall ? { price: putWall.price, gex: putWall.gexOI } : null,
+      keyMagnet: { price: keyMagnet.price, gex: keyMagnet.gexOI },
+      dealerPositioning,
+      currentPrice,
+      updatedAt: new Date().toISOString(),
+    };
+
+    tickerGexCache[ticker] = { data: result, time: now };
+    console.log(`[gex] ${ticker} GEX updated: flip=${gammaFlip}, callWall=${callWall?.price}, putWall=${putWall?.price}, dealer=${dealerPositioning}`);
+    return result;
+  } catch (err: any) {
+    console.warn(`[gex] ${ticker} fetchTickerGex error:`, err.message);
+    return cached?.data ?? null;
+  }
+}
 
 async function fetchSpxGex(): Promise<GexLevels | null> {
   const now = Date.now();
