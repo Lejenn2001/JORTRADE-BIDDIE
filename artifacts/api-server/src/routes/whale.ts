@@ -1899,11 +1899,6 @@ async function runSignalsPipeline() {
     const t = (alert.ticker ?? "").toUpperCase();
     const p = parseFloat(alert.underlying_price);
     if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
-    if ((t === "SPX" || t === "SPXW") && p > 0) {
-      const vol = parseInt(alert.volume) || 1;
-      const tickId = alert.id || alert.option_activity_id || `pipe|${alert.executed_at || alert.created_at}|${p}|${vol}`;
-      addSpxTick(p, vol, String(tickId));
-    }
   }
 
   // Get unique tickers — limit to 10 to avoid Polygon rate limits
@@ -2750,10 +2745,13 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       if (vwapCtx && vwapCtx.vwap && vwapCtx.currentPrice > 0) {
         const v = vwapCtx.vwap;
         const cp = vwapCtx.currentPrice;
+        const allSwingHighs: number[] = (vwapCtx as any).allSwingHighs || [];
+        const allSwingLows: number[] = (vwapCtx as any).allSwingLows || [];
 
         for (const s of signals) {
           if (!spxTickers.has(s.ticker)) continue;
           const dir = s.direction || s.signal_type;
+          const signalPrice = s.price_at_signal || cp;
 
           if (dir === "bearish") {
             if (vwapCtx.recentCross?.direction === "broke_below") {
@@ -2766,13 +2764,18 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
                 if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
               }
             } else if (vwapCtx.priceVsVwap === "below") {
-              s.entry_trigger = `Below VWAP ($${v}) — Near $${cp}`;
+              s.entry_trigger = `Below VWAP ($${v}) — Near $${signalPrice}`;
             } else {
               s.entry_trigger = `Above VWAP ($${v}) — needs break below $${v} for entry`;
             }
 
-            if (vwapCtx.swingLow) {
-              s.target = `$${vwapCtx.swingLow} (last major swing low)`;
+            const bearTargets = allSwingLows.filter(sl => sl < signalPrice).sort((a, b) => b - a);
+            if (bearTargets.length > 0) {
+              const nearest = bearTargets[0];
+              const further = bearTargets.length > 1 ? bearTargets[1] : null;
+              s.target = further ? `$${nearest} (previous swing low), then $${further}` : `$${nearest} (previous swing low)`;
+            } else if (vwapCtx.swingLow) {
+              s.target = `$${vwapCtx.swingLow} (previous swing low)`;
             }
             s.invalidation = `Above $${v} (VWAP reclaim invalidates bearish thesis)`;
 
@@ -2787,18 +2790,23 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
                 if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
               }
             } else if (vwapCtx.priceVsVwap === "above") {
-              s.entry_trigger = `Above VWAP ($${v}) — Near $${cp}`;
+              s.entry_trigger = `Above VWAP ($${v}) — Near $${signalPrice}`;
             } else {
               s.entry_trigger = `Below VWAP ($${v}) — needs reclaim above $${v} for entry`;
             }
 
-            if (vwapCtx.swingHigh) {
-              s.target = `$${vwapCtx.swingHigh} (last major swing high)`;
+            const bullTargets = allSwingHighs.filter(sh => sh > signalPrice).sort((a, b) => a - b);
+            if (bullTargets.length > 0) {
+              const nearest = bullTargets[0];
+              const further = bullTargets.length > 1 ? bullTargets[1] : null;
+              s.target = further ? `$${nearest} (previous swing high), then $${further}` : `$${nearest} (previous swing high)`;
+            } else if (vwapCtx.swingHigh) {
+              s.target = `$${vwapCtx.swingHigh} (previous swing high)`;
             }
             s.invalidation = `Below $${v} (VWAP break invalidates bullish thesis)`;
           }
         }
-        console.log(`[signals] SPX VWAP enrichment: vwap=$${v}, price=$${cp}, pos=${vwapCtx.priceVsVwap}, cross=${vwapCtx.recentCross?.direction ?? 'none'}, retest=${vwapCtx.retest?.type ?? 'none'}, swHi=${vwapCtx.swingHigh}, swLo=${vwapCtx.swingLow}`);
+        console.log(`[signals] SPX VWAP enrichment: vwap=$${v}, price=$${cp}, pos=${vwapCtx.priceVsVwap}, cross=${vwapCtx.recentCross?.direction ?? 'none'}, retest=${vwapCtx.retest?.type ?? 'none'}, swHi=[${allSwingHighs.join(',')}], swLo=[${allSwingLows.join(',')}]`);
       }
     } catch (vwapErr: any) {
       console.warn(`[signals] SPX VWAP enrichment failed:`, vwapErr.message);
@@ -5926,9 +5934,6 @@ interface SpxVwapState {
 }
 
 let spxVwapState: SpxVwapState | null = null;
-let spxSeenTickKeys = new Set<string>();
-let spxCumTPV = 0;
-let spxCumVol = 0;
 
 function resetSpxVwapIfNewDay() {
   const today = new Date().toISOString().slice(0, 10);
@@ -5945,117 +5950,118 @@ function resetSpxVwapIfNewDay() {
       dayDate: today,
       updatedAt: new Date().toISOString(),
     };
-    spxSeenTickKeys.clear();
-    spxCumTPV = 0;
-    spxCumVol = 0;
   }
 }
 
-function addSpxTick(price: number, volume: number = 1, tickId?: string) {
-  resetSpxVwapIfNewDay();
-  if (!spxVwapState || price <= 0) return;
+async function fetchSpxVwapFromPolygon(): Promise<void> {
+  try {
+    resetSpxVwapIfNewDay();
+    if (!spxVwapState) return;
 
-  const key = tickId || `${price.toFixed(2)}|${volume}|${spxVwapState.ticks.length}`;
-  if (spxSeenTickKeys.has(key)) return;
-  spxSeenTickKeys.add(key);
-
-  const now = Date.now();
-  const MAX_TICKS = 500;
-  if (spxVwapState.ticks.length >= MAX_TICKS) {
-    const old = spxVwapState.ticks.shift()!;
-    spxCumTPV -= old.price * old.volume;
-    spxCumVol -= old.volume;
-  }
-  spxVwapState.ticks.push({ price, volume, timestamp: now });
-  spxCumTPV += price * volume;
-  spxCumVol += volume;
-
-  const newVwap = spxCumVol > 0 ? Math.round((spxCumTPV / spxCumVol) * 100) / 100 : null;
-  const prevVwap = spxVwapState.vwap;
-  const prevPrice = spxVwapState.currentPrice;
-  spxVwapState.vwap = newVwap;
-  spxVwapState.currentPrice = price;
-
-  if (newVwap) {
-    const threshold = newVwap * 0.0003;
-    if (Math.abs(price - newVwap) < threshold) {
-      spxVwapState.priceVsVwap = "at";
-    } else {
-      spxVwapState.priceVsVwap = price > newVwap ? "above" : "below";
+    const today = new Date().toISOString().slice(0, 10);
+    const apiKey = process.env["POLYGON_API_KEY"] ?? "";
+    const url = `https://api.polygon.io/v2/aggs/ticker/I:SPX/range/5/minute/${today}/${today}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[spx-vwap] Polygon I:SPX fetch failed: ${res.status}`);
+      return;
     }
+    const json = await res.json() as any;
+    const bars: { o: number; h: number; l: number; c: number; t: number }[] = json.results || [];
+    if (bars.length === 0) return;
 
-    if (prevPrice > 0 && prevVwap) {
-      const wasAbove = prevPrice > prevVwap;
-      const wasBelow = prevPrice < prevVwap;
-      const isAbove = price > newVwap;
-      const isBelow = price < newVwap;
+    let cumTP = 0;
+    let barCount = 0;
+    const closePrices: number[] = [];
+    const highPrices: number[] = [];
+    const lowPrices: number[] = [];
+    let prevVwap: number | null = null;
+    let prevClose: number | null = null;
 
-      if (wasAbove && isBelow) {
-        spxVwapState.recentCross = { direction: "broke_below", crossPrice: newVwap, crossTime: now };
-        spxVwapState.retest = null;
-      } else if (wasBelow && isAbove) {
-        spxVwapState.recentCross = { direction: "broke_above", crossPrice: newVwap, crossTime: now };
-        spxVwapState.retest = null;
-      }
+    spxVwapState.ticks = [];
+    spxVwapState.recentCross = null;
+    spxVwapState.retest = null;
 
-      if (spxVwapState.recentCross && !spxVwapState.retest) {
-        const timeSinceCross = now - spxVwapState.recentCross.crossTime;
-        if (timeSinceCross > 60_000 && Math.abs(price - newVwap) < newVwap * 0.001) {
-          if (spxVwapState.recentCross.direction === "broke_below") {
-            spxVwapState.retest = { level: newVwap, type: "retest_from_below", time: now };
-          } else {
-            spxVwapState.retest = { level: newVwap, type: "retest_from_above", time: now };
+    for (const bar of bars) {
+      const h = bar.h ?? bar.c;
+      const l = bar.l ?? bar.c;
+      const c = bar.c;
+      const tp = (h + l + c) / 3;
+      cumTP += tp;
+      barCount++;
+      const vwap = Math.round((cumTP / barCount) * 100) / 100;
+
+      closePrices.push(c);
+      highPrices.push(h);
+      lowPrices.push(l);
+      spxVwapState.ticks.push({ price: c, volume: 1, timestamp: bar.t });
+
+      if (prevVwap && prevClose) {
+        const wasAbove = prevClose > prevVwap;
+        const wasBelow = prevClose < prevVwap;
+        const isAbove = c > vwap;
+        const isBelow = c < vwap;
+
+        if (wasAbove && isBelow) {
+          spxVwapState.recentCross = { direction: "broke_below", crossPrice: vwap, crossTime: bar.t };
+          spxVwapState.retest = null;
+        } else if (wasBelow && isAbove) {
+          spxVwapState.recentCross = { direction: "broke_above", crossPrice: vwap, crossTime: bar.t };
+          spxVwapState.retest = null;
+        }
+
+        if (spxVwapState.recentCross && !spxVwapState.retest) {
+          const timeSinceCross = bar.t - spxVwapState.recentCross.crossTime;
+          if (timeSinceCross > 300_000 && Math.abs(c - vwap) < vwap * 0.001) {
+            if (spxVwapState.recentCross.direction === "broke_below") {
+              spxVwapState.retest = { level: vwap, type: "retest_from_below", time: bar.t };
+            } else {
+              spxVwapState.retest = { level: vwap, type: "retest_from_above", time: bar.t };
+            }
           }
         }
       }
-    }
-  }
 
-  const prices = spxVwapState.ticks.map(t => t.price);
-  if (prices.length >= 5) {
-    const recent = prices.slice(-Math.min(prices.length, 50));
-    let swHigh: number | null = null, swLow: number | null = null;
-    for (let i = 2; i < recent.length - 2; i++) {
-      if (recent[i] > recent[i-1] && recent[i] > recent[i-2] && recent[i] > recent[i+1] && recent[i] > recent[i+2]) {
-        swHigh = recent[i];
+      prevVwap = vwap;
+      prevClose = c;
+    }
+
+    const lastBar = bars[bars.length - 1];
+    const lastClose = lastBar.c;
+    const finalVwap = Math.round((cumTP / barCount) * 100) / 100;
+    spxVwapState.vwap = finalVwap;
+    spxVwapState.currentPrice = lastClose;
+
+    const threshold = finalVwap * 0.0003;
+    if (Math.abs(lastClose - finalVwap) < threshold) {
+      spxVwapState.priceVsVwap = "at";
+    } else {
+      spxVwapState.priceVsVwap = lastClose > finalVwap ? "above" : "below";
+    }
+
+    const allSwingHighs: number[] = [];
+    const allSwingLows: number[] = [];
+    for (let i = 2; i < highPrices.length - 2; i++) {
+      if (highPrices[i] > highPrices[i-1] && highPrices[i] > highPrices[i-2] &&
+          highPrices[i] > highPrices[i+1] && highPrices[i] > highPrices[i+2]) {
+        allSwingHighs.push(Math.round(highPrices[i] * 100) / 100);
       }
-      if (recent[i] < recent[i-1] && recent[i] < recent[i-2] && recent[i] < recent[i+1] && recent[i] < recent[i+2]) {
-        swLow = recent[i];
+      if (lowPrices[i] < lowPrices[i-1] && lowPrices[i] < lowPrices[i-2] &&
+          lowPrices[i] < lowPrices[i+1] && lowPrices[i] < lowPrices[i+2]) {
+        allSwingLows.push(Math.round(lowPrices[i] * 100) / 100);
       }
     }
-    if (swHigh) spxVwapState.swingHigh = Math.round(swHigh * 100) / 100;
-    if (swLow) spxVwapState.swingLow = Math.round(swLow * 100) / 100;
-  }
 
-  spxVwapState.updatedAt = new Date().toISOString();
-}
+    spxVwapState.swingHigh = allSwingHighs.length > 0 ? allSwingHighs[allSwingHighs.length - 1] : null;
+    spxVwapState.swingLow = allSwingLows.length > 0 ? allSwingLows[allSwingLows.length - 1] : null;
 
-async function collectSpxPriceTicks(): Promise<void> {
-  try {
-    const headers = { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}`, Accept: "application/json" };
-    const res = await fetch(`${UW_BASE}/api/stock/SPX/flow-recent?limit=50`, { headers });
-    if (!res.ok) return;
-    const json = await res.json();
-    const records = Array.isArray(json) ? json : json.data || [];
+    (spxVwapState as any).allSwingHighs = allSwingHighs;
+    (spxVwapState as any).allSwingLows = allSwingLows;
 
-    const ticks: { price: number; vol: number; id: string }[] = [];
-    for (const r of records) {
-      const p = parseFloat(r.underlying_price);
-      const v = parseInt(r.volume) || 1;
-      const id = r.id || r.option_activity_id || `${r.executed_at || r.created_at}|${p}|${v}`;
-      if (p > 0) ticks.push({ price: p, vol: v, id: String(id) });
-    }
-
-    ticks.reverse();
-    for (const { price, vol, id } of ticks) {
-      addSpxTick(price, vol, id);
-    }
-
-    if (ticks.length > 0) {
-      console.log(`[spx-vwap] Collected ${ticks.length} ticks, VWAP=${spxVwapState?.vwap}, price=${spxVwapState?.currentPrice}, pos=${spxVwapState?.priceVsVwap}, cross=${spxVwapState?.recentCross?.direction ?? 'none'}, retest=${spxVwapState?.retest?.type ?? 'none'}`);
-    }
+    spxVwapState.updatedAt = new Date().toISOString();
+    console.log(`[spx-vwap] Polygon I:SPX: ${bars.length} bars, VWAP=$${finalVwap}, price=$${lastClose}, pos=${spxVwapState.priceVsVwap}, cross=${spxVwapState.recentCross?.direction ?? 'none'}, retest=${spxVwapState.retest?.type ?? 'none'}, swHi=${spxVwapState.swingHigh}, swLo=${spxVwapState.swingLow}, allHi=[${allSwingHighs.join(',')}], allLo=[${allSwingLows.join(',')}]`);
   } catch (err: any) {
-    console.warn(`[spx-vwap] collection error:`, err.message);
+    console.warn(`[spx-vwap] Polygon I:SPX error:`, err.message);
   }
 }
 
@@ -6064,8 +6070,8 @@ function getSpxVwapContext(): SpxVwapState | null {
   return spxVwapState;
 }
 
-setInterval(collectSpxPriceTicks, 60_000);
-collectSpxPriceTicks();
+setInterval(fetchSpxVwapFromPolygon, 60_000);
+fetchSpxVwapFromPolygon();
 
 router.get("/whale/spx-vwap", async (_req, res) => {
   try {
@@ -6074,6 +6080,7 @@ router.get("/whale/spx-vwap", async (_req, res) => {
       return res.json({ status: "collecting", message: "VWAP not yet computed — ticks still being collected", ticks: ctx?.ticks?.length ?? 0 });
     }
     res.json({
+      source: "Polygon I:SPX (real index data)",
       vwap: ctx.vwap,
       currentPrice: ctx.currentPrice,
       priceVsVwap: ctx.priceVsVwap,
@@ -6081,7 +6088,9 @@ router.get("/whale/spx-vwap", async (_req, res) => {
       retest: ctx.retest,
       swingHigh: ctx.swingHigh,
       swingLow: ctx.swingLow,
-      tickCount: ctx.ticks.length,
+      allSwingHighs: (ctx as any).allSwingHighs || [],
+      allSwingLows: (ctx as any).allSwingLows || [],
+      barCount: ctx.ticks.length,
       dayDate: ctx.dayDate,
       updatedAt: ctx.updatedAt,
     });
