@@ -2842,6 +2842,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   }
 
   // ── GEX Enrichment for Algorithm Plays (non-SPX tickers) ──
+  // Uses the EXACT same GEX enrichment logic as SPX signals above
   const algoSignals = signals.filter(s => s.category === "algorithm" && !spxTickers.has(s.ticker));
   const algoTickers = [...new Set(algoSignals.map(s => s.ticker))];
   const GEX_ELIGIBLE = new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG"]);
@@ -2863,17 +2864,39 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         if (!gex || !gex.currentPrice) continue;
 
         const price = s.current_price || gex.currentPrice;
-        const optType = s.option_type;
+        const strike = s.strike || 0;
+        if (strike <= 0) continue;
 
-        // 1. Confidence adjustment based on gamma positioning
+        // GEX zone detection — exact same logic as SPX block above
+        if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
+          s.gamma_description = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
+          s.gamma_zone = "positive";
+          if (!s.tags.includes("GEX Call Wall")) s.tags.push("GEX Call Wall");
+        } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
+          s.gamma_description = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
+          s.gamma_zone = "negative";
+          if (!s.tags.includes("GEX Put Wall")) s.tags.push("GEX Put Wall");
+        } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
+          s.gamma_description = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
+          s.gamma_zone = "neutral";
+          if (!s.tags.includes("GEX Flip Zone")) s.tags.push("GEX Flip Zone");
+        } else if (gex.gammaFlip) {
+          if (strike > gex.gammaFlip) {
+            s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
+            s.gamma_zone = "positive";
+          } else {
+            s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
+            s.gamma_zone = "negative";
+          }
+        }
+
+        // Confidence adjustment — same logic as SPX
         if (gex.gammaFlip) {
           const inNegGamma = price < gex.gammaFlip;
           const inPosGamma = price > gex.gammaFlip;
+          const optType = s.option_type;
 
-          if (optType === "call" && inNegGamma) {
-            s.confidence = Math.min(10, (s.confidence || 5) + 1);
-            if (!s.tags.includes("GEX Boost")) s.tags.push("GEX Boost");
-          } else if (optType === "put" && inNegGamma) {
+          if ((optType === "call" || optType === "put") && inNegGamma) {
             s.confidence = Math.min(10, (s.confidence || 5) + 1);
             if (!s.tags.includes("GEX Boost")) s.tags.push("GEX Boost");
           } else if (optType === "call" && inPosGamma && gex.callWall) {
@@ -2886,78 +2909,6 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
             s.confidence = Math.max(5, (s.confidence || 5) - 1);
             if (!s.tags.includes("GEX Headwind")) s.tags.push("GEX Headwind");
           }
-        }
-
-        // 2. Use GEX walls as target levels
-        if (optType === "call" && gex.callWall && gex.callWall.price > price) {
-          const cw = gex.callWall.price;
-          const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
-          if (!existingTargetVal || cw < existingTargetVal) {
-            s.target_near = s.target;
-            s.target = `$${cw.toFixed(2)} (call wall resistance), then $${existingTargetVal ? existingTargetVal.toFixed(2) : cw.toFixed(2)}`;
-          } else if (!s.target_near) {
-            s.target_near = `$${cw.toFixed(2)} (call wall resistance)`;
-          }
-        }
-        if (optType === "put" && gex.putWall && gex.putWall.price < price) {
-          const pw = gex.putWall.price;
-          const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
-          if (!existingTargetVal || pw > existingTargetVal) {
-            s.target_near = s.target;
-            s.target = `$${pw.toFixed(2)} (put wall support), then $${existingTargetVal ? existingTargetVal.toFixed(2) : pw.toFixed(2)}`;
-          } else if (!s.target_near) {
-            s.target_near = `$${pw.toFixed(2)} (put wall support)`;
-          }
-        }
-
-        // 3. Gamma flip as invalidation reinforcement
-        if (gex.gammaFlip) {
-          if (optType === "call" && gex.gammaFlip < price) {
-            const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
-            if (gex.gammaFlip > existingInvVal || !existingInvVal) {
-              s.invalidation = `Below $${gex.gammaFlip.toFixed(2)} (gamma flip break invalidates bullish thesis)`;
-            }
-          }
-          if (optType === "put" && gex.gammaFlip > price) {
-            const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
-            if (gex.gammaFlip < existingInvVal || !existingInvVal) {
-              s.invalidation = `Above $${gex.gammaFlip.toFixed(2)} (gamma flip reclaim invalidates bearish thesis)`;
-            }
-          }
-        }
-
-        // 4. Set gamma zone and description (matching SPX format)
-        const flipStr = `$${gex.gammaFlip?.toLocaleString() ?? 'N/A'}`;
-        const cwStr = gex.callWall ? `$${gex.callWall.price.toLocaleString()}` : 'N/A';
-        const pwStr = gex.putWall ? `$${gex.putWall.price.toLocaleString()}` : 'N/A';
-        const pctFromFlip = gex.gammaFlip ? Math.abs((price - gex.gammaFlip) / gex.gammaFlip * 100).toFixed(1) : '0';
-        const depth = gex.gammaFlip && Math.abs(price - gex.gammaFlip) / gex.gammaFlip > 0.005 ? "Deep " : "";
-
-        if (gex.gammaFlip) {
-          if (price > gex.gammaFlip) {
-            s.gamma_zone = "positive";
-            s.gamma_description = `${depth}Above gamma flip (${flipStr}) — long gamma territory where dealer hedging suppresses moves. Call wall at ${cwStr}, put wall at ${pwStr}. Needs gamma flip break as catalyst.`;
-          } else {
-            s.gamma_zone = "negative";
-            s.gamma_description = `${depth}Below gamma flip (${flipStr}) — short gamma territory where dealer hedging amplifies moves. Call wall at ${cwStr}, put wall at ${pwStr}. Needs gamma flip break as catalyst.`;
-          }
-        }
-
-        // 5. Entry trigger — replace whale sweep with VWAP-based entry
-        if (s.entry_trigger && s.entry_trigger.includes("Whale sweep")) {
-          const vwapMatch = s.entry_trigger.match(/\$[\d,.]+/);
-          const sweepPrice = vwapMatch ? vwapMatch[0] : `$${price.toFixed(2)}`;
-          if (optType === "call") {
-            s.entry_trigger = `Near ${sweepPrice} — needs confirmation above for entry`;
-          } else {
-            s.entry_trigger = `Near ${sweepPrice} — needs breakdown confirmation for entry`;
-          }
-        }
-
-        // 6. Reason enhancement
-        if (gex.gammaFlip) {
-          const zone = price > gex.gammaFlip ? "positive (suppressed)" : "negative (amplified)";
-          s.reason = (s.reason || "") + ` GEX: ${zone} gamma zone, flip at ${flipStr}.`;
         }
 
         if (!s.tags.includes("Negative Gamma") && !s.tags.includes("Positive Gamma")) {
@@ -5488,10 +5439,37 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
       let reason = s.reason || "";
       let isBiddiePick = s.is_biddie_pick;
       
+      const strike = parseFloat(s.strike) || 0;
+      if (strike <= 0) continue;
+
+      // GEX zone detection — exact same logic as SPX pipeline
+      if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
+        gammaDescription = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
+        gammaZone = "positive";
+        if (!tags.includes("GEX Call Wall")) tags.push("GEX Call Wall");
+      } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
+        gammaDescription = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
+        gammaZone = "negative";
+        if (!tags.includes("GEX Put Wall")) tags.push("GEX Put Wall");
+      } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
+        gammaDescription = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
+        gammaZone = "neutral";
+        if (!tags.includes("GEX Flip Zone")) tags.push("GEX Flip Zone");
+      } else if (gex.gammaFlip) {
+        if (strike > gex.gammaFlip) {
+          gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
+          gammaZone = "positive";
+        } else {
+          gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
+          gammaZone = "negative";
+        }
+      }
+
+      // Confidence adjustment — same logic as SPX pipeline
       if (gex.gammaFlip) {
         const inNegGamma = price < gex.gammaFlip;
         const inPosGamma = price > gex.gammaFlip;
-        
+
         if ((optType === "call" || optType === "put") && inNegGamma) {
           confidence = Math.min(10, confidence + 1);
           if (!tags.includes("GEX Boost")) tags.push("GEX Boost");
@@ -5506,63 +5484,7 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
           if (!tags.includes("GEX Headwind")) tags.push("GEX Headwind");
         }
       }
-      
-      if (optType === "call" && gex.callWall && gex.callWall.price > price) {
-        const callWallPrice = gex.callWall.price;
-        const existingTargetVal = parseFloat((target || "").replace(/[^0-9.]/g, '')) || 0;
-        if (!existingTargetVal || callWallPrice < existingTargetVal) {
-          targetNear = target;
-          target = `Call Wall at $${callWallPrice.toFixed(2)}`;
-        } else if (!targetNear || callWallPrice > existingTargetVal) {
-          targetNear = `Call Wall at $${callWallPrice.toFixed(2)}`;
-        }
-      }
-      if (optType === "put" && gex.putWall && gex.putWall.price < price) {
-        const putWallPrice = gex.putWall.price;
-        const existingTargetVal = parseFloat((target || "").replace(/[^0-9.]/g, '')) || 0;
-        if (!existingTargetVal || putWallPrice > existingTargetVal) {
-          targetNear = target;
-          target = `Put Wall at $${putWallPrice.toFixed(2)}`;
-        } else if (!targetNear || putWallPrice < existingTargetVal) {
-          targetNear = `Put Wall at $${putWallPrice.toFixed(2)}`;
-        }
-      }
-      
-      if (gex.gammaFlip) {
-        if (optType === "call" && gex.gammaFlip < price) {
-          const existingInvVal = parseFloat((invalidation || "").replace(/[^0-9.]/g, '')) || 0;
-          if (gex.gammaFlip > existingInvVal || !existingInvVal) {
-            invalidation = `Below gamma flip at $${gex.gammaFlip.toFixed(2)}`;
-          }
-        }
-        if (optType === "put" && gex.gammaFlip > price) {
-          const existingInvVal = parseFloat((invalidation || "").replace(/[^0-9.]/g, '')) || 0;
-          if (gex.gammaFlip < existingInvVal || !existingInvVal) {
-            invalidation = `Above gamma flip at $${gex.gammaFlip.toFixed(2)}`;
-          }
-        }
-      }
-      
-      if (gex.gammaFlip) {
-        if (price > gex.gammaFlip) {
-          gammaZone = "positive";
-          gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma, moves suppressed. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
-        } else {
-          gammaZone = "negative";
-          gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma, moves amplified. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
-        }
-      }
-      
-      if (gex.gammaFlip && entryTrigger && !entryTrigger.includes("Whale sweep") && !entryTrigger.includes("[")) {
-        const gammaCtx = price > gex.gammaFlip ? "Long gamma" : "Short gamma";
-        entryTrigger = entryTrigger + ` [${gammaCtx}]`;
-      }
-      
-      if (gex.gammaFlip) {
-        const zone = price > gex.gammaFlip ? "positive (suppressed)" : "negative (amplified)";
-        reason = reason + ` GEX: ${zone} gamma zone, flip at $${gex.gammaFlip}.`;
-      }
-      
+
       if (!tags.includes("Negative Gamma") && !tags.includes("Positive Gamma")) {
         if (gammaZone === "negative") tags.push("Negative Gamma");
         if (gammaZone === "positive") tags.push("Positive Gamma");
