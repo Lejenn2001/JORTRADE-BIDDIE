@@ -478,9 +478,9 @@ const DashboardSignals = () => {
     const pipelineIds = new Set(pipelineSpx.map((s: any) => s.id));
     const merged = [...pipelineSpx];
     for (const s of dbSpxSignals) {
-      if (!pipelineIds.has(s.id)) merged.push(s);
+      if (!pipelineIds.has(s.id)) merged.push(dbRecordToSignal(s));
     }
-    return merged.sort((a: any, b: any) => new Date(b.detected_at || 0).getTime() - new Date(a.detected_at || 0).getTime());
+    return merged.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   }, [pipelineSpx, dbSpxSignals]);
 
   useEffect(() => {
