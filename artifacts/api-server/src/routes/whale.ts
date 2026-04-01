@@ -5192,6 +5192,14 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
         setClauses.push(`gamma_description = $${paramIdx++}`);
         params.push(u.gamma_description);
       }
+      if (u.confidence !== undefined && u.confidence !== null) {
+        setClauses.push(`confidence = $${paramIdx++}`);
+        params.push(u.confidence);
+      }
+      if (u.premium !== undefined && u.premium !== null) {
+        setClauses.push(`premium = $${paramIdx++}`);
+        params.push(u.premium);
+      }
 
       if (setClauses.length === 0) continue;
 
@@ -5202,6 +5210,30 @@ router.post("/whale/admin/sync-signal-fields", async (req, res) => {
       if (result?.rowCount) updated++;
     }
     res.json({ success: true, updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/whale/admin/fix-confidence", async (req, res) => {
+  try {
+    const { adminSecret, fixes } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    if (Array.isArray(fixes)) {
+      let updated = 0;
+      for (const f of fixes) {
+        const r = await dbQuery(
+          `UPDATE signal_outcomes SET confidence = $2, premium = COALESCE($3, premium) WHERE id = $1`,
+          [f.id, f.confidence, f.premium ?? null]
+        );
+        if (r?.rowCount) updated++;
+      }
+      return res.json({ success: true, updated });
+    }
+    const result = await dbQuery(
+      `UPDATE signal_outcomes SET confidence = 7.5 WHERE confidence >= 50 AND signal_source = 'replit'`
+    );
+    res.json({ success: true, fixed: result?.rowCount || 0 });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
