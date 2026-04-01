@@ -1893,12 +1893,17 @@ async function runSignalsPipeline() {
     return true;
   }).slice(0, 20);
 
-  // Extract real-time prices from UW flow data
+  // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
   for (const alert of enriched) {
     const t = (alert.ticker ?? "").toUpperCase();
     const p = parseFloat(alert.underlying_price);
     if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
+    if ((t === "SPX" || t === "SPXW") && p > 0) {
+      const vol = parseInt(alert.volume) || 1;
+      const tickId = alert.id || alert.option_activity_id || `pipe|${alert.executed_at || alert.created_at}|${p}|${vol}`;
+      addSpxTick(p, vol, String(tickId));
+    }
   }
 
   // Get unique tickers — limit to 10 to avoid Polygon rate limits
@@ -1968,7 +1973,8 @@ async function runSignalsPipeline() {
     const direction = optType === "call" ? "bullish" : "bearish";
     const klPrice = kl?.current_price ?? null;
     const uwPrice = parseFloat(c.underlying_price) || null;
-    const price = spxTickers.has(ticker) ? (uwPrice ?? klPrice) : (klPrice ?? uwPrice);
+    const isSpx = ticker === "SPX" || ticker === "SPXW";
+    const price = isSpx ? (uwPrice ?? klPrice) : (klPrice ?? uwPrice);
 
     // ── Hard filters: reject signals that aren't actionable ──
 
@@ -2737,6 +2743,65 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       }
     } catch (gexErr: any) {
       console.warn(`[signals] GEX enrichment failed:`, gexErr.message);
+    }
+
+    try {
+      const vwapCtx = getSpxVwapContext();
+      if (vwapCtx && vwapCtx.vwap && vwapCtx.currentPrice > 0) {
+        const v = vwapCtx.vwap;
+        const cp = vwapCtx.currentPrice;
+
+        for (const s of signals) {
+          if (!spxTickers.has(s.ticker)) continue;
+          const dir = s.direction || s.signal_type;
+
+          if (dir === "bearish") {
+            if (vwapCtx.recentCross?.direction === "broke_below") {
+              if (vwapCtx.retest?.type === "retest_from_below") {
+                s.entry_trigger = `VWAP retest from below at $${v} — rejection is your entry`;
+                if (!s.tags.includes("VWAP Retest")) s.tags.push("VWAP Retest");
+                s.confidence = Math.min(10, (s.confidence || 7) + 1);
+              } else {
+                s.entry_trigger = `Broke below VWAP ($${v}) — wait for retest at $${v} then enter on rejection`;
+                if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
+              }
+            } else if (vwapCtx.priceVsVwap === "below") {
+              s.entry_trigger = `Below VWAP ($${v}) — Near $${cp}`;
+            } else {
+              s.entry_trigger = `Above VWAP ($${v}) — needs break below $${v} for entry`;
+            }
+
+            if (vwapCtx.swingLow) {
+              s.target = `$${vwapCtx.swingLow} (last major swing low)`;
+            }
+            s.invalidation = `Above $${v} (VWAP reclaim invalidates bearish thesis)`;
+
+          } else if (dir === "bullish") {
+            if (vwapCtx.recentCross?.direction === "broke_above") {
+              if (vwapCtx.retest?.type === "retest_from_above") {
+                s.entry_trigger = `VWAP retest from above at $${v} — bounce is your entry`;
+                if (!s.tags.includes("VWAP Retest")) s.tags.push("VWAP Retest");
+                s.confidence = Math.min(10, (s.confidence || 7) + 1);
+              } else {
+                s.entry_trigger = `Broke above VWAP ($${v}) — wait for retest at $${v} then enter on bounce`;
+                if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
+              }
+            } else if (vwapCtx.priceVsVwap === "above") {
+              s.entry_trigger = `Above VWAP ($${v}) — Near $${cp}`;
+            } else {
+              s.entry_trigger = `Below VWAP ($${v}) — needs reclaim above $${v} for entry`;
+            }
+
+            if (vwapCtx.swingHigh) {
+              s.target = `$${vwapCtx.swingHigh} (last major swing high)`;
+            }
+            s.invalidation = `Below $${v} (VWAP break invalidates bullish thesis)`;
+          }
+        }
+        console.log(`[signals] SPX VWAP enrichment: vwap=$${v}, price=$${cp}, pos=${vwapCtx.priceVsVwap}, cross=${vwapCtx.recentCross?.direction ?? 'none'}, retest=${vwapCtx.retest?.type ?? 'none'}, swHi=${vwapCtx.swingHigh}, swLo=${vwapCtx.swingLow}`);
+      }
+    } catch (vwapErr: any) {
+      console.warn(`[signals] SPX VWAP enrichment failed:`, vwapErr.message);
     }
   }
 
@@ -5834,6 +5899,191 @@ router.post("/whale/trump-posts/refresh", async (_req, res) => {
       posts: trumpPosts,
       lastFetch: trumpLastFetch ? new Date(trumpLastFetch).toISOString() : null,
       count: trumpPosts.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── SPX VWAP Tracker (computed from UW intraday SPX prices) ──────────────────
+interface SpxTick {
+  price: number;
+  volume: number;
+  timestamp: number;
+}
+
+interface SpxVwapState {
+  ticks: SpxTick[];
+  vwap: number | null;
+  currentPrice: number;
+  priceVsVwap: "above" | "below" | "at" | null;
+  recentCross: { direction: "broke_below" | "broke_above"; crossPrice: number; crossTime: number } | null;
+  retest: { level: number; type: "retest_from_below" | "retest_from_above"; time: number } | null;
+  swingHigh: number | null;
+  swingLow: number | null;
+  dayDate: string;
+  updatedAt: string;
+}
+
+let spxVwapState: SpxVwapState | null = null;
+let spxSeenTickKeys = new Set<string>();
+let spxCumTPV = 0;
+let spxCumVol = 0;
+
+function resetSpxVwapIfNewDay() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!spxVwapState || spxVwapState.dayDate !== today) {
+    spxVwapState = {
+      ticks: [],
+      vwap: null,
+      currentPrice: 0,
+      priceVsVwap: null,
+      recentCross: null,
+      retest: null,
+      swingHigh: null,
+      swingLow: null,
+      dayDate: today,
+      updatedAt: new Date().toISOString(),
+    };
+    spxSeenTickKeys.clear();
+    spxCumTPV = 0;
+    spxCumVol = 0;
+  }
+}
+
+function addSpxTick(price: number, volume: number = 1, tickId?: string) {
+  resetSpxVwapIfNewDay();
+  if (!spxVwapState || price <= 0) return;
+
+  const key = tickId || `${price.toFixed(2)}|${volume}|${spxVwapState.ticks.length}`;
+  if (spxSeenTickKeys.has(key)) return;
+  spxSeenTickKeys.add(key);
+
+  const now = Date.now();
+  const MAX_TICKS = 500;
+  if (spxVwapState.ticks.length >= MAX_TICKS) {
+    const old = spxVwapState.ticks.shift()!;
+    spxCumTPV -= old.price * old.volume;
+    spxCumVol -= old.volume;
+  }
+  spxVwapState.ticks.push({ price, volume, timestamp: now });
+  spxCumTPV += price * volume;
+  spxCumVol += volume;
+
+  const newVwap = spxCumVol > 0 ? Math.round((spxCumTPV / spxCumVol) * 100) / 100 : null;
+  const prevVwap = spxVwapState.vwap;
+  const prevPrice = spxVwapState.currentPrice;
+  spxVwapState.vwap = newVwap;
+  spxVwapState.currentPrice = price;
+
+  if (newVwap) {
+    const threshold = newVwap * 0.0003;
+    if (Math.abs(price - newVwap) < threshold) {
+      spxVwapState.priceVsVwap = "at";
+    } else {
+      spxVwapState.priceVsVwap = price > newVwap ? "above" : "below";
+    }
+
+    if (prevPrice > 0 && prevVwap) {
+      const wasAbove = prevPrice > prevVwap;
+      const wasBelow = prevPrice < prevVwap;
+      const isAbove = price > newVwap;
+      const isBelow = price < newVwap;
+
+      if (wasAbove && isBelow) {
+        spxVwapState.recentCross = { direction: "broke_below", crossPrice: newVwap, crossTime: now };
+        spxVwapState.retest = null;
+      } else if (wasBelow && isAbove) {
+        spxVwapState.recentCross = { direction: "broke_above", crossPrice: newVwap, crossTime: now };
+        spxVwapState.retest = null;
+      }
+
+      if (spxVwapState.recentCross && !spxVwapState.retest) {
+        const timeSinceCross = now - spxVwapState.recentCross.crossTime;
+        if (timeSinceCross > 60_000 && Math.abs(price - newVwap) < newVwap * 0.001) {
+          if (spxVwapState.recentCross.direction === "broke_below") {
+            spxVwapState.retest = { level: newVwap, type: "retest_from_below", time: now };
+          } else {
+            spxVwapState.retest = { level: newVwap, type: "retest_from_above", time: now };
+          }
+        }
+      }
+    }
+  }
+
+  const prices = spxVwapState.ticks.map(t => t.price);
+  if (prices.length >= 5) {
+    const recent = prices.slice(-Math.min(prices.length, 50));
+    let swHigh: number | null = null, swLow: number | null = null;
+    for (let i = 2; i < recent.length - 2; i++) {
+      if (recent[i] > recent[i-1] && recent[i] > recent[i-2] && recent[i] > recent[i+1] && recent[i] > recent[i+2]) {
+        swHigh = recent[i];
+      }
+      if (recent[i] < recent[i-1] && recent[i] < recent[i-2] && recent[i] < recent[i+1] && recent[i] < recent[i+2]) {
+        swLow = recent[i];
+      }
+    }
+    if (swHigh) spxVwapState.swingHigh = Math.round(swHigh * 100) / 100;
+    if (swLow) spxVwapState.swingLow = Math.round(swLow * 100) / 100;
+  }
+
+  spxVwapState.updatedAt = new Date().toISOString();
+}
+
+async function collectSpxPriceTicks(): Promise<void> {
+  try {
+    const headers = { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}`, Accept: "application/json" };
+    const res = await fetch(`${UW_BASE}/api/stock/SPX/flow-recent?limit=50`, { headers });
+    if (!res.ok) return;
+    const json = await res.json();
+    const records = Array.isArray(json) ? json : json.data || [];
+
+    const ticks: { price: number; vol: number; id: string }[] = [];
+    for (const r of records) {
+      const p = parseFloat(r.underlying_price);
+      const v = parseInt(r.volume) || 1;
+      const id = r.id || r.option_activity_id || `${r.executed_at || r.created_at}|${p}|${v}`;
+      if (p > 0) ticks.push({ price: p, vol: v, id: String(id) });
+    }
+
+    ticks.reverse();
+    for (const { price, vol, id } of ticks) {
+      addSpxTick(price, vol, id);
+    }
+
+    if (ticks.length > 0) {
+      console.log(`[spx-vwap] Collected ${ticks.length} ticks, VWAP=${spxVwapState?.vwap}, price=${spxVwapState?.currentPrice}, pos=${spxVwapState?.priceVsVwap}, cross=${spxVwapState?.recentCross?.direction ?? 'none'}, retest=${spxVwapState?.retest?.type ?? 'none'}`);
+    }
+  } catch (err: any) {
+    console.warn(`[spx-vwap] collection error:`, err.message);
+  }
+}
+
+function getSpxVwapContext(): SpxVwapState | null {
+  resetSpxVwapIfNewDay();
+  return spxVwapState;
+}
+
+setInterval(collectSpxPriceTicks, 60_000);
+collectSpxPriceTicks();
+
+router.get("/whale/spx-vwap", async (_req, res) => {
+  try {
+    const ctx = getSpxVwapContext();
+    if (!ctx || !ctx.vwap) {
+      return res.json({ status: "collecting", message: "VWAP not yet computed — ticks still being collected", ticks: ctx?.ticks?.length ?? 0 });
+    }
+    res.json({
+      vwap: ctx.vwap,
+      currentPrice: ctx.currentPrice,
+      priceVsVwap: ctx.priceVsVwap,
+      recentCross: ctx.recentCross,
+      retest: ctx.retest,
+      swingHigh: ctx.swingHigh,
+      swingLow: ctx.swingLow,
+      tickCount: ctx.ticks.length,
+      dayDate: ctx.dayDate,
+      updatedAt: ctx.updatedAt,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
