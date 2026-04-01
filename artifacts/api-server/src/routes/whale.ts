@@ -2098,6 +2098,8 @@ async function runSignalsPipeline() {
       confidence += 0.5;
     }
 
+    if (premium >= 200_000 && premium < 500_000) confidence += 1;
+
     confidence = Math.min(10, Math.round(confidence));
     if (confidence < 5) return null;
 
@@ -2956,7 +2958,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
           s.current_price || null, s.key_level || null, s.sr_level || null,
-          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null, "v3"
+          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null, "v4"
         ]
       );
     } catch {}
