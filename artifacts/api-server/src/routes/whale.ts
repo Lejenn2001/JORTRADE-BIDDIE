@@ -52,7 +52,8 @@ async function fetchPolygonAggs(ticker: string, mult: number, span: string, from
   try {
     const key = POLYGON_KEY();
     if (!key) return [];
-    const url = POLYGON_AGGS_URL(ticker, mult, span, fromDate, toDate);
+    const polygonTicker = ticker === "SPX" ? "I:SPX" : ticker;
+    const url = POLYGON_AGGS_URL(polygonTicker, mult, span, fromDate, toDate);
     const res = await axios.get(url, { timeout: 8000 });
     logApiCall("polygon", "aggs");
     const bars = res.data?.results;
@@ -1959,6 +1960,9 @@ async function runSignalsPipeline() {
   const rawTickers = [...new Set(candidates.map((a) => a.ticker as string))];
   const uniqueTickers = [...new Set(rawTickers.map(t => t === "SPXW" ? "SPX" : t))].slice(0, 10);
   const hasSpxw = rawTickers.includes("SPXW");
+  if (hasSpxw && uwPricesMap["SPXW"] && !uwPricesMap["SPX"]) {
+    uwPricesMap["SPX"] = uwPricesMap["SPXW"];
+  }
 
   // Fetch key levels, candles, and structure candles in parallel with a global timeout
   const dataFetchPromise = (async () => {
@@ -1983,6 +1987,9 @@ async function runSignalsPipeline() {
 
   const candleMap: Record<string, CandleBar[]> = {};
   uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
+  if (hasSpxw && candleMap["SPX"] && !candleMap["SPXW"]) {
+    candleMap["SPXW"] = candleMap["SPX"];
+  }
 
   const structureMap: Record<string, MarketStructure> = {};
   uniqueTickers.forEach((t, i) => {
@@ -1990,6 +1997,9 @@ async function runSignalsPipeline() {
     const price = keyLevels[t]?.current_price ?? null;
     structureMap[t] = analyzeMarketStructure(sCandles, price);
   });
+  if (hasSpxw && structureMap["SPX"] && !structureMap["SPXW"]) {
+    structureMap["SPXW"] = structureMap["SPX"];
+  }
 
   // Run price action confirmation for each candidate
   const priceConfirmations: Record<string, any> = {};
@@ -2374,6 +2384,8 @@ async function runSignalsPipeline() {
   // Step 1: Local pre-screen to get top candidates
   const preScreened: any[] = [];
   const seenTickers = new Set<string>();
+  const spxStrikeCounts: Record<string, number> = {};
+  const SPX_MAX_PER_TYPE = 3;
   for (const c of candidates) {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
@@ -2385,9 +2397,20 @@ async function runSignalsPipeline() {
     const isSpxTicker = ticker === "SPX" || ticker === "SPXW";
     const sig = scoreSignal(c, kl, confirmation, structure);
     if (isSpxTicker) {
-      console.log(`[signals] SPX scoring: ${ticker} $${strike} ${optType} → ${sig ? `conf=${sig.confidence}` : "REJECTED (null)"}, hasKL=${!!kl}, price=${kl?.current_price || 'none'}, seenKey=${ticker}-${optType}, alreadySeen=${seenTickers.has(`${ticker}-${optType}`)}`);
+      console.log(`[signals] SPX scoring: ${ticker} $${strike} ${optType} → ${sig ? `conf=${sig.confidence}` : "REJECTED (null)"}, hasKL=${!!kl}, price=${kl?.current_price || 'none'}`);
     }
-    if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
+    if (isSpxTicker) {
+      const spxKey = `${ticker}-${optType}`;
+      const count = spxStrikeCounts[spxKey] || 0;
+      if (sig && count < SPX_MAX_PER_TYPE) {
+        const strikeKey = `${ticker}-${strike}-${optType}`;
+        if (!seenTickers.has(strikeKey)) {
+          seenTickers.add(strikeKey);
+          spxStrikeCounts[spxKey] = count + 1;
+          preScreened.push(sig);
+        }
+      }
+    } else if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
     }
