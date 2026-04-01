@@ -12,6 +12,7 @@ import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldO
 
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
+import AdminSpxAnalytics from "@/components/dashboard/AdminSpxAnalytics";
 import { Link } from "react-router-dom";
 
 interface StatCardProps {
@@ -388,7 +389,7 @@ const DashboardAdmin = () => {
   const [showReference, setShowReference] = useState(false);
   const [showTiers, setShowTiers] = useState(false);
   const [chatCount, setChatCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'users' | 'referrals' | 'ideas'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'signals' | 'spx' | 'users' | 'referrals' | 'ideas'>('overview');
   const [apiCounts, setApiCounts] = useState<Record<string, { today: number; minute: number }>>({});
   const [replitCredits, setReplitCredits] = useState("242.89");
   const [replitCreditsDate, setReplitCreditsDate] = useState("3/29");
@@ -705,6 +706,7 @@ const DashboardAdmin = () => {
               { id: 'overview' as const, label: 'Overview', icon: Activity },
               { id: 'health' as const, label: 'System Health', icon: Server },
               { id: 'signals' as const, label: 'Signal Insights', icon: Zap },
+              { id: 'spx' as const, label: 'SPX', icon: TrendingUp },
               { id: 'users' as const, label: 'Users', icon: Users },
               { id: 'referrals' as const, label: 'Referrals', icon: Gift },
               { id: 'ideas' as const, label: 'Ideas', icon: Lightbulb },
@@ -1125,6 +1127,10 @@ const DashboardAdmin = () => {
               )}
               </div>
             </motion.div>
+          )}
+
+          {activeTab === 'spx' && (
+            <AdminSpxAnalytics />
           )}
 
           {activeTab === 'users' && (
