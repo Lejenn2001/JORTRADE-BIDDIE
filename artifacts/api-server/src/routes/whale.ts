@@ -5423,6 +5423,170 @@ router.post("/whale/admin/insert-test-signals", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/retroactive-gex", async (req, res) => {
+  try {
+    const { adminSecret, limit: maxSignals, allTickers } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+    
+    const GEX_ELIGIBLE = allTickers
+      ? null
+      : new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG", "MU", "MSTR", "RDDT", "SOFI", "HIMS", "GLD", "SLV", "ARM", "SNDK"]);
+    
+    const result = await dbQuery(
+      `SELECT * FROM signal_outcomes WHERE category = 'algorithm' AND (gamma_zone IS NULL OR gamma_zone = '' OR gamma_zone = 'none') ORDER BY detected_at DESC LIMIT $1`,
+      [maxSignals || 30]
+    );
+    const signals = result?.rows || [];
+    console.log(`[admin] retroactive-gex: found ${signals.length} algorithm signals without GEX`);
+    
+    const eligibleSignals = GEX_ELIGIBLE ? signals.filter((s: any) => GEX_ELIGIBLE.has(s.ticker)) : signals;
+    const ineligibleSignals = GEX_ELIGIBLE ? signals.filter((s: any) => !GEX_ELIGIBLE.has(s.ticker)) : [];
+    console.log(`[admin] GEX eligible: ${eligibleSignals.length}, ineligible: ${ineligibleSignals.length}`);
+    
+    const tickers = [...new Set(eligibleSignals.map((s: any) => s.ticker))];
+    const tickerGex: Record<string, any> = {};
+    
+    for (const t of tickers) {
+      try {
+        const lookupTicker = (t === "SPXW" || t === "SPX") ? "SPX" : t;
+        if (lookupTicker === "SPX") {
+          const spxRes = await fetch("http://localhost:8080/api/whale/gex/spx");
+          const spxData = await spxRes.json();
+          if (spxData?.gex) tickerGex[t] = spxData.gex;
+        } else {
+          const gex = await fetchTickerGex(lookupTicker);
+          if (gex) tickerGex[t] = gex;
+        }
+      } catch (e: any) {
+        console.warn(`[admin] GEX fetch failed for ${t}:`, e.message);
+      }
+    }
+    console.log(`[admin] GEX data fetched for: ${Object.keys(tickerGex).join(', ')}`);
+    
+    let updated = 0;
+    const updates: any[] = [];
+    
+    for (const s of eligibleSignals) {
+      const gex = tickerGex[s.ticker];
+      if (!gex || !gex.currentPrice) continue;
+      
+      const price = s.price_at_signal || gex.currentPrice;
+      const optType = s.option_type;
+      let confidence = parseFloat(s.confidence) || 5;
+      let target = s.target;
+      let targetNear = s.target_near;
+      let invalidation = s.invalidation;
+      let entryTrigger = s.entry_trigger;
+      let tags: string[] = Array.isArray(s.tags) ? [...s.tags] : [];
+      let gammaZone = "";
+      let gammaDescription = "";
+      let reason = s.reason || "";
+      let isBiddiePick = s.is_biddie_pick;
+      
+      if (gex.gammaFlip) {
+        const inNegGamma = price < gex.gammaFlip;
+        const inPosGamma = price > gex.gammaFlip;
+        
+        if ((optType === "call" || optType === "put") && inNegGamma) {
+          confidence = Math.min(10, confidence + 1);
+          if (!tags.includes("GEX Boost")) tags.push("GEX Boost");
+        } else if (optType === "call" && inPosGamma && gex.callWall) {
+          const distToCallWall = (gex.callWall.price - price) / price;
+          if (distToCallWall < 0.01 && distToCallWall >= 0) {
+            confidence = Math.max(5, confidence - 1);
+            if (!tags.includes("Near Call Wall")) tags.push("Near Call Wall");
+          }
+        } else if (optType === "put" && inPosGamma) {
+          confidence = Math.max(5, confidence - 1);
+          if (!tags.includes("GEX Headwind")) tags.push("GEX Headwind");
+        }
+      }
+      
+      if (optType === "call" && gex.callWall && gex.callWall.price > price) {
+        const callWallPrice = gex.callWall.price;
+        const existingTargetVal = parseFloat((target || "").replace(/[^0-9.]/g, '')) || 0;
+        if (!existingTargetVal || callWallPrice < existingTargetVal) {
+          targetNear = target;
+          target = `Call Wall at $${callWallPrice.toFixed(2)}`;
+        } else if (!targetNear || callWallPrice > existingTargetVal) {
+          targetNear = `Call Wall at $${callWallPrice.toFixed(2)}`;
+        }
+      }
+      if (optType === "put" && gex.putWall && gex.putWall.price < price) {
+        const putWallPrice = gex.putWall.price;
+        const existingTargetVal = parseFloat((target || "").replace(/[^0-9.]/g, '')) || 0;
+        if (!existingTargetVal || putWallPrice > existingTargetVal) {
+          targetNear = target;
+          target = `Put Wall at $${putWallPrice.toFixed(2)}`;
+        } else if (!targetNear || putWallPrice < existingTargetVal) {
+          targetNear = `Put Wall at $${putWallPrice.toFixed(2)}`;
+        }
+      }
+      
+      if (gex.gammaFlip) {
+        if (optType === "call" && gex.gammaFlip < price) {
+          const existingInvVal = parseFloat((invalidation || "").replace(/[^0-9.]/g, '')) || 0;
+          if (gex.gammaFlip > existingInvVal || !existingInvVal) {
+            invalidation = `Below gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+          }
+        }
+        if (optType === "put" && gex.gammaFlip > price) {
+          const existingInvVal = parseFloat((invalidation || "").replace(/[^0-9.]/g, '')) || 0;
+          if (gex.gammaFlip < existingInvVal || !existingInvVal) {
+            invalidation = `Above gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+          }
+        }
+      }
+      
+      if (gex.gammaFlip) {
+        if (price > gex.gammaFlip) {
+          gammaZone = "positive";
+          gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma, moves suppressed. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+        } else {
+          gammaZone = "negative";
+          gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma, moves amplified. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+        }
+      }
+      
+      if (gex.gammaFlip && entryTrigger && !entryTrigger.includes("Whale sweep") && !entryTrigger.includes("[")) {
+        const gammaCtx = price > gex.gammaFlip ? "Long gamma" : "Short gamma";
+        entryTrigger = entryTrigger + ` [${gammaCtx}]`;
+      }
+      
+      if (gex.gammaFlip) {
+        const zone = price > gex.gammaFlip ? "positive (suppressed)" : "negative (amplified)";
+        reason = reason + ` GEX: ${zone} gamma zone, flip at $${gex.gammaFlip}.`;
+      }
+      
+      if (!tags.includes("Negative Gamma") && !tags.includes("Positive Gamma")) {
+        if (gammaZone === "negative") tags.push("Negative Gamma");
+        if (gammaZone === "positive") tags.push("Positive Gamma");
+      }
+      
+      if (!isBiddiePick && confidence >= 8) {
+        const sq = s.signal_quality;
+        if (sq === "strong" || sq === "moderate") isBiddiePick = true;
+      }
+      
+      try {
+        await dbQuery(
+          `UPDATE signal_outcomes SET confidence = $1, target = $2, target_near = $3, invalidation = $4, entry_trigger = $5, tags = $6, gamma_zone = $7, gamma_description = $8, reason = $9, is_biddie_pick = $10 WHERE id = $11`,
+          [confidence, target, targetNear, invalidation, entryTrigger, tags, gammaZone, gammaDescription, reason, isBiddiePick, s.id]
+        );
+        updated++;
+        updates.push({ id: s.id, ticker: s.ticker, optType, confidence, gammaZone, target: target?.slice(0, 60), tags });
+      } catch (e: any) {
+        console.error(`[admin] update signal ${s.id} failed:`, e.message);
+      }
+    }
+    
+    console.log(`[admin] retroactive-gex: updated ${updated} signals`);
+    res.json({ success: true, found: signals.length, eligible: eligibleSignals.length, updated, tickerGexData: Object.keys(tickerGex), updates });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/dedup-signals", async (req, res) => {
   try {
     const { adminSecret } = req.body;
