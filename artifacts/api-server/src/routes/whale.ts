@@ -1913,13 +1913,16 @@ async function runSignalsPipeline() {
 
   // Pre-filter: only alerts worth scoring
   const today = new Date().toISOString().split("T")[0];
-  const candidates = enriched.filter((a) => {
+  const allQualified = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
     if (a.expiry < today) return false;
     if (a.total_premium < 25_000) return false;
     if (a.ask_aggression_pct < 50) return false;
     return true;
-  }).slice(0, 20);
+  });
+  const spxCandidates = allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW").slice(0, 10);
+  const nonSpxCandidates = allQualified.filter((a) => a.ticker !== "SPX" && a.ticker !== "SPXW").slice(0, 20);
+  const candidates = [...nonSpxCandidates, ...spxCandidates];
 
   // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
