@@ -1932,6 +1932,16 @@ async function runSignalsPipeline() {
     if (a.ask_aggression_pct < 50) return false;
     return true;
   });
+  const allSpxRaw = enriched.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW");
+  const spxFilterLog = allSpxRaw.slice(0, 5).map((a) => {
+    const reasons: string[] = [];
+    if (!a.ticker || !a.expiry) reasons.push("no ticker/expiry");
+    if (a.expiry < today) reasons.push(`expired(${a.expiry})`);
+    if (a.total_premium < 25_000) reasons.push(`lowPrem($${Math.round(a.total_premium/1000)}K)`);
+    if (a.ask_aggression_pct < 50) reasons.push(`lowAgg(${a.ask_aggression_pct}%)`);
+    return `${a.ticker} $${a.strike} ${a.option_type} prem=$${Math.round(a.total_premium/1000)}K agg=${a.ask_aggression_pct}% exp=${a.expiry} ${reasons.length ? "FAIL:" + reasons.join(",") : "PASS"}`;
+  });
+  console.log(`[signals] SPX/SPXW raw=${allSpxRaw.length}, qualified=${allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW").length}, samples: ${spxFilterLog.join(" | ")}`);
   const spxCandidates = allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW").slice(0, 10);
   const nonSpxCandidates = allQualified.filter((a) => a.ticker !== "SPX" && a.ticker !== "SPXW").slice(0, 20);
   const candidates = [...nonSpxCandidates, ...spxCandidates];
