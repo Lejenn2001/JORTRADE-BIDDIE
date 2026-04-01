@@ -178,6 +178,18 @@ const SEED_ADMIN_IDS = [
       )`
     );
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, flow_archive table ready`);
+
+    const dupClean = await dbQuery(`
+      DELETE FROM signal_outcomes
+      WHERE ticker IN ('SPX', 'SPXW')
+      AND id NOT IN (
+        SELECT DISTINCT ON (ticker, strike, option_type, expiry, direction) id
+        FROM signal_outcomes
+        WHERE ticker IN ('SPX', 'SPXW')
+        ORDER BY ticker, strike, option_type, expiry, direction, confidence DESC, detected_at DESC
+      )
+    `);
+    console.log(`[admin-seed] Cleaned ${dupClean?.rowCount || 0} duplicate SPX/SPXW signals`);
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
   }
@@ -2975,6 +2987,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
+  const batchSavedKeys = new Set<string>();
   for (const s of signals.slice(0, 20)) {
     try {
       let fixedExpiry = s.expiry || "";
@@ -2995,11 +3008,15 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         }
       }
 
+      const batchKey = `${s.ticker}|${s.strike || 0}|${s.option_type || ''}|${fixedExpiry}|${s.direction || ''}`;
+      if (batchSavedKeys.has(batchKey)) continue;
+
       const existing = await dbQuery(
         `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
         [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
       if (existing && existing.rows.length > 0) continue;
+      batchSavedKeys.add(batchKey);
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
       const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
@@ -6834,10 +6851,12 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
 router.get("/whale/spx-signals", async (_req, res) => {
   try {
     const result = await dbQuery(
-      `SELECT * FROM signal_outcomes 
+      `SELECT DISTINCT ON (ticker, strike, option_type, expiry, direction) *
+       FROM signal_outcomes 
        WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit'
        AND trade_status NOT IN ('expired')
-       ORDER BY detected_at DESC LIMIT 50`
+       ORDER BY ticker, strike, option_type, expiry, direction, confidence DESC, detected_at DESC
+       LIMIT 50`
     );
     const signals = (result?.rows || []).map((r: any) => ({
       id: r.id,
