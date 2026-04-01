@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldOff, Download, Users, UserPlus, MessageSquare, TrendingUp, Anchor, Gauge, Circle, Globe, BookOpen, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, RefreshCw, ExternalLink, Server, Activity, Ban, Gift, Copy, Check, Lightbulb, Plus, X, GripVertical } from "lucide-react";
 
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
+import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import { Link } from "react-router-dom";
 
 interface StatCardProps {
@@ -966,6 +967,7 @@ const DashboardAdmin = () => {
 
           {activeTab === 'signals' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <PerformanceSnapshot />
               <AdminSignalInsights onExport={exportSignalsCSV} exporting={exportingSignals} />
 
               <FlaggedSignalsPanel />

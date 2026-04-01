@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import { useAuth } from "@/hooks/useAuth";
 import { useRealtimePrices } from "@/hooks/useRealtimePrices";
 import type { PriceInfo } from "@/hooks/useRealtimePrices";
@@ -597,7 +596,6 @@ const DashboardAnalytics = () => {
               <>
                 {activeTab === "overview" && (
                   <>
-                    <PerformanceSnapshot />
                     <OverviewTab
                       signalStats={signalStats}
                       topTickers={topTickers}
