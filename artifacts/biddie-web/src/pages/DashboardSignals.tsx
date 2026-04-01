@@ -1433,7 +1433,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
 
-        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed line-clamp-2">
+        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
           {compactDescription(signal)}
         </p>
 
