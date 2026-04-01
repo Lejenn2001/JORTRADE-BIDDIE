@@ -6101,16 +6101,34 @@ function getSpxVwapContext(): SpxVwapState | null {
 setInterval(fetchSpxVwapFromPolygon, 60_000);
 fetchSpxVwapFromPolygon();
 
-// ── Daily Flow Archiver ─────────────────────────────────────────────────────
+// ── Daily Flow Archiver (post-close only) ───────────────────────────────────
+let flowArchiveRanToday = false;
+let flowArchiveLastDate = "";
+
 async function archiveFlowAlerts() {
   try {
     const now = new Date();
-    const etHour = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
+    const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const etHour = etNow.getHours();
+    const etMin = etNow.getMinutes();
     const today = fmtDate(now);
-    const dayOfWeek = now.getDay();
+    const dayOfWeek = etNow.getDay();
 
     if (dayOfWeek === 0 || dayOfWeek === 6) return;
     if (MARKET_HOLIDAYS.has(today)) return;
+
+    if (flowArchiveLastDate !== today) {
+      flowArchiveRanToday = false;
+      flowArchiveLastDate = today;
+    }
+
+    if (flowArchiveRanToday) return;
+
+    if (etHour < 16 || (etHour === 16 && etMin < 15)) {
+      return;
+    }
+
+    console.log(`[flow-archive] Market closed — archiving today's flows...`);
 
     const resp = await axios.get(`${UW_BASE}/api/option-trades/flow-alerts`, {
       headers: { ...UW_HEADERS(), Accept: "application/json" },
@@ -6127,6 +6145,7 @@ async function archiveFlowAlerts() {
 
     if (spxFlows.length === 0) {
       console.log(`[flow-archive] No SPX/SPXW flows to archive`);
+      flowArchiveRanToday = true;
       return;
     }
 
@@ -6159,13 +6178,14 @@ async function archiveFlowAlerts() {
       else skipped++;
     }
 
-    console.log(`[flow-archive] Archived ${archived} new, skipped ${skipped} existing (${spxFlows.length} total SPX flows)`);
+    flowArchiveRanToday = true;
+    console.log(`[flow-archive] Done — archived ${archived} new, skipped ${skipped} dupes (${spxFlows.length} total SPX flows)`);
   } catch (err: any) {
     console.warn(`[flow-archive] Error:`, err.message);
   }
 }
 
-setInterval(archiveFlowAlerts, 30 * 60 * 1000);
+setInterval(archiveFlowAlerts, 10 * 60 * 1000);
 archiveFlowAlerts();
 
 router.get("/whale/flow-archive", async (req, res) => {
