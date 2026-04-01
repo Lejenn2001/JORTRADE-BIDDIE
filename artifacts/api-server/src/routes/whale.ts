@@ -2917,7 +2917,58 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
-  const responseData = { signals: biddiePicks.slice(0, 20), count: Math.min(biddiePicks.length, 20), signalCount: signals.length, timestamp: now };
+
+  let dbActiveSignals: any[] = [];
+  try {
+    const dbResult = await dbQuery(
+      `SELECT *, id as db_id FROM signal_outcomes 
+       WHERE signal_source = 'replit' 
+       AND trade_status IN ('active', 'watching') 
+       AND (outcome IS NULL OR outcome = 'pending')
+       AND detected_at > NOW() - INTERVAL '24 hours'
+       ORDER BY detected_at DESC LIMIT 30`
+    );
+    if (dbResult && dbResult.rows) {
+      const freshIds = new Set(biddiePicks.map((s: any) => `${s.ticker}-${s.strike}-${s.option_type}-${s.expiry}`));
+      dbActiveSignals = dbResult.rows
+        .filter((r: any) => !freshIds.has(`${r.ticker}-${r.strike}-${r.option_type}-${r.expiry}`))
+        .map((r: any) => ({
+          id: `replit-${r.ticker}-${r.strike || ''}-${r.option_type || ''}-${r.expiry || ''}`.replace(/\s/g, ''),
+          db_id: r.db_id,
+          ticker: r.ticker,
+          direction: r.direction,
+          option_type: r.option_type,
+          strike: r.strike,
+          expiry: r.expiry,
+          premium: r.premium,
+          confidence: r.confidence,
+          conviction_score: r.conviction_score,
+          category: r.category,
+          reason: r.reason,
+          entry_trigger: r.entry_trigger,
+          target: r.target,
+          invalidation: r.invalidation,
+          tags: r.tags || [],
+          spread_details: r.spread_details ? (typeof r.spread_details === 'string' ? JSON.parse(r.spread_details) : r.spread_details) : null,
+          current_price: r.price_at_signal,
+          key_level: r.key_level,
+          sr_level: r.sr_level,
+          target_near: r.target_near,
+          trade_status: r.trade_status,
+          is_biddie_pick: r.is_biddie_pick,
+          signal_quality: r.signal_quality,
+          algo_version: r.algo_version,
+          detected_at: r.detected_at,
+          signal_type: r.signal_type,
+        }));
+      console.log(`[signals] merged ${dbActiveSignals.length} active DB signals with ${biddiePicks.length} fresh picks`);
+    }
+  } catch (dbErr: any) {
+    console.warn("[signals] DB active signal merge failed:", dbErr.message);
+  }
+
+  const allDisplaySignals = [...biddiePicks, ...dbActiveSignals].slice(0, 30);
+  const responseData = { signals: allDisplaySignals, count: allDisplaySignals.length, signalCount: signals.length, timestamp: now };
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
@@ -4616,6 +4667,18 @@ function startPriceMonitorSystem() {
 }
 
 setTimeout(startPriceMonitorSystem, 5000);
+
+setInterval(async () => {
+  if (!isMarketHours()) return;
+  if (signalsPipelineRunning) return;
+  if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) return;
+  try {
+    console.log("[signals] background scan triggered");
+    await runSignalsPipeline();
+  } catch (e: any) {
+    console.error("[signals] background scan error:", e.message);
+  }
+}, 3 * 60 * 1000);
 
 router.get("/whale/prices/realtime", (_req, res) => {
   const prices = priceMonitor.getAllPrices();
