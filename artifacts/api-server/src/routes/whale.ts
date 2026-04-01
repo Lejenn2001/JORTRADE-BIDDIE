@@ -149,7 +149,35 @@ const SEED_ADMIN_IDS = [
         reviewed_at TIMESTAMPTZ DEFAULT NOW()
       )`
     );
-    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles`);
+    await dbQuery(
+      `CREATE TABLE IF NOT EXISTS flow_archive (
+        id SERIAL PRIMARY KEY,
+        uw_alert_id TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        strike NUMERIC,
+        option_type TEXT,
+        direction TEXT,
+        expiry TEXT,
+        underlying_price NUMERIC,
+        total_premium NUMERIC,
+        volume INT,
+        open_interest INT,
+        trade_count INT,
+        has_sweep BOOLEAN DEFAULT FALSE,
+        alert_rule TEXT,
+        iv_start NUMERIC,
+        iv_end NUMERIC,
+        ask_aggression_pct NUMERIC,
+        total_size INT,
+        option_chain TEXT,
+        raw_data JSONB,
+        flow_date TEXT NOT NULL,
+        detected_at TIMESTAMPTZ NOT NULL,
+        archived_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(uw_alert_id)
+      )`
+    );
+    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, flow_archive table ready`);
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
   }
@@ -6072,6 +6100,105 @@ function getSpxVwapContext(): SpxVwapState | null {
 
 setInterval(fetchSpxVwapFromPolygon, 60_000);
 fetchSpxVwapFromPolygon();
+
+// ── Daily Flow Archiver ─────────────────────────────────────────────────────
+async function archiveFlowAlerts() {
+  try {
+    const now = new Date();
+    const etHour = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getHours();
+    const today = fmtDate(now);
+    const dayOfWeek = now.getDay();
+
+    if (dayOfWeek === 0 || dayOfWeek === 6) return;
+    if (MARKET_HOLIDAYS.has(today)) return;
+
+    const resp = await axios.get(`${UW_BASE}/api/option-trades/flow-alerts`, {
+      headers: { ...UW_HEADERS(), Accept: "application/json" },
+      params: { limit: 2000 },
+      timeout: 15000,
+    });
+
+    const records: any[] = Array.isArray(resp.data) ? resp.data : resp.data?.data ?? [];
+
+    const spxFlows = records.filter((r: any) => {
+      const ticker = (r.ticker || "").toUpperCase();
+      return ticker === "SPX" || ticker === "SPXW";
+    });
+
+    if (spxFlows.length === 0) {
+      console.log(`[flow-archive] No SPX/SPXW flows to archive`);
+      return;
+    }
+
+    let archived = 0;
+    let skipped = 0;
+    for (const f of spxFlows) {
+      const uwId = f.id;
+      if (!uwId) continue;
+
+      const ts = f.created_at || f.executed_at || now.toISOString();
+      const flowDate = ts.slice(0, 10);
+      const otype = (f.type || f.put_call || "").toLowerCase();
+      const direction = otype === "call" ? "bullish" : "bearish";
+
+      const result = await dbQuery(
+        `INSERT INTO flow_archive (uw_alert_id, ticker, strike, option_type, direction, expiry, underlying_price, total_premium, volume, open_interest, trade_count, has_sweep, alert_rule, iv_start, iv_end, ask_aggression_pct, total_size, option_chain, raw_data, flow_date, detected_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+         ON CONFLICT (uw_alert_id) DO NOTHING`,
+        [
+          uwId, f.ticker, f.strike || null, otype, direction,
+          f.expiry || null, f.underlying_price || null, f.total_premium || null,
+          f.volume || null, f.open_interest || null, f.trade_count || null,
+          f.has_sweep || false, f.alert_rule || null, f.iv_start || null,
+          f.iv_end || null, f.ask_aggression_pct || null, f.total_size || null,
+          f.option_chain || null, JSON.stringify(f), flowDate, ts
+        ]
+      );
+
+      if (result?.rowCount > 0) archived++;
+      else skipped++;
+    }
+
+    console.log(`[flow-archive] Archived ${archived} new, skipped ${skipped} existing (${spxFlows.length} total SPX flows)`);
+  } catch (err: any) {
+    console.warn(`[flow-archive] Error:`, err.message);
+  }
+}
+
+setInterval(archiveFlowAlerts, 30 * 60 * 1000);
+archiveFlowAlerts();
+
+router.get("/whale/flow-archive", async (req, res) => {
+  try {
+    const { date, limit } = req.query;
+    const flowDate = (date as string) || fmtDate(new Date());
+    const maxRows = Math.min(parseInt(limit as string) || 200, 500);
+
+    const result = await dbQuery(
+      `SELECT * FROM flow_archive WHERE flow_date = $1 ORDER BY detected_at DESC LIMIT $2`,
+      [flowDate, maxRows]
+    );
+
+    res.json({
+      date: flowDate,
+      count: result?.rows?.length ?? 0,
+      flows: result?.rows ?? [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/whale/flow-archive/dates", async (_req, res) => {
+  try {
+    const result = await dbQuery(
+      `SELECT flow_date, COUNT(*) as flow_count FROM flow_archive GROUP BY flow_date ORDER BY flow_date DESC LIMIT 30`
+    );
+    res.json({ dates: result?.rows ?? [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/whale/spx-vwap", async (_req, res) => {
   try {
