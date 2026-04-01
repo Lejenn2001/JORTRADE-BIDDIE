@@ -5433,7 +5433,7 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
       : new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG", "MU", "MSTR", "RDDT", "SOFI", "HIMS", "GLD", "SLV", "ARM", "SNDK"]);
     
     const result = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE category = 'algorithm' AND (gamma_zone IS NULL OR gamma_zone = '' OR gamma_zone = 'none') ORDER BY detected_at DESC LIMIT $1`,
+      `SELECT * FROM signal_outcomes WHERE category = 'algorithm' AND ticker NOT IN ('SPX', 'SPXW') AND (gamma_zone IS NULL OR gamma_zone = '' OR gamma_zone = 'none') ORDER BY detected_at DESC LIMIT $1`,
       [maxSignals || 30]
     );
     const signals = result?.rows || [];
@@ -5447,16 +5447,10 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
     const tickerGex: Record<string, any> = {};
     
     for (const t of tickers) {
+      if (t === "SPXW" || t === "SPX") continue;
       try {
-        const lookupTicker = (t === "SPXW" || t === "SPX") ? "SPX" : t;
-        if (lookupTicker === "SPX") {
-          const spxRes = await fetch("http://localhost:8080/api/whale/gex/spx");
-          const spxData = await spxRes.json();
-          if (spxData?.gex) tickerGex[t] = spxData.gex;
-        } else {
-          const gex = await fetchTickerGex(lookupTicker);
-          if (gex) tickerGex[t] = gex;
-        }
+        const gex = await fetchTickerGex(t);
+        if (gex) tickerGex[t] = gex;
       } catch (e: any) {
         console.warn(`[admin] GEX fetch failed for ${t}:`, e.message);
       }
