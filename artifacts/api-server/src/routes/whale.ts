@@ -5541,7 +5541,55 @@ router.get("/whale/admin/version-comparison", async (req, res) => {
         last_signal: r.last_signal,
       };
     });
-    res.json({ versions });
+    const spxResult = await dbQuery(`
+      SELECT 
+        algo_version,
+        COUNT(*) as total_signals,
+        COUNT(*) FILTER (WHERE outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit') as wins,
+        COUNT(*) FILTER (WHERE outcome = 'missed' OR outcome = 'loss') as losses,
+        COUNT(*) FILTER (WHERE outcome IS NULL OR outcome = 'pending') as pending,
+        ROUND(AVG(confidence)::numeric, 1) as avg_confidence,
+        ROUND(AVG(CASE WHEN mfe_percent IS NOT NULL AND mfe_percent > 0 THEN mfe_percent END)::numeric, 2) as avg_mfe,
+        ROUND(AVG(CASE WHEN pct_past_invalidation IS NOT NULL AND pct_past_invalidation > 0 THEN pct_past_invalidation END)::numeric, 2) as avg_drawdown,
+        COUNT(*) FILTER (WHERE entry_price_reached = true) as entries_hit,
+        COUNT(*) FILTER (WHERE invalidation_breached = true) as invalidations_breached,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true) as biddie_picks,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit')) as biddie_wins,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'missed' OR outcome = 'loss')) as biddie_losses,
+        MIN(created_at) as first_signal,
+        MAX(created_at) as last_signal
+      FROM signal_outcomes
+      WHERE ticker IN ('SPX', 'SPXW')
+      GROUP BY algo_version
+      ORDER BY algo_version
+    `);
+    const parseVersion = (r: any) => {
+      const wins = parseInt(r.wins) || 0;
+      const losses = parseInt(r.losses) || 0;
+      const resolved = wins + losses;
+      const biddieWins = parseInt(r.biddie_wins) || 0;
+      const biddieLosses = parseInt(r.biddie_losses) || 0;
+      const biddieResolved = biddieWins + biddieLosses;
+      return {
+        version: r.algo_version || 'v2',
+        total_signals: parseInt(r.total_signals),
+        wins,
+        losses,
+        pending: parseInt(r.pending),
+        win_rate: resolved > 0 ? Math.round((wins / resolved) * 100) : null,
+        avg_confidence: parseFloat(r.avg_confidence) || null,
+        avg_mfe: parseFloat(r.avg_mfe) || null,
+        avg_drawdown: parseFloat(r.avg_drawdown) || null,
+        entries_hit: parseInt(r.entries_hit),
+        invalidations_breached: parseInt(r.invalidations_breached),
+        biddie_picks: parseInt(r.biddie_picks),
+        biddie_win_rate: biddieResolved > 0 ? Math.round((biddieWins / biddieResolved) * 100) : null,
+        first_signal: r.first_signal,
+        last_signal: r.last_signal,
+      };
+    };
+    const spxVersions = (spxResult?.rows || []).map(parseVersion);
+    res.json({ versions, spx: spxVersions });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
