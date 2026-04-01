@@ -13,6 +13,7 @@ import { Shield, Search, UserCog, Crown, Zap, Star, Trash2, ShieldCheck, ShieldO
 import AdminSignalInsights from "@/components/dashboard/AdminSignalInsights";
 import PerformanceSnapshot from "@/components/dashboard/PerformanceSnapshot";
 import AdminSpxAnalytics from "@/components/dashboard/AdminSpxAnalytics";
+import AlgoVersionTracker from "@/components/dashboard/AlgoVersionTracker";
 import { Link } from "react-router-dom";
 
 interface StatCardProps {
@@ -970,6 +971,7 @@ const DashboardAdmin = () => {
           {activeTab === 'signals' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <PerformanceSnapshot />
+              <AlgoVersionTracker />
               <AdminSignalInsights onExport={exportSignalsCSV} exporting={exportingSignals} />
 
               <FlaggedSignalsPanel />

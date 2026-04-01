@@ -2948,15 +2948,15 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
       const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24)`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, algo_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24, $25)`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
           s.current_price || null, s.key_level || null, s.sr_level || null,
-          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null
+          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null, "v3"
         ]
       );
     } catch {}
@@ -5487,6 +5487,61 @@ router.post("/whale/admin/retroactive-gex", async (req, res) => {
     
     console.log(`[admin] retroactive-gex: updated ${updated} signals`);
     res.json({ success: true, found: signals.length, eligible: eligibleSignals.length, updated, tickerGexData: Object.keys(tickerGex), updates });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/whale/admin/version-comparison", async (req, res) => {
+  try {
+    const result = await dbQuery(`
+      SELECT 
+        algo_version,
+        COUNT(*) as total_signals,
+        COUNT(*) FILTER (WHERE outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit') as wins,
+        COUNT(*) FILTER (WHERE outcome = 'missed' OR outcome = 'loss') as losses,
+        COUNT(*) FILTER (WHERE outcome IS NULL OR outcome = 'pending') as pending,
+        ROUND(AVG(confidence)::numeric, 1) as avg_confidence,
+        ROUND(AVG(CASE WHEN mfe_percent IS NOT NULL AND mfe_percent > 0 THEN mfe_percent END)::numeric, 2) as avg_mfe,
+        ROUND(AVG(CASE WHEN pct_past_invalidation IS NOT NULL AND pct_past_invalidation > 0 THEN pct_past_invalidation END)::numeric, 2) as avg_drawdown,
+        COUNT(*) FILTER (WHERE entry_price_reached = true) as entries_hit,
+        COUNT(*) FILTER (WHERE invalidation_breached = true) as invalidations_breached,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true) as biddie_picks,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit')) as biddie_wins,
+        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'missed' OR outcome = 'loss')) as biddie_losses,
+        MIN(created_at) as first_signal,
+        MAX(created_at) as last_signal
+      FROM signal_outcomes
+      WHERE ticker NOT IN ('SPX', 'SPXW')
+      GROUP BY algo_version
+      ORDER BY algo_version
+    `);
+    const versions = (result?.rows || []).map((r: any) => {
+      const wins = parseInt(r.wins) || 0;
+      const losses = parseInt(r.losses) || 0;
+      const resolved = wins + losses;
+      const biddieWins = parseInt(r.biddie_wins) || 0;
+      const biddieLosses = parseInt(r.biddie_losses) || 0;
+      const biddieResolved = biddieWins + biddieLosses;
+      return {
+        version: r.algo_version || 'v2',
+        total_signals: parseInt(r.total_signals),
+        wins,
+        losses,
+        pending: parseInt(r.pending),
+        win_rate: resolved > 0 ? Math.round((wins / resolved) * 100) : null,
+        avg_confidence: parseFloat(r.avg_confidence) || null,
+        avg_mfe: parseFloat(r.avg_mfe) || null,
+        avg_drawdown: parseFloat(r.avg_drawdown) || null,
+        entries_hit: parseInt(r.entries_hit),
+        invalidations_breached: parseInt(r.invalidations_breached),
+        biddie_picks: parseInt(r.biddie_picks),
+        biddie_win_rate: biddieResolved > 0 ? Math.round((biddieWins / biddieResolved) * 100) : null,
+        first_signal: r.first_signal,
+        last_signal: r.last_signal,
+      };
+    });
+    res.json({ versions });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
