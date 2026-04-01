@@ -2888,25 +2888,25 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
           }
         }
 
-        // 2. Use GEX walls as target/invalidation levels
+        // 2. Use GEX walls as target levels
         if (optType === "call" && gex.callWall && gex.callWall.price > price) {
-          const callWallPrice = gex.callWall.price;
+          const cw = gex.callWall.price;
           const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
-          if (!existingTargetVal || callWallPrice < existingTargetVal) {
+          if (!existingTargetVal || cw < existingTargetVal) {
             s.target_near = s.target;
-            s.target = `Call Wall at $${callWallPrice.toFixed(2)}`;
-          } else if (!s.target_near || callWallPrice > existingTargetVal) {
-            s.target_near = `Call Wall at $${callWallPrice.toFixed(2)}`;
+            s.target = `$${cw.toFixed(2)} (call wall resistance), then $${existingTargetVal ? existingTargetVal.toFixed(2) : cw.toFixed(2)}`;
+          } else if (!s.target_near) {
+            s.target_near = `$${cw.toFixed(2)} (call wall resistance)`;
           }
         }
         if (optType === "put" && gex.putWall && gex.putWall.price < price) {
-          const putWallPrice = gex.putWall.price;
+          const pw = gex.putWall.price;
           const existingTargetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
-          if (!existingTargetVal || putWallPrice > existingTargetVal) {
+          if (!existingTargetVal || pw > existingTargetVal) {
             s.target_near = s.target;
-            s.target = `Put Wall at $${putWallPrice.toFixed(2)}`;
-          } else if (!s.target_near || putWallPrice < existingTargetVal) {
-            s.target_near = `Put Wall at $${putWallPrice.toFixed(2)}`;
+            s.target = `$${pw.toFixed(2)} (put wall support), then $${existingTargetVal ? existingTargetVal.toFixed(2) : pw.toFixed(2)}`;
+          } else if (!s.target_near) {
+            s.target_near = `$${pw.toFixed(2)} (put wall support)`;
           }
         }
 
@@ -2915,38 +2915,49 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
           if (optType === "call" && gex.gammaFlip < price) {
             const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
             if (gex.gammaFlip > existingInvVal || !existingInvVal) {
-              s.invalidation = `Below gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+              s.invalidation = `Below $${gex.gammaFlip.toFixed(2)} (gamma flip break invalidates bullish thesis)`;
             }
           }
           if (optType === "put" && gex.gammaFlip > price) {
             const existingInvVal = parseFloat((s.invalidation || "").replace(/[^0-9.]/g, '')) || 0;
             if (gex.gammaFlip < existingInvVal || !existingInvVal) {
-              s.invalidation = `Above gamma flip at $${gex.gammaFlip.toFixed(2)}`;
+              s.invalidation = `Above $${gex.gammaFlip.toFixed(2)} (gamma flip reclaim invalidates bearish thesis)`;
             }
           }
         }
 
-        // 4. Set gamma zone and description
+        // 4. Set gamma zone and description (matching SPX format)
+        const flipStr = `$${gex.gammaFlip?.toLocaleString() ?? 'N/A'}`;
+        const cwStr = gex.callWall ? `$${gex.callWall.price.toLocaleString()}` : 'N/A';
+        const pwStr = gex.putWall ? `$${gex.putWall.price.toLocaleString()}` : 'N/A';
+        const pctFromFlip = gex.gammaFlip ? Math.abs((price - gex.gammaFlip) / gex.gammaFlip * 100).toFixed(1) : '0';
+        const depth = gex.gammaFlip && Math.abs(price - gex.gammaFlip) / gex.gammaFlip > 0.005 ? "Deep " : "";
+
         if (gex.gammaFlip) {
           if (price > gex.gammaFlip) {
             s.gamma_zone = "positive";
-            s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma, moves suppressed. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+            s.gamma_description = `${depth}Above gamma flip (${flipStr}) — long gamma territory where dealer hedging suppresses moves. Call wall at ${cwStr}, put wall at ${pwStr}. Needs gamma flip break as catalyst.`;
           } else {
             s.gamma_zone = "negative";
-            s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma, moves amplified. Call wall: $${gex.callWall?.price?.toFixed(2) ?? 'N/A'}, Put wall: $${gex.putWall?.price?.toFixed(2) ?? 'N/A'}`;
+            s.gamma_description = `${depth}Below gamma flip (${flipStr}) — short gamma territory where dealer hedging amplifies moves. Call wall at ${cwStr}, put wall at ${pwStr}. Needs gamma flip break as catalyst.`;
           }
         }
 
-        // 5. Entry trigger enhancement with GEX context
-        if (gex.gammaFlip && s.entry_trigger && !s.entry_trigger.includes("Whale sweep")) {
-          const gammaCtx = price > gex.gammaFlip ? "Long gamma" : "Short gamma";
-          s.entry_trigger = s.entry_trigger + ` [${gammaCtx}]`;
+        // 5. Entry trigger — replace whale sweep with VWAP-based entry
+        if (s.entry_trigger && s.entry_trigger.includes("Whale sweep")) {
+          const vwapMatch = s.entry_trigger.match(/\$[\d,.]+/);
+          const sweepPrice = vwapMatch ? vwapMatch[0] : `$${price.toFixed(2)}`;
+          if (optType === "call") {
+            s.entry_trigger = `Near ${sweepPrice} — needs confirmation above for entry`;
+          } else {
+            s.entry_trigger = `Near ${sweepPrice} — needs breakdown confirmation for entry`;
+          }
         }
 
         // 6. Reason enhancement
         if (gex.gammaFlip) {
           const zone = price > gex.gammaFlip ? "positive (suppressed)" : "negative (amplified)";
-          s.reason = (s.reason || "") + ` GEX: ${zone} gamma zone, flip at $${gex.gammaFlip}.`;
+          s.reason = (s.reason || "") + ` GEX: ${zone} gamma zone, flip at ${flipStr}.`;
         }
 
         if (!s.tags.includes("Negative Gamma") && !s.tags.includes("Positive Gamma")) {
