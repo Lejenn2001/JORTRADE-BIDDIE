@@ -1943,9 +1943,7 @@ async function runSignalsPipeline() {
     return `${a.ticker} $${a.strike} ${a.option_type} prem=$${Math.round(a.total_premium/1000)}K agg=${a.ask_aggression_pct}% exp=${a.expiry} ${reasons.length ? "FAIL:" + reasons.join(",") : "PASS"}`;
   });
   console.log(`[signals] SPX/SPXW raw=${allSpxRaw.length}, qualified=${allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW").length}, samples: ${spxFilterLog.join(" | ")}`);
-  const spxCandidates = allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW").slice(0, 10);
-  const nonSpxCandidates = allQualified.filter((a) => a.ticker !== "SPX" && a.ticker !== "SPXW").slice(0, 20);
-  const candidates = [...nonSpxCandidates, ...spxCandidates];
+  const candidates = allQualified.slice(0, 30);
 
   // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
@@ -2369,8 +2367,6 @@ async function runSignalsPipeline() {
   // Step 1: Local pre-screen to get top candidates
   const preScreened: any[] = [];
   const seenTickers = new Set<string>();
-  const spxStrikeCounts: Record<string, number> = {};
-  const SPX_MAX_PER_TYPE = 3;
   for (const c of candidates) {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
@@ -2379,30 +2375,13 @@ async function runSignalsPipeline() {
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
     const structure = structureMap[ticker] || null;
-    const isSpxTicker = ticker === "SPX" || ticker === "SPXW";
     const sig = scoreSignal(c, kl, confirmation, structure);
-    if (isSpxTicker) {
-      console.log(`[signals] SPX scoring: ${ticker} $${strike} ${optType} → ${sig ? `conf=${sig.confidence}` : "REJECTED (null)"}, hasKL=${!!kl}, price=${kl?.current_price || 'none'}`);
-    }
-    if (isSpxTicker) {
-      const spxKey = `${ticker}-${optType}`;
-      const count = spxStrikeCounts[spxKey] || 0;
-      if (sig && count < SPX_MAX_PER_TYPE) {
-        const strikeKey = `${ticker}-${strike}-${optType}`;
-        if (!seenTickers.has(strikeKey)) {
-          seenTickers.add(strikeKey);
-          spxStrikeCounts[spxKey] = count + 1;
-          preScreened.push(sig);
-        }
-      }
-    } else if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
+    if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
     }
   }
   preScreened.sort((a, b) => b.confidence - a.confidence);
-  const spxPreScreened = preScreened.filter(s => s.ticker === "SPX" || s.ticker === "SPXW");
-  console.log(`[signals] SPX pre-screened: ${spxPreScreened.length} signals, confs: ${spxPreScreened.map(s => `${s.ticker} ${s.option_type} conf=${s.confidence}`).join(", ")}`);
   const topCandidates = preScreened.slice(0, 15);
 
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
