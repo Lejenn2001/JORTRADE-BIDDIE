@@ -1,0 +1,15 @@
+GEX as a directional filter — If SPX is in short gamma territory (below the gamma flip), moves get amplified. A bullish call signal in short gamma is fighting against dealer hedging that pushes price down further. The algorithm should know that and either lower conviction or skip the signal entirely. Right now it doesn't factor that in at all.
+
+Call/Put wall as target validation — The algorithm sets target prices based on support/resistance and VWAP, but the call wall is often the real ceiling and the put wall is the real floor during a trading session. If a signal's target is above the call wall, that target is probably unrealistic. The algorithm doesn't check this.
+
+Key magnet as entry validation — Price tends to gravitate toward the key magnet level. If a signal's entry is far from the magnet, it may be fighting the dominant flow. The algorithm could use this to confirm or reject entries.
+
+Beyond GEX — what else would help accuracy:
+
+Intraday momentum confirmation — Waiting for price to actually move in the signal's direction before calling "Act Now" rather than just checking VWAP position
+Volume confirmation — Requiring above-average volume on the move, not just the options flow
+Multi-timeframe structure — The ICT/SMC structure analysis exists but isn't heavily weighted in the final score
+Historical pattern matching — Looking at how similar setups performed in the past (we track outcomes, but don't feed them back into scoring yet)
+The biggest accuracy killer today — The algorithm generates signals based on large options flow, but not every big trade is a directional bet. Some are hedges, some are rolls, some are closing positions. Claude tries to filter these out, but it's imperfect. More context from the options chain (open interest changes, put/call skew) would help distinguish real bets from noise.
+
+Bottom line: The GEX data is valuable and accurate, but right now it's just decorating signals instead of shaping them. The real improvement would come from using it as a scoring input — boosting signals that align with gamma positioning and penalizing ones that fight it.
