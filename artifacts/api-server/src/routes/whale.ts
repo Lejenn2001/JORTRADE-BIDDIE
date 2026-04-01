@@ -1955,7 +1955,10 @@ async function runSignalsPipeline() {
   }
 
   // Get unique tickers — limit to 10 to avoid Polygon rate limits
-  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
+  // Map SPXW → SPX for data fetching since Polygon doesn't have SPXW bars
+  const rawTickers = [...new Set(candidates.map((a) => a.ticker as string))];
+  const uniqueTickers = [...new Set(rawTickers.map(t => t === "SPXW" ? "SPX" : t))].slice(0, 10);
+  const hasSpxw = rawTickers.includes("SPXW");
 
   // Fetch key levels, candles, and structure candles in parallel with a global timeout
   const dataFetchPromise = (async () => {
@@ -1974,6 +1977,9 @@ async function runSignalsPipeline() {
 
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
+  if (hasSpxw && keyLevels["SPX"] && !keyLevels["SPXW"]) {
+    keyLevels["SPXW"] = { ...keyLevels["SPX"] };
+  }
 
   const candleMap: Record<string, CandleBar[]> = {};
   uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
@@ -2376,13 +2382,19 @@ async function runSignalsPipeline() {
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
     const structure = structureMap[ticker] || null;
+    const isSpxTicker = ticker === "SPX" || ticker === "SPXW";
     const sig = scoreSignal(c, kl, confirmation, structure);
+    if (isSpxTicker) {
+      console.log(`[signals] SPX scoring: ${ticker} $${strike} ${optType} → ${sig ? `conf=${sig.confidence}` : "REJECTED (null)"}, hasKL=${!!kl}, price=${kl?.current_price || 'none'}, seenKey=${ticker}-${optType}, alreadySeen=${seenTickers.has(`${ticker}-${optType}`)}`);
+    }
     if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
     }
   }
   preScreened.sort((a, b) => b.confidence - a.confidence);
+  const spxPreScreened = preScreened.filter(s => s.ticker === "SPX" || s.ticker === "SPXW");
+  console.log(`[signals] SPX pre-screened: ${spxPreScreened.length} signals, confs: ${spxPreScreened.map(s => `${s.ticker} ${s.option_type} conf=${s.confidence}`).join(", ")}`);
   const topCandidates = preScreened.slice(0, 15);
 
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
