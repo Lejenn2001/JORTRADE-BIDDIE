@@ -1956,13 +1956,7 @@ async function runSignalsPipeline() {
   }
 
   // Get unique tickers — limit to 10 to avoid Polygon rate limits
-  // Map SPXW → SPX for data fetching since Polygon doesn't have SPXW bars
-  const rawTickers = [...new Set(candidates.map((a) => a.ticker as string))];
-  const uniqueTickers = [...new Set(rawTickers.map(t => t === "SPXW" ? "SPX" : t))].slice(0, 10);
-  const hasSpxw = rawTickers.includes("SPXW");
-  if (hasSpxw && uwPricesMap["SPXW"] && !uwPricesMap["SPX"]) {
-    uwPricesMap["SPX"] = uwPricesMap["SPXW"];
-  }
+  const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))].slice(0, 10);
 
   // Fetch key levels, candles, and structure candles in parallel with a global timeout
   const dataFetchPromise = (async () => {
@@ -1981,15 +1975,9 @@ async function runSignalsPipeline() {
 
   const keyLevels: Record<string, any> = {};
   uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
-  if (hasSpxw && keyLevels["SPX"] && !keyLevels["SPXW"]) {
-    keyLevels["SPXW"] = { ...keyLevels["SPX"] };
-  }
 
   const candleMap: Record<string, CandleBar[]> = {};
   uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
-  if (hasSpxw && candleMap["SPX"] && !candleMap["SPXW"]) {
-    candleMap["SPXW"] = candleMap["SPX"];
-  }
 
   const structureMap: Record<string, MarketStructure> = {};
   uniqueTickers.forEach((t, i) => {
@@ -1997,9 +1985,6 @@ async function runSignalsPipeline() {
     const price = keyLevels[t]?.current_price ?? null;
     structureMap[t] = analyzeMarketStructure(sCandles, price);
   });
-  if (hasSpxw && structureMap["SPX"] && !structureMap["SPXW"]) {
-    structureMap["SPXW"] = structureMap["SPX"];
-  }
 
   // Run price action confirmation for each candidate
   const priceConfirmations: Record<string, any> = {};
