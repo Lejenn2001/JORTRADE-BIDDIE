@@ -439,7 +439,7 @@ const DashboardSignals = () => {
   }, [signals]);
 
   const algorithmSignals = useMemo(() => {
-    const algoOnly = filtered.filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'));
+    const algoOnly = filtered.filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && s.ticker !== 'SPX' && s.ticker !== 'SPXW');
     const buyNow = algoOnly.filter(s => s.timeframe === 'buy_now');
     const shortTerm = algoOnly.filter(s => s.timeframe === 'short_term' || s.timeframe === 'swing');
     return { buy_now: buyNow, short_term: shortTerm };
