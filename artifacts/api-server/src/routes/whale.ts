@@ -179,18 +179,6 @@ const SEED_ADMIN_IDS = [
       )`
     );
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, flow_archive table ready`);
-
-    const dupClean = await dbQuery(`
-      DELETE FROM signal_outcomes
-      WHERE ticker IN ('SPX', 'SPXW')
-      AND id NOT IN (
-        SELECT DISTINCT ON (ticker, strike, option_type, expiry, direction) id
-        FROM signal_outcomes
-        WHERE ticker IN ('SPX', 'SPXW')
-        ORDER BY ticker, strike, option_type, expiry, direction, confidence DESC, detected_at DESC
-      )
-    `);
-    console.log(`[admin-seed] Cleaned ${dupClean?.rowCount || 0} duplicate SPX/SPXW signals`);
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
   }
