@@ -4734,30 +4734,40 @@ async function realtimeVerifySignals() {
         timeAtTarget = now.toISOString();
       }
 
+      const duringMarket = isMarketHours();
+
       const prevStatus = signal.trade_status || "watching";
       let newStatus = prevStatus;
       const hasNoLevels = (signal.entry_trigger || "").includes("Level data not available");
-      if (hasNoLevels) {
-        if (outcome === "hit") newStatus = "hit";
-        else if (outcome === "partial_hit") newStatus = "partial";
-        else if (outcome === "near_miss") newStatus = "near_miss";
-        else if (outcome === "missed") newStatus = "miss";
-        else if (outcome === "expired") newStatus = "expired";
-        else if (signal.outcome === "missed") newStatus = "miss";
-        else if (signal.outcome === "hit" || signal.outcome === "win") newStatus = "hit";
-      } else {
+
+      if (duringMarket) {
         if (prevStatus === "watching" && didReachEntry) {
           newStatus = "active";
         }
-        if (didBreachInvalidation && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
-          newStatus = "miss";
-          if (!outcome) outcome = "missed";
+        outcome = null;
+      } else {
+        if (hasNoLevels) {
+          if (outcome === "hit") newStatus = "hit";
+          else if (outcome === "partial_hit") newStatus = "partial";
+          else if (outcome === "near_miss") newStatus = "near_miss";
+          else if (outcome === "missed") newStatus = "miss";
+          else if (outcome === "expired") newStatus = "expired";
+          else if (signal.outcome === "missed") newStatus = "miss";
+          else if (signal.outcome === "hit" || signal.outcome === "win") newStatus = "hit";
+        } else {
+          if (prevStatus === "watching" && didReachEntry) {
+            newStatus = "active";
+          }
+          if (didBreachInvalidation && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
+            newStatus = "miss";
+            if (!outcome) outcome = "missed";
+          }
+          if (outcome === "hit") newStatus = "hit";
+          else if (outcome === "partial_hit") newStatus = "partial";
+          else if (outcome === "near_miss") newStatus = "near_miss";
+          else if (outcome === "missed") newStatus = "miss";
+          else if (outcome === "expired") newStatus = "expired";
         }
-        if (outcome === "hit") newStatus = "hit";
-        else if (outcome === "partial_hit") newStatus = "partial";
-        else if (outcome === "near_miss") newStatus = "near_miss";
-        else if (outcome === "missed") newStatus = "miss";
-        else if (outcome === "expired") newStatus = "expired";
       }
 
       const statusChanged = newStatus !== prevStatus;
