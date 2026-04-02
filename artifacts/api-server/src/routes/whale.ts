@@ -5489,6 +5489,122 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/reprocess-v5", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
+
+    const { signalIds } = req.body;
+    if (!signalIds || !Array.isArray(signalIds) || signalIds.length === 0) {
+      return res.status(400).json({ error: "signalIds array required" });
+    }
+    if (signalIds.length > 20) return res.status(400).json({ error: "Max 20 signals at once" });
+
+    const results: any[] = [];
+    for (const sid of signalIds) {
+      try {
+        const sigRes = await pool.query(
+          "SELECT id, ticker, direction, price_at_signal, option_type, category, tags FROM signal_outcomes WHERE id = $1",
+          [sid]
+        );
+        if (sigRes.rows.length === 0) { results.push({ id: sid, status: "not_found" }); continue; }
+        const sig = sigRes.rows[0];
+        const ticker = sig.ticker;
+        const price = parseFloat(sig.price_at_signal);
+        const direction = sig.direction;
+        const optionType = sig.option_type;
+        const existingTags: string[] = sig.tags || [];
+
+        const structureCandles = await fetchStructureCandles(ticker);
+        const structure = structureCandles.length > 10 ? analyzeMarketStructure(structureCandles) : null;
+
+        const gex = await fetchTickerGex(ticker, price);
+
+        let target = "", targetNear = "", invalidation = "";
+        const minTargetDist = price * 0.005;
+
+        if (direction === "bullish" || optionType === "call") {
+          const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
+          const validSwingHighs = swingHighs.filter(p => (p - price) >= minTargetDist);
+          if (validSwingHighs.length >= 2) {
+            target = `$${validSwingHighs[0].toFixed(2)} (previous swing high), then $${validSwingHighs[1].toFixed(2)}`;
+            targetNear = `$${validSwingHighs[1].toFixed(2)}`;
+          } else if (validSwingHighs.length === 1) {
+            target = `$${validSwingHighs[0].toFixed(2)} (previous swing high)`;
+            targetNear = `$${(validSwingHighs[0] * 1.01).toFixed(2)}`;
+          } else {
+            target = `$${(price * 1.02).toFixed(2)} (2% above entry)`;
+            targetNear = `$${(price * 1.04).toFixed(2)}`;
+          }
+          const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
+          invalidation = swingLows.length > 0
+            ? `Below $${swingLows[0].toFixed(2)} (previous swing low)`
+            : `Below $${(price * 0.98).toFixed(2)}`;
+        } else {
+          const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
+          const validSwingLows = swingLows.filter(p => (price - p) >= minTargetDist);
+          if (validSwingLows.length >= 2) {
+            target = `$${validSwingLows[0].toFixed(2)} (previous swing low), then $${validSwingLows[1].toFixed(2)}`;
+            targetNear = `$${validSwingLows[1].toFixed(2)}`;
+          } else if (validSwingLows.length === 1) {
+            target = `$${validSwingLows[0].toFixed(2)} (previous swing low)`;
+            targetNear = `$${(validSwingLows[0] * 0.99).toFixed(2)}`;
+          } else {
+            target = `$${(price * 0.98).toFixed(2)} (2% below entry)`;
+            targetNear = `$${(price * 0.96).toFixed(2)}`;
+          }
+          const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
+          invalidation = swingHighs.length > 0
+            ? `Above $${swingHighs[0].toFixed(2)} (previous swing high)`
+            : `Above $${(price * 1.02).toFixed(2)}`;
+        }
+
+        let gammaZone = "neutral", gammaDescription = "";
+        const newTags = existingTags.filter(t => !["Positive Gamma", "Negative Gamma", "GEX Call Wall", "GEX Put Wall", "GEX Flip Zone", "GEX Wall Target", "GEX Headwind"].includes(t));
+
+        if (gex) {
+          if (gex.gamma_zone === "positive" || gex.gamma_zone === "negative") {
+            gammaZone = gex.gamma_zone;
+            gammaDescription = gex.gamma_description;
+            newTags.push(gex.gamma_zone === "positive" ? "Positive Gamma" : "Negative Gamma");
+          }
+          if (gex.call_wall && Math.abs(price - gex.call_wall) / gex.call_wall < 0.01) newTags.push("GEX Call Wall");
+          if (gex.put_wall && Math.abs(price - gex.put_wall) / gex.put_wall < 0.01) newTags.push("GEX Put Wall");
+          if (gex.gamma_flip && Math.abs(price - gex.gamma_flip) / gex.gamma_flip < 0.01) newTags.push("GEX Flip Zone");
+          if (direction === "bullish" && gex.call_wall) newTags.push("GEX Wall Target");
+          if (direction === "bearish" && gex.put_wall) newTags.push("GEX Wall Target");
+          if ((direction === "bullish" && gammaZone === "negative") || (direction === "bearish" && gammaZone === "positive")) {
+            newTags.push("GEX Headwind");
+          }
+        }
+
+        await pool.query(
+          `UPDATE signal_outcomes SET target = $1, target_near = $2, invalidation = $3, gamma_zone = $4, gamma_description = $5, tags = $6 WHERE id = $7`,
+          [target, targetNear, invalidation, gammaZone, gammaDescription, newTags, sid]
+        );
+
+        results.push({
+          id: sid, ticker, status: "updated",
+          target, targetNear, invalidation,
+          gammaZone, gammaDescription,
+          tags: newTags,
+          structureBars: structureCandles.length,
+          gexData: gex ? { flip: gex.gamma_flip, callWall: gex.call_wall, putWall: gex.put_wall } : null
+        });
+      } catch (e: any) {
+        results.push({ id: sid, status: "error", error: e.message });
+      }
+    }
+
+    console.log(`[admin] reprocess-v5: ${results.filter(r => r.status === "updated").length}/${signalIds.length} updated`);
+    res.json({ success: true, results });
+  } catch (e: any) {
+    console.error("[admin] reprocess-v5 error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/process-archived-spx", async (req, res) => {
   try {
     const { adminSecret } = req.body;
