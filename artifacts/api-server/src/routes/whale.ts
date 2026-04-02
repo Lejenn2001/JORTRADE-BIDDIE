@@ -3632,10 +3632,12 @@ router.post("/whale/verify-signals", async (_req, res) => {
     }
 
     const signalPriceMap: Record<string, PriceHistory> = {};
+    const spxTickerSet2 = new Set(["SPX", "SPXW"]);
     await Promise.all(
       pending.map(async (s: any) => {
         const sinceDate = s.detected_at || s.created_at;
-        const history = await fetchPriceHistory(s.ticker, sinceDate);
+        const lookupTicker = spxTickerSet2.has(s.ticker) ? "I:SPX" : s.ticker;
+        const history = await fetchPriceHistory(lookupTicker, sinceDate);
         if (history) signalPriceMap[s.id] = history;
       })
     );
@@ -4426,11 +4428,13 @@ async function realtimeVerifySignals() {
 
     const tickers = [...new Set(pending.map((s: any) => s.ticker))];
     const signalPriceMap: Record<string, PriceHistory> = {};
+    const spxTickerSet = new Set(["SPX", "SPXW"]);
 
     await Promise.all(
       pending.map(async (s: any) => {
         const sinceDate = s.detected_at || s.created_at;
-        const history = await fetchPriceHistory(s.ticker, sinceDate);
+        const lookupTicker = spxTickerSet.has(s.ticker) ? "I:SPX" : s.ticker;
+        const history = await fetchPriceHistory(lookupTicker, sinceDate);
         if (history) signalPriceMap[s.id] = history;
       })
     );
