@@ -2730,6 +2730,13 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   }
   signals = dedupedSignals;
 
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  🔒 LOCKED SPX PIPELINE — DO NOT MODIFY WITHOUT JENNIFER APPROVAL  ║
+  // ║  Locked: April 2, 2026                                             ║
+  // ║  Covers: SPX/SPXW GEX enrichment, I:SPX VWAP, swing targets,      ║
+  // ║          VWAP-based entries, VWAP-based invalidation                ║
+  // ║  See: .local/signal_logic_changelog.md                              ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
   const spxTickers = new Set(["SPX", "SPXW"]);
   const hasSpxSignals = signals.some(s => spxTickers.has(s.ticker));
   if (hasSpxSignals) {
@@ -2841,6 +2848,9 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
       console.warn(`[signals] SPX VWAP enrichment failed:`, vwapErr.message);
     }
   }
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  🔒 END LOCKED SPX PIPELINE                                        ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
 
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
@@ -6617,6 +6627,12 @@ function resetSpxVwapIfNewDay() {
   }
 }
 
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  🔒 LOCKED SPX HELPER FUNCTIONS — DO NOT MODIFY WITHOUT JENNIFER   ║
+// ║  Locked: April 2, 2026                                             ║
+// ║  Functions: fetchSpxVwapFromPolygon, getSpxVwapContext, fetchSpxGex ║
+// ║  See: .local/signal_logic_changelog.md                              ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 async function fetchSpxVwapFromPolygon(): Promise<void> {
   try {
     resetSpxVwapIfNewDay();
@@ -6998,6 +7014,9 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
     return gexCache;
   }
 }
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  🔒 END LOCKED SPX HELPER FUNCTIONS                                ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 
 router.get("/whale/spx-signals", async (_req, res) => {
   try {
