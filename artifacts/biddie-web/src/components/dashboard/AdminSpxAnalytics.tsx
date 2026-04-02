@@ -29,6 +29,8 @@ interface SpxSignal {
   signal_quality: string;
   key_level: string;
   sr_level: string;
+  mfe_percent: number | null;
+  max_favorable_price: number | null;
 }
 
 interface VwapData {
@@ -497,6 +499,16 @@ const AdminSpxAnalytics = () => {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-violet-400 text-[10px]">{s.confidence}/10</span>
                     {s.premium && <span className="text-blue-400">{fmtK(s.premium)}</span>}
+                    {s.mfe_percent != null && (
+                      <span className={`text-[10px] font-bold ${
+                        s.mfe_percent >= 75 ? "text-emerald-400" :
+                        s.mfe_percent >= 50 ? "text-blue-400" :
+                        s.mfe_percent >= 30 ? "text-orange-400" :
+                        "text-red-400"
+                      }`}>
+                        {s.mfe_percent.toFixed(0)}%
+                      </span>
+                    )}
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       s.trade_status === "hit" ? "bg-emerald-500/15 text-emerald-400" :
                       s.trade_status === "miss" ? "bg-red-500/15 text-red-400" :
@@ -547,6 +559,33 @@ const AdminSpxAnalytics = () => {
                         <span className="ml-1 text-foreground capitalize">{s.signal_quality || "standard"}</span>
                       </div>
                     </div>
+                    {s.mfe_percent != null && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">MFE:</span>
+                        <span className={`font-bold ${
+                          s.mfe_percent >= 75 ? "text-emerald-400" :
+                          s.mfe_percent >= 50 ? "text-blue-400" :
+                          s.mfe_percent >= 30 ? "text-orange-400" :
+                          "text-red-400"
+                        }`}>
+                          {s.mfe_percent.toFixed(1)}%
+                        </span>
+                        <span className={`inline-flex items-center h-4 text-[9px] font-bold px-1.5 rounded-full ${
+                          s.mfe_percent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
+                          s.mfe_percent >= 50 ? "bg-blue-400/15 text-blue-400" :
+                          s.mfe_percent >= 30 ? "bg-orange-400/15 text-orange-400" :
+                          "bg-red-400/15 text-red-400"
+                        }`}>
+                          {s.mfe_percent >= 75 ? "HIT" :
+                           s.mfe_percent >= 50 ? "PARTIAL" :
+                           s.mfe_percent >= 30 ? "NEAR MISS" :
+                           "MISS"}
+                        </span>
+                        {s.max_favorable_price && (
+                          <span className="text-muted-foreground">(best: ${fmt(s.max_favorable_price)})</span>
+                        )}
+                      </div>
+                    )}
                     {s.gamma_zone && (
                       <div>
                         <span className="text-muted-foreground">Gamma:</span>

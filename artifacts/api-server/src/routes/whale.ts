@@ -7575,6 +7575,8 @@ router.get("/whale/spx-signals", async (_req, res) => {
       gamma_zone: r.gamma_zone,
       gamma_description: r.gamma_description,
       detected_at: r.detected_at,
+      mfe_percent: r.mfe_percent != null ? parseFloat(r.mfe_percent) : null,
+      max_favorable_price: r.max_favorable_price != null ? parseFloat(r.max_favorable_price) : null,
     }));
     res.json({ signals, count: signals.length });
   } catch (err: any) {

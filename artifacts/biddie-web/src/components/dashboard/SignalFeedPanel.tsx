@@ -280,19 +280,25 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         })()}
                         {signal.mfePercent != null && (
                           <span className="relative group inline-flex">
-                            <span className={`inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
-                              signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
+                            <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
+                              signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
                               signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
-                              signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
+                              signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
                               "bg-red-400/15 text-red-400"
                             }`}>
                               MFE {signal.mfePercent.toFixed(0)}%
+                              <span className="opacity-70">
+                                {signal.mfePercent >= 75 ? "HIT" :
+                                 signal.mfePercent >= 50 ? "PARTIAL" :
+                                 signal.mfePercent >= 30 ? "NEAR" :
+                                 "MISS"}
+                              </span>
                             </span>
-                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                              {signal.mfePercent >= 100 ? "Home run! Price went all the way to the target" :
-                               signal.mfePercent >= 50 ? "Good progress — price got over halfway to the target" :
-                               signal.mfePercent > 0 ? "Moved in the right direction but didn't get far" :
-                               "Went the wrong way — price moved against us"}
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg max-w-[200px] text-wrap">
+                              {signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
+                               signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
+                               signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
+                               "Miss — below 30% of target"}
                               {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
                             </span>
                           </span>
