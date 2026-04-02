@@ -5514,28 +5514,33 @@ router.post("/whale/admin/clean-spx-duplicates", async (req, res) => {
     if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
     if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
 
-    const result = await pool.query(
-      `DELETE FROM signal_outcomes
-       WHERE id IN (
-         SELECT id FROM (
-           SELECT id, ROW_NUMBER() OVER (
-             PARTITION BY ticker, strike, option_type, 
-               CASE 
-                 WHEN expiry ~ '^\\d{4}-\\d{2}-\\d{2}' THEN expiry::date::text
-                 ELSE COALESCE(
-                   TO_DATE(expiry, 'Month DD, YYYY')::text,
-                   TO_DATE(expiry, 'MM/DD/YYYY')::text
-                 )
-               END
-             ORDER BY detected_at ASC
-           ) AS rn
-           FROM signal_outcomes
-           WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit'
-         ) dupes
-         WHERE rn > 1
-       )
-       RETURNING id, ticker, strike, option_type, expiry`
+    const allSpx = await pool.query(
+      `SELECT id, ticker, strike, option_type, expiry, detected_at FROM signal_outcomes WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit' ORDER BY detected_at ASC`
     );
+
+    const seen = new Map<string, string>();
+    const dupeIds: string[] = [];
+    for (const row of allSpx.rows) {
+      let normExpiry = row.expiry || "";
+      try {
+        const d = new Date(normExpiry);
+        if (!isNaN(d.getTime())) normExpiry = d.toISOString().slice(0, 10);
+      } catch {}
+      const key = `${row.ticker}-${row.strike}-${row.option_type}-${normExpiry}`;
+      if (seen.has(key)) {
+        dupeIds.push(row.id);
+      } else {
+        seen.set(key, row.id);
+      }
+    }
+
+    let result = { rows: [] as any[] };
+    if (dupeIds.length > 0) {
+      result = await pool.query(
+        `DELETE FROM signal_outcomes WHERE id = ANY($1) RETURNING id, ticker, strike, option_type, expiry`,
+        [dupeIds]
+      );
+    }
     const removed = result.rows;
     console.log(`[admin] clean-spx-duplicates: removed ${removed.length} duplicate SPX signals`);
     res.json({ success: true, removed: removed.length, signals: removed });
