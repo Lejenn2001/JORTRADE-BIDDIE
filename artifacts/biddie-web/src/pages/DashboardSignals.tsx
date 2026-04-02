@@ -428,7 +428,7 @@ const DashboardSignals = () => {
     list.sort((a, b) => {
       const dateA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
       const dateB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return dateB - dateA;
+      return dateA - dateB;
     });
 
     return list;
