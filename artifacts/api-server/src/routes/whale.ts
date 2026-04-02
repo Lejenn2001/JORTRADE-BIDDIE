@@ -1915,7 +1915,10 @@ async function runSignalsPipeline() {
   const today = new Date().toISOString().split("T")[0];
   const candidates = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
-    if (a.expiry < today) return false;
+    try {
+      const expDate = new Date(a.expiry);
+      if (!isNaN(expDate.getTime()) && expDate < new Date(today)) return false;
+    } catch {}
     if (a.total_premium < 25_000) return false;
     const isSpxTicker = (a.ticker ?? "").toUpperCase() === "SPX" || (a.ticker ?? "").toUpperCase() === "SPXW";
     if (!isSpxTicker && a.ask_aggression_pct < 50) return false;

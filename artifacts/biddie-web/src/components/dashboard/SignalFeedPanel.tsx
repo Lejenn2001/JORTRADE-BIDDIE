@@ -249,7 +249,7 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         ) : null}
                         {(() => {
                           let ts = signal.tradeStatus || "watching";
-                          if (ts === "watching") {
+                          if (ts === "watching" || ts === "active") {
                             if (signal.outcome === "hit" || signal.outcome === "win") ts = "hit";
                             else if (signal.outcome === "partial_hit") ts = "partial";
                             else if (signal.outcome === "near_miss") ts = "near_miss";

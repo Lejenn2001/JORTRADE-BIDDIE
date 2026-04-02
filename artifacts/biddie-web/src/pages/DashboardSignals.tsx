@@ -1384,7 +1384,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             </span>
             {(() => {
               let ts = signal.tradeStatus || "watching";
-              if (ts === "watching") {
+              if (ts === "watching" || ts === "active") {
                 if (signal.outcome === "hit") ts = "hit";
                 else if (signal.outcome === "partial_hit") ts = "partial_hit";
                 else if (isLoser) ts = "miss";
