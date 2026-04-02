@@ -454,8 +454,8 @@ const DashboardSignals = () => {
   }, [filtered]);
 
   const pipelineSpx = useMemo(() => {
-    return filtered.filter(s => s.ticker === 'SPX' || s.ticker === 'SPXW');
-  }, [filtered]);
+    return signals.filter(s => s.ticker === 'SPX' || s.ticker === 'SPXW');
+  }, [signals]);
 
   const [dbSpxSignals, setDbSpxSignals] = useState<any[]>([]);
 
