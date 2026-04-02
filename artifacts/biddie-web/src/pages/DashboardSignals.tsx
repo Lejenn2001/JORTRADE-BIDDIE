@@ -319,7 +319,7 @@ const DashboardSignals = () => {
         todayET.setHours(0, 0, 0, 0);
         const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
-        const resp = await fetch('/api/whale/signals/history?limit=100');
+        const resp = await fetch('/api/whale/signals/history?limit=300');
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 

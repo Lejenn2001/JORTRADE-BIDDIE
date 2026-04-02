@@ -143,7 +143,7 @@ const Dashboard = () => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         todayStart.setHours(todayStart.getHours() - 4);
 
-        const resp = await fetch('/api/whale/signals/history?limit=150');
+        const resp = await fetch('/api/whale/signals/history?limit=300');
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 

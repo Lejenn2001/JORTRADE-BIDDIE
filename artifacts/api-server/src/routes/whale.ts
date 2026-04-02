@@ -3584,12 +3584,11 @@ router.get("/whale/signals/history", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 50, 500);
     const result = await dbQuery(
-      `SELECT d.*, sr.status AS review_status, sr.note AS review_note FROM (
-        SELECT DISTINCT ON (ticker, category, strike, option_type) * FROM signal_outcomes
-        WHERE signal_source = 'replit'
-        ORDER BY ticker, category, strike, option_type, confidence DESC, detected_at DESC
-      ) d LEFT JOIN signal_reviews sr ON sr.signal_id = d.id::text
-      ORDER BY d.detected_at DESC LIMIT $1`,
+      `SELECT d.*, sr.status AS review_status, sr.note AS review_note
+       FROM signal_outcomes d
+       LEFT JOIN signal_reviews sr ON sr.signal_id = d.id::text
+       WHERE d.signal_source = 'replit'
+       ORDER BY d.detected_at DESC LIMIT $1`,
       [limit]
     );
     const countResult = await dbQuery(
@@ -8058,6 +8057,8 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 router.get("/whale/spx-signals", async (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("ETag", `W/"spx-${Date.now()}"`);
   try {
     const result = await dbQuery(
       `SELECT * FROM signal_outcomes 
