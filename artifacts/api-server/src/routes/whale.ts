@@ -3019,9 +3019,20 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         }
       }
 
+      let expiryIso = "";
+      if (fixedExpiry) {
+        try {
+          const d = new Date(fixedExpiry);
+          if (!isNaN(d.getTime())) expiryIso = d.toISOString().slice(0, 10);
+        } catch {}
+      }
       const existing = await dbQuery(
-        `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
-        [s.ticker, s.strike, s.option_type, fixedExpiry]
+        expiryIso
+          ? `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND signal_source = 'replit' AND (COALESCE(expiry, '') = COALESCE($4, '') OR COALESCE(expiry, '') ILIKE '%' || $5 || '%') LIMIT 1`
+          : `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
+        expiryIso
+          ? [s.ticker, s.strike, s.option_type, fixedExpiry, expiryIso]
+          : [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
       if (existing && existing.rows.length > 0) continue;
 
@@ -5494,6 +5505,43 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   } catch (e: any) {
     console.error("[admin] update-plan error:", e.response?.data || e.message);
     res.status(500).json({ error: e.response?.data?.message || e.message });
+  }
+});
+
+router.post("/whale/admin/clean-spx-duplicates", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
+
+    const result = await pool.query(
+      `DELETE FROM signal_outcomes
+       WHERE id IN (
+         SELECT id FROM (
+           SELECT id, ROW_NUMBER() OVER (
+             PARTITION BY ticker, strike, option_type, 
+               CASE 
+                 WHEN expiry ~ '^\\d{4}-\\d{2}-\\d{2}' THEN expiry::date::text
+                 ELSE COALESCE(
+                   TO_DATE(expiry, 'Month DD, YYYY')::text,
+                   TO_DATE(expiry, 'MM/DD/YYYY')::text
+                 )
+               END
+             ORDER BY detected_at ASC
+           ) AS rn
+           FROM signal_outcomes
+           WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit'
+         ) dupes
+         WHERE rn > 1
+       )
+       RETURNING id, ticker, strike, option_type, expiry`
+    );
+    const removed = result.rows;
+    console.log(`[admin] clean-spx-duplicates: removed ${removed.length} duplicate SPX signals`);
+    res.json({ success: true, removed: removed.length, signals: removed });
+  } catch (e: any) {
+    console.error("[admin] clean-spx-duplicates error:", e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
