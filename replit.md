@@ -120,14 +120,17 @@ The project is structured as a pnpm monorepo using TypeScript (v5.9) and Node.js
 - **API Endpoints**: `GET /api/whale/user-settings` (returns alias + referral_code + count), `POST /api/whale/user-settings` (update alias), `POST /api/whale/referral/apply` (apply ref code at signup), `GET /api/whale/referrals` (list referrals)
 - **Two-sided incentive**: Referrer earns tier rewards, referred user gets 10% off first paid month
 
-## Signal Algorithm: JORTRADE FINAL (LOCKED — March 30, 2026)
+## Signal Algorithm: JORTRADE FINAL (LOCKED — March 30, 2026) + Accuracy Upgrade v2 (April 2, 2026)
 
 **⚠️ DO NOT MODIFY without explicit user approval. Full spec in `.local/signal_logic_changelog.md`.**
 
 - **Entry (Hybrid VWAP + Price)**: Shows VWAP context AND actual price together. CALL: `Above VWAP ($X) — Near $Y` (act now), `On bounce from VWAP ($X) — Near $Y` (wait). PUT: `Below VWAP ($X) — Near $Y` (act now), `On rejection from VWAP ($X) — Near $Y` (wait). Whale flows: `Whale sweep at $X`. No VWAP fallback: `Near $X (no VWAP data)` — NO Act Now tag.
-- **Invalidation**: Closest support/resistance level (PDL/S1/Pivot for calls, PDH/R1/Pivot for puts). Fallback: 2% from price. VWAP excluded from invalidation.
-- **Target**: Must point in correct direction with named levels. Calls: ABOVE price (VWAP, Strike, PDH, R1). Puts: BELOW price (VWAP, Strike, PDL, S1). Fallback: 2%/4% from price.
-- **Server code**: `whale.ts` scoreSignal function (~line 2099). **Frontend code**: `useMarketData.ts` (~line 658, uses flat `Near $X` since no VWAP on live alerts).
+- **Target (v2)**: Swing highs/lows from Polygon 15-min bars (via `fetchStructureCandles`). Bullish: nearest swing high above price. Bearish: nearest swing low below price. Minimum 0.5% distance from entry. Fallback to VWAP/PDH/R1 if no swings.
+- **Invalidation (v2)**: Swing lows (bullish) and swing highs (bearish) — structurally meaningful reversal levels. Fallback to PDL/S1/PDH/R1 if no swings.
+- **GEX for all tickers (v2)**: `fetchTickerGex()` computes gamma flip, call/put walls from Polygon options chain for every pipeline ticker. GEX walls can override swing targets when between price and target.
+- **Flow clustering (v2)**: 3+ orders at same ticker/strike/expiry within 30 min → +1.5 confidence, "Clustered Flow" tag.
+- **Cross-tab confirmation (v2)**: Same ticker in both Algo AND Whale → +1 confidence, "Multi-Source Confirmed" tag.
+- **Server code**: `whale.ts` scoreSignal function + post-scoring pipeline. **Frontend code**: `useMarketData.ts`.
 - **Validation safety net**: After computing, verifies CALL target > price and PUT target < price; resets to 2%/4% if wrong.
 
 ## Trump Feed

@@ -1986,7 +1986,7 @@ async function runSignalsPipeline() {
   }
 
   // ── Local scoring — no Claude call needed ──
-  function scoreSignal(c: any, kl: any, confirmation: any): any {
+  function scoreSignal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null): any {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
     const premium = c.total_premium || 0;
@@ -2172,35 +2172,49 @@ async function runSignalsPipeline() {
           actNow = false;
         }
 
-        const callTargets = [
-          vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
-          strike > price ? { level: strike, name: "Strike" } : null,
-          pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
-          r1 && r1 > price ? { level: r1, name: "R1" } : null,
-          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l);
-        callTargets.sort((a, b) => a.level - b.level);
+        const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
+        const minTargetDist = price * 0.005;
 
-        if (callTargets.length >= 2) {
-          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-          targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-        } else if (callTargets.length === 1) {
-          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-          targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
+        const validSwingHighs = swingHighs.filter(p => (p - price) >= minTargetDist);
+        if (validSwingHighs.length >= 2) {
+          target = `$${validSwingHighs[0].toFixed(2)} (previous swing high), then $${validSwingHighs[1].toFixed(2)}`;
+          targetNear = `$${validSwingHighs[1].toFixed(2)}`;
+        } else if (validSwingHighs.length === 1) {
+          target = `$${validSwingHighs[0].toFixed(2)} (previous swing high)`;
+          targetNear = `$${(validSwingHighs[0] * 1.01).toFixed(2)}`;
         } else {
-          target = `$${(price * 1.02).toFixed(2)}`;
-          targetNear = `$${(price * 1.04).toFixed(2)}`;
+          const callTargets = [
+            vwap && vwap > price && (vwap - price) >= minTargetDist ? { level: vwap, name: "VWAP" } : null,
+            pdh && pdh > price && (pdh - price) >= minTargetDist ? { level: pdh, name: "PDH" } : null,
+            r1 && r1 > price && (r1 - price) >= minTargetDist ? { level: r1, name: "R1" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l);
+          callTargets.sort((a, b) => a.level - b.level);
+          if (callTargets.length >= 2) {
+            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
+          } else if (callTargets.length === 1) {
+            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
+          } else {
+            target = `$${(price * 1.02).toFixed(2)}`;
+            targetNear = `$${(price * 1.04).toFixed(2)}`;
+          }
         }
 
-        const supportLevels = [
-          pdl ? { level: pdl, name: "PDL" } : null,
-          s1 ? { level: s1, name: "S1" } : null,
-          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
-        supportLevels.sort((a, b) => b.level - a.level);
-        invalidation = supportLevels.length > 0
-          ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
-          : `Below $${(price * 0.98).toFixed(2)}`;
+        const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
+        if (swingLows.length > 0) {
+          invalidation = `Below $${swingLows[0].toFixed(2)} (previous swing low)`;
+        } else {
+          const supportLevels = [
+            pdl ? { level: pdl, name: "PDL" } : null,
+            s1 ? { level: s1, name: "S1" } : null,
+            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+          supportLevels.sort((a, b) => b.level - a.level);
+          invalidation = supportLevels.length > 0
+            ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
+            : `Below $${(price * 0.98).toFixed(2)}`;
+        }
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
@@ -2234,35 +2248,49 @@ async function runSignalsPipeline() {
           actNow = false;
         }
 
-        const putTargets = [
-          vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
-          strike < price ? { level: strike, name: "Strike" } : null,
-          pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
-          s1 && s1 < price ? { level: s1, name: "S1" } : null,
-          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l);
-        putTargets.sort((a, b) => b.level - a.level);
+        const swingLowsPut = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
+        const minTargetDistPut = price * 0.005;
 
-        if (putTargets.length >= 2) {
-          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-          targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-        } else if (putTargets.length === 1) {
-          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-          targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
+        const validSwingLows = swingLowsPut.filter(p => (price - p) >= minTargetDistPut);
+        if (validSwingLows.length >= 2) {
+          target = `$${validSwingLows[0].toFixed(2)} (previous swing low), then $${validSwingLows[1].toFixed(2)}`;
+          targetNear = `$${validSwingLows[1].toFixed(2)}`;
+        } else if (validSwingLows.length === 1) {
+          target = `$${validSwingLows[0].toFixed(2)} (previous swing low)`;
+          targetNear = `$${(validSwingLows[0] * 0.99).toFixed(2)}`;
         } else {
-          target = `$${(price * 0.98).toFixed(2)}`;
-          targetNear = `$${(price * 0.96).toFixed(2)}`;
+          const putTargets = [
+            vwap && vwap < price && (price - vwap) >= minTargetDistPut ? { level: vwap, name: "VWAP" } : null,
+            pdl && pdl < price && (price - pdl) >= minTargetDistPut ? { level: pdl, name: "PDL" } : null,
+            s1 && s1 < price && (price - s1) >= minTargetDistPut ? { level: s1, name: "S1" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l);
+          putTargets.sort((a, b) => b.level - a.level);
+          if (putTargets.length >= 2) {
+            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
+          } else if (putTargets.length === 1) {
+            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
+          } else {
+            target = `$${(price * 0.98).toFixed(2)}`;
+            targetNear = `$${(price * 0.96).toFixed(2)}`;
+          }
         }
 
-        const resistanceLevels = [
-          pdh ? { level: pdh, name: "PDH" } : null,
-          r1 ? { level: r1, name: "R1" } : null,
-          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
-        resistanceLevels.sort((a, b) => a.level - b.level);
-        invalidation = resistanceLevels.length > 0
-          ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
-          : `Above $${(price * 1.02).toFixed(2)}`;
+        const swingHighsPut = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
+        if (swingHighsPut.length > 0) {
+          invalidation = `Above $${swingHighsPut[0].toFixed(2)} (previous swing high)`;
+        } else {
+          const resistanceLevels = [
+            pdh ? { level: pdh, name: "PDH" } : null,
+            r1 ? { level: r1, name: "R1" } : null,
+            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+          resistanceLevels.sort((a, b) => a.level - b.level);
+          invalidation = resistanceLevels.length > 0
+            ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
+            : `Above $${(price * 1.02).toFixed(2)}`;
+        }
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
@@ -2372,7 +2400,8 @@ async function runSignalsPipeline() {
     const key = `${ticker}-${strike}-${optType}`;
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
-    const sig = scoreSignal(c, kl, confirmation);
+    const structure = structureMap[ticker] || null;
+    const sig = scoreSignal(c, kl, confirmation, structure);
     if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
@@ -2851,6 +2880,117 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   // ╔══════════════════════════════════════════════════════════════════════╗
   // ║  🔒 END LOCKED SPX PIPELINE                                        ║
   // ╚══════════════════════════════════════════════════════════════════════╝
+
+  // ── GEX enrichment for non-SPX tickers (Polygon options chain) ──
+  try {
+    const nonSpxSignals = signals.filter(s => !spxTickers.has(s.ticker));
+    const gexTickers = [...new Set(nonSpxSignals.map(s => s.ticker))];
+    if (gexTickers.length > 0) {
+      const gexResults = await Promise.all(
+        gexTickers.map(t => {
+          const sig = nonSpxSignals.find(s => s.ticker === t);
+          const price = sig?.current_price || sig?.price_at_signal || 0;
+          return fetchTickerGex(t, price).catch(() => null);
+        })
+      );
+      const gexMap: Record<string, TickerGex> = {};
+      gexTickers.forEach((t, i) => { if (gexResults[i]) gexMap[t] = gexResults[i]!; });
+
+      for (const s of nonSpxSignals) {
+        const gex = gexMap[s.ticker];
+        if (!gex) continue;
+        const price = s.current_price || s.price_at_signal || 0;
+        if (price <= 0) continue;
+
+        if (gex.callWall && Math.abs(price - gex.callWall.price) / gex.callWall.price < 0.01) {
+          s.gamma_description = `Near call wall at $${gex.callWall.price.toFixed(2)} — dealers sell here, strong resistance`;
+          s.gamma_zone = "positive";
+          if (!s.tags.includes("GEX Call Wall")) s.tags.push("GEX Call Wall");
+        } else if (gex.putWall && Math.abs(price - gex.putWall.price) / gex.putWall.price < 0.01) {
+          s.gamma_description = `Near put wall at $${gex.putWall.price.toFixed(2)} — dealers buy here, strong support`;
+          s.gamma_zone = "negative";
+          if (!s.tags.includes("GEX Put Wall")) s.tags.push("GEX Put Wall");
+        } else if (gex.gammaFlip && Math.abs(price - gex.gammaFlip) / gex.gammaFlip < 0.01) {
+          s.gamma_description = `Near gamma flip at $${gex.gammaFlip.toFixed(2)} — transition zone`;
+          s.gamma_zone = "neutral";
+          if (!s.tags.includes("GEX Flip Zone")) s.tags.push("GEX Flip Zone");
+        } else if (gex.gammaFlip) {
+          if (price > gex.gammaFlip) {
+            s.gamma_description = `Above gamma flip ($${gex.gammaFlip.toFixed(2)}) — long gamma, moves suppressed`;
+            s.gamma_zone = "positive";
+          } else {
+            s.gamma_description = `Below gamma flip ($${gex.gammaFlip.toFixed(2)}) — short gamma, moves amplified`;
+            s.gamma_zone = "negative";
+          }
+        }
+
+        if (gex.callWall && s.direction === "bullish") {
+          const targetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
+          if (targetVal > gex.callWall.price && price < gex.callWall.price) {
+            s.target = `$${gex.callWall.price.toFixed(2)} (GEX call wall — likely resistance)`;
+            if (!s.tags.includes("GEX Wall Target")) s.tags.push("GEX Wall Target");
+          }
+        }
+        if (gex.putWall && s.direction === "bearish") {
+          const targetVal = parseFloat((s.target || "").replace(/[^0-9.]/g, '')) || 0;
+          if (targetVal < gex.putWall.price && price > gex.putWall.price) {
+            s.target = `$${gex.putWall.price.toFixed(2)} (GEX put wall — likely support)`;
+            if (!s.tags.includes("GEX Wall Target")) s.tags.push("GEX Wall Target");
+          }
+        }
+      }
+      console.log(`[signals] GEX enrichment applied to ${Object.keys(gexMap).length} non-SPX tickers`);
+    }
+  } catch (gexAllErr: any) {
+    console.warn(`[signals] Non-SPX GEX enrichment failed:`, gexAllErr.message);
+  }
+
+  // ── Flow clustering: boost confidence for repeated institutional conviction ──
+  try {
+    const clusterCounts: Record<string, number> = {};
+    for (const c of candidates) {
+      const cTicker = c.ticker as string;
+      const cStrike = parseFloat(String(c.strike)) || 0;
+      const cExpiry = c.expires_at || c.expiry || "";
+      const cKey = `${cTicker}|${cStrike}|${cExpiry}`;
+      clusterCounts[cKey] = (clusterCounts[cKey] || 0) + 1;
+    }
+    for (const s of signals) {
+      if (spxTickers.has(s.ticker)) continue;
+      const sKey = `${s.ticker}|${s.strike}|${s.expiry}`;
+      const flowCount = clusterCounts[sKey] || 0;
+      if (flowCount >= 3) {
+        s.confidence = Math.min(10, (s.confidence || 7) + 1.5);
+        if (!s.tags.includes("Clustered Flow")) s.tags.push("Clustered Flow");
+        s.reason = (s.reason || "") + ` ${flowCount} separate orders hit this strike/expiry — institutional conviction.`;
+        console.log(`[signals] ${s.ticker} $${s.strike} ${s.expiry}: ${flowCount} clustered flows, +1.5 confidence`);
+      }
+    }
+  } catch (clusterErr: any) {
+    console.warn(`[signals] Flow clustering failed:`, clusterErr.message);
+  }
+
+  // ── Cross-tab confirmation: same ticker in both algo AND whale ──
+  try {
+    const algoTickers = new Set(signals.filter(s => s.category === "algorithm").map(s => s.ticker));
+    const whaleTickers = new Set(signals.filter(s => s.category === "whale").map(s => s.ticker));
+    for (const s of signals) {
+      if (spxTickers.has(s.ticker)) continue;
+      if (s.category === "algorithm" && whaleTickers.has(s.ticker)) {
+        s.confidence = Math.min(10, (s.confidence || 7) + 1);
+        if (!s.tags.includes("Multi-Source Confirmed")) s.tags.push("Multi-Source Confirmed");
+      } else if (s.category === "whale" && algoTickers.has(s.ticker)) {
+        s.confidence = Math.min(10, (s.confidence || 7) + 1);
+        if (!s.tags.includes("Multi-Source Confirmed")) s.tags.push("Multi-Source Confirmed");
+      }
+    }
+    const multiSourceCount = signals.filter(s => s.tags?.includes("Multi-Source Confirmed")).length;
+    if (multiSourceCount > 0) console.log(`[signals] ${multiSourceCount} signals marked Multi-Source Confirmed`);
+  } catch (crossTabErr: any) {
+    console.warn(`[signals] Cross-tab confirmation failed:`, crossTabErr.message);
+  }
+
+  signals.sort((a, b) => b.confidence - a.confidence);
 
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
@@ -5463,7 +5603,7 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
       priceConfirmations[key] = { ...confirmation, trade_recommendation: tradeRec };
     }
 
-    function scoreSignalLocal(c: any, kl: any, confirmation: any): any {
+    function scoreSignalLocal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null): any {
       const ticker = c.ticker as string;
       const strike = parseFloat(String(c.strike)) || 0;
       const premium = c.total_premium || 0;
@@ -5618,35 +5758,48 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             actNow = false;
           }
 
-          const callTargets = [
-            vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
-            strike > price ? { level: strike, name: "Strike" } : null,
-            pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
-            r1 && r1 > price ? { level: r1, name: "R1" } : null,
-            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          callTargets.sort((a, b) => a.level - b.level);
-
-          if (callTargets.length >= 2) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-          } else if (callTargets.length === 1) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
+          const aSwingHighs = (structure?.swing_highs || []).map((s: any) => s.price).filter((p: number) => p > price).sort((a: number, b: number) => a - b);
+          const aMinTargetDist = price * 0.005;
+          const aValidSwingHighs = aSwingHighs.filter((p: number) => (p - price) >= aMinTargetDist);
+          if (aValidSwingHighs.length >= 2) {
+            target = `$${aValidSwingHighs[0].toFixed(2)} (previous swing high), then $${aValidSwingHighs[1].toFixed(2)}`;
+            targetNear = `$${aValidSwingHighs[1].toFixed(2)}`;
+          } else if (aValidSwingHighs.length === 1) {
+            target = `$${aValidSwingHighs[0].toFixed(2)} (previous swing high)`;
+            targetNear = `$${(aValidSwingHighs[0] * 1.01).toFixed(2)}`;
           } else {
-            target = `$${(price * 1.02).toFixed(2)}`;
-            targetNear = `$${(price * 1.04).toFixed(2)}`;
+            const callTargets = [
+              vwap && vwap > price && (vwap - price) >= aMinTargetDist ? { level: vwap, name: "VWAP" } : null,
+              pdh && pdh > price && (pdh - price) >= aMinTargetDist ? { level: pdh, name: "PDH" } : null,
+              r1 && r1 > price && (r1 - price) >= aMinTargetDist ? { level: r1, name: "R1" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l);
+            callTargets.sort((a, b) => a.level - b.level);
+            if (callTargets.length >= 2) {
+              target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+              targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
+            } else if (callTargets.length === 1) {
+              target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+              targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
+            } else {
+              target = `$${(price * 1.02).toFixed(2)}`;
+              targetNear = `$${(price * 1.04).toFixed(2)}`;
+            }
           }
 
-          const supportLevels = [
-            pdl ? { level: pdl, name: "PDL" } : null,
-            s1 ? { level: s1, name: "S1" } : null,
-            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
-          supportLevels.sort((a, b) => b.level - a.level);
-          invalidation = supportLevels.length > 0
-            ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
-            : `Below $${(price * 0.98).toFixed(2)}`;
+          const aSwingLows = (structure?.swing_lows || []).map((s: any) => s.price).filter((p: number) => p < price).sort((a: number, b: number) => b - a);
+          if (aSwingLows.length > 0) {
+            invalidation = `Below $${aSwingLows[0].toFixed(2)} (previous swing low)`;
+          } else {
+            const supportLevels = [
+              pdl ? { level: pdl, name: "PDL" } : null,
+              s1 ? { level: s1, name: "S1" } : null,
+              pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+            supportLevels.sort((a, b) => b.level - a.level);
+            invalidation = supportLevels.length > 0
+              ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
+              : `Below $${(price * 0.98).toFixed(2)}`;
+          }
         } else {
           entryTrigger = `Data Not Available`;
           target = `Data Not Available`;
@@ -5679,35 +5832,48 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             actNow = false;
           }
 
-          const putTargets = [
-            vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
-            strike < price ? { level: strike, name: "Strike" } : null,
-            pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
-            s1 && s1 < price ? { level: s1, name: "S1" } : null,
-            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          putTargets.sort((a, b) => b.level - a.level);
-
-          if (putTargets.length >= 2) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-          } else if (putTargets.length === 1) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
+          const aSwingLowsPut = (structure?.swing_lows || []).map((s: any) => s.price).filter((p: number) => p < price).sort((a: number, b: number) => b - a);
+          const aMinTargetDistPut = price * 0.005;
+          const aValidSwingLowsPut = aSwingLowsPut.filter((p: number) => (price - p) >= aMinTargetDistPut);
+          if (aValidSwingLowsPut.length >= 2) {
+            target = `$${aValidSwingLowsPut[0].toFixed(2)} (previous swing low), then $${aValidSwingLowsPut[1].toFixed(2)}`;
+            targetNear = `$${aValidSwingLowsPut[1].toFixed(2)}`;
+          } else if (aValidSwingLowsPut.length === 1) {
+            target = `$${aValidSwingLowsPut[0].toFixed(2)} (previous swing low)`;
+            targetNear = `$${(aValidSwingLowsPut[0] * 0.99).toFixed(2)}`;
           } else {
-            target = `$${(price * 0.98).toFixed(2)}`;
-            targetNear = `$${(price * 0.96).toFixed(2)}`;
+            const putTargets = [
+              vwap && vwap < price && (price - vwap) >= aMinTargetDistPut ? { level: vwap, name: "VWAP" } : null,
+              pdl && pdl < price && (price - pdl) >= aMinTargetDistPut ? { level: pdl, name: "PDL" } : null,
+              s1 && s1 < price && (price - s1) >= aMinTargetDistPut ? { level: s1, name: "S1" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l);
+            putTargets.sort((a, b) => b.level - a.level);
+            if (putTargets.length >= 2) {
+              target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+              targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
+            } else if (putTargets.length === 1) {
+              target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+              targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
+            } else {
+              target = `$${(price * 0.98).toFixed(2)}`;
+              targetNear = `$${(price * 0.96).toFixed(2)}`;
+            }
           }
 
-          const resistanceLevels = [
-            pdh ? { level: pdh, name: "PDH" } : null,
-            r1 ? { level: r1, name: "R1" } : null,
-            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
-          resistanceLevels.sort((a, b) => a.level - b.level);
-          invalidation = resistanceLevels.length > 0
-            ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
-            : `Above $${(price * 1.02).toFixed(2)}`;
+          const aSwingHighsPut = (structure?.swing_highs || []).map((s: any) => s.price).filter((p: number) => p > price).sort((a: number, b: number) => a - b);
+          if (aSwingHighsPut.length > 0) {
+            invalidation = `Above $${aSwingHighsPut[0].toFixed(2)} (previous swing high)`;
+          } else {
+            const resistanceLevels = [
+              pdh ? { level: pdh, name: "PDH" } : null,
+              r1 ? { level: r1, name: "R1" } : null,
+              pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+            resistanceLevels.sort((a, b) => a.level - b.level);
+            invalidation = resistanceLevels.length > 0
+              ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
+              : `Above $${(price * 1.02).toFixed(2)}`;
+          }
         } else {
           entryTrigger = `Data Not Available`;
           target = `Data Not Available`;
@@ -5780,7 +5946,8 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
       if (existingKeys.has(key)) continue;
       const kl = keyLevels[ticker];
       const confirmation = priceConfirmations[`${ticker}-${strike}-${c.type}`];
-      const sig = scoreSignalLocal(c, kl, confirmation);
+      const archStructure = structureMap[ticker] || null;
+      const sig = scoreSignalLocal(c, kl, confirmation, archStructure);
       if (sig && !seenStrikes.has(key)) {
         seenStrikes.add(key);
         preScreened.push(sig);
@@ -6897,6 +7064,130 @@ router.get("/whale/spx-vwap", async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Ticker GEX (Polygon options chain) ───────────────────────────────────────
+interface TickerGex {
+  gammaFlip: number | null;
+  callWall: { price: number; gex: number } | null;
+  putWall: { price: number; gex: number } | null;
+  keyMagnet: { price: number; gex: number } | null;
+  dealerPositioning: string;
+  currentPrice: number;
+  updatedAt: string;
+}
+
+const tickerGexCache: Record<string, { data: TickerGex; time: number }> = {};
+const TICKER_GEX_CACHE_TTL = 300_000;
+
+async function fetchTickerGex(ticker: string, currentPrice: number): Promise<TickerGex | null> {
+  const now = Date.now();
+  const cached = tickerGexCache[ticker];
+  if (cached && now - cached.time < TICKER_GEX_CACHE_TTL) return cached.data;
+
+  try {
+    let allResults: any[] = [];
+    let nextUrl: string | null = `https://api.polygon.io/v3/snapshot/options/${ticker}?limit=250&apiKey=${POLYGON_KEY()}`;
+    let pages = 0;
+    while (nextUrl && pages < 10) {
+      const res = await fetch(nextUrl, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) {
+        if (pages === 0) {
+          console.warn(`[gex-ticker] ${ticker} options snapshot failed: ${res.status}`);
+          return cached?.data || null;
+        }
+        break;
+      }
+      const json = await res.json();
+      const results = json.results || [];
+      allResults = allResults.concat(results);
+      nextUrl = json.next_url ? `${json.next_url}&apiKey=${POLYGON_KEY()}` : null;
+      pages++;
+    }
+    if (!allResults.length) return cached?.data || null;
+    const results = allResults;
+
+    const strikes: Record<number, { callGamma: number; callOI: number; putGamma: number; putOI: number }> = {};
+
+    for (const opt of results) {
+      const details = opt.details || {};
+      const greeks = opt.greeks || {};
+      const strikePrice = details.strike_price;
+      const contractType = details.contract_type;
+      const gamma = greeks.gamma || 0;
+      const oi = opt.open_interest || 0;
+
+      if (!strikePrice || !contractType) continue;
+
+      if (!strikes[strikePrice]) strikes[strikePrice] = { callGamma: 0, callOI: 0, putGamma: 0, putOI: 0 };
+
+      if (contractType === "call") {
+        strikes[strikePrice].callGamma += gamma * oi * 100;
+        strikes[strikePrice].callOI += oi;
+      } else {
+        strikes[strikePrice].putGamma += gamma * oi * 100;
+        strikes[strikePrice].putOI += oi;
+      }
+    }
+
+    const strikeList = Object.entries(strikes)
+      .map(([priceStr, d]) => ({
+        price: parseFloat(priceStr),
+        netGex: d.callGamma - d.putGamma,
+        totalGex: d.callGamma + d.putGamma,
+      }))
+      .filter(d => d.price > 0)
+      .sort((a, b) => a.price - b.price);
+
+    if (!strikeList.length) return cached?.data || null;
+
+    let gammaFlip: number | null = null;
+    for (let i = 1; i < strikeList.length; i++) {
+      if ((strikeList[i - 1].netGex <= 0 && strikeList[i].netGex > 0) ||
+          (strikeList[i - 1].netGex >= 0 && strikeList[i].netGex < 0)) {
+        const p1 = strikeList[i - 1], p2 = strikeList[i];
+        const ratio = Math.abs(p1.netGex) / (Math.abs(p1.netGex) + Math.abs(p2.netGex));
+        gammaFlip = Math.round((p1.price + ratio * (p2.price - p1.price)) * 100) / 100;
+        break;
+      }
+    }
+
+    const above = strikeList.filter(d => d.price >= currentPrice);
+    const callWall = above.length
+      ? above.reduce((max, d) => d.totalGex > max.totalGex ? d : max, above[0])
+      : null;
+
+    const below = strikeList.filter(d => d.price < currentPrice);
+    const putWall = below.length
+      ? below.reduce((max, d) => d.totalGex > max.totalGex ? d : max, below[0])
+      : null;
+
+    const keyMagnet = strikeList.reduce((max, d) =>
+      d.totalGex > max.totalGex ? d : max, strikeList[0]);
+
+    const dealerPositioning = gammaFlip === null
+      ? "Unknown"
+      : currentPrice > gammaFlip
+      ? "Long Gamma (suppresses moves)"
+      : "Short Gamma (amplifies moves)";
+
+    const result: TickerGex = {
+      gammaFlip,
+      callWall: callWall ? { price: callWall.price, gex: callWall.netGex } : null,
+      putWall: putWall ? { price: putWall.price, gex: putWall.netGex } : null,
+      keyMagnet: keyMagnet ? { price: keyMagnet.price, gex: keyMagnet.totalGex } : null,
+      dealerPositioning,
+      currentPrice,
+      updatedAt: new Date().toISOString(),
+    };
+
+    tickerGexCache[ticker] = { data: result, time: now };
+    console.log(`[gex-ticker] ${ticker} GEX: flip=${gammaFlip}, callWall=${callWall?.price}, putWall=${putWall?.price}, dealer=${dealerPositioning}`);
+    return result;
+  } catch (err: any) {
+    console.error(`[gex-ticker] ${ticker} error:`, err.message);
+    return cached?.data || null;
+  }
+}
 
 // ── SPX Gamma Exposure (GEX) ─────────────────────────────────────────────────
 interface GexLevels {
