@@ -3037,7 +3037,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
   console.log(`[signals] ${biddiePicks.length}/${signals.length} are biddie picks`);
 
-  let activePicks = biddiePicks;
+  let activePicks = signals;
   try {
     const resolvedRows = await dbQuery(
       `SELECT ticker, COALESCE(strike, 0) as strike, COALESCE(option_type, '') as option_type, COALESCE(expiry, '') as expiry
