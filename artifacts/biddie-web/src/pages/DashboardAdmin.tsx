@@ -994,7 +994,8 @@ const DashboardAdmin = () => {
                   <div className="glass-panel rounded-xl p-6 border-border/40">
                     <h3 className="text-lg font-bold text-foreground mb-4">Signal Verification Methodology</h3>
                     <p className="text-xs text-muted-foreground mb-4">Every pending signal is checked on a regular interval against live Polygon.io price data. The verifier pulls the stock's price history since the signal was detected, including the current price, the highest price since detection, and the lowest price since detection.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider mb-2">Wins — MFE ≥50%</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                       <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
@@ -1005,16 +1006,19 @@ const DashboardAdmin = () => {
                       <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <CheckCircle2 className="h-4 w-4 text-blue-400" />
-                          <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL — MFE 50-74%</span>
+                          <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL HIT — MFE 50-74%</span>
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed">Directionally right, tradeable move. Price made it 50-74% of the way to target. Counts as a win.</p>
                       </div>
+                    </div>
+                    <p className="text-[10px] text-destructive font-bold uppercase tracking-wider mb-2">Losses — MFE &lt;50%</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                       <div className="rounded-lg bg-orange-500/10 border border-orange-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertTriangle className="h-4 w-4 text-orange-400" />
                           <span className="text-xs font-bold text-orange-400 uppercase">NEAR MISS — MFE 30-49%</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Right idea but weak execution window. Price moved 30-49% toward target. Counts as a loss for win rate.</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Right idea but weak execution window. Price moved 30-49% toward target. Counts as a loss.</p>
                       </div>
                       <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -1023,6 +1027,9 @@ const DashboardAdmin = () => {
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed">Signal didn't produce a tradeable move. MFE below 30% of target, or invalidation level was breached.</p>
                       </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-2">Not Scored</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                       <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertTriangle className="h-4 w-4 text-amber-400" />
@@ -1042,7 +1049,7 @@ const DashboardAdmin = () => {
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Key Rules</h4>
                       <ul className="space-y-1.5 text-xs text-muted-foreground">
                         <li><span className="text-foreground font-semibold">1. MFE-based scoring:</span> Outcomes are classified by Maximum Favorable Excursion (best price reached as % of target distance).</li>
-                        <li><span className="text-foreground font-semibold">2. Win Rate:</span> (Hits + Partials) / (Hits + Partials + Near Misses + Misses). Near misses count as losses.</li>
+                        <li><span className="text-foreground font-semibold">2. Win Rate:</span> Wins (≥50% MFE) / (Wins + Losses). Hit + Partial Hit = Win. Near Miss + Miss = Loss.</li>
                         <li><span className="text-foreground font-semibold">3. Invalidation:</span> Stocks: 2.5% adverse buffer. SPX/NDX: 0.75% tighter buffer for indices.</li>
                         <li><span className="text-foreground font-semibold">4. Grace period:</span> 2-hour minimum before MISS can be marked. Prevents noise.</li>
                         <li><span className="text-foreground font-semibold">5. Direction:</span> Uses option type (CALL/PUT) first, falls back to signal_type.</li>

@@ -1391,9 +1391,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                 else if (signal.outcome === "expired") ts = "expired";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "PARTIAL HIT", desc: "Good move in the right direction but didn't quite reach the full target — like getting to 3rd base!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "WIN", desc: "Good move in the right direction — past 50% of the target, counts as a win!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                miss: { label: "LOSS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                 expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                 watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },

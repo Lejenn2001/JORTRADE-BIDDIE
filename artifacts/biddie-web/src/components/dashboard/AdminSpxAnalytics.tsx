@@ -518,7 +518,7 @@ const AdminSpxAnalytics = () => {
                       s.trade_status === "expired" ? "bg-yellow-500/15 text-yellow-400" :
                       "bg-muted/20 text-muted-foreground"
                     }`}>
-                      {s.trade_status === "near_miss" ? "NEAR MISS" : s.trade_status === "partial_hit" ? "PARTIAL" : (s.trade_status || "watching").toUpperCase()}
+                      {s.trade_status === "hit" ? "WIN" : s.trade_status === "partial_hit" ? "WIN" : s.trade_status === "near_miss" ? "LOSS" : s.trade_status === "missed" ? "LOSS" : (s.trade_status || "watching").toUpperCase()}
                     </span>
                     <span className="text-muted-foreground w-16 text-right">
                       {new Date(s.detected_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
@@ -576,10 +576,9 @@ const AdminSpxAnalytics = () => {
                           s.mfe_percent >= 30 ? "bg-orange-400/15 text-orange-400" :
                           "bg-red-400/15 text-red-400"
                         }`}>
-                          {s.mfe_percent >= 75 ? "HIT" :
-                           s.mfe_percent >= 50 ? "PARTIAL" :
-                           s.mfe_percent >= 30 ? "NEAR MISS" :
-                           "MISS"}
+                          {s.mfe_percent >= 50 ? "WIN" :
+                           s.mfe_percent >= 30 ? "NEAR" :
+                           "LOSS"}
                         </span>
                         {s.max_favorable_price && (
                           <span className="text-muted-foreground">(best: ${fmt(s.max_favorable_price)})</span>

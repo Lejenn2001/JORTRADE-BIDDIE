@@ -41,10 +41,10 @@ const outcomeLabel = (outcome: string) => {
   switch (outcome) {
     case "live": return "DAY TRADE";
     case "pending": return "SWING";
-    case "hit": return "HIT";
-    case "partial_hit": return "PARTIAL";
-    case "near_miss": return "NEAR MISS";
-    case "missed": return "MISSED";
+    case "hit": return "WIN";
+    case "partial_hit": return "WIN";
+    case "near_miss": return "LOSS";
+    case "missed": return "LOSS";
     case "expired": return "EXPIRED";
     default: return outcome.toUpperCase();
   }
@@ -183,14 +183,14 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
           <p className="text-[9px] text-muted-foreground mt-1">Overall accuracy</p>
         </motion.div>
         <div className="bg-muted/20 rounded-lg p-3 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Hits</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Wins</p>
           <p className="text-2xl font-bold text-emerald-400">{hits}</p>
-          <p className="text-[9px] text-muted-foreground mt-1">Played out as called</p>
+          <p className="text-[9px] text-muted-foreground mt-1">MFE ≥50% — tradeable move</p>
         </div>
         <div className="bg-muted/20 rounded-lg p-3 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Misses</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Losses</p>
           <p className="text-2xl font-bold text-destructive">{misses + nearMisses}</p>
-          <p className="text-[9px] text-muted-foreground mt-1">{nearMisses > 0 ? `${nearMisses} near, ${misses} full` : "Didn't hit target"}</p>
+          <p className="text-[9px] text-muted-foreground mt-1">MFE &lt;50% — didn't reach target</p>
         </div>
         <div className="bg-muted/20 rounded-lg p-3 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Swing</p>
@@ -227,9 +227,9 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
                   <CheckCircle className="h-3 w-3 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-emerald-400">HIT — MFE ≥75% of Target</p>
+                  <p className="text-[11px] font-semibold text-emerald-400">WIN — MFE ≥50% of Target</p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                    The stock price reached 75% or more of the way to the target. This means there was a real, tradeable profit opportunity. Includes partial hits (50-74% MFE) which were also directionally right and tradeable.
+                    The stock price reached 50% or more of the way to the target. This means there was a real, tradeable profit opportunity. Includes full hits (≥75% MFE) and partial hits (50-74% MFE) — both are counted as wins.
                   </p>
                 </div>
               </div>
@@ -239,9 +239,9 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
                   <XCircle className="h-3 w-3 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-destructive">MISSED — MFE &lt;30% or Invalidation Breached</p>
+                  <p className="text-[11px] font-semibold text-destructive">LOSS — MFE &lt;50% or Invalidation Breached</p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                    The signal didn't produce a tradeable move (MFE below 30% of target), or the price crossed the invalidation level. Near misses (30-49% MFE) had the right idea but didn't reach a tradeable level. Both count as losses for win rate.
+                    The signal didn't produce a tradeable move (MFE below 50% of target), or the price crossed the invalidation level. Near misses (30-49% MFE) and full misses (&lt;30% MFE) both count as losses.
                   </p>
                 </div>
               </div>
@@ -273,7 +273,7 @@ const SignalAccuracyPanel = ({ isAdmin, liveSignals = [] }: Props) => {
 
             <div className="border-t border-border/30 pt-2.5 mt-2.5">
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                <span className="font-semibold text-foreground/80">Win Rate</span> = (Hits + Partials) / (Hits + Partials + Near Misses + Misses). Near misses count as losses. Pending and expired signals are excluded. MFE (Maximum Favorable Excursion) measures how far the price moved in the right direction as a percentage of the distance to target.
+                <span className="font-semibold text-foreground/80">Win Rate</span> = Wins / (Wins + Losses). Anything ≥50% MFE is a win (hit + partial hit). Anything &lt;50% MFE is a loss (near miss + miss). Pending and expired signals are excluded. MFE (Maximum Favorable Excursion) measures how far the price moved in the right direction as a percentage of the distance to target.
               </p>
             </div>
           </motion.div>
