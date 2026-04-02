@@ -143,7 +143,7 @@ const Dashboard = () => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         todayStart.setHours(todayStart.getHours() - 4);
 
-        const resp = await fetch('/api/whale/signals/history?limit=50');
+        const resp = await fetch('/api/whale/signals/history?limit=150');
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 
@@ -251,24 +251,24 @@ const Dashboard = () => {
   const algorithmPlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && getSignalScore(s) >= 85)
-    ).slice(0, 5),
+        .filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && getSignalScore(s) >= 60)
+    ).slice(0, 10),
     [allMergedSignals]
   );
 
   const whalePlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => s.category === 'whale' && getSignalScore(s) >= 85)
-    ).slice(0, 5),
+        .filter(s => s.category === 'whale' && getSignalScore(s) >= 60)
+    ).slice(0, 10),
     [allMergedSignals]
   );
 
   const spreadPlays = useMemo(() =>
     sortSignals(
       allMergedSignals
-        .filter(s => s.category === 'spread' && getSignalScore(s) >= 85)
-    ).slice(0, 5),
+        .filter(s => s.category === 'spread' && getSignalScore(s) >= 60)
+    ).slice(0, 10),
     [allMergedSignals]
   );
 
