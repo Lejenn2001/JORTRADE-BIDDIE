@@ -94,7 +94,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAllSignals, setShowAllSignals] = useState(false);
-  const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "partial_hit" | "missed" | "expired" | "pending">("all");
+  const [filterOutcome, setFilterOutcome] = useState<"all" | "hit" | "partial_hit" | "near_miss" | "missed" | "expired" | "pending">("all");
   const [fetchError, setFetchError] = useState(false);
   const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
   const [signalDetails, setSignalDetails] = useState<Record<string, SignalDetail>>({});
@@ -153,17 +153,18 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
   }, []);
 
   const stats = useMemo(() => {
-    let hits = 0, partialHits = 0, misses = 0, expired = 0, pending = 0;
+    let hits = 0, partialHits = 0, nearMisses = 0, misses = 0, expired = 0, pending = 0;
     for (const s of signals) {
       if (s.outcome === "hit") hits++;
       else if (s.outcome === "partial_hit") partialHits++;
+      else if (s.outcome === "near_miss") nearMisses++;
       else if (s.outcome === "missed") misses++;
       else if (s.outcome === "expired") expired++;
       else pending++;
     }
-    const resolved = hits + partialHits + misses;
+    const resolved = hits + partialHits + nearMisses + misses;
     const successRate = resolved > 0 ? ((hits + partialHits) / resolved) * 100 : null;
-    return { hits, partialHits, misses, expired, pending, total: signals.length, resolved, winRate: successRate };
+    return { hits, partialHits, nearMisses, misses, expired, pending, total: signals.length, resolved, winRate: successRate };
   }, [signals]);
 
   const tickerPatterns = useMemo(() => {
@@ -177,7 +178,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       const cat = s.category || "algorithm";
       if (!tp.categories[cat]) tp.categories[cat] = { hits: 0, misses: 0 };
-      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "partial_hit" ? "hit" : s.outcome === "missed" ? "missed" : s.outcome === "expired" ? "missed" : "pending";
+      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "partial_hit" ? "hit" : s.outcome === "missed" ? "missed" : s.outcome === "near_miss" ? "missed" : s.outcome === "expired" ? "missed" : "pending";
 
       if (outcome === "hit") {
         tp.hits++;
@@ -203,7 +204,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
     for (const s of signals) {
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       if (s.outcome === "hit" || s.outcome === "partial_hit") { if (isCall) callHits++; else putHits++; }
-      else if (s.outcome === "missed" || s.outcome === "expired") { if (isCall) callMisses++; else putMisses++; }
+      else if (s.outcome === "missed" || s.outcome === "near_miss" || s.outcome === "expired") { if (isCall) callMisses++; else putMisses++; }
     }
     const callResolved = callHits + callMisses;
     const putResolved = putHits + putMisses;
@@ -221,7 +222,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       if (!map[cat]) map[cat] = { hits: 0, misses: 0, pending: 0, total: 0 };
       map[cat].total++;
       if (s.outcome === "hit" || s.outcome === "partial_hit") map[cat].hits++;
-      else if (s.outcome === "missed" || s.outcome === "expired") map[cat].misses++;
+      else if (s.outcome === "missed" || s.outcome === "near_miss" || s.outcome === "expired") map[cat].misses++;
       else map[cat].pending++;
     }
     return map;
@@ -345,7 +346,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       const dir = sortDir === "asc" ? 1 : -1;
       switch (sortCol) {
         case "status": {
-          const order: Record<string, number> = { hit: 0, partial_hit: 1, pending: 2, expired: 3, missed: 4 };
+          const order: Record<string, number> = { hit: 0, partial_hit: 1, near_miss: 2, pending: 3, expired: 4, missed: 5 };
           const ao = order[a.outcome || "pending"] ?? 2;
           const bo = order[b.outcome || "pending"] ?? 2;
           return (ao - bo) * dir;
@@ -464,26 +465,30 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
           <span className="text-[10px] text-muted-foreground ml-auto">{stats.total} total signals</span>
         </div>
 
-        <div className="grid grid-cols-3 lg:grid-cols-8 gap-3 p-4">
-          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Success rate: (Hits + Partial Hits) / All Resolved">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Success Rate</p>
+        <div className="grid grid-cols-3 lg:grid-cols-9 gap-3 p-4">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Win rate: (Hits + Partials) / (Hits + Partials + Near Misses + Misses)">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Win Rate</p>
             <p className={`text-2xl font-bold ${stats.winRate !== null && stats.winRate >= 50 ? "text-emerald-400" : stats.winRate !== null ? "text-destructive" : "text-foreground"}`}>
               {stats.winRate !== null ? `${stats.winRate.toFixed(1)}%` : "—"}
             </p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Target price was reached">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="MFE ≥75% of target — full hit">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Hits</p>
             <p className="text-2xl font-bold text-emerald-400">{stats.hits}</p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Expired with significant favorable move (50%+ to target or 1%+ price move)">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Partial Hits</p>
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="MFE 50-74% of target — directionally right, tradeable">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Partial</p>
             <p className="text-2xl font-bold text-blue-400">{stats.partialHits}</p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Invalidation level was breached — thesis was wrong">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="MFE 30-49% of target — right idea, weak execution window">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Near Miss</p>
+            <p className="text-2xl font-bold text-orange-400">{stats.nearMisses}</p>
+          </div>
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="MFE <30% of target or invalidation breached">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Misses</p>
             <p className="text-2xl font-bold text-destructive">{stats.misses}</p>
           </div>
-          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Expired without hitting target or invalidation, minimal favorable move">
+          <div className="bg-muted/20 rounded-lg p-3 text-center" title="Expired without resolution">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Expired</p>
             <p className="text-2xl font-bold text-muted-foreground">{stats.expired}</p>
           </div>
@@ -657,11 +662,12 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
         </div>
         {showSignalLog && (<>
         <div className="px-4 py-2 border-t border-border/30 flex items-center gap-1.5 flex-wrap">
-          {(["all", "hit", "partial_hit", "missed", "expired", "pending"] as const).map(f => {
+          {(["all", "hit", "partial_hit", "near_miss", "missed", "expired", "pending"] as const).map(f => {
             const colors: Record<string, string> = {
               all: "bg-primary/20 text-primary border border-primary/40",
               hit: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
               partial_hit: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
+              near_miss: "bg-orange-500/20 text-orange-400 border border-orange-500/40",
               missed: "bg-red-500/20 text-red-400 border border-red-500/40",
               expired: "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
               pending: "bg-amber-500/20 text-amber-400 border border-amber-500/40",
@@ -670,6 +676,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
               all: "All",
               hit: `Hits (${stats.hits})`,
               partial_hit: `Partial (${stats.partialHits})`,
+              near_miss: `Near Miss (${stats.nearMisses})`,
               missed: `Misses (${stats.misses})`,
               expired: `Expired (${stats.expired})`,
               pending: `Pending (${stats.pending})`,
@@ -727,6 +734,8 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full"><CheckCircle className="h-3 w-3" /> HIT</span>
                             ) : s.outcome === "partial_hit" ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full"><CheckCircle className="h-3 w-3" /> PARTIAL</span>
+                            ) : s.outcome === "near_miss" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-full"><AlertTriangle className="h-3 w-3" /> NEAR MISS</span>
                             ) : s.outcome === "missed" ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full"><XCircle className="h-3 w-3" /> MISS</span>
                             ) : s.outcome === "expired" ? (
@@ -748,7 +757,13 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                               <span className="text-muted-foreground">${Number(s.price_at_signal).toFixed(2)}</span>
                             )}
                             {mfePct !== null && (
-                              <span className={`font-semibold ${mfePct >= 0 ? "text-emerald-400" : "text-destructive"}`}>
+                              <span className={`font-bold ${
+                                mfePct >= 75 ? "text-emerald-400" :
+                                mfePct >= 50 ? "text-blue-400" :
+                                mfePct >= 30 ? "text-orange-400" :
+                                mfePct >= 0 ? "text-red-400" :
+                                "text-destructive"
+                              }`}>
                                 {mfePct >= 0 ? "+" : ""}{mfePct.toFixed(1)}%
                               </span>
                             )}
@@ -792,6 +807,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                                   <div className={`rounded-lg p-3 border ${
                                     s.outcome === "hit" ? "bg-emerald-500/5 border-emerald-500/20" :
                                     s.outcome === "partial_hit" ? "bg-blue-500/5 border-blue-500/20" :
+                                    s.outcome === "near_miss" ? "bg-orange-500/5 border-orange-500/20" :
                                     s.outcome === "missed" ? "bg-red-500/5 border-red-500/20" :
                                     s.outcome === "expired" ? "bg-zinc-500/5 border-zinc-500/20" :
                                     "bg-amber-500/5 border-amber-500/20"
@@ -800,6 +816,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                                       <Info className={`h-4 w-4 mt-0.5 shrink-0 ${
                                         s.outcome === "hit" ? "text-emerald-400" :
                                         s.outcome === "partial_hit" ? "text-blue-400" :
+                                        s.outcome === "near_miss" ? "text-orange-400" :
                                         s.outcome === "missed" ? "text-destructive" :
                                         s.outcome === "expired" ? "text-zinc-400" :
                                         "text-amber-400"
@@ -808,13 +825,15 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                                         <p className={`text-sm font-semibold ${
                                           s.outcome === "hit" ? "text-emerald-400" :
                                           s.outcome === "partial_hit" ? "text-blue-400" :
+                                          s.outcome === "near_miss" ? "text-orange-400" :
                                           s.outcome === "missed" ? "text-destructive" :
                                           s.outcome === "expired" ? "text-zinc-400" :
                                           "text-amber-400"
                                         }`}>
-                                          {s.outcome === "hit" ? "How this was scored a HIT" :
-                                           s.outcome === "partial_hit" ? "How this was scored a PARTIAL HIT" :
-                                           s.outcome === "missed" ? "How this was scored a MISS" :
+                                          {s.outcome === "hit" ? "How this was scored a HIT (MFE ≥75%)" :
+                                           s.outcome === "partial_hit" ? "How this was scored a PARTIAL HIT (MFE 50-74%)" :
+                                           s.outcome === "near_miss" ? "How this was scored a NEAR MISS (MFE 30-49%)" :
+                                           s.outcome === "missed" ? "How this was scored a MISS (MFE <30%)" :
                                            s.outcome === "expired" ? "Why this EXPIRED" :
                                            "Signal Still Being Tracked"}
                                         </p>
@@ -871,11 +890,36 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
                                         {detail.signal.pctProfitAchieved != null ? `${detail.signal.pctProfitAchieved >= 0 ? "+" : ""}${detail.signal.pctProfitAchieved.toFixed(2)}%` : "—"}
                                       </p>
                                     </div>
-                                    <div className={`rounded-lg p-2.5 border ${detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 100 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/15 border-border/20"}`}>
-                                      <span className="text-[9px] font-medium text-muted-foreground uppercase">% to Target</span>
-                                      <p className={`text-sm font-bold ${detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 100 ? "text-emerald-400" : detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 50 ? "text-amber-400" : "text-muted-foreground"}`}>
-                                        {detail.signal.pctToTarget != null ? `${detail.signal.pctToTarget.toFixed(1)}%` : "—"}
-                                      </p>
+                                    <div className={`rounded-lg p-2.5 border ${
+                                      detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 75 ? "bg-emerald-500/10 border-emerald-500/20" :
+                                      detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 50 ? "bg-blue-500/10 border-blue-500/20" :
+                                      detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 30 ? "bg-orange-500/10 border-orange-500/20" :
+                                      "bg-muted/15 border-border/20"
+                                    }`}>
+                                      <span className="text-[9px] font-medium text-muted-foreground uppercase">MFE % to Target</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className={`text-sm font-bold ${
+                                          detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 75 ? "text-emerald-400" :
+                                          detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 50 ? "text-blue-400" :
+                                          detail.signal.pctToTarget != null && detail.signal.pctToTarget >= 30 ? "text-orange-400" :
+                                          "text-muted-foreground"
+                                        }`}>
+                                          {detail.signal.pctToTarget != null ? `${detail.signal.pctToTarget.toFixed(1)}%` : "—"}
+                                        </p>
+                                        {detail.signal.pctToTarget != null && (
+                                          <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
+                                            detail.signal.pctToTarget >= 75 ? "bg-emerald-400/15 text-emerald-400" :
+                                            detail.signal.pctToTarget >= 50 ? "bg-blue-400/15 text-blue-400" :
+                                            detail.signal.pctToTarget >= 30 ? "bg-orange-400/15 text-orange-400" :
+                                            "bg-red-400/15 text-red-400"
+                                          }`}>
+                                            {detail.signal.pctToTarget >= 75 ? "HIT" :
+                                             detail.signal.pctToTarget >= 50 ? "PARTIAL" :
+                                             detail.signal.pctToTarget >= 30 ? "NEAR" :
+                                             "MISS"}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                     <div className="bg-muted/15 rounded-lg p-2.5 border border-border/20">
                                       <span className="text-[9px] font-medium text-muted-foreground uppercase">Time @ Target</span>

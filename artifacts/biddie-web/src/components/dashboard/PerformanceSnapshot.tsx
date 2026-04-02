@@ -40,14 +40,14 @@ const PerformanceSnapshot = () => {
         let winStreak = 0;
         for (const d of data) {
           if (d.outcome === "hit" || d.outcome === "win" || d.outcome === "partial_hit") winStreak++;
-          else if (d.outcome !== "pending" && d.outcome !== null && d.outcome !== undefined) break;
+          else if (d.outcome !== "pending" && d.outcome !== "expired" && d.outcome !== null && d.outcome !== undefined) break;
         }
 
         for (const s of data) {
           const detected = new Date(s.detected_at || s.created_at);
           const cat = (s.category === "whale" ? "whale" : s.category === "spread" ? "spread" : "algorithm") as keyof DayStats;
           const isHit = s.outcome === "hit" || s.outcome === "win" || s.outcome === "partial_hit";
-          const isMiss = s.outcome === "missed" || s.outcome === "loss";
+          const isMiss = s.outcome === "missed" || s.outcome === "loss" || s.outcome === "near_miss";
           const isPending = !s.outcome || s.outcome === "pending";
 
           if (detected >= weekStart) {

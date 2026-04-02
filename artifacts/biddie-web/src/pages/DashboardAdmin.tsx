@@ -994,20 +994,34 @@ const DashboardAdmin = () => {
                   <div className="glass-panel rounded-xl p-6 border-border/40">
                     <h3 className="text-lg font-bold text-foreground mb-4">Signal Verification Methodology</h3>
                     <p className="text-xs text-muted-foreground mb-4">Every pending signal is checked on a regular interval against live Polygon.io price data. The verifier pulls the stock's price history since the signal was detected, including the current price, the highest price since detection, and the lowest price since detection.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                       <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                          <span className="text-xs font-bold text-emerald-400 uppercase">HIT</span>
+                          <span className="text-xs font-bold text-emerald-400 uppercase">HIT — MFE ≥75%</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Price reached the target zone. Bullish/CALL: high reached target. Bearish/PUT: low dropped to target.</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Price reached 75%+ of the way to target. Full hit — real profit opportunity existed.</p>
                       </div>
                       <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <CheckCircle2 className="h-4 w-4 text-blue-400" />
-                          <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL HIT</span>
+                          <span className="text-xs font-bold text-blue-400 uppercase">PARTIAL — MFE 50-74%</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Expired but made a significant favorable move — 50%+ to target or 1%+ price move. Counts as success.</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Directionally right, tradeable move. Price made it 50-74% of the way to target. Counts as a win.</p>
+                      </div>
+                      <div className="rounded-lg bg-orange-500/10 border border-orange-500/30 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-4 w-4 text-orange-400" />
+                          <span className="text-xs font-bold text-orange-400 uppercase">NEAR MISS — MFE 30-49%</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Right idea but weak execution window. Price moved 30-49% toward target. Counts as a loss for win rate.</p>
+                      </div>
+                      <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <XCircle className="h-4 w-4 text-red-400" />
+                          <span className="text-xs font-bold text-red-400 uppercase">MISS — MFE &lt;30%</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Signal didn't produce a tradeable move. MFE below 30% of target, or invalidation level was breached.</p>
                       </div>
                       <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -1021,23 +1035,16 @@ const DashboardAdmin = () => {
                           <AlertTriangle className="h-4 w-4 text-zinc-400" />
                           <span className="text-xs font-bold text-zinc-400 uppercase">EXPIRED</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Time ran out with minimal favorable movement (less than 50% to target and less than 1% move).</p>
-                      </div>
-                      <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <XCircle className="h-4 w-4 text-red-400" />
-                          <span className="text-xs font-bold text-red-400 uppercase">MISSED</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Invalidation breached — thesis was wrong. Only marked after 2+ hour grace period.</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Time ran out. Excluded from win rate calculation — only MFE-classified outcomes count.</p>
                       </div>
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2">Key Rules</h4>
                       <ul className="space-y-1.5 text-xs text-muted-foreground">
-                        <li><span className="text-foreground font-semibold">1. Priority:</span> HIT checked first, then MISS, then PARTIAL HIT / EXPIRED at expiry.</li>
-                        <li><span className="text-foreground font-semibold">2. Grace period:</span> 2-hour minimum before MISS can be marked. Prevents noise.</li>
-                        <li><span className="text-foreground font-semibold">3. Sanity checks:</span> Targets/invalidation must make directional sense or they're ignored.</li>
-                        <li><span className="text-foreground font-semibold">4. Success Rate:</span> (Hits + Partial Hits) / All Resolved. Pending excluded.</li>
+                        <li><span className="text-foreground font-semibold">1. MFE-based scoring:</span> Outcomes are classified by Maximum Favorable Excursion (best price reached as % of target distance).</li>
+                        <li><span className="text-foreground font-semibold">2. Win Rate:</span> (Hits + Partials) / (Hits + Partials + Near Misses + Misses). Near misses count as losses.</li>
+                        <li><span className="text-foreground font-semibold">3. Invalidation:</span> Stocks: 2.5% adverse buffer. SPX/NDX: 0.75% tighter buffer for indices.</li>
+                        <li><span className="text-foreground font-semibold">4. Grace period:</span> 2-hour minimum before MISS can be marked. Prevents noise.</li>
                         <li><span className="text-foreground font-semibold">5. Direction:</span> Uses option type (CALL/PUT) first, falls back to signal_type.</li>
                       </ul>
                     </div>
