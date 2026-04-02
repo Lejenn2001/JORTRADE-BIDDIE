@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Activity, TrendingUp, TrendingDown, Target, Zap, Flame, Shield, RefreshCw, ArrowUpRight, ArrowDownRight, Minus, BarChart3, Crosshair, Gauge } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Target, Zap, Flame, Shield, RefreshCw, ArrowUpRight, ArrowDownRight, Minus, BarChart3, Crosshair, Gauge, Clock, CheckCircle2, XCircle, Eye, Calendar } from "lucide-react";
 
 interface SpxSignal {
   id: string;
@@ -15,6 +15,7 @@ interface SpxSignal {
   premium: number | null;
   entry_trigger: string;
   target: string;
+  target_near: string;
   invalidation: string;
   trade_status: string;
   is_biddie_pick: boolean;
@@ -24,6 +25,10 @@ interface SpxSignal {
   price_at_signal: number | null;
   reason: string;
   tags: string[];
+  expiry: string;
+  signal_quality: string;
+  key_level: string;
+  sr_level: string;
 }
 
 interface VwapData {
@@ -63,6 +68,9 @@ const AdminSpxAnalytics = () => {
   const [archiveDates, setArchiveDates] = useState<FlowArchiveDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<string | null>(null);
+  const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
 
   const fetchAll = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -97,6 +105,24 @@ const AdminSpxAnalytics = () => {
     setRefreshing(false);
   };
 
+  const forceVerify = async () => {
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const res = await fetch("/api/whale/verify-signals", { method: "POST" });
+      if (res.ok) {
+        const d = await res.json();
+        setVerifyResult(`Verified ${d.verified}: ${d.hits}H / ${d.partial_hits || 0}P / ${d.misses}M / ${d.expired}E`);
+        await fetchAll(true);
+      } else {
+        setVerifyResult("Verify failed");
+      }
+    } catch {
+      setVerifyResult("Verify error");
+    }
+    setVerifying(false);
+  };
+
   useEffect(() => { fetchAll(); }, []);
 
   const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -114,7 +140,10 @@ const AdminSpxAnalytics = () => {
 
   const hits = signals.filter(s => s.trade_status === "hit").length;
   const misses = signals.filter(s => s.trade_status === "miss").length;
-  const pending = signals.filter(s => !["hit", "miss", "expired"].includes(s.trade_status || "")).length;
+  const partials = signals.filter(s => s.trade_status === "partial").length;
+  const active = signals.filter(s => s.trade_status === "active").length;
+  const watching = signals.filter(s => s.trade_status === "watching").length;
+  const expired = signals.filter(s => s.trade_status === "expired").length;
   const resolved = hits + misses;
   const winRate = resolved > 0 ? ((hits / resolved) * 100).toFixed(1) : "—";
 
@@ -144,6 +173,18 @@ const AdminSpxAnalytics = () => {
     }
   });
 
+  const byExpiry: Record<string, number> = {};
+  signals.forEach(s => {
+    const exp = s.expiry || "unknown";
+    byExpiry[exp] = (byExpiry[exp] || 0) + 1;
+  });
+
+  const byQuality: Record<string, number> = {};
+  signals.forEach(s => {
+    const q = s.signal_quality || "standard";
+    byQuality[q] = (byQuality[q] || 0) + 1;
+  });
+
   const totalArchiveFlows = archiveDates.reduce((s, d) => s + parseInt(d.flow_count || "0"), 0);
 
   if (loading) {
@@ -166,21 +207,45 @@ const AdminSpxAnalytics = () => {
             <p className="text-xs text-muted-foreground">Live SPX/SPXW signal data, VWAP, and GEX levels</p>
           </div>
         </div>
-        <button
-          onClick={() => fetchAll(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={forceVerify}
+            disabled={verifying}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all disabled:opacity-50"
+          >
+            <CheckCircle2 className={`h-3.5 w-3.5 ${verifying ? "animate-pulse" : ""}`} />
+            {verifying ? "Verifying..." : "Force Verify"}
+          </button>
+          <button
+            onClick={() => fetchAll(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {verifyResult && (
+        <div className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+          {verifyResult}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="SPX Signals" value={totalSignals} sub={`${biddiePickCount} Biddie Picks`} color="cyan" icon={<Activity className="h-4 w-4" />} />
-        <MetricCard label="Win Rate" value={winRate === "—" ? "—" : `${winRate}%`} sub={`${hits}W / ${misses}L / ${pending}P`} color={parseFloat(winRate) >= 60 ? "emerald" : parseFloat(winRate) >= 40 ? "yellow" : "red"} icon={<Target className="h-4 w-4" />} />
+        <MetricCard label="Win Rate" value={winRate === "—" ? "—" : `${winRate}%`} sub={`${hits}W / ${misses}L / ${partials}P`} color={winRate !== "—" && parseFloat(winRate) >= 60 ? "emerald" : winRate !== "—" && parseFloat(winRate) >= 40 ? "yellow" : winRate !== "—" ? "red" : "cyan"} icon={<Target className="h-4 w-4" />} />
         <MetricCard label="Avg Confidence" value={avgConfidence} sub="out of 10" color="violet" icon={<Flame className="h-4 w-4" />} />
         <MetricCard label="Total Premium" value={fmtK(totalPremium)} sub={`across ${totalSignals} signals`} color="blue" icon={<Zap className="h-4 w-4" />} />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <StatusPill label="Watching" count={watching} icon={<Eye className="h-3 w-3" />} color="text-muted-foreground" bg="bg-muted/20" />
+        <StatusPill label="Active" count={active} icon={<Zap className="h-3 w-3" />} color="text-blue-400" bg="bg-blue-500/10" />
+        <StatusPill label="Hit" count={hits} icon={<CheckCircle2 className="h-3 w-3" />} color="text-emerald-400" bg="bg-emerald-500/10" />
+        <StatusPill label="Miss" count={misses} icon={<XCircle className="h-3 w-3" />} color="text-red-400" bg="bg-red-500/10" />
+        <StatusPill label="Expired" count={expired} icon={<Clock className="h-3 w-3" />} color="text-yellow-400" bg="bg-yellow-500/10" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -250,6 +315,23 @@ const AdminSpxAnalytics = () => {
           )}
         </div>
       </div>
+
+      {Object.keys(byExpiry).length > 0 && (
+        <div className="rounded-xl p-4 border border-white/10 bg-gradient-to-br from-yellow-500/5 via-background to-background">
+          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Calendar className="h-3.5 w-3.5 text-yellow-400" />
+            By Expiry Date
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(byExpiry).sort().map(([exp, count]) => (
+              <div key={exp} className="px-3 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-xs">
+                <span className="text-yellow-400 font-medium">{exp}</span>
+                <span className="text-muted-foreground ml-1.5">{count} signal{count > 1 ? "s" : ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded-xl p-4 border border-white/10 bg-gradient-to-br from-emerald-500/5 via-background to-background">
@@ -390,33 +472,100 @@ const AdminSpxAnalytics = () => {
         <div className="rounded-xl p-4 border border-white/10 bg-gradient-to-br from-cyan-500/5 via-background to-background">
           <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
             <Activity className="h-3.5 w-3.5 text-cyan-400" />
-            Recent SPX Signals ({signals.length})
+            SPX Signals ({signals.length})
           </h3>
-          <div className="space-y-1.5 max-h-80 overflow-y-auto">
-            {signals.slice(0, 20).map(s => (
-              <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5 text-xs">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    s.direction === "bullish" ? "bg-emerald-400" : s.direction === "bearish" ? "bg-red-400" : "bg-yellow-400"
-                  }`} />
-                  <span className="font-bold text-cyan-400">{s.ticker}</span>
-                  <span className="text-muted-foreground uppercase">{s.option_type}</span>
-                  {s.strike && <span className="text-foreground">${s.strike}</span>}
-                  <span className="text-muted-foreground capitalize truncate">{s.category}</span>
+          <div className="space-y-1.5 max-h-[600px] overflow-y-auto">
+            {signals.map(s => (
+              <div key={s.id}>
+                <div
+                  onClick={() => setExpandedSignal(expandedSignal === s.id ? null : s.id)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5 text-xs cursor-pointer hover:bg-white/[0.04] transition-colors"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      s.trade_status === "hit" ? "bg-emerald-400" : s.trade_status === "miss" ? "bg-red-400" :
+                      s.direction === "bullish" ? "bg-emerald-400/50" : s.direction === "bearish" ? "bg-red-400/50" : "bg-yellow-400/50"
+                    }`} />
+                    <span className="font-bold text-cyan-400">{s.ticker}</span>
+                    <span className="text-muted-foreground uppercase">{s.option_type}</span>
+                    {s.strike && <span className="text-foreground font-medium">${s.strike}</span>}
+                    <span className="text-muted-foreground capitalize truncate">{s.category}</span>
+                    {s.is_biddie_pick && <span className="px-1 py-0.5 rounded text-[9px] bg-cyan-500/15 text-cyan-400 font-medium">PICK</span>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-violet-400 text-[10px]">{s.confidence}/10</span>
+                    {s.premium && <span className="text-blue-400">{fmtK(s.premium)}</span>}
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      s.trade_status === "hit" ? "bg-emerald-500/15 text-emerald-400" :
+                      s.trade_status === "miss" ? "bg-red-500/15 text-red-400" :
+                      s.trade_status === "partial" ? "bg-blue-500/15 text-blue-400" :
+                      s.trade_status === "active" ? "bg-blue-500/15 text-blue-400" :
+                      s.trade_status === "expired" ? "bg-yellow-500/15 text-yellow-400" :
+                      "bg-muted/20 text-muted-foreground"
+                    }`}>
+                      {s.trade_status || "watching"}
+                    </span>
+                    <span className="text-muted-foreground w-16 text-right">
+                      {new Date(s.detected_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {s.premium && <span className="text-blue-400">{fmtK(s.premium)}</span>}
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                    s.trade_status === "hit" ? "bg-emerald-500/15 text-emerald-400" :
-                    s.trade_status === "miss" ? "bg-red-500/15 text-red-400" :
-                    "bg-muted/20 text-muted-foreground"
-                  }`}>
-                    {s.trade_status || "pending"}
-                  </span>
-                  <span className="text-muted-foreground w-16 text-right">
-                    {new Date(s.detected_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                  </span>
-                </div>
+                {expandedSignal === s.id && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mx-3 mb-1 px-3 py-2.5 rounded-b-lg bg-white/[0.03] border border-t-0 border-white/5 text-[11px] space-y-2"
+                  >
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <span className="text-muted-foreground">Entry:</span>
+                        <span className="ml-1 text-foreground font-medium">{s.entry_trigger || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Target:</span>
+                        <span className="ml-1 text-emerald-400 font-medium">{s.target || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Invalidation:</span>
+                        <span className="ml-1 text-red-400 font-medium">{s.invalidation || "—"}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <span className="text-muted-foreground">Price@Signal:</span>
+                        <span className="ml-1 text-foreground">{s.price_at_signal ? `$${fmt(s.price_at_signal)}` : "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Expiry:</span>
+                        <span className="ml-1 text-yellow-400">{s.expiry || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Quality:</span>
+                        <span className="ml-1 text-foreground capitalize">{s.signal_quality || "standard"}</span>
+                      </div>
+                    </div>
+                    {s.gamma_zone && (
+                      <div>
+                        <span className="text-muted-foreground">Gamma:</span>
+                        <span className="ml-1 text-orange-400 capitalize">{s.gamma_zone.replace(/_/g, " ")}</span>
+                        {s.gamma_description && <span className="ml-1 text-muted-foreground">— {s.gamma_description}</span>}
+                      </div>
+                    )}
+                    {s.reason && (
+                      <div>
+                        <span className="text-muted-foreground">Reason:</span>
+                        <span className="ml-1 text-foreground">{s.reason}</span>
+                      </div>
+                    )}
+                    {s.tags && s.tags.length > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {s.tags.map((tag, i) => (
+                          <span key={i} className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[9px]">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </div>
             ))}
           </div>
@@ -455,6 +604,16 @@ const MetricCard = ({ label, value, sub, color, icon }: { label: string; value: 
     </motion.div>
   );
 };
+
+const StatusPill = ({ label, count, icon, color, bg }: { label: string; count: number; icon: React.ReactNode; color: string; bg: string }) => (
+  <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${bg} border border-white/5 text-xs`}>
+    <div className={`flex items-center gap-1.5 ${color}`}>
+      {icon}
+      <span className="font-medium">{label}</span>
+    </div>
+    <span className={`font-bold ${color}`}>{count}</span>
+  </div>
+);
 
 const DirectionBar = ({ label, count, total, color }: { label: string; count: number; total: number; color: string }) => {
   const pct = total > 0 ? (count / total) * 100 : 0;
