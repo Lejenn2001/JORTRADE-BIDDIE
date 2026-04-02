@@ -3171,6 +3171,18 @@ router.get("/whale/signals", async (_req, res) => {
   }
 });
 
+setInterval(async () => {
+  try {
+    if (!isMarketHours()) return;
+    if (signalsPipelineRunning) return;
+    if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) return;
+    console.log("[signals] scheduled refresh starting...");
+    await runSignalsPipeline();
+  } catch (e: any) {
+    console.error("[signals] scheduled refresh failed:", e.message);
+  }
+}, 5 * 60 * 1000);
+
 router.get("/whale/analyze/:ticker", async (req, res) => {
   const ticker = (req.params.ticker || "").toUpperCase().replace(/[^A-Z]/g, "");
   if (!ticker || ticker.length > 5) {
