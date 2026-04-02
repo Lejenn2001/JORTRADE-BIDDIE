@@ -251,14 +251,18 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           let ts = signal.tradeStatus || "watching";
                           if (ts === "watching") {
                             if (signal.outcome === "hit" || signal.outcome === "win") ts = "hit";
+                            else if (signal.outcome === "partial_hit") ts = "partial";
+                            else if (signal.outcome === "near_miss") ts = "near_miss";
                             else if (signal.outcome === "missed" || signal.outcome === "loss") ts = "miss";
                             else if (signal.outcome === "expired") ts = "expired";
                           }
                           const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                            hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                            partial_hit: { label: "PARTIAL", desc: "Price moved in our direction but didn't fully reach the target before time ran out", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                            miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                            expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                            hit: { label: "HIT", desc: "Price reached 75%+ of the target — signal was correct, real profit opportunity", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                            partial: { label: "PARTIAL", desc: "Price moved 50-74% toward target — directionally right, tradeable but didn't fully deliver", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                            partial_hit: { label: "PARTIAL", desc: "Price moved 50-74% toward target — directionally right, tradeable but didn't fully deliver", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                            near_miss: { label: "NEAR MISS", desc: "Price moved 30-49% toward target — right idea, weak execution window", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
+                            miss: { label: "MISS", desc: "Signal didn't produce a tradeable move — price hit invalidation", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                            expired: { label: "EXPIRED", desc: "Time ran out before the signal played out", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                             active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                             watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
                           };

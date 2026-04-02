@@ -3670,50 +3670,55 @@ router.post("/whale/verify-signals", async (_req, res) => {
       let outcomePrice = history.current;
       const refPrice = signalPrice || entryPrice || 0;
 
-      const MIN_MOVE_PCT = 0.005;
+      const isSpxTicker = new Set(["SPX", "SPXW", "NDX", "QQQ"]).has(signal.ticker);
+      const ADV_MOVE_PCT_M = isSpxTicker ? 0.0075 : 0.025;
 
-      if (target.low && target.high && refPrice > 0) {
-        const targetMakesDirectionalSense = isBullish
-          ? target.low > refPrice * 0.999
-          : target.high < refPrice * 1.001;
-        if (targetMakesDirectionalSense) {
-          if (isBullish) {
-            const notAlreadyPastTarget = !signalPrice || signalPrice <= target.low * 1.03;
-            if (notAlreadyPastTarget && history.highSince >= target.low) {
-              outcome = "hit";
-              outcomePrice = history.highSince;
-            }
-          } else {
-            const notAlreadyPastTarget = !signalPrice || signalPrice >= target.high * 0.97;
-            if (notAlreadyPastTarget && history.lowSince <= target.high) {
-              outcome = "hit";
-              outcomePrice = history.lowSince;
-            }
-          }
+      let mfeToTargetM: number | null = null;
+      if (refPrice > 0 && target.low && target.high) {
+        const tgtP = isBullish ? Math.min(target.low, target.high) : Math.max(target.low, target.high);
+        const distToTarget = Math.abs(tgtP - refPrice);
+        if (distToTarget > 0) {
+          const favorable = isBullish ? (history.highSince - refPrice) : (refPrice - history.lowSince);
+          mfeToTargetM = Math.max(0, (favorable / distToTarget) * 100);
+        }
+      }
+
+      if (mfeToTargetM !== null) {
+        if (mfeToTargetM >= 75) {
+          outcome = "hit";
+          outcomePrice = isBullish ? history.highSince : history.lowSince;
+        } else if (mfeToTargetM >= 50) {
+          outcome = "partial_hit";
+          outcomePrice = isBullish ? history.highSince : history.lowSince;
         }
       }
 
       if (!outcome && !target.low && !target.high && refPrice > 0) {
-        const strikeVal = parseFloat(signal.strike);
-        if (!isNaN(strikeVal) && strikeVal > 0) {
-          if (isBullish && strikeVal > refPrice && history.highSince >= strikeVal) {
-            outcome = "hit";
-            outcomePrice = history.highSince;
-          } else if (!isBullish && strikeVal < refPrice && history.lowSince <= strikeVal) {
-            outcome = "hit";
-            outcomePrice = history.lowSince;
-          }
+        const MIN_FALLBACK_PCT = 0.015;
+        if (isBullish && history.highSince >= refPrice * (1 + MIN_FALLBACK_PCT)) {
+          outcome = "hit";
+          outcomePrice = history.highSince;
+        } else if (!isBullish && history.lowSince <= refPrice * (1 - MIN_FALLBACK_PCT)) {
+          outcome = "hit";
+          outcomePrice = history.lowSince;
         }
       }
 
-      if (!outcome && canMiss && invalidationPrice && refPrice > 0) {
+      let effectiveInvM = invalidationPrice;
+      if (!effectiveInvM && refPrice > 0) {
+        effectiveInvM = isBullish
+          ? refPrice * (1 - ADV_MOVE_PCT_M)
+          : refPrice * (1 + ADV_MOVE_PCT_M);
+      }
+
+      if (!outcome && canMiss && effectiveInvM && refPrice > 0) {
         const INV_BUFFER_PCT = 0.0025;
         const invZone = isBullish
-          ? invalidationPrice * (1 - INV_BUFFER_PCT)
-          : invalidationPrice * (1 + INV_BUFFER_PCT);
+          ? effectiveInvM * (1 - INV_BUFFER_PCT)
+          : effectiveInvM * (1 + INV_BUFFER_PCT);
         const invMakesDirectionalSense = isBullish
-          ? invalidationPrice < refPrice
-          : invalidationPrice > refPrice;
+          ? effectiveInvM < refPrice
+          : effectiveInvM > refPrice;
         if (invMakesDirectionalSense) {
           const currentlyBreached = isBullish
             ? history.current <= invZone
@@ -3724,27 +3729,27 @@ router.post("/whale/verify-signals", async (_req, res) => {
           const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
           const isLongDated = dteHours > 48;
           if (isExpired && didBreachZone) {
-            outcome = "missed";
+            outcome = (mfeToTargetM !== null && mfeToTargetM >= 30) ? "near_miss" : "missed";
             outcomePrice = isBullish ? history.lowSince : history.highSince;
           } else if (currentlyBreached && didBreachZone && !isLongDated) {
-            outcome = "missed";
+            outcome = (mfeToTargetM !== null && mfeToTargetM >= 30) ? "near_miss" : "missed";
             outcomePrice = isBullish ? history.lowSince : history.highSince;
           } else if (currentlyBreached && didBreachZone && isLongDated) {
             const breachPct = isBullish
               ? ((invZone - history.current) / invZone) * 100
               : ((history.current - invZone) / invZone) * 100;
             if (breachPct >= 1.0) {
-              outcome = "missed";
+              outcome = (mfeToTargetM !== null && mfeToTargetM >= 30) ? "near_miss" : "missed";
               outcomePrice = isBullish ? history.lowSince : history.highSince;
             }
           }
         }
       }
 
-      if (!outcome && signal.outcome === "missed" && !isExpired && invalidationPrice && refPrice > 0) {
+      if (!outcome && signal.outcome === "missed" && !isExpired && effectiveInvM && refPrice > 0) {
         const recovered = isBullish
-          ? history.current > invalidationPrice
-          : history.current < invalidationPrice;
+          ? history.current > effectiveInvM
+          : history.current < effectiveInvM;
         if (recovered) {
           outcome = "pending_revert";
         }
@@ -3754,27 +3759,19 @@ router.post("/whale/verify-signals", async (_req, res) => {
       const isActuallyExpired = expiryPlusClose ? expiryPlusClose < now : false;
       if (!outcome && (isExpired || isActuallyExpired)) {
         if (!isActuallyExpired) {
-          // Option hasn't expired yet — don't mark expired/partial_hit
+          // not expired yet
         } else {
-          let mfePctCalc: number | null = null;
-          if (refPrice > 0 && target.low && target.high) {
-            const tgtP = isBullish ? target.low : target.high;
-            const denom = Math.abs(tgtP - refPrice);
-            if (denom > 0) {
-              const favorable = isBullish ? (history.highSince - refPrice) : (refPrice - history.lowSince);
-              mfePctCalc = (favorable / denom) * 100;
-            }
-          }
-          const mfePricePct = refPrice > 0
-            ? (isBullish ? ((history.highSince - refPrice) / refPrice) * 100 : ((refPrice - history.lowSince) / refPrice) * 100)
-            : 0;
-
-          if (mfePctCalc !== null && mfePctCalc >= 50) {
-            outcome = "partial_hit";
-          } else if (mfePricePct >= 1.0) {
-            outcome = "partial_hit";
+          if (mfeToTargetM !== null) {
+            if (mfeToTargetM >= 75) outcome = "hit";
+            else if (mfeToTargetM >= 50) outcome = "partial_hit";
+            else if (mfeToTargetM >= 30) outcome = "near_miss";
+            else outcome = "missed";
           } else {
-            outcome = "expired";
+            const mfePricePct = refPrice > 0
+              ? (isBullish ? ((history.highSince - refPrice) / refPrice) * 100 : ((refPrice - history.lowSince) / refPrice) * 100)
+              : 0;
+            if (mfePricePct >= 1.5) outcome = "partial_hit";
+            else outcome = "expired";
           }
         }
       }
@@ -3790,9 +3787,16 @@ router.post("/whale/verify-signals", async (_req, res) => {
         );
         console.log(`[verify] ${signal.ticker} ${signal.option_type} $${signal.strike}: REVERTED missed → pending (price recovered above invalidation)`);
       } else if (outcome) {
+        let newTradeStatus = "watching";
+        if (outcome === "hit") newTradeStatus = "hit";
+        else if (outcome === "partial_hit") newTradeStatus = "partial";
+        else if (outcome === "near_miss") newTradeStatus = "near_miss";
+        else if (outcome === "missed") newTradeStatus = "miss";
+        else if (outcome === "expired") newTradeStatus = "expired";
+
         const updateResult = await dbQuery(
-          `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2 WHERE id = $3`,
-          [outcome, now.toISOString(), signal.id]
+          `UPDATE signal_outcomes SET outcome = $1, resolved_at = $2, trade_status = $3 WHERE id = $4`,
+          [outcome, now.toISOString(), newTradeStatus, signal.id]
         );
 
         if (!updateResult) {
@@ -3802,6 +3806,7 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
         if (outcome === "hit") hits++;
         else if (outcome === "partial_hit") partialHits++;
+        else if (outcome === "near_miss") partialHits++;
         else if (outcome === "missed") misses++;
         else if (outcome === "expired") expired++;
 
@@ -3812,8 +3817,12 @@ router.post("/whale/verify-signals", async (_req, res) => {
       }
     }
 
+    let nearMisses = 0;
+    for (const signal of pending) {
+      if (signal.outcome === "near_miss") nearMisses++;
+    }
     const remaining = pending.length - hits - partialHits - misses - expired - updateErrors;
-    res.json({ verified: pending.length, hits, partial_hits: partialHits, misses, expired, remaining_pending: remaining, errors: updateErrors > 0 ? updateErrors : undefined });
+    res.json({ verified: pending.length, hits, partial_hits: partialHits, misses, expired, near_misses: nearMisses, remaining_pending: remaining, errors: updateErrors > 0 ? updateErrors : undefined });
   } catch (err: any) {
     console.error("Verify signals error:", err);
     res.status(500).json({ error: err.message ?? "Verification failed" });
@@ -4461,46 +4470,48 @@ async function realtimeVerifySignals() {
       let outcome: string | null = null;
       const refPrice2 = signalPrice || entryPrice || 0;
 
-      const MIN_MOVE_PCT2 = 0.005;
+      const isSpx = new Set(["SPX", "SPXW", "NDX", "QQQ"]).has(signal.ticker);
+      const ADV_MOVE_PCT = isSpx ? 0.0075 : 0.025;
 
-      if (target_val.low && target_val.high && refPrice2 > 0) {
-        // For calls: target should be above price. Use the LOWER target value as the hit threshold.
-        // For puts: target should be below price. Use the HIGHER target value as the hit threshold (closest downside target).
-        // But ONLY if the target makes directional sense (above price for calls, below price for puts)
-        if (isBullish) {
-          // Call: need price to go UP to target. Use lowest target as threshold.
-          const callTarget = Math.min(target_val.low, target_val.high);
-          const targetAbovePrice = callTarget > refPrice2 * 0.995;
-          const notAlreadyPastTarget = !signalPrice || signalPrice <= callTarget * 1.01;
-          if (targetAbovePrice && notAlreadyPastTarget && history.highSince >= callTarget) {
-            outcome = "hit";
-          }
-        } else {
-          // Put: need price to go DOWN to target. Use highest target as threshold (nearest downside target).
-          const putTarget = Math.max(target_val.low, target_val.high);
-          const targetBelowPrice = putTarget < refPrice2 * 1.005;
-          const notAlreadyPastTarget = !signalPrice || signalPrice >= putTarget * 0.99;
-          if (targetBelowPrice && notAlreadyPastTarget && history.lowSince <= putTarget) {
-            outcome = "hit";
-          }
+      let mfeToTarget: number | null = null;
+      if (refPrice2 > 0 && target_val.low && target_val.high) {
+        const tgtP = isBullish ? Math.min(target_val.low, target_val.high) : Math.max(target_val.low, target_val.high);
+        const distToTarget = Math.abs(tgtP - refPrice2);
+        if (distToTarget > 0) {
+          const favorable = isBullish ? (history.highSince - refPrice2) : (refPrice2 - history.lowSince);
+          mfeToTarget = Math.max(0, (favorable / distToTarget) * 100);
         }
       }
 
-      // Fallback: no valid targets — require at least 1.5% move in the right direction (not 0.5%)
-      const MIN_FALLBACK_PCT = 0.015;
+      if (mfeToTarget !== null) {
+        if (mfeToTarget >= 75) {
+          outcome = "hit";
+        } else if (mfeToTarget >= 50) {
+          outcome = "partial_hit";
+        }
+      }
+
       if (!outcome && refPrice2 > 0 && (!target_val.low || !target_val.high)) {
+        const MIN_FALLBACK_PCT = 0.015;
         if (isBullish && history.highSince >= refPrice2 * (1 + MIN_FALLBACK_PCT)) outcome = "hit";
         else if (!isBullish && history.lowSince <= refPrice2 * (1 - MIN_FALLBACK_PCT)) outcome = "hit";
       }
 
-      if (!outcome && canMiss && invalidationPrice && refPrice2 > 0) {
+      let effectiveInvalidation = invalidationPrice;
+      if (!effectiveInvalidation && refPrice2 > 0) {
+        effectiveInvalidation = isBullish
+          ? refPrice2 * (1 - ADV_MOVE_PCT)
+          : refPrice2 * (1 + ADV_MOVE_PCT);
+      }
+
+      if (!outcome && canMiss && effectiveInvalidation && refPrice2 > 0) {
         const INV_BUFFER_PCT = 0.0025;
         const invZone = isBullish
-          ? invalidationPrice * (1 - INV_BUFFER_PCT)
-          : invalidationPrice * (1 + INV_BUFFER_PCT);
+          ? effectiveInvalidation * (1 - INV_BUFFER_PCT)
+          : effectiveInvalidation * (1 + INV_BUFFER_PCT);
         const invMakesDirectionalSense = isBullish
-          ? invalidationPrice < refPrice2
-          : invalidationPrice > refPrice2;
+          ? effectiveInvalidation < refPrice2
+          : effectiveInvalidation > refPrice2;
         if (invMakesDirectionalSense) {
           const currentlyBreached = isBullish
             ? history.current <= invZone
@@ -4511,24 +4522,36 @@ async function realtimeVerifySignals() {
           const dteHours = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 0;
           const isLongDated = dteHours > 48;
           if (isExpired && didBreachZone) {
-            outcome = "missed";
+            if (mfeToTarget !== null && mfeToTarget >= 30) {
+              outcome = "near_miss";
+            } else {
+              outcome = "missed";
+            }
           } else if (currentlyBreached && didBreachZone && !isLongDated) {
-            outcome = "missed";
+            if (mfeToTarget !== null && mfeToTarget >= 30) {
+              outcome = "near_miss";
+            } else {
+              outcome = "missed";
+            }
           } else if (currentlyBreached && didBreachZone && isLongDated) {
             const breachPct = isBullish
               ? ((invZone - history.current) / invZone) * 100
               : ((history.current - invZone) / invZone) * 100;
             if (breachPct >= 1.0) {
-              outcome = "missed";
+              if (mfeToTarget !== null && mfeToTarget >= 30) {
+                outcome = "near_miss";
+              } else {
+                outcome = "missed";
+              }
             }
           }
         }
       }
 
-      if (!outcome && signal.outcome === "missed" && !isExpired && invalidationPrice && refPrice2 > 0) {
+      if (!outcome && signal.outcome === "missed" && !isExpired && effectiveInvalidation && refPrice2 > 0) {
         const recovered = isBullish
-          ? history.current > invalidationPrice
-          : history.current < invalidationPrice;
+          ? history.current > effectiveInvalidation
+          : history.current < effectiveInvalidation;
         if (recovered) {
           outcome = "pending_revert";
         }
@@ -4538,27 +4561,27 @@ async function realtimeVerifySignals() {
       const isActuallyExpired2 = expiryPlusClose2 ? expiryPlusClose2 < now : false;
       if (!outcome && (isExpired || isActuallyExpired2)) {
         if (!isActuallyExpired2) {
-          // Option hasn't expired yet — don't mark expired/partial_hit
+          // not expired yet
         } else {
-          let mfePctCalc2: number | null = null;
-          if (refPrice2 > 0 && target_val.low && target_val.high) {
-            const tgtP = isBullish ? target_val.low : target_val.high;
-            const denom = Math.abs(tgtP - refPrice2);
-            if (denom > 0) {
-              const favorable = isBullish ? (history.highSince - refPrice2) : (refPrice2 - history.lowSince);
-              mfePctCalc2 = (favorable / denom) * 100;
+          if (mfeToTarget !== null) {
+            if (mfeToTarget >= 75) {
+              outcome = "hit";
+            } else if (mfeToTarget >= 50) {
+              outcome = "partial_hit";
+            } else if (mfeToTarget >= 30) {
+              outcome = "near_miss";
+            } else {
+              outcome = "missed";
             }
-          }
-          const mfePricePct2 = refPrice2 > 0
-            ? (isBullish ? ((history.highSince - refPrice2) / refPrice2) * 100 : ((refPrice2 - history.lowSince) / refPrice2) * 100)
-            : 0;
-
-          if (mfePctCalc2 !== null && mfePctCalc2 >= 50) {
-            outcome = "partial_hit";
-          } else if (mfePricePct2 >= 1.0) {
-            outcome = "partial_hit";
           } else {
-            outcome = "expired";
+            const mfePricePct2 = refPrice2 > 0
+              ? (isBullish ? ((history.highSince - refPrice2) / refPrice2) * 100 : ((refPrice2 - history.lowSince) / refPrice2) * 100)
+              : 0;
+            if (mfePricePct2 >= 1.5) {
+              outcome = "partial_hit";
+            } else {
+              outcome = "expired";
+            }
           }
         }
       }
@@ -4621,7 +4644,8 @@ async function realtimeVerifySignals() {
       const hasNoLevels = (signal.entry_trigger || "").includes("Level data not available");
       if (hasNoLevels) {
         if (outcome === "hit") newStatus = "hit";
-        else if (outcome === "partial_hit") newStatus = "partial_hit";
+        else if (outcome === "partial_hit") newStatus = "partial";
+        else if (outcome === "near_miss") newStatus = "near_miss";
         else if (outcome === "missed") newStatus = "miss";
         else if (outcome === "expired") newStatus = "expired";
         else if (signal.outcome === "missed") newStatus = "miss";
@@ -4630,12 +4654,13 @@ async function realtimeVerifySignals() {
         if (prevStatus === "watching" && didReachEntry) {
           newStatus = "active";
         }
-        if (didBreachInvalidation && prevStatus !== "hit" && prevStatus !== "partial_hit" && outcome !== "hit" && outcome !== "partial_hit") {
+        if (didBreachInvalidation && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
           newStatus = "miss";
           if (!outcome) outcome = "missed";
         }
         if (outcome === "hit") newStatus = "hit";
-        else if (outcome === "partial_hit") newStatus = "partial_hit";
+        else if (outcome === "partial_hit") newStatus = "partial";
+        else if (outcome === "near_miss") newStatus = "near_miss";
         else if (outcome === "missed") newStatus = "miss";
         else if (outcome === "expired") newStatus = "expired";
       }
@@ -4676,6 +4701,7 @@ async function realtimeVerifySignals() {
         );
         if (outcome === "hit") hits++;
         else if (outcome === "partial_hit") partialHits++;
+        else if (outcome === "near_miss") partialHits++;
         else if (outcome === "missed") misses++;
         else if (outcome === "expired") expired++;
       }
@@ -4683,7 +4709,7 @@ async function realtimeVerifySignals() {
 
     if (hits + partialHits + misses + expired > 0) {
       const source = priceMonitor.isConnected() ? "real-time" : "Polygon";
-      console.log(`[auto-verify] ${source} | Verified: ${hits} hits, ${partialHits} partial, ${misses} misses, ${expired} expired`);
+      console.log(`[auto-verify] ${source} | Verified: ${hits} hits, ${partialHits} partial/near-miss, ${misses} misses, ${expired} expired`);
     }
   } catch (e: any) {
     console.error("[auto-verify] Error:", e.message);
@@ -6467,30 +6493,31 @@ router.get("/whale/trades/stats", async (req, res) => {
     const weekPending = thisWeek.filter((t: any) => !t.outcome || t.outcome === "pending").length;
     const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
 
-    const weeklyMap: Record<string, { hits: number; misses: number; pending: number; total: number; partial_hits: number }> = {};
+    const weeklyMap: Record<string, { hits: number; misses: number; pending: number; total: number; partial_hits: number; near_misses: number }> = {};
     for (const t of trades) {
       const takenAt = new Date((t as any).taken_at);
       const ws = getTradeWeekStart(takenAt);
       const key = ws.toISOString();
-      if (!weeklyMap[key]) weeklyMap[key] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0 };
+      if (!weeklyMap[key]) weeklyMap[key] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0, near_misses: 0 };
       weeklyMap[key].total++;
       const outcome = (t as any).outcome;
       if (outcome === "hit") weeklyMap[key].hits++;
       else if (outcome === "partial_hit") weeklyMap[key].partial_hits++;
+      else if (outcome === "near_miss") weeklyMap[key].near_misses++;
       else if (outcome === "missed") weeklyMap[key].misses++;
       else weeklyMap[key].pending++;
     }
 
     const currentWeekKey = sunday.toISOString();
     if (!weeklyMap[currentWeekKey]) {
-      weeklyMap[currentWeekKey] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0 };
+      weeklyMap[currentWeekKey] = { hits: 0, misses: 0, pending: 0, total: 0, partial_hits: 0, near_misses: 0 };
     }
 
     const weeklyBreakdown = Object.entries(weeklyMap)
       .map(([weekStart, data]) => {
         const ws = new Date(weekStart);
         const we = new Date(ws); we.setDate(we.getDate() + 6);
-        const resolved = data.hits + data.partial_hits + data.misses;
+        const resolved = data.hits + data.partial_hits + data.misses + data.near_misses;
         const wr = resolved > 0 ? Math.round(((data.hits + data.partial_hits) / resolved) * 100) : 0;
 
         const weekTrades = trades.filter((t: any) => {
@@ -6518,6 +6545,7 @@ router.get("/whale/trades/stats", async (req, res) => {
           total: data.total,
           hits: data.hits,
           partial_hits: data.partial_hits,
+          near_misses: data.near_misses,
           misses: data.misses,
           pending: data.pending,
           win_rate: wr,

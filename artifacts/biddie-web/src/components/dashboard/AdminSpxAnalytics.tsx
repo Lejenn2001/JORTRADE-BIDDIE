@@ -140,12 +140,13 @@ const AdminSpxAnalytics = () => {
 
   const hits = signals.filter(s => s.trade_status === "hit").length;
   const misses = signals.filter(s => s.trade_status === "miss").length;
-  const partials = signals.filter(s => s.trade_status === "partial").length;
+  const partials = signals.filter(s => ["partial", "partial_hit"].includes(s.trade_status)).length;
+  const nearMisses = signals.filter(s => s.trade_status === "near_miss").length;
   const active = signals.filter(s => s.trade_status === "active").length;
   const watching = signals.filter(s => s.trade_status === "watching").length;
   const expired = signals.filter(s => s.trade_status === "expired").length;
-  const resolved = hits + misses;
-  const winRate = resolved > 0 ? ((hits / resolved) * 100).toFixed(1) : "—";
+  const resolved = hits + partials + misses + nearMisses;
+  const winRate = resolved > 0 ? (((hits + partials) / resolved) * 100).toFixed(1) : "—";
 
   const avgConfidence = totalSignals > 0
     ? (signals.reduce((sum, s) => sum + (s.confidence || 0), 0) / totalSignals).toFixed(1)
@@ -235,17 +236,18 @@ const AdminSpxAnalytics = () => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="SPX Signals" value={totalSignals} sub={`${biddiePickCount} Biddie Picks`} color="cyan" icon={<Activity className="h-4 w-4" />} />
-        <MetricCard label="Win Rate" value={winRate === "—" ? "—" : `${winRate}%`} sub={`${hits}W / ${misses}L / ${partials}P`} color={winRate !== "—" && parseFloat(winRate) >= 60 ? "emerald" : winRate !== "—" && parseFloat(winRate) >= 40 ? "yellow" : winRate !== "—" ? "red" : "cyan"} icon={<Target className="h-4 w-4" />} />
+        <MetricCard label="Win Rate" value={winRate === "—" ? "—" : `${winRate}%`} sub={`${hits}H / ${partials}P / ${nearMisses}NM / ${misses}M`} color={winRate !== "—" && parseFloat(winRate) >= 60 ? "emerald" : winRate !== "—" && parseFloat(winRate) >= 40 ? "yellow" : winRate !== "—" ? "red" : "cyan"} icon={<Target className="h-4 w-4" />} />
         <MetricCard label="Avg Confidence" value={avgConfidence} sub="out of 10" color="violet" icon={<Flame className="h-4 w-4" />} />
         <MetricCard label="Total Premium" value={fmtK(totalPremium)} sub={`across ${totalSignals} signals`} color="blue" icon={<Zap className="h-4 w-4" />} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <StatusPill label="Watching" count={watching} icon={<Eye className="h-3 w-3" />} color="text-muted-foreground" bg="bg-muted/20" />
         <StatusPill label="Active" count={active} icon={<Zap className="h-3 w-3" />} color="text-blue-400" bg="bg-blue-500/10" />
-        <StatusPill label="Hit" count={hits} icon={<CheckCircle2 className="h-3 w-3" />} color="text-emerald-400" bg="bg-emerald-500/10" />
-        <StatusPill label="Miss" count={misses} icon={<XCircle className="h-3 w-3" />} color="text-red-400" bg="bg-red-500/10" />
-        <StatusPill label="Expired" count={expired} icon={<Clock className="h-3 w-3" />} color="text-yellow-400" bg="bg-yellow-500/10" />
+        <StatusPill label="Hit (≥75%)" count={hits} icon={<CheckCircle2 className="h-3 w-3" />} color="text-emerald-400" bg="bg-emerald-500/10" />
+        <StatusPill label="Partial (50-74%)" count={partials} icon={<CheckCircle2 className="h-3 w-3" />} color="text-blue-400" bg="bg-blue-500/10" />
+        <StatusPill label="Near Miss (30-49%)" count={nearMisses} icon={<Target className="h-3 w-3" />} color="text-orange-400" bg="bg-orange-500/10" />
+        <StatusPill label="Miss (<30%)" count={misses} icon={<XCircle className="h-3 w-3" />} color="text-red-400" bg="bg-red-500/10" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -498,12 +500,13 @@ const AdminSpxAnalytics = () => {
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                       s.trade_status === "hit" ? "bg-emerald-500/15 text-emerald-400" :
                       s.trade_status === "miss" ? "bg-red-500/15 text-red-400" :
-                      s.trade_status === "partial" ? "bg-blue-500/15 text-blue-400" :
-                      s.trade_status === "active" ? "bg-blue-500/15 text-blue-400" :
+                      ["partial", "partial_hit"].includes(s.trade_status) ? "bg-blue-500/15 text-blue-400" :
+                      s.trade_status === "near_miss" ? "bg-orange-500/15 text-orange-400" :
+                      s.trade_status === "active" ? "bg-cyan-500/15 text-cyan-400" :
                       s.trade_status === "expired" ? "bg-yellow-500/15 text-yellow-400" :
                       "bg-muted/20 text-muted-foreground"
                     }`}>
-                      {s.trade_status || "watching"}
+                      {s.trade_status === "near_miss" ? "NEAR MISS" : s.trade_status === "partial_hit" ? "PARTIAL" : (s.trade_status || "watching").toUpperCase()}
                     </span>
                     <span className="text-muted-foreground w-16 text-right">
                       {new Date(s.detected_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
