@@ -5345,12 +5345,13 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
 
     const today = fmtDate(new Date());
     const targetDate = req.body.date || today;
+
     const archiveRows = await dbQuery(
       `SELECT * FROM flow_archive WHERE ticker IN ('SPX', 'SPXW') AND flow_date = $1 ORDER BY detected_at ASC`,
       [targetDate]
     );
     const flows = archiveRows?.rows || [];
-    if (!flows.length) return res.json({ success: true, message: "No SPX flows in archive for today", processed: 0 });
+    if (!flows.length) return res.json({ success: true, message: "No SPX flows in archive for target date", processed: 0 });
 
     const existingRes = await dbQuery(
       `SELECT ticker, strike, option_type FROM signal_outcomes WHERE ticker IN ('SPX', 'SPXW') AND detected_at >= $1 AND signal_source = 'replit'`,
@@ -5358,37 +5359,149 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
     );
     const existingKeys = new Set((existingRes?.rows || []).map((r: any) => `${r.ticker}-${r.strike}-${r.option_type}`));
 
-    const spxPrice = flows[0]?.underlying_price ? parseFloat(flows[0].underlying_price) : 0;
-    const kl = await fetchKeyLevels("SPX", spxPrice).catch(() => null);
-    const candles = await fetchRecentCandles("SPX", "5min", 20).catch(() => []);
+    const fakeAlerts = flows.map((f: any) => {
+      const rawData = typeof f.raw_data === "string" ? JSON.parse(f.raw_data) : f.raw_data;
+      return {
+        ticker: f.ticker,
+        type: f.option_type,
+        strike: f.strike,
+        expiry: f.expiry,
+        underlying_price: f.underlying_price,
+        total_premium: String(f.total_premium || "0"),
+        total_ask_side_prem: rawData?.total_ask_side_prem || "0",
+        total_bid_side_prem: rawData?.total_bid_side_prem || "0",
+        volume: f.volume,
+        open_interest: f.open_interest,
+        alert_rule: f.alert_rule,
+        has_sweep: f.has_sweep,
+        has_multileg: rawData?.has_multileg || false,
+        has_floor: rawData?.has_floor || false,
+        trade_count: f.trade_count,
+        iv_end: f.iv_end,
+        next_earnings_date: rawData?.next_earnings_date || null,
+        created_at: f.detected_at,
+        ask_aggression_pct: f.ask_aggression_pct,
+      };
+    });
 
-    let gex: any = null;
-    try { gex = await fetchSpxGex(); } catch {}
+    const enriched = enrichAlerts(fakeAlerts);
 
-    const vwapCtx = getSpxVwapContext();
+    const candidates = enriched.filter((a) => {
+      if (!a.ticker || !a.expiry) return false;
+      if (a.total_premium < 25_000) return false;
+      return true;
+    });
 
-    const processed: any[] = [];
-    const skipped: string[] = [];
+    const uwPricesMap: Record<string, number> = {};
+    for (const alert of enriched) {
+      const t = (alert.ticker ?? "").toUpperCase();
+      const p = parseFloat(alert.underlying_price);
+      if (t && p > 0 && !uwPricesMap[t]) uwPricesMap[t] = p;
+    }
 
-    for (const f of flows) {
-      const strike = parseFloat(f.strike) || 0;
-      const optType = (f.option_type || "").toLowerCase() as "call" | "put";
-      const key = `${f.ticker}-${strike}-${optType}`;
+    if (uwPricesMap["SPXW"] && !uwPricesMap["SPX"]) uwPricesMap["SPX"] = uwPricesMap["SPXW"];
+    if (uwPricesMap["SPX"] && !uwPricesMap["SPXW"]) uwPricesMap["SPXW"] = uwPricesMap["SPX"];
 
-      if (existingKeys.has(key)) {
-        skipped.push(key);
-        continue;
+    const uniqueTickers = [...new Set(candidates.map((a) => a.ticker as string))];
+
+    const dataFetchPromise = (async () => {
+      const levelResults = await Promise.all(uniqueTickers.map((t) => fetchKeyLevels(t, uwPricesMap[t.toUpperCase()] ?? null).catch(() => null)));
+      const candleResults = await Promise.all(uniqueTickers.map((t) => fetchRecentCandles(t, "1m", 10).catch(() => [])));
+      const structureResults = await Promise.all(uniqueTickers.map((t) => fetchStructureCandles(t).catch(() => [])));
+      return { levelResults, candleResults, structureResults };
+    })();
+
+    const timeoutPromise = new Promise<{ levelResults: any[]; candleResults: any[]; structureResults: any[] }>((resolve) =>
+      setTimeout(() => resolve({ levelResults: uniqueTickers.map(() => null), candleResults: uniqueTickers.map(() => []), structureResults: uniqueTickers.map(() => []) }), 15000)
+    );
+
+    const { levelResults, candleResults, structureResults } = await Promise.race([dataFetchPromise, timeoutPromise]);
+
+    const keyLevels: Record<string, any> = {};
+    uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
+
+    const candleMap: Record<string, CandleBar[]> = {};
+    uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
+
+    const structureMap: Record<string, any> = {};
+    uniqueTickers.forEach((t, i) => {
+      const sCandles = structureResults[i] || [];
+      const price = uwPricesMap[t.toUpperCase()] ?? keyLevels[t]?.current_price ?? null;
+      if (sCandles.length > 0 && price) structureMap[t] = analyzeMarketStructure(sCandles, price);
+    });
+
+    const priceConfirmations: Record<string, any> = {};
+    for (const c of candidates) {
+      const ticker = c.ticker as string;
+      const kl = keyLevels[ticker];
+      const candles = candleMap[ticker] || [];
+      const strike = parseFloat(String(c.strike)) || 0;
+      const putCall = c.type === "call" ? "call" as const : "put" as const;
+
+      const confirmation = detectPriceActionConfirmation(
+        candles, strike,
+        kl?.current_price ?? null,
+        kl?.pivot_points ?? null,
+        kl?.prior_day?.high ?? null,
+        kl?.prior_day?.low ?? null,
+        putCall,
+      );
+
+      const tradeRec = generateTradeRecommendation(c, kl, confirmation);
+      const key = `${ticker}-${strike}-${c.type}`;
+      priceConfirmations[key] = { ...confirmation, trade_recommendation: tradeRec };
+    }
+
+    function scoreSignalLocal(c: any, kl: any, confirmation: any): any {
+      const ticker = c.ticker as string;
+      const strike = parseFloat(String(c.strike)) || 0;
+      const premium = c.total_premium || 0;
+      const aggression = c.ask_aggression_pct || 0;
+      const volOi = c.vol_oi_ratio || 0;
+      const hasSweep = !!c.has_sweep;
+      const optType = c.type === "call" ? "call" : "put";
+      const direction = optType === "call" ? "bullish" : "bearish";
+      const klPrice = kl?.current_price ?? null;
+      const uwPrice = parseFloat(c.underlying_price) || null;
+      const isSpx = ticker === "SPX" || ticker === "SPXW";
+      const price = isSpx ? (uwPrice ?? klPrice) : (klPrice ?? uwPrice);
+
+      if (klPrice && uwPrice && uwPrice > 0) {
+        const priceDivergence = Math.abs(klPrice - uwPrice) / uwPrice;
+        if (priceDivergence > 0.20) {
+          console.log(`[admin-spx] REJECTED ${ticker}: key levels price $${klPrice.toFixed(2)} vs UW price $${uwPrice.toFixed(2)} — ${(priceDivergence * 100).toFixed(0)}% divergence`);
+          return null;
+        }
       }
 
-      const price = parseFloat(f.underlying_price) || spxPrice;
-      const premium = parseFloat(f.total_premium) || 0;
-      const volume = parseInt(f.volume) || 0;
-      const oi = parseInt(f.open_interest) || 1;
-      const hasSweep = !!f.has_sweep;
-      const volOi = oi > 0 ? volume / oi : 0;
-      const aggression = parseFloat(f.ask_aggression_pct) || 0;
-      const direction = optType === "call" ? "bullish" : "bearish";
-      const expiry = f.expiry || null;
+      if (price && strike) {
+        const ratio = strike / price;
+        if (ratio > 3 || ratio < 0.33) return null;
+      }
+
+      if (!price) return null;
+
+      if (price && strike) {
+        const isCall = optType === "call";
+        const otmPct = isCall ? (strike - price) / price : (price - strike) / price;
+        const itmPct = isCall ? (price - strike) / price : (strike - price) / price;
+        if (otmPct > 0.15) return null;
+        if (itmPct > 0.05) {
+          console.log(`[admin-spx] REJECTED ${ticker}: $${strike} ${optType} is ${(itmPct * 100).toFixed(1)}% deep ITM at $${price.toFixed(2)}`);
+          return null;
+        }
+      }
+
+      const expiryDate = c.expiry;
+      if (expiryDate) {
+        try {
+          const expMs = new Date(expiryDate + "T16:00:00").getTime();
+          const detectedMs = new Date(c.created_at || Date.now()).getTime();
+          const daysToExpiry = (expMs - detectedMs) / (1000 * 60 * 60 * 24);
+          if (daysToExpiry > 45) return null;
+          if (daysToExpiry < -1) return null;
+        } catch {}
+      }
 
       let confidence = 5;
       if (hasSweep) confidence += 1;
@@ -5399,6 +5512,7 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
       if (premium >= 100_000) confidence += 0.5;
       if (premium >= 500_000) confidence += 0.5;
       if (premium >= 1_000_000) confidence += 0.5;
+      if (confirmation?.confirmed) confidence += 1;
 
       if (price && strike) {
         const diff = Math.abs(strike - price) / price;
@@ -5407,126 +5521,420 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
         else if (diff > 0.10) confidence -= 1;
       }
 
-      if (expiry) {
+      let daysOut = 30;
+      if (expiryDate) {
         try {
-          const daysOut = (new Date(expiry + "T16:00:00").getTime() - new Date(f.detected_at).getTime()) / (1000 * 60 * 60 * 24);
+          daysOut = (new Date(expiryDate + "T16:00:00").getTime() - new Date(c.created_at || Date.now()).getTime()) / (1000 * 60 * 60 * 24);
           if (daysOut <= 7) confidence += 0.5;
         } catch {}
       }
 
       const vwapVal = kl?.vwap ?? null;
-      if (vwapVal && price) {
-        const priceAligned = optType === "call" ? price > vwapVal : price < vwapVal;
-        if (!priceAligned) confidence -= 1;
-        else confidence += 0.5;
+      const priceAligned = (() => {
+        if (!price || !vwapVal) return null;
+        if (optType === "call") return price > vwapVal;
+        return price < vwapVal;
+      })();
+
+      const isWhaleFlow = premium >= 1_000_000 || (premium >= 500_000 && hasSweep);
+
+      if (priceAligned === false) {
+        if (isWhaleFlow) { confidence -= 0.5; } else { confidence -= 1; }
+      } else if (priceAligned === true && confirmation?.confirmed) {
+        confidence += 0.5;
       }
 
       confidence = Math.min(10, Math.round(confidence));
-      if (confidence < 4) continue;
+      if (confidence < 5) return null;
 
+      const hasMultileg = !!c.has_multileg;
       let category = "algorithm";
       if (premium >= 2_000_000) category = "whale";
       else if (premium >= 1_000_000 && (hasSweep || aggression >= 90)) category = "whale";
+      if (hasMultileg) category = "spread";
 
-      let gammaZone = "neutral";
-      let gammaDescription = "Outside major gamma influence.";
-      if (price && strike) {
-        const dist = Math.abs(price - strike) / price;
-        if (dist <= 0.02) {
-          gammaZone = "negative";
-          gammaDescription = "Negative gamma zone — market makers short options here. Moves are amplified.";
-        } else if (dist <= 0.05) {
-          gammaZone = "positive";
-          gammaDescription = "Positive gamma zone — market makers hedging stabilizes price near this level.";
-        }
-      }
-
-      if (gex && gex.currentPrice > 0) {
-        if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
-          gammaDescription = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
-          gammaZone = "positive";
-        } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
-          gammaDescription = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
-          gammaZone = "negative";
-        } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
-          gammaDescription = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone`;
-          gammaZone = "neutral";
-        } else if (gex.gammaFlip) {
-          if (strike > gex.gammaFlip) {
-            gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
-            gammaZone = "positive";
-          } else {
-            gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
-            gammaZone = "negative";
-          }
-        }
-      }
-
-      const tags: string[] = ["SPX"];
+      const tags: string[] = [];
       if (hasSweep) tags.push("Sweep");
-      if (premium >= 500_000) tags.push("Large Block");
-      if (gammaZone === "negative") tags.push("Negative Gamma");
-      if (gammaZone === "positive") tags.push("Positive Gamma");
+      tags.push(optType === "call" ? "Call Flow" : "Put Flow");
+      if (volOi >= 5) tags.push("High Volume");
+      if (price && Math.abs(strike - price) / price < 0.03) tags.push("ATM");
+      if (expiryDate === today) tags.push("0DTE");
+      if (confirmation?.confirmed) tags.push("Price Confirmed");
+      if (confirmation?.gamma_zone === "negative") tags.push("Negative Gamma");
+      if (confirmation?.gamma_zone === "positive") tags.push("Positive Gamma");
 
-      let entryTrigger = `Near $${price.toFixed(2)}`;
-      let target = `$${strike.toFixed(0)} (strike level)`;
+      const vwap = kl?.vwap ?? null;
+      const pdh = kl?.prior_day?.high ?? null;
+      const pdl = kl?.prior_day?.low ?? null;
+      const pivot = kl?.pivot_points?.pivot ?? null;
+      const r1 = kl?.pivot_points?.r1 ?? null;
+      const s1 = kl?.pivot_points?.s1 ?? null;
+
+      let entryTrigger = "";
+      let target = "";
+      let targetNear = "";
       let invalidation = "";
-      const v = vwapCtx?.vwap ?? vwapVal;
+      let keyLevel = "";
 
-      if (v && v > 0) {
-        if (direction === "bullish") {
-          if (price >= v) {
-            entryTrigger = `Above VWAP ($${v.toFixed(2)}) with price holding near $${price.toFixed(2)}`;
+      const aboveVwap = price && vwap ? price > vwap : null;
+      const psych = Math.round(strike / 10) * 10;
+      const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
+      let actNow = false;
+      let srLevel = "";
+
+      if (optType === "call") {
+        if (price) {
+          if (isWhaleFlow) {
+            entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+            actNow = true;
+          } else if (vwap) {
+            const distToVwap = Math.abs(price - vwap) / price;
+            if (distToVwap < 0.005) {
+              entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = true;
+            } else if (price > vwap) {
+              entryTrigger = `Above VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = true;
+            } else {
+              entryTrigger = `On bounce from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = false;
+            }
+          } else if (pivot) {
+            entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+            actNow = price >= pivot;
           } else {
-            entryTrigger = `Below VWAP ($${v.toFixed(2)}) — needs break above $${v.toFixed(2)} for entry`;
+            entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
+            actNow = false;
           }
-          invalidation = `Below $${v.toFixed(2)} (VWAP break invalidates bullish thesis)`;
+
+          const callTargets = [
+            vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
+            strike > price ? { level: strike, name: "Strike" } : null,
+            pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
+            r1 && r1 > price ? { level: r1, name: "R1" } : null,
+            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l);
+          callTargets.sort((a, b) => a.level - b.level);
+
+          if (callTargets.length >= 2) {
+            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
+          } else if (callTargets.length === 1) {
+            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
+          } else {
+            target = `$${(price * 1.02).toFixed(2)}`;
+            targetNear = `$${(price * 1.04).toFixed(2)}`;
+          }
+
+          const supportLevels = [
+            pdl ? { level: pdl, name: "PDL" } : null,
+            s1 ? { level: s1, name: "S1" } : null,
+            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+          supportLevels.sort((a, b) => b.level - a.level);
+          invalidation = supportLevels.length > 0
+            ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
+            : `Below $${(price * 0.98).toFixed(2)}`;
         } else {
-          if (price <= v) {
-            entryTrigger = `Below VWAP ($${v.toFixed(2)}) with price rejecting $${price.toFixed(2)}`;
-          } else {
-            entryTrigger = `Above VWAP ($${v.toFixed(2)}) — needs break below $${v.toFixed(2)} for entry`;
-          }
-          invalidation = `Above $${v.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
+          entryTrigger = `Data Not Available`;
+          target = `Data Not Available`;
+          invalidation = `Data Not Available`;
         }
-        tags.push("VWAP");
+        keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+        srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
       } else {
-        invalidation = direction === "bullish"
-          ? `Below $${(price * 0.995).toFixed(2)}`
-          : `Above $${(price * 1.005).toFixed(2)}`;
+        if (price) {
+          if (isWhaleFlow) {
+            entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+            actNow = true;
+          } else if (vwap) {
+            const distToVwap = Math.abs(price - vwap) / price;
+            if (distToVwap < 0.005) {
+              entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = true;
+            } else if (price < vwap) {
+              entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = true;
+            } else {
+              entryTrigger = `On rejection from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+              actNow = false;
+            }
+          } else if (pivot) {
+            entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+            actNow = price <= pivot;
+          } else {
+            entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
+            actNow = false;
+          }
+
+          const putTargets = [
+            vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
+            strike < price ? { level: strike, name: "Strike" } : null,
+            pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
+            s1 && s1 < price ? { level: s1, name: "S1" } : null,
+            pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l);
+          putTargets.sort((a, b) => b.level - a.level);
+
+          if (putTargets.length >= 2) {
+            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
+          } else if (putTargets.length === 1) {
+            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
+          } else {
+            target = `$${(price * 0.98).toFixed(2)}`;
+            targetNear = `$${(price * 0.96).toFixed(2)}`;
+          }
+
+          const resistanceLevels = [
+            pdh ? { level: pdh, name: "PDH" } : null,
+            r1 ? { level: r1, name: "R1" } : null,
+            pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+          ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+          resistanceLevels.sort((a, b) => a.level - b.level);
+          invalidation = resistanceLevels.length > 0
+            ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
+            : `Above $${(price * 1.02).toFixed(2)}`;
+        } else {
+          entryTrigger = `Data Not Available`;
+          target = `Data Not Available`;
+          invalidation = `Data Not Available`;
+        }
+        keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+        srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
       }
 
-      if (kl) {
-        const pivots = kl.pivotPoints || {};
-        if (direction === "bullish" && pivots.r1) {
-          target = `$${pivots.r1.toFixed(2)} (R1 resistance)`;
-        } else if (direction === "bearish" && pivots.s1) {
-          target = `$${pivots.s1.toFixed(2)} (S1 support)`;
+      if (price && target !== "Data Not Available") {
+        const targetVal = parseFloat(target.replace(/[^0-9.]/g, '')) || 0;
+        if (optType === "call" && targetVal > 0 && targetVal <= price) {
+          target = `$${(price * 1.02).toFixed(2)}`;
+          targetNear = `$${(price * 1.04).toFixed(2)}`;
+        }
+        if (optType === "put" && targetVal > 0 && targetVal >= price) {
+          target = `$${(price * 0.98).toFixed(2)}`;
+          targetNear = `$${(price * 0.96).toFixed(2)}`;
         }
       }
 
-      const reason = `SPXW $${strike} ${optType} — $${(premium / 1000).toFixed(0)}K premium, ${volume.toLocaleString()} volume. ${gammaDescription}`;
+      if (actNow) tags.push("⚡ Act Now");
 
-      await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, gamma_zone, gamma_description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), $23, $24, $25, $26, $27)`,
-        [
-          f.ticker, direction, "replit", strike, expiry, premium,
-          optType, direction, confidence, confidence,
-          category, reason, entryTrigger, target, invalidation,
-          tags, null,
-          price, kl?.nearest_resistance?.price || null, kl?.nearest_support?.price || null,
-          null, "watching",
-          f.detected_at,
-          confidence >= 8, null, gammaZone, gammaDescription
-        ]
-      );
-      existingKeys.add(key);
-      processed.push({ ticker: f.ticker, strike, optType, confidence, gammaZone, entryTrigger, target });
+      const premStr = premium >= 1_000_000 ? `$${(premium / 1_000_000).toFixed(1)}M` : `$${(premium / 1000).toFixed(0)}K`;
+      let reason = `${premStr} ${optType} ${hasSweep ? "sweep" : "flow"} at $${strike} strike with ${aggression.toFixed(0)}% ask aggression.`;
+      if (price && vwap) {
+        reason += ` Price at $${price.toFixed(2)} ${price > vwap ? "above" : "below"} VWAP ($${vwap.toFixed(2)}).`;
+      } else if (price) {
+        reason += ` Price at $${price.toFixed(2)}.`;
+      }
+      if (confirmation?.gamma_zone === "negative") reason += " Negative gamma zone — moves will be amplified.";
+      if (confirmation?.confirmed) reason += ` Price action confirmed: ${confirmation.pattern}.`;
+
+      const adjustedExpiryISO = expiryDate ? adjustExpiryForHolidays(expiryDate) : expiryDate;
+      const expiryFormatted = (() => {
+        try {
+          const d = new Date(adjustedExpiryISO + "T12:00:00");
+          return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        } catch { return adjustedExpiryISO; }
+      })();
+
+      return {
+        ticker, direction, option_type: optType, category,
+        trade: `Buy ${ticker} $${strike} ${optType === "call" ? "Call" : "Put"}`,
+        strike, expiry: expiryFormatted, premium,
+        ask_aggression_pct: aggression, vol_oi_ratio: volOi, has_sweep: hasSweep,
+        current_price: price, vwap, prior_day_high: pdh, prior_day_low: pdl,
+        pivot, r1, s1,
+        entry_trigger: entryTrigger, key_level: keyLevel, sr_level: srLevel, target, target_near: targetNear, invalidation,
+        reason, confidence, tags,
+        created_at: c.created_at || null,
+        detected_at: c.created_at || getNowEastern(),
+        price_confirmed: !!confirmation?.confirmed,
+        price_pattern: confirmation?.pattern ?? null,
+        gamma_zone: confirmation?.gamma_zone ?? "neutral",
+        gamma_description: confirmation?.gamma_description ?? null,
+        spread_details: null,
+        signal_quality: null,
+        is_hedge: false,
+      };
     }
 
-    console.log(`[admin] Processed ${processed.length} archived SPX flows, skipped ${skipped.length} dupes`);
-    res.json({ success: true, processed: processed.length, skipped: skipped.length, signals: processed });
+    const preScreened: any[] = [];
+    const seenStrikes = new Set<string>();
+    for (const c of candidates) {
+      const ticker = c.ticker as string;
+      const strike = parseFloat(String(c.strike)) || 0;
+      const optType = c.type === "call" ? "call" : "put";
+      const key = `${ticker}-${strike}-${optType}`;
+      if (existingKeys.has(key)) continue;
+      const kl = keyLevels[ticker];
+      const confirmation = priceConfirmations[`${ticker}-${strike}-${c.type}`];
+      const sig = scoreSignalLocal(c, kl, confirmation);
+      if (sig && !seenStrikes.has(key)) {
+        seenStrikes.add(key);
+        preScreened.push(sig);
+      }
+    }
+    preScreened.sort((a: any, b: any) => b.confidence - a.confidence);
+
+    let signals = preScreened;
+
+    const spxTickers = new Set(["SPX", "SPXW"]);
+    const hasSpxSignals = signals.some((s: any) => spxTickers.has(s.ticker));
+
+    if (hasSpxSignals) {
+      try {
+        const gex = await fetchSpxGex();
+        if (gex && gex.currentPrice > 0) {
+          for (const s of signals) {
+            if (!spxTickers.has(s.ticker)) continue;
+            const strike = s.strike || 0;
+            if (strike <= 0) continue;
+
+            if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
+              s.gamma_description = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
+              s.gamma_zone = "positive";
+              if (!s.tags.includes("GEX Call Wall")) s.tags.push("GEX Call Wall");
+            } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
+              s.gamma_description = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
+              s.gamma_zone = "negative";
+              if (!s.tags.includes("GEX Put Wall")) s.tags.push("GEX Put Wall");
+            } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
+              s.gamma_description = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
+              s.gamma_zone = "neutral";
+              if (!s.tags.includes("GEX Flip Zone")) s.tags.push("GEX Flip Zone");
+            } else if (gex.gammaFlip) {
+              if (strike > gex.gammaFlip) {
+                s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
+                s.gamma_zone = "positive";
+              } else {
+                s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
+                s.gamma_zone = "negative";
+              }
+            }
+          }
+          console.log(`[admin-spx] GEX enrichment applied`);
+        }
+      } catch (gexErr: any) {
+        console.warn(`[admin-spx] GEX enrichment failed:`, gexErr.message);
+      }
+
+      try {
+        await fetchSpxVwapFromPolygon();
+        const vwapCtx = getSpxVwapContext();
+        if (vwapCtx && vwapCtx.vwap && vwapCtx.currentPrice > 0) {
+          const v = vwapCtx.vwap;
+          const cp = vwapCtx.currentPrice;
+          const allSwingHighs: number[] = (vwapCtx as any).allSwingHighs || [];
+          const allSwingLows: number[] = (vwapCtx as any).allSwingLows || [];
+
+          for (const s of signals) {
+            if (!spxTickers.has(s.ticker)) continue;
+            const dir = s.direction || s.signal_type;
+            const signalPrice = s.current_price || cp;
+
+            if (dir === "bearish") {
+              if (vwapCtx.recentCross?.direction === "broke_below") {
+                if (vwapCtx.retest?.type === "retest_from_below") {
+                  s.entry_trigger = `VWAP retest from below at $${v} — rejection is your entry`;
+                  if (!s.tags.includes("VWAP Retest")) s.tags.push("VWAP Retest");
+                  s.confidence = Math.min(10, (s.confidence || 7) + 1);
+                } else {
+                  s.entry_trigger = `Broke below VWAP ($${v}) — wait for retest at $${v} then enter on rejection`;
+                  if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
+                }
+              } else if (vwapCtx.priceVsVwap === "below") {
+                s.entry_trigger = `Below VWAP ($${v}) — Near $${signalPrice}`;
+              } else {
+                s.entry_trigger = `Above VWAP ($${v}) — needs break below $${v} for entry`;
+              }
+
+              const bearTargets = allSwingLows.filter((sl: number) => sl < signalPrice).sort((a: number, b: number) => b - a);
+              if (bearTargets.length > 0) {
+                const nearest = bearTargets[0];
+                const further = bearTargets.length > 1 ? bearTargets[1] : null;
+                s.target = further ? `$${nearest} (previous swing low), then $${further}` : `$${nearest} (previous swing low)`;
+              } else if (vwapCtx.swingLow) {
+                s.target = `$${vwapCtx.swingLow} (previous swing low)`;
+              }
+              s.invalidation = `Above $${v} (VWAP reclaim invalidates bearish thesis)`;
+
+            } else if (dir === "bullish") {
+              if (vwapCtx.recentCross?.direction === "broke_above") {
+                if (vwapCtx.retest?.type === "retest_from_above") {
+                  s.entry_trigger = `VWAP retest from above at $${v} — bounce is your entry`;
+                  if (!s.tags.includes("VWAP Retest")) s.tags.push("VWAP Retest");
+                  s.confidence = Math.min(10, (s.confidence || 7) + 1);
+                } else {
+                  s.entry_trigger = `Broke above VWAP ($${v}) — wait for retest at $${v} then enter on bounce`;
+                  if (!s.tags.includes("VWAP Break")) s.tags.push("VWAP Break");
+                }
+              } else if (vwapCtx.priceVsVwap === "above") {
+                s.entry_trigger = `Above VWAP ($${v}) — Near $${signalPrice}`;
+              } else {
+                s.entry_trigger = `Below VWAP ($${v}) — needs reclaim above $${v} for entry`;
+              }
+
+              const bullTargets = allSwingHighs.filter((sh: number) => sh > signalPrice).sort((a: number, b: number) => a - b);
+              if (bullTargets.length > 0) {
+                const nearest = bullTargets[0];
+                const further = bullTargets.length > 1 ? bullTargets[1] : null;
+                s.target = further ? `$${nearest} (previous swing high), then $${further}` : `$${nearest} (previous swing high)`;
+              } else if (vwapCtx.swingHigh) {
+                s.target = `$${vwapCtx.swingHigh} (previous swing high)`;
+              }
+              s.invalidation = `Below $${v} (VWAP break invalidates bullish thesis)`;
+            }
+          }
+          console.log(`[admin-spx] VWAP enrichment: vwap=$${v}, price=$${cp}, pos=${vwapCtx.priceVsVwap}, cross=${vwapCtx.recentCross?.direction ?? 'none'}, retest=${vwapCtx.retest?.type ?? 'none'}, swHi=[${allSwingHighs.join(',')}], swLo=[${allSwingLows.join(',')}]`);
+        }
+      } catch (vwapErr: any) {
+        console.warn(`[admin-spx] VWAP enrichment failed:`, vwapErr.message);
+      }
+    }
+
+    let saved = 0;
+    for (const s of signals) {
+      try {
+        const existing = await dbQuery(
+          `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND signal_source = 'replit' AND detected_at >= $4 LIMIT 1`,
+          [s.ticker, s.strike, s.option_type, targetDate]
+        );
+        if (existing && existing.rows.length > 0) continue;
+
+        const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
+        const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate" || !s.signal_quality);
+        await dbQuery(
+          `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, gamma_zone, gamma_description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), $23, $24, $25, $26, $27)`,
+          [
+            s.ticker, s.direction, "replit", s.strike, s.expiry, s.premium,
+            s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
+            s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
+            s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
+            s.current_price || null, s.key_level || null, s.sr_level || null,
+            s.target_near || null, initialStatus,
+            targetDate, isBiddiePick, s.signal_quality || null, s.gamma_zone || null, s.gamma_description || null
+          ]
+        );
+        saved++;
+      } catch (saveErr: any) {
+        console.error(`[admin-spx] save failed for ${s.ticker} $${s.strike}:`, saveErr.message);
+      }
+    }
+
+    console.log(`[admin-spx] Done: ${signals.length} scored, ${saved} saved to DB`);
+    res.json({
+      success: true,
+      scored: signals.length,
+      saved,
+      signals: signals.map((s: any) => ({
+        ticker: s.ticker, strike: s.strike, option_type: s.option_type, direction: s.direction,
+        confidence: s.confidence, gamma_zone: s.gamma_zone, gamma_description: s.gamma_description,
+        entry_trigger: s.entry_trigger, target: s.target, invalidation: s.invalidation,
+        category: s.category, tags: s.tags,
+      })),
+    });
   } catch (e: any) {
     console.error("[admin] process-archived-spx error:", e.message);
     res.status(500).json({ error: e.message });
