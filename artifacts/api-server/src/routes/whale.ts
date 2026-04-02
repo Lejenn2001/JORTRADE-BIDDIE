@@ -3648,7 +3648,9 @@ router.post("/whale/verify-signals", async (_req, res) => {
 
       const createdAt = new Date(signal.created_at || signal.detected_at);
       const hoursAlive = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      const MIN_HOURS_BEFORE_MISS = 2;
+      const dteHoursToExpiry = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 999;
+      const isShortDated = dteHoursToExpiry <= 48;
+      const MIN_HOURS_BEFORE_MISS = isShortDated ? 0.25 : 2;
       const canMiss = hoursAlive >= MIN_HOURS_BEFORE_MISS || isExpired;
 
       let outcome: string | null = null;
@@ -4436,7 +4438,9 @@ async function realtimeVerifySignals() {
 
       const createdAt = new Date(signal.created_at || signal.detected_at);
       const hoursAlive = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      const MIN_HOURS_BEFORE_MISS = 2;
+      const dteHoursToExpiry2 = expiryDate ? (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60) : 999;
+      const isShortDated2 = dteHoursToExpiry2 <= 48;
+      const MIN_HOURS_BEFORE_MISS = isShortDated2 ? 0.25 : 2;
       const canMiss = hoursAlive >= MIN_HOURS_BEFORE_MISS || isExpired;
 
       let outcome: string | null = null;
@@ -4610,6 +4614,9 @@ async function realtimeVerifySignals() {
       } else {
         if (prevStatus === "watching" && didReachEntry) {
           newStatus = "active";
+        }
+        if (didBreachInvalidation && prevStatus !== "hit" && prevStatus !== "partial_hit" && outcome !== "hit" && outcome !== "partial_hit") {
+          newStatus = "invalidated";
         }
         if (outcome === "hit") newStatus = "hit";
         else if (outcome === "partial_hit") newStatus = "partial_hit";

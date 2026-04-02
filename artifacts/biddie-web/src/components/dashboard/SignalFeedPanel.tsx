@@ -256,7 +256,9 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                           }
                           const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
                             hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                            partial_hit: { label: "PARTIAL", desc: "Price moved in our direction but didn't fully reach the target before time ran out", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
                             miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                            invalidated: { label: "INVALIDATED", desc: "Price broke through our safety level — this signal is no longer valid", color: "text-orange-400 bg-orange-400/15", icon: <XCircle className="h-3 w-3" /> },
                             expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                             active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                             watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
