@@ -428,7 +428,7 @@ const DashboardSignals = () => {
     list.sort((a, b) => {
       const dateA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
       const dateB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return dateA - dateB;
+      return dateB - dateA;
     });
 
     return list;
@@ -439,7 +439,7 @@ const DashboardSignals = () => {
   }, [signals]);
 
   const algorithmSignals = useMemo(() => {
-    const algoOnly = filtered.filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && s.ticker !== 'SPX' && s.ticker !== 'SPXW');
+    const algoOnly = filtered.filter(s => s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread'));
     const buyNow = algoOnly.filter(s => s.timeframe === 'buy_now');
     const shortTerm = algoOnly.filter(s => s.timeframe === 'short_term' || s.timeframe === 'swing');
     return { buy_now: buyNow, short_term: shortTerm };
@@ -1433,7 +1433,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
 
-        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
+        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed line-clamp-2">
           {compactDescription(signal)}
         </p>
 

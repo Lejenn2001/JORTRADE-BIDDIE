@@ -52,8 +52,7 @@ async function fetchPolygonAggs(ticker: string, mult: number, span: string, from
   try {
     const key = POLYGON_KEY();
     if (!key) return [];
-    const polygonTicker = (ticker === "SPX" || ticker === "SPXW") ? "I:SPX" : ticker;
-    const url = POLYGON_AGGS_URL(polygonTicker, mult, span, fromDate, toDate);
+    const url = POLYGON_AGGS_URL(ticker, mult, span, fromDate, toDate);
     const res = await axios.get(url, { timeout: 8000 });
     logApiCall("polygon", "aggs");
     const bars = res.data?.results;
@@ -1914,16 +1913,13 @@ async function runSignalsPipeline() {
 
   // Pre-filter: only alerts worth scoring
   const today = new Date().toISOString().split("T")[0];
-  const allQualified = enriched.filter((a) => {
+  const candidates = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
     if (a.expiry < today) return false;
     if (a.total_premium < 25_000) return false;
     if (a.ask_aggression_pct < 50) return false;
     return true;
-  });
-  const spxQualified = allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW");
-  const nonSpxQualified = allQualified.filter((a) => a.ticker !== "SPX" && a.ticker !== "SPXW");
-  const candidates = [...nonSpxQualified.slice(0, 20), ...spxQualified];
+  }).slice(0, 20);
 
   // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
@@ -1989,7 +1985,7 @@ async function runSignalsPipeline() {
   }
 
   // ── Local scoring — no Claude call needed ──
-  function scoreSignal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null): any {
+  function scoreSignal(c: any, kl: any, confirmation: any): any {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
     const premium = c.total_premium || 0;
@@ -2102,8 +2098,6 @@ async function runSignalsPipeline() {
       confidence += 0.5;
     }
 
-    if (premium >= 200_000 && premium < 500_000) confidence += 1;
-
     confidence = Math.min(10, Math.round(confidence));
     if (confidence < 5) return null;
 
@@ -2152,12 +2146,12 @@ async function runSignalsPipeline() {
 
     const hasKeyLevels = !!(vwap || pivot || pdh || pdl || r1 || s1);
 
-    const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > 0);
-    const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p > 0);
-
     if (optType === "call") {
       if (price) {
-        if (vwap) {
+        if (isWhaleFlow) {
+          entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+          actNow = true;
+        } else if (vwap) {
           const distToVwap = Math.abs(price - vwap) / price;
           if (distToVwap < 0.005) {
             entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
@@ -2166,47 +2160,60 @@ async function runSignalsPipeline() {
             entryTrigger = `Above VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = true;
           } else {
-            entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — needs reclaim above $${vwap.toFixed(2)} for entry`;
+            entryTrigger = `On bounce from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = false;
           }
+        } else if (pivot) {
+          entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+          actNow = price >= pivot;
         } else {
           entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
           actNow = false;
         }
 
-        const bullSwings = swingHighs.filter(sh => sh > price).sort((a, b) => a - b);
-        if (bullSwings.length > 0) {
-          const nearest = bullSwings[0];
-          const further = bullSwings.length > 1 ? bullSwings[1] : null;
-          target = further ? `$${nearest.toFixed(2)} (previous swing high), then $${further.toFixed(2)}` : `$${nearest.toFixed(2)} (previous swing high)`;
-        } else if (pdh && pdh > price) {
-          target = `$${pdh.toFixed(2)} (previous day high)`;
-        } else if (r1 && r1 > price) {
-          target = `$${r1.toFixed(2)} (R1 resistance)`;
-        } else if (strike > price) {
-          target = `$${strike.toFixed(2)} (strike level)`;
+        const callTargets = [
+          vwap && vwap > price ? { level: vwap, name: "VWAP" } : null,
+          strike > price ? { level: strike, name: "Strike" } : null,
+          pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
+          r1 && r1 > price ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l);
+        callTargets.sort((a, b) => a.level - b.level);
+
+        if (callTargets.length >= 2) {
+          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+          targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
+        } else if (callTargets.length === 1) {
+          target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
+          targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
         } else {
           target = `$${(price * 1.02).toFixed(2)}`;
+          targetNear = `$${(price * 1.04).toFixed(2)}`;
         }
 
-        if (vwap) {
-          invalidation = `Below $${vwap.toFixed(2)} (VWAP break invalidates bullish thesis)`;
-        } else if (pivot && pivot < price) {
-          invalidation = `Below $${pivot.toFixed(2)} (pivot break invalidates bullish thesis)`;
-        } else {
-          invalidation = `Below $${(price * 0.98).toFixed(2)}`;
-        }
+        const supportLevels = [
+          pdl ? { level: pdl, name: "PDL" } : null,
+          s1 ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+        supportLevels.sort((a, b) => b.level - a.level);
+        invalidation = supportLevels.length > 0
+          ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
+          : `Below $${(price * 0.98).toFixed(2)}`;
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
         targetNear = "";
         invalidation = `Data Not Available`;
       }
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : "");
+      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
       if (price) {
-        if (vwap) {
+        if (isWhaleFlow) {
+          entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+          actNow = true;
+        } else if (vwap) {
           const distToVwap = Math.abs(price - vwap) / price;
           if (distToVwap < 0.005) {
             entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
@@ -2215,43 +2222,53 @@ async function runSignalsPipeline() {
             entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = true;
           } else {
-            entryTrigger = `Above VWAP ($${vwap.toFixed(2)}) — needs break below $${vwap.toFixed(2)} for entry`;
+            entryTrigger = `On rejection from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = false;
           }
+        } else if (pivot) {
+          entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
+          actNow = price <= pivot;
         } else {
           entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
           actNow = false;
         }
 
-        const bearSwings = swingLows.filter(sl => sl < price).sort((a, b) => b - a);
-        if (bearSwings.length > 0) {
-          const nearest = bearSwings[0];
-          const further = bearSwings.length > 1 ? bearSwings[1] : null;
-          target = further ? `$${nearest.toFixed(2)} (previous swing low), then $${further.toFixed(2)}` : `$${nearest.toFixed(2)} (previous swing low)`;
-        } else if (pdl && pdl < price) {
-          target = `$${pdl.toFixed(2)} (previous day low)`;
-        } else if (s1 && s1 < price) {
-          target = `$${s1.toFixed(2)} (S1 support)`;
-        } else if (strike < price) {
-          target = `$${strike.toFixed(2)} (strike level)`;
+        const putTargets = [
+          vwap && vwap < price ? { level: vwap, name: "VWAP" } : null,
+          strike < price ? { level: strike, name: "Strike" } : null,
+          pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
+          s1 && s1 < price ? { level: s1, name: "S1" } : null,
+          pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l);
+        putTargets.sort((a, b) => b.level - a.level);
+
+        if (putTargets.length >= 2) {
+          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+          targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
+        } else if (putTargets.length === 1) {
+          target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
+          targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
         } else {
           target = `$${(price * 0.98).toFixed(2)}`;
+          targetNear = `$${(price * 0.96).toFixed(2)}`;
         }
 
-        if (vwap) {
-          invalidation = `Above $${vwap.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
-        } else if (pivot && pivot > price) {
-          invalidation = `Above $${pivot.toFixed(2)} (pivot reclaim invalidates bearish thesis)`;
-        } else {
-          invalidation = `Above $${(price * 1.02).toFixed(2)}`;
-        }
+        const resistanceLevels = [
+          pdh ? { level: pdh, name: "PDH" } : null,
+          r1 ? { level: r1, name: "R1" } : null,
+          pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+        ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+        resistanceLevels.sort((a, b) => a.level - b.level);
+        invalidation = resistanceLevels.length > 0
+          ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
+          : `Above $${(price * 1.02).toFixed(2)}`;
       } else {
         entryTrigger = `Data Not Available`;
         target = `Data Not Available`;
         targetNear = "";
         invalidation = `Data Not Available`;
       }
-      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : "");
+      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
@@ -2346,9 +2363,7 @@ async function runSignalsPipeline() {
 
   // Step 1: Local pre-screen to get top candidates
   const preScreened: any[] = [];
-  const spxPreScreened: any[] = [];
   const seenTickers = new Set<string>();
-  const seenSpxStrikes = new Set<string>();
   for (const c of candidates) {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
@@ -2356,23 +2371,14 @@ async function runSignalsPipeline() {
     const key = `${ticker}-${strike}-${optType}`;
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
-    const structure = structureMap[ticker] || null;
-    const isSpx = ticker === "SPX" || ticker === "SPXW";
-    const sig = scoreSignal(c, kl, confirmation, structure);
-    if (isSpx) {
-      const spxKey = `${ticker}-${strike}-${optType}`;
-      if (sig && !seenSpxStrikes.has(spxKey)) {
-        seenSpxStrikes.add(spxKey);
-        spxPreScreened.push(sig);
-      }
-    } else if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
+    const sig = scoreSignal(c, kl, confirmation);
+    if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
     }
   }
   preScreened.sort((a, b) => b.confidence - a.confidence);
-  spxPreScreened.sort((a, b) => b.confidence - a.confidence);
-  const topCandidates = [...preScreened.slice(0, 15), ...spxPreScreened];
+  const topCandidates = preScreened.slice(0, 15);
 
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
   let signals = topCandidates;
@@ -2835,158 +2841,13 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
     }
   }
 
-  // ── GEX Enrichment for Algorithm Plays (non-SPX tickers) ──
-  // Uses the EXACT same GEX enrichment logic as SPX signals above
-  const algoSignals = signals.filter(s => s.category === "algorithm" && !spxTickers.has(s.ticker));
-  const algoTickers = [...new Set(algoSignals.map(s => s.ticker))];
-  const GEX_ELIGIBLE = new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG"]);
-  const gexTickers = algoTickers.filter(t => GEX_ELIGIBLE.has(t));
-
-  if (gexTickers.length > 0) {
-    try {
-      const gexResults = await Promise.allSettled(
-        gexTickers.map(t => fetchTickerGex(t))
-      );
-      const tickerGex: Record<string, GexLevels> = {};
-      gexTickers.forEach((t, i) => {
-        const r = gexResults[i];
-        if (r.status === "fulfilled" && r.value) tickerGex[t] = r.value;
-      });
-
-      for (const s of algoSignals) {
-        const gex = tickerGex[s.ticker];
-        if (!gex || !gex.currentPrice) continue;
-
-        const price = s.current_price || gex.currentPrice;
-        const strike = s.strike || 0;
-        if (strike <= 0) continue;
-
-        // GEX zone detection — exact same logic as SPX block above
-        if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
-          s.gamma_description = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
-          s.gamma_zone = "positive";
-          if (!s.tags.includes("GEX Call Wall")) s.tags.push("GEX Call Wall");
-        } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
-          s.gamma_description = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
-          s.gamma_zone = "negative";
-          if (!s.tags.includes("GEX Put Wall")) s.tags.push("GEX Put Wall");
-        } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
-          s.gamma_description = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
-          s.gamma_zone = "neutral";
-          if (!s.tags.includes("GEX Flip Zone")) s.tags.push("GEX Flip Zone");
-        } else if (gex.gammaFlip) {
-          if (strike > gex.gammaFlip) {
-            s.gamma_description = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
-            s.gamma_zone = "positive";
-          } else {
-            s.gamma_description = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
-            s.gamma_zone = "negative";
-          }
-        }
-
-        // Confidence adjustment — same logic as SPX
-        if (gex.gammaFlip) {
-          const inNegGamma = price < gex.gammaFlip;
-          const inPosGamma = price > gex.gammaFlip;
-          const optType = s.option_type;
-
-          if ((optType === "call" || optType === "put") && inNegGamma) {
-            s.confidence = Math.min(10, (s.confidence || 5) + 1);
-            if (!s.tags.includes("GEX Boost")) s.tags.push("GEX Boost");
-          } else if (optType === "call" && inPosGamma && gex.callWall) {
-            const distToCallWall = (gex.callWall.price - price) / price;
-            if (distToCallWall < 0.01 && distToCallWall >= 0) {
-              s.confidence = Math.max(5, (s.confidence || 5) - 1);
-              if (!s.tags.includes("Near Call Wall")) s.tags.push("Near Call Wall");
-            }
-          } else if (optType === "put" && inPosGamma) {
-            s.confidence = Math.max(5, (s.confidence || 5) - 1);
-            if (!s.tags.includes("GEX Headwind")) s.tags.push("GEX Headwind");
-          }
-        }
-
-        if (!s.tags.includes("Negative Gamma") && !s.tags.includes("Positive Gamma")) {
-          if (s.gamma_zone === "negative") s.tags.push("Negative Gamma");
-          if (s.gamma_zone === "positive") s.tags.push("Positive Gamma");
-        }
-      }
-
-      // Recalculate biddie pick status after GEX confidence adjustments
-      for (const s of algoSignals) {
-        if (tickerGex[s.ticker]) {
-          const wasNotPick = !s.is_biddie_pick;
-          const newIsBiddie = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
-          if (wasNotPick && newIsBiddie) {
-            s.is_biddie_pick = true;
-          }
-        }
-      }
-
-      console.log(`[signals] GEX enrichment applied to ${algoSignals.length} algorithm plays across ${Object.keys(tickerGex).length} tickers: ${Object.keys(tickerGex).join(', ')}`);
-    } catch (gexErr: any) {
-      console.warn(`[signals] Algorithm GEX enrichment failed:`, gexErr.message);
-    }
-  }
-
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
-
-  let dbActiveSignals: any[] = [];
-  try {
-    const dbResult = await dbQuery(
-      `SELECT *, id as db_id FROM signal_outcomes 
-       WHERE signal_source = 'replit' 
-       AND trade_status IN ('active', 'watching') 
-       AND (outcome IS NULL OR outcome = 'pending')
-       AND detected_at > NOW() - INTERVAL '24 hours'
-       ORDER BY detected_at DESC LIMIT 30`
-    );
-    if (dbResult && dbResult.rows) {
-      const freshIds = new Set(biddiePicks.map((s: any) => `${s.ticker}-${s.strike}-${s.option_type}-${s.expiry}`));
-      dbActiveSignals = dbResult.rows
-        .filter((r: any) => !freshIds.has(`${r.ticker}-${r.strike}-${r.option_type}-${r.expiry}`))
-        .map((r: any) => ({
-          id: `replit-${r.ticker}-${r.strike || ''}-${r.option_type || ''}-${r.expiry || ''}`.replace(/\s/g, ''),
-          db_id: r.db_id,
-          ticker: r.ticker,
-          direction: r.direction,
-          option_type: r.option_type,
-          strike: r.strike,
-          expiry: r.expiry,
-          premium: r.premium,
-          confidence: r.confidence,
-          conviction_score: r.conviction_score,
-          category: r.category,
-          reason: r.reason,
-          entry_trigger: r.entry_trigger,
-          target: r.target,
-          invalidation: r.invalidation,
-          tags: r.tags || [],
-          spread_details: r.spread_details ? (typeof r.spread_details === 'string' ? JSON.parse(r.spread_details) : r.spread_details) : null,
-          current_price: r.price_at_signal,
-          key_level: r.key_level,
-          sr_level: r.sr_level,
-          target_near: r.target_near,
-          trade_status: r.trade_status,
-          is_biddie_pick: r.is_biddie_pick,
-          signal_quality: r.signal_quality,
-          algo_version: r.algo_version,
-          detected_at: r.detected_at,
-          signal_type: r.signal_type,
-        }));
-      console.log(`[signals] merged ${dbActiveSignals.length} active DB signals with ${biddiePicks.length} fresh picks`);
-    }
-  } catch (dbErr: any) {
-    console.warn("[signals] DB active signal merge failed:", dbErr.message);
-  }
-
-  const allDisplaySignals = [...biddiePicks, ...dbActiveSignals].slice(0, 30);
-  const responseData = { signals: allDisplaySignals, count: allDisplaySignals.length, signalCount: signals.length, timestamp: now };
+  const responseData = { signals: biddiePicks.slice(0, 20), count: Math.min(biddiePicks.length, 20), signalCount: signals.length, timestamp: now };
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
-  const batchSavedKeys = new Set<string>();
   for (const s of signals.slice(0, 20)) {
     try {
       let fixedExpiry = s.expiry || "";
@@ -3007,28 +2868,24 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         }
       }
 
-      const batchKey = `${s.ticker}|${s.strike || 0}|${s.option_type || ''}|${fixedExpiry}|${s.direction || ''}`;
-      if (batchSavedKeys.has(batchKey)) continue;
-
       const existing = await dbQuery(
         `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
         [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
       if (existing && existing.rows.length > 0) continue;
-      batchSavedKeys.add(batchKey);
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
       const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
       await dbQuery(
-        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, algo_version)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24, $25)`,
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW(), $23, $24)`,
         [
           s.ticker, s.direction, "replit", s.strike, fixedExpiry, s.premium,
           s.option_type, s.direction, s.confidence, Math.round(s.confidence * 10),
           s.category, s.reason, s.entry_trigger, s.target, s.invalidation,
           s.tags || [], s.spread_details ? JSON.stringify(s.spread_details) : null,
           s.current_price || null, s.key_level || null, s.sr_level || null,
-          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null, "v4"
+          s.target_near || null, initialStatus, isBiddiePick, s.signal_quality || null
         ]
       );
     } catch {}
@@ -4687,18 +4544,6 @@ function startPriceMonitorSystem() {
 
 setTimeout(startPriceMonitorSystem, 5000);
 
-setInterval(async () => {
-  if (!isMarketHours()) return;
-  if (signalsPipelineRunning) return;
-  if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) return;
-  try {
-    console.log("[signals] background scan triggered");
-    await runSignalsPipeline();
-  } catch (e: any) {
-    console.error("[signals] background scan error:", e.message);
-  }
-}, 3 * 60 * 1000);
-
 router.get("/whale/prices/realtime", (_req, res) => {
   const prices = priceMonitor.getAllPrices();
   const data: Record<string, any> = {};
@@ -5442,204 +5287,6 @@ router.post("/whale/admin/insert-test-signals", async (req, res) => {
       }
     }
     res.json({ success: true, inserted });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-router.post("/whale/admin/retroactive-gex", async (req, res) => {
-  try {
-    const { adminSecret, limit: maxSignals, allTickers } = req.body;
-    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
-    
-    const GEX_ELIGIBLE = allTickers
-      ? null
-      : new Set(["SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "GOOGL", "AMD", "NFLX", "GOOG", "MU", "MSTR", "RDDT", "SOFI", "HIMS", "GLD", "SLV", "ARM", "SNDK"]);
-    
-    const result = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE category = 'algorithm' AND ticker NOT IN ('SPX', 'SPXW') AND (gamma_zone IS NULL OR gamma_zone = '' OR gamma_zone = 'none') ORDER BY detected_at DESC LIMIT $1`,
-      [maxSignals || 30]
-    );
-    const signals = result?.rows || [];
-    console.log(`[admin] retroactive-gex: found ${signals.length} algorithm signals without GEX`);
-    
-    const eligibleSignals = GEX_ELIGIBLE ? signals.filter((s: any) => GEX_ELIGIBLE.has(s.ticker)) : signals;
-    const ineligibleSignals = GEX_ELIGIBLE ? signals.filter((s: any) => !GEX_ELIGIBLE.has(s.ticker)) : [];
-    console.log(`[admin] GEX eligible: ${eligibleSignals.length}, ineligible: ${ineligibleSignals.length}`);
-    
-    const tickers = [...new Set(eligibleSignals.map((s: any) => s.ticker))];
-    const tickerGex: Record<string, any> = {};
-    
-    for (const t of tickers) {
-      if (t === "SPXW" || t === "SPX") continue;
-      try {
-        const gex = await fetchTickerGex(t);
-        if (gex) tickerGex[t] = gex;
-      } catch (e: any) {
-        console.warn(`[admin] GEX fetch failed for ${t}:`, e.message);
-      }
-    }
-    console.log(`[admin] GEX data fetched for: ${Object.keys(tickerGex).join(', ')}`);
-    
-    let updated = 0;
-    const updates: any[] = [];
-    
-    for (const s of eligibleSignals) {
-      const gex = tickerGex[s.ticker];
-      if (!gex || !gex.currentPrice) continue;
-      
-      const price = s.price_at_signal || gex.currentPrice;
-      const optType = s.option_type;
-      let confidence = parseFloat(s.confidence) || 5;
-      let target = s.target;
-      let targetNear = s.target_near;
-      let invalidation = s.invalidation;
-      let entryTrigger = s.entry_trigger;
-      let tags: string[] = Array.isArray(s.tags) ? [...s.tags] : [];
-      let gammaZone = "";
-      let gammaDescription = "";
-      let reason = s.reason || "";
-      let isBiddiePick = s.is_biddie_pick;
-      
-      const strike = parseFloat(s.strike) || 0;
-      if (strike <= 0) continue;
-
-      // GEX zone detection — exact same logic as SPX pipeline
-      if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
-        gammaDescription = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
-        gammaZone = "positive";
-        if (!tags.includes("GEX Call Wall")) tags.push("GEX Call Wall");
-      } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
-        gammaDescription = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
-        gammaZone = "negative";
-        if (!tags.includes("GEX Put Wall")) tags.push("GEX Put Wall");
-      } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
-        gammaDescription = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone between long/short gamma`;
-        gammaZone = "neutral";
-        if (!tags.includes("GEX Flip Zone")) tags.push("GEX Flip Zone");
-      } else if (gex.gammaFlip) {
-        if (strike > gex.gammaFlip) {
-          gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
-          gammaZone = "positive";
-        } else {
-          gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
-          gammaZone = "negative";
-        }
-      }
-
-      // Confidence adjustment — same logic as SPX pipeline
-      if (gex.gammaFlip) {
-        const inNegGamma = price < gex.gammaFlip;
-        const inPosGamma = price > gex.gammaFlip;
-
-        if ((optType === "call" || optType === "put") && inNegGamma) {
-          confidence = Math.min(10, confidence + 1);
-          if (!tags.includes("GEX Boost")) tags.push("GEX Boost");
-        } else if (optType === "call" && inPosGamma && gex.callWall) {
-          const distToCallWall = (gex.callWall.price - price) / price;
-          if (distToCallWall < 0.01 && distToCallWall >= 0) {
-            confidence = Math.max(5, confidence - 1);
-            if (!tags.includes("Near Call Wall")) tags.push("Near Call Wall");
-          }
-        } else if (optType === "put" && inPosGamma) {
-          confidence = Math.max(5, confidence - 1);
-          if (!tags.includes("GEX Headwind")) tags.push("GEX Headwind");
-        }
-      }
-
-      if (!tags.includes("Negative Gamma") && !tags.includes("Positive Gamma")) {
-        if (gammaZone === "negative") tags.push("Negative Gamma");
-        if (gammaZone === "positive") tags.push("Positive Gamma");
-      }
-      
-      if (!isBiddiePick && confidence >= 8) {
-        const sq = s.signal_quality;
-        if (sq === "strong" || sq === "moderate") isBiddiePick = true;
-      }
-      
-      try {
-        await dbQuery(
-          `UPDATE signal_outcomes SET confidence = $1, target = $2, target_near = $3, invalidation = $4, entry_trigger = $5, tags = $6, gamma_zone = $7, gamma_description = $8, reason = $9, is_biddie_pick = $10 WHERE id = $11`,
-          [confidence, target, targetNear, invalidation, entryTrigger, tags, gammaZone, gammaDescription, reason, isBiddiePick, s.id]
-        );
-        updated++;
-        updates.push({ id: s.id, ticker: s.ticker, optType, confidence, gammaZone, target: target?.slice(0, 60), tags });
-      } catch (e: any) {
-        console.error(`[admin] update signal ${s.id} failed:`, e.message);
-      }
-    }
-    
-    console.log(`[admin] retroactive-gex: updated ${updated} signals`);
-    res.json({ success: true, found: signals.length, eligible: eligibleSignals.length, updated, tickerGexData: Object.keys(tickerGex), updates });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-router.get("/whale/admin/version-comparison", async (req, res) => {
-  try {
-    const result = await dbQuery(`
-      SELECT 
-        algo_version,
-        COUNT(*) as total_signals,
-        COUNT(*) FILTER (WHERE outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit') as wins,
-        COUNT(*) FILTER (WHERE outcome = 'missed' OR outcome = 'loss') as losses,
-        COUNT(*) FILTER (WHERE outcome IS NULL OR outcome = 'pending') as pending,
-        ROUND(AVG(confidence)::numeric, 1) as avg_confidence,
-        ROUND(AVG(CASE WHEN mfe_percent IS NOT NULL AND mfe_percent > 0 THEN mfe_percent END)::numeric, 2) as avg_mfe,
-        ROUND(AVG(CASE WHEN pct_past_invalidation IS NOT NULL AND pct_past_invalidation > 0 THEN pct_past_invalidation END)::numeric, 2) as avg_drawdown,
-        COUNT(*) FILTER (WHERE entry_price_reached = true) as entries_hit,
-        COUNT(*) FILTER (WHERE invalidation_breached = true) as invalidations_breached,
-        COUNT(*) FILTER (WHERE is_biddie_pick = true) as biddie_picks,
-        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'hit' OR outcome = 'win' OR outcome = 'partial_hit')) as biddie_wins,
-        COUNT(*) FILTER (WHERE is_biddie_pick = true AND (outcome = 'missed' OR outcome = 'loss')) as biddie_losses,
-        MIN(created_at) as first_signal,
-        MAX(created_at) as last_signal
-      FROM signal_outcomes
-      WHERE ticker NOT IN ('SPX', 'SPXW')
-      GROUP BY algo_version
-      ORDER BY algo_version
-    `);
-    const versions = (result?.rows || []).map((r: any) => {
-      const wins = parseInt(r.wins) || 0;
-      const losses = parseInt(r.losses) || 0;
-      const resolved = wins + losses;
-      const biddieWins = parseInt(r.biddie_wins) || 0;
-      const biddieLosses = parseInt(r.biddie_losses) || 0;
-      const biddieResolved = biddieWins + biddieLosses;
-      return {
-        version: r.algo_version || 'v2',
-        total_signals: parseInt(r.total_signals),
-        wins,
-        losses,
-        pending: parseInt(r.pending),
-        win_rate: resolved > 0 ? Math.round((wins / resolved) * 100) : null,
-        avg_confidence: parseFloat(r.avg_confidence) || null,
-        avg_mfe: parseFloat(r.avg_mfe) || null,
-        avg_drawdown: parseFloat(r.avg_drawdown) || null,
-        entries_hit: parseInt(r.entries_hit),
-        invalidations_breached: parseInt(r.invalidations_breached),
-        biddie_picks: parseInt(r.biddie_picks),
-        biddie_win_rate: biddieResolved > 0 ? Math.round((biddieWins / biddieResolved) * 100) : null,
-        first_signal: r.first_signal,
-        last_signal: r.last_signal,
-      };
-    });
-    res.json({ versions });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-router.post("/whale/admin/refresh-signals", async (req, res) => {
-  try {
-    const { adminSecret } = req.body;
-    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
-    signalsCache = null;
-    console.log("[admin] Cache cleared, forcing pipeline re-run...");
-    const data = await runSignalsPipeline();
-    const algoCount = data?.signals?.filter((s: any) => s.signal_type === "algorithm").length || 0;
-    res.json({ success: true, totalSignals: data?.signals?.length || 0, algorithmSignals: algoCount });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -6646,105 +6293,6 @@ let gexCache: GexLevels | null = null;
 let gexCacheTime = 0;
 const GEX_CACHE_TTL = 180_000;
 
-const tickerGexCache: Record<string, { data: GexLevels; time: number }> = {};
-const TICKER_GEX_TTL = 300_000;
-
-async function fetchTickerGex(ticker: string): Promise<GexLevels | null> {
-  const now = Date.now();
-  const cached = tickerGexCache[ticker];
-  if (cached && now - cached.time < TICKER_GEX_TTL) return cached.data;
-
-  try {
-    const headers = { Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}`, Accept: "application/json" };
-    const spotRes = await fetch(`${UW_BASE}/api/stock/${ticker}/spot-exposures`, { headers });
-    if (!spotRes.ok) {
-      console.warn(`[gex] ${ticker} spot-exposures failed: ${spotRes.status}`);
-      return cached?.data ?? null;
-    }
-
-    const spotJson = await spotRes.json();
-    const spotData = spotJson.data || [];
-
-    let currentPrice = 0;
-    try {
-      const polyRes = await fetch(POLYGON_SNAPSHOT_TICKER(ticker));
-      if (polyRes.ok) {
-        const polyData = await polyRes.json();
-        currentPrice = polyData?.ticker?.lastTrade?.p || polyData?.ticker?.day?.c || 0;
-      }
-    } catch {}
-
-    if (!currentPrice) {
-      try {
-        const flowRes = await fetch(`${UW_BASE}/api/stock/${ticker}/flow-recent`, { headers });
-        if (flowRes.ok) {
-          const flowJson = await flowRes.json();
-          const flowRecords = Array.isArray(flowJson) ? flowJson : flowJson.data || [];
-          currentPrice = parseFloat(flowRecords[0]?.underlying_price || "0");
-        }
-      } catch {}
-    }
-
-    const parsed = spotData
-      .map((d: any) => ({
-        price: parseFloat(d.price || "0"),
-        gexOI: parseFloat(d.gamma_per_one_percent_move_oi || "0"),
-        gexDir: parseFloat(d.gamma_per_one_percent_move_dir || "0"),
-      }))
-      .filter((d: any) => d.price > 0)
-      .sort((a: any, b: any) => a.price - b.price);
-
-    if (!parsed.length || currentPrice <= 0) return cached?.data ?? null;
-
-    let gammaFlip: number | null = null;
-    for (let i = 1; i < parsed.length; i++) {
-      if ((parsed[i - 1].gexDir <= 0 && parsed[i].gexDir > 0) ||
-          (parsed[i - 1].gexDir >= 0 && parsed[i].gexDir < 0)) {
-        const p1 = parsed[i - 1], p2 = parsed[i];
-        const ratio = Math.abs(p1.gexDir) / (Math.abs(p1.gexDir) + Math.abs(p2.gexDir));
-        gammaFlip = Math.round((p1.price + ratio * (p2.price - p1.price)) * 100) / 100;
-        break;
-      }
-    }
-
-    const above = parsed.filter((d: any) => d.price >= currentPrice);
-    const callWall = above.length
-      ? above.reduce((max: any, d: any) => d.gexOI > max.gexOI ? d : max, above[0])
-      : null;
-
-    const below = parsed.filter((d: any) => d.price < currentPrice);
-    const putWall = below.length
-      ? below.reduce((min: any, d: any) => d.gexOI < min.gexOI ? d : min, below[0])
-      : null;
-
-    const keyMagnet = parsed.reduce((max: any, d: any) =>
-      Math.abs(d.gexOI) > Math.abs(max.gexOI) ? d : max, parsed[0]);
-
-    const dealerPositioning = gammaFlip === null
-      ? "Unknown"
-      : currentPrice > gammaFlip
-      ? "Long Gamma (suppresses moves)"
-      : "Short Gamma (amplifies moves)";
-
-    const result: GexLevels = {
-      gammaFlip,
-      callWall: callWall ? { price: callWall.price, gex: callWall.gexOI } : null,
-      putWall: putWall ? { price: putWall.price, gex: putWall.gexOI } : null,
-      keyMagnet: { price: keyMagnet.price, gex: keyMagnet.gexOI },
-      dealerPositioning,
-      currentPrice,
-      updatedAt: new Date().toISOString(),
-    };
-
-    tickerGexCache[ticker] = { data: result, time: now };
-    console.log(`[gex] ${ticker} GEX updated: flip=${gammaFlip}, callWall=${callWall?.price}, putWall=${putWall?.price}, dealer=${dealerPositioning}`);
-    return result;
-  } catch (err: any) {
-    console.warn(`[gex] ${ticker} fetchTickerGex error:`, err.message);
-    return cached?.data ?? null;
-  }
-}
-
 async function fetchSpxGex(): Promise<GexLevels | null> {
   const now = Date.now();
   if (gexCache && now - gexCacheTime < GEX_CACHE_TTL) return gexCache;
@@ -6850,12 +6398,10 @@ async function fetchSpxGex(): Promise<GexLevels | null> {
 router.get("/whale/spx-signals", async (_req, res) => {
   try {
     const result = await dbQuery(
-      `SELECT DISTINCT ON (ticker, strike, option_type, expiry, direction) *
-       FROM signal_outcomes 
+      `SELECT * FROM signal_outcomes 
        WHERE ticker IN ('SPX', 'SPXW') AND signal_source = 'replit'
        AND trade_status NOT IN ('expired')
-       ORDER BY ticker, strike, option_type, expiry, direction, confidence DESC, detected_at DESC
-       LIMIT 50`
+       ORDER BY detected_at DESC LIMIT 50`
     );
     const signals = (result?.rows || []).map((r: any) => ({
       id: r.id,
