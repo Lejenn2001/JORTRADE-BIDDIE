@@ -5338,6 +5338,201 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/process-archived-spx", async (req, res) => {
+  try {
+    const { adminSecret } = req.body;
+    if (adminSecret !== "jortrade-admin-2026") return res.status(403).json({ error: "Forbidden" });
+
+    const today = fmtDate(new Date());
+    const targetDate = req.body.date || today;
+    const archiveRows = await dbQuery(
+      `SELECT * FROM flow_archive WHERE ticker IN ('SPX', 'SPXW') AND flow_date = $1 ORDER BY detected_at ASC`,
+      [targetDate]
+    );
+    const flows = archiveRows?.rows || [];
+    if (!flows.length) return res.json({ success: true, message: "No SPX flows in archive for today", processed: 0 });
+
+    const existingRes = await dbQuery(
+      `SELECT ticker, strike, option_type FROM signal_outcomes WHERE ticker IN ('SPX', 'SPXW') AND detected_at >= $1 AND signal_source = 'replit'`,
+      [targetDate]
+    );
+    const existingKeys = new Set((existingRes?.rows || []).map((r: any) => `${r.ticker}-${r.strike}-${r.option_type}`));
+
+    const spxPrice = flows[0]?.underlying_price ? parseFloat(flows[0].underlying_price) : 0;
+    const kl = await fetchKeyLevels("SPX", spxPrice).catch(() => null);
+    const candles = await fetchRecentCandles("SPX", "5min", 20).catch(() => []);
+
+    let gex: any = null;
+    try { gex = await fetchSpxGex(); } catch {}
+
+    const vwapCtx = getSpxVwapContext();
+
+    const processed: any[] = [];
+    const skipped: string[] = [];
+
+    for (const f of flows) {
+      const strike = parseFloat(f.strike) || 0;
+      const optType = (f.option_type || "").toLowerCase() as "call" | "put";
+      const key = `${f.ticker}-${strike}-${optType}`;
+
+      if (existingKeys.has(key)) {
+        skipped.push(key);
+        continue;
+      }
+
+      const price = parseFloat(f.underlying_price) || spxPrice;
+      const premium = parseFloat(f.total_premium) || 0;
+      const volume = parseInt(f.volume) || 0;
+      const oi = parseInt(f.open_interest) || 1;
+      const hasSweep = !!f.has_sweep;
+      const volOi = oi > 0 ? volume / oi : 0;
+      const aggression = parseFloat(f.ask_aggression_pct) || 0;
+      const direction = optType === "call" ? "bullish" : "bearish";
+      const expiry = f.expiry || null;
+
+      let confidence = 5;
+      if (hasSweep) confidence += 1;
+      if (aggression >= 80) confidence += 1;
+      if (aggression >= 95) confidence += 0.5;
+      if (volOi >= 2) confidence += 0.5;
+      if (volOi >= 5) confidence += 0.5;
+      if (premium >= 100_000) confidence += 0.5;
+      if (premium >= 500_000) confidence += 0.5;
+      if (premium >= 1_000_000) confidence += 0.5;
+
+      if (price && strike) {
+        const diff = Math.abs(strike - price) / price;
+        if (diff < 0.02) confidence += 1;
+        else if (diff < 0.05) confidence += 0.5;
+        else if (diff > 0.10) confidence -= 1;
+      }
+
+      if (expiry) {
+        try {
+          const daysOut = (new Date(expiry + "T16:00:00").getTime() - new Date(f.detected_at).getTime()) / (1000 * 60 * 60 * 24);
+          if (daysOut <= 7) confidence += 0.5;
+        } catch {}
+      }
+
+      const vwapVal = kl?.vwap ?? null;
+      if (vwapVal && price) {
+        const priceAligned = optType === "call" ? price > vwapVal : price < vwapVal;
+        if (!priceAligned) confidence -= 1;
+        else confidence += 0.5;
+      }
+
+      confidence = Math.min(10, Math.round(confidence));
+      if (confidence < 4) continue;
+
+      let category = "algorithm";
+      if (premium >= 2_000_000) category = "whale";
+      else if (premium >= 1_000_000 && (hasSweep || aggression >= 90)) category = "whale";
+
+      let gammaZone = "neutral";
+      let gammaDescription = "Outside major gamma influence.";
+      if (price && strike) {
+        const dist = Math.abs(price - strike) / price;
+        if (dist <= 0.02) {
+          gammaZone = "negative";
+          gammaDescription = "Negative gamma zone — market makers short options here. Moves are amplified.";
+        } else if (dist <= 0.05) {
+          gammaZone = "positive";
+          gammaDescription = "Positive gamma zone — market makers hedging stabilizes price near this level.";
+        }
+      }
+
+      if (gex && gex.currentPrice > 0) {
+        if (gex.callWall && Math.abs(strike - gex.callWall.price) / gex.callWall.price < 0.005) {
+          gammaDescription = `Near call wall at $${gex.callWall.price.toLocaleString()} — dealers sell here, strong resistance`;
+          gammaZone = "positive";
+        } else if (gex.putWall && Math.abs(strike - gex.putWall.price) / gex.putWall.price < 0.005) {
+          gammaDescription = `Near put wall at $${gex.putWall.price.toLocaleString()} — dealers buy here, strong support`;
+          gammaZone = "negative";
+        } else if (gex.gammaFlip && Math.abs(strike - gex.gammaFlip) / gex.gammaFlip < 0.005) {
+          gammaDescription = `Near gamma flip at $${gex.gammaFlip.toLocaleString()} — transition zone`;
+          gammaZone = "neutral";
+        } else if (gex.gammaFlip) {
+          if (strike > gex.gammaFlip) {
+            gammaDescription = `Above gamma flip ($${gex.gammaFlip}) — long gamma territory, moves suppressed`;
+            gammaZone = "positive";
+          } else {
+            gammaDescription = `Below gamma flip ($${gex.gammaFlip}) — short gamma territory, moves amplified`;
+            gammaZone = "negative";
+          }
+        }
+      }
+
+      const tags: string[] = ["SPX"];
+      if (hasSweep) tags.push("Sweep");
+      if (premium >= 500_000) tags.push("Large Block");
+      if (gammaZone === "negative") tags.push("Negative Gamma");
+      if (gammaZone === "positive") tags.push("Positive Gamma");
+
+      let entryTrigger = `Near $${price.toFixed(2)}`;
+      let target = `$${strike.toFixed(0)} (strike level)`;
+      let invalidation = "";
+      const v = vwapCtx?.vwap ?? vwapVal;
+
+      if (v && v > 0) {
+        if (direction === "bullish") {
+          if (price >= v) {
+            entryTrigger = `Above VWAP ($${v.toFixed(2)}) with price holding near $${price.toFixed(2)}`;
+          } else {
+            entryTrigger = `Below VWAP ($${v.toFixed(2)}) — needs break above $${v.toFixed(2)} for entry`;
+          }
+          invalidation = `Below $${v.toFixed(2)} (VWAP break invalidates bullish thesis)`;
+        } else {
+          if (price <= v) {
+            entryTrigger = `Below VWAP ($${v.toFixed(2)}) with price rejecting $${price.toFixed(2)}`;
+          } else {
+            entryTrigger = `Above VWAP ($${v.toFixed(2)}) — needs break below $${v.toFixed(2)} for entry`;
+          }
+          invalidation = `Above $${v.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
+        }
+        tags.push("VWAP");
+      } else {
+        invalidation = direction === "bullish"
+          ? `Below $${(price * 0.995).toFixed(2)}`
+          : `Above $${(price * 1.005).toFixed(2)}`;
+      }
+
+      if (kl) {
+        const pivots = kl.pivotPoints || {};
+        if (direction === "bullish" && pivots.r1) {
+          target = `$${pivots.r1.toFixed(2)} (R1 resistance)`;
+        } else if (direction === "bearish" && pivots.s1) {
+          target = `$${pivots.s1.toFixed(2)} (S1 support)`;
+        }
+      }
+
+      const reason = `SPXW $${strike} ${optType} — $${(premium / 1000).toFixed(0)}K premium, ${volume.toLocaleString()} volume. ${gammaDescription}`;
+
+      await dbQuery(
+        `INSERT INTO signal_outcomes (ticker, signal_type, signal_source, strike, expiry, premium, option_type, direction, confidence, conviction_score, category, reason, entry_trigger, target, invalidation, tags, spread_details, price_at_signal, key_level, sr_level, target_near, trade_status, status_updated_at, detected_at, is_biddie_pick, signal_quality, gamma_zone, gamma_description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), $23, $24, $25, $26, $27)`,
+        [
+          f.ticker, direction, "replit", strike, expiry, premium,
+          optType, direction, confidence, confidence,
+          category, reason, entryTrigger, target, invalidation,
+          tags, null,
+          price, kl?.nearest_resistance?.price || null, kl?.nearest_support?.price || null,
+          null, "watching",
+          f.detected_at,
+          confidence >= 8, null, gammaZone, gammaDescription
+        ]
+      );
+      existingKeys.add(key);
+      processed.push({ ticker: f.ticker, strike, optType, confidence, gammaZone, entryTrigger, target });
+    }
+
+    console.log(`[admin] Processed ${processed.length} archived SPX flows, skipped ${skipped.length} dupes`);
+    res.json({ success: true, processed: processed.length, skipped: skipped.length, signals: processed });
+  } catch (e: any) {
+    console.error("[admin] process-archived-spx error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/toggle-admin", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
