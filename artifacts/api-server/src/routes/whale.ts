@@ -2995,7 +2995,48 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
-  const responseData = { signals: biddiePicks.slice(0, 20), count: Math.min(biddiePicks.length, 20), signalCount: signals.length, timestamp: now };
+
+  let activePicks = biddiePicks;
+  try {
+    const resolvedRows = await dbQuery(
+      `SELECT ticker, COALESCE(strike, 0) as strike, COALESCE(option_type, '') as option_type, COALESCE(expiry, '') as expiry
+       FROM signal_outcomes
+       WHERE outcome IS NOT NULL AND outcome NOT IN ('pending', 'watching')
+       AND created_at > NOW() - INTERVAL '7 days'`
+    );
+    if (resolvedRows?.rows?.length) {
+      const resolvedKeys = new Set<string>();
+      for (const r of resolvedRows.rows) {
+        const tk = String(r.ticker || "").toUpperCase();
+        const st = parseFloat(String(r.strike)) || 0;
+        const ot = String(r.option_type || "").toLowerCase();
+        const exp = String(r.expiry || "");
+        let expIso = "";
+        try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
+        resolvedKeys.add(`${tk}|${st}|${ot}`);
+        if (expIso) resolvedKeys.add(`${tk}|${st}|${ot}|${expIso}`);
+      }
+      const before = activePicks.length;
+      activePicks = activePicks.filter(s => {
+        const tk = String(s.ticker || "").toUpperCase();
+        const st = parseFloat(String(s.strike)) || 0;
+        const ot = String(s.option_type || "").toLowerCase();
+        const exp = String(s.expiry || "");
+        let expIso = "";
+        try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
+        if (expIso && resolvedKeys.has(`${tk}|${st}|${ot}|${expIso}`)) return false;
+        if (!expIso && resolvedKeys.has(`${tk}|${st}|${ot}`)) return false;
+        return true;
+      });
+      if (before !== activePicks.length) {
+        console.log(`[signals] Filtered ${before - activePicks.length} resolved signals from live feed`);
+      }
+    }
+  } catch (filterErr: any) {
+    console.warn(`[signals] Resolved filter failed:`, filterErr.message);
+  }
+
+  const responseData = { signals: activePicks.slice(0, 20), count: Math.min(activePicks.length, 20), signalCount: signals.length, timestamp: now };
   signalsCache = { data: responseData, timestamp: Date.now() };
   signalsPipelineRunning = false;
 
