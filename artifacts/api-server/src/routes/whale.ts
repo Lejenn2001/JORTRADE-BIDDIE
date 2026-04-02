@@ -5497,6 +5497,26 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   }
 });
 
+router.post("/whale/admin/fix-breached-statuses", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
+
+    const result = await pool.query(
+      `UPDATE signal_outcomes SET trade_status = 'miss', outcome = 'missed', status_updated_at = NOW()
+       WHERE invalidation_breached = true AND outcome = 'pending' AND trade_status NOT IN ('miss','hit','partial_hit','expired')
+       RETURNING id, ticker, direction, category, trade_status`
+    );
+    const fixed = result.rows;
+    console.log(`[admin] fix-breached-statuses: fixed ${fixed.length} signals`);
+    res.json({ success: true, fixed: fixed.length, signals: fixed });
+  } catch (e: any) {
+    console.error("[admin] fix-breached-statuses error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/reprocess-v5", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
