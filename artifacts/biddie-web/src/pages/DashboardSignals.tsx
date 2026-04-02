@@ -453,10 +453,6 @@ const DashboardSignals = () => {
     return filtered.filter(s => s.category === 'spread');
   }, [filtered]);
 
-  const pipelineSpx = useMemo(() => {
-    return signals.filter(s => s.ticker === 'SPX' || s.ticker === 'SPXW');
-  }, [signals]);
-
   const [dbSpxSignals, setDbSpxSignals] = useState<any[]>([]);
 
   useEffect(() => {
@@ -470,18 +466,13 @@ const DashboardSignals = () => {
       } catch {}
     };
     loadSpxFromDb();
-    const interval = setInterval(loadSpxFromDb, 180_000);
+    const interval = setInterval(loadSpxFromDb, 60_000);
     return () => clearInterval(interval);
   }, []);
 
   const spxSignals = useMemo(() => {
-    const pipelineIds = new Set(pipelineSpx.map((s: any) => s.id));
-    const merged = [...pipelineSpx];
-    for (const s of dbSpxSignals) {
-      if (!pipelineIds.has(s.id)) merged.push(dbRecordToSignal(s));
-    }
-    return merged.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [pipelineSpx, dbSpxSignals]);
+    return dbSpxSignals.map(dbRecordToSignal).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [dbSpxSignals]);
 
   useEffect(() => {
     const loadGex = async () => {
