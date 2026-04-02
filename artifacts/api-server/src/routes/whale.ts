@@ -4616,7 +4616,8 @@ async function realtimeVerifySignals() {
           newStatus = "active";
         }
         if (didBreachInvalidation && prevStatus !== "hit" && prevStatus !== "partial_hit" && outcome !== "hit" && outcome !== "partial_hit") {
-          newStatus = "invalidated";
+          newStatus = "miss";
+          if (!outcome) outcome = "missed";
         }
         if (outcome === "hit") newStatus = "hit";
         else if (outcome === "partial_hit") newStatus = "partial_hit";
