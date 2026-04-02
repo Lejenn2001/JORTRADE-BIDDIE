@@ -1917,7 +1917,8 @@ async function runSignalsPipeline() {
     if (!a.ticker || !a.expiry) return false;
     if (a.expiry < today) return false;
     if (a.total_premium < 25_000) return false;
-    if (a.ask_aggression_pct < 50) return false;
+    const isSpxTicker = (a.ticker ?? "").toUpperCase() === "SPX" || (a.ticker ?? "").toUpperCase() === "SPXW";
+    if (!isSpxTicker && a.ask_aggression_pct < 50) return false;
     return true;
   }).slice(0, 20);
 
