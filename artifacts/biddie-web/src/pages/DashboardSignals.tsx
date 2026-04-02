@@ -1236,7 +1236,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
     : "border-destructive/20";
 
   const isWinner = signal.outcome === "hit" || signal.outcome === "partial_hit" || signal.outcome === "win";
-  const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
+  const isLoser = signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "near_miss";
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
   const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
