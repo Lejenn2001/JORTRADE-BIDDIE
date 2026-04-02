@@ -1412,28 +1412,21 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             })()}
             {signal.mfePercent != null && (() => {
               const isResolved = signal.outcome === "hit" || signal.outcome === "win" || signal.outcome === "partial_hit" || signal.outcome === "near_miss" || signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "expired";
-              const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const showVerdict = isResolved || isExpired;
+              const isExpiredDate = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+              const isDone = isResolved || isExpiredDate;
               return (
                 <span className="relative group inline-flex">
                   <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
                     signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
                     signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
                     signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
-                    showVerdict ? "bg-red-400/15 text-red-400" :
+                    isDone ? "bg-red-400/15 text-red-400" :
                     "bg-muted/20 text-muted-foreground"
                   }`}>
                     MFE {signal.mfePercent.toFixed(0)}%
-                    {showVerdict && (
-                      <span className="opacity-70">
-                        {signal.mfePercent >= 50 ? "WIN" :
-                         signal.mfePercent >= 30 ? "NEAR" :
-                         "LOSS"}
-                      </span>
-                    )}
                   </span>
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg max-w-[200px] text-wrap">
-                    {!showVerdict ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
+                    {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
                      signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
                      signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
                      signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
