@@ -1913,7 +1913,7 @@ async function runSignalsPipeline() {
 
   // Pre-filter: only alerts worth scoring
   const today = new Date().toISOString().split("T")[0];
-  const candidates = enriched.filter((a) => {
+  const allCandidates = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
     try {
       const expDate = new Date(a.expiry);
@@ -1923,7 +1923,44 @@ async function runSignalsPipeline() {
     const isSpxTicker = (a.ticker ?? "").toUpperCase() === "SPX" || (a.ticker ?? "").toUpperCase() === "SPXW";
     if (!isSpxTicker && a.ask_aggression_pct < 50) return false;
     return true;
-  }).slice(0, 20);
+  });
+  let freshCandidates = allCandidates;
+  try {
+    const resolvedRows = await dbQuery(
+      `SELECT ticker, COALESCE(strike, 0) as strike, COALESCE(option_type, '') as option_type, COALESCE(expiry, '') as expiry
+       FROM signal_outcomes
+       WHERE outcome IS NOT NULL AND outcome NOT IN ('pending', 'watching')
+       AND created_at > NOW() - INTERVAL '7 days'`
+    );
+    if (resolvedRows?.rows?.length) {
+      const resolvedKeys = new Set<string>();
+      for (const r of resolvedRows.rows) {
+        const tk = String(r.ticker || "").toUpperCase();
+        const st = parseFloat(String(r.strike)) || 0;
+        const ot = String(r.option_type || "").toLowerCase();
+        const exp = String(r.expiry || "");
+        let expIso = "";
+        try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
+        if (expIso) resolvedKeys.add(`${tk}|${st}|${ot}|${expIso}`);
+        else resolvedKeys.add(`${tk}|${st}|${ot}|noexp`);
+      }
+      freshCandidates = allCandidates.filter(a => {
+        const tk = String(a.ticker || "").toUpperCase();
+        const st = parseFloat(String(a.strike)) || 0;
+        const ot = String(a.option_type || "").toLowerCase();
+        const exp = String(a.expiry || "");
+        let expIso = "";
+        try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
+        if (expIso && resolvedKeys.has(`${tk}|${st}|${ot}|${expIso}`)) return false;
+        if (!expIso && resolvedKeys.has(`${tk}|${st}|${ot}|noexp`)) return false;
+        return true;
+      });
+    }
+  } catch (earlyFilterErr: any) {
+    console.warn(`[signals] Early resolved filter failed:`, earlyFilterErr.message);
+  }
+  console.log(`[signals] pre-filter: ${enriched.length} alerts → ${allCandidates.length} candidates → ${freshCandidates.length} fresh (taking top 20)`);
+  const candidates = freshCandidates.slice(0, 20);
 
   // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
@@ -2998,6 +3035,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
   console.log(`[signals] pipeline complete: ${Date.now() - t0}ms, ${signals.length} signals (deduped)`);
 
   const biddiePicks = signals.filter((s) => s.is_biddie_pick);
+  console.log(`[signals] ${biddiePicks.length}/${signals.length} are biddie picks`);
 
   let activePicks = biddiePicks;
   try {
@@ -3016,8 +3054,8 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         const exp = String(r.expiry || "");
         let expIso = "";
         try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
-        resolvedKeys.add(`${tk}|${st}|${ot}`);
         if (expIso) resolvedKeys.add(`${tk}|${st}|${ot}|${expIso}`);
+        else resolvedKeys.add(`${tk}|${st}|${ot}|noexp`);
       }
       const before = activePicks.length;
       activePicks = activePicks.filter(s => {
@@ -3028,7 +3066,7 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
         let expIso = "";
         try { const d = new Date(exp); if (!isNaN(d.getTime())) expIso = d.toISOString().slice(0, 10); } catch {}
         if (expIso && resolvedKeys.has(`${tk}|${st}|${ot}|${expIso}`)) return false;
-        if (!expIso && resolvedKeys.has(`${tk}|${st}|${ot}`)) return false;
+        if (!expIso && resolvedKeys.has(`${tk}|${st}|${ot}|noexp`)) return false;
         return true;
       });
       if (before !== activePicks.length) {
@@ -3057,7 +3095,8 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 
       if (fixedExpiry) {
         const expDate = new Date(fixedExpiry);
-        if (!isNaN(expDate.getTime()) && expDate < new Date()) {
+        const todayMidnight = new Date(new Date().toISOString().split("T")[0]);
+        if (!isNaN(expDate.getTime()) && expDate < todayMidnight) {
           console.log(`[signals] SKIPPED ${s.ticker}: ${s.option_type} $${s.strike} already expired (${fixedExpiry})`);
           continue;
         }
