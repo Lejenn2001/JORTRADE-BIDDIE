@@ -570,16 +570,20 @@ const AdminSpxAnalytics = () => {
                         }`}>
                           {s.mfe_percent.toFixed(1)}%
                         </span>
-                        <span className={`inline-flex items-center h-4 text-[9px] font-bold px-1.5 rounded-full ${
-                          s.mfe_percent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
-                          s.mfe_percent >= 50 ? "bg-blue-400/15 text-blue-400" :
-                          s.mfe_percent >= 30 ? "bg-orange-400/15 text-orange-400" :
-                          "bg-red-400/15 text-red-400"
-                        }`}>
-                          {s.mfe_percent >= 50 ? "WIN" :
-                           s.mfe_percent >= 30 ? "NEAR" :
-                           "LOSS"}
-                        </span>
+                        {(() => {
+                          const isResolved = ["hit", "miss", "partial", "partial_hit", "near_miss", "expired"].includes(s.trade_status);
+                          const isExp = s.expiry ? new Date(s.expiry) < new Date() : false;
+                          const showV = isResolved || isExp;
+                          return showV ? (
+                            <span className={`inline-flex items-center h-4 text-[9px] font-bold px-1.5 rounded-full ${
+                              s.mfe_percent >= 50 ? "bg-emerald-400/15 text-emerald-400" :
+                              s.mfe_percent >= 30 ? "bg-orange-400/15 text-orange-400" :
+                              "bg-red-400/15 text-red-400"
+                            }`}>
+                              {s.mfe_percent >= 50 ? "WIN" : s.mfe_percent >= 30 ? "NEAR" : "LOSS"}
+                            </span>
+                          ) : null;
+                        })()}
                         {s.max_favorable_price && (
                           <span className="text-muted-foreground">(best: ${fmt(s.max_favorable_price)})</span>
                         )}
