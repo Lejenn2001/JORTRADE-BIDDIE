@@ -52,7 +52,7 @@ async function fetchPolygonAggs(ticker: string, mult: number, span: string, from
   try {
     const key = POLYGON_KEY();
     if (!key) return [];
-    const polygonTicker = ticker === "SPX" ? "I:SPX" : ticker;
+    const polygonTicker = (ticker === "SPX" || ticker === "SPXW") ? "I:SPX" : ticker;
     const url = POLYGON_AGGS_URL(polygonTicker, mult, span, fromDate, toDate);
     const res = await axios.get(url, { timeout: 8000 });
     logApiCall("polygon", "aggs");
@@ -1914,13 +1914,16 @@ async function runSignalsPipeline() {
 
   // Pre-filter: only alerts worth scoring
   const today = new Date().toISOString().split("T")[0];
-  const candidates = enriched.filter((a) => {
+  const allQualified = enriched.filter((a) => {
     if (!a.ticker || !a.expiry) return false;
     if (a.expiry < today) return false;
     if (a.total_premium < 25_000) return false;
     if (a.ask_aggression_pct < 50) return false;
     return true;
-  }).slice(0, 20);
+  });
+  const spxQualified = allQualified.filter((a) => a.ticker === "SPX" || a.ticker === "SPXW");
+  const nonSpxQualified = allQualified.filter((a) => a.ticker !== "SPX" && a.ticker !== "SPXW");
+  const candidates = [...nonSpxQualified.slice(0, 20), ...spxQualified];
 
   // Extract real-time prices from UW flow data + feed SPX VWAP tracker
   const uwPricesMap: Record<string, number> = {};
@@ -2343,7 +2346,9 @@ async function runSignalsPipeline() {
 
   // Step 1: Local pre-screen to get top candidates
   const preScreened: any[] = [];
+  const spxPreScreened: any[] = [];
   const seenTickers = new Set<string>();
+  const seenSpxStrikes = new Set<string>();
   for (const c of candidates) {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
@@ -2352,14 +2357,22 @@ async function runSignalsPipeline() {
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
     const structure = structureMap[ticker] || null;
+    const isSpx = ticker === "SPX" || ticker === "SPXW";
     const sig = scoreSignal(c, kl, confirmation, structure);
-    if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
+    if (isSpx) {
+      const spxKey = `${ticker}-${strike}-${optType}`;
+      if (sig && !seenSpxStrikes.has(spxKey)) {
+        seenSpxStrikes.add(spxKey);
+        spxPreScreened.push(sig);
+      }
+    } else if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
     }
   }
   preScreened.sort((a, b) => b.confidence - a.confidence);
-  const topCandidates = preScreened.slice(0, 15);
+  spxPreScreened.sort((a, b) => b.confidence - a.confidence);
+  const topCandidates = [...preScreened.slice(0, 15), ...spxPreScreened];
 
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
   let signals = topCandidates;
