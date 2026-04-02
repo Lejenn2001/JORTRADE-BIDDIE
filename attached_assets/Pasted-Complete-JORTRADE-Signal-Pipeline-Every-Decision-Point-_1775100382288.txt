@@ -1,0 +1,387 @@
+Complete JORTRADE Signal Pipeline — Every Decision Point
+STAGE 1: Data Ingestion
+Source: Unusual Whales API — fetches 500 latest flow alerts every ~5 minutes during market hours
+Enrichment (applied to all raw alerts):
+Parse: ticker, strike, expiry, option type (call/put)
+Calculate: total premium, ask-side premium, bid-side premium
+Calculate: ask_aggression_pct = (ask premium / total premium) × 100
+Calculate: vol_oi_ratio = volume / open interest
+Flags: has_sweep, has_multileg
+________________________________________
+STAGE 2: Pre-Filter (the gate)
+All alerts must pass these to become candidates:
+Filter
+Rule
+Source
+Valid ticker
+Must have a ticker symbol
+UW
+Valid expiry
+Must have expiry, can't be in the past
+UW
+Premium
+≥ $25,000
+UW
+Ask aggression
+≥ 50% — except SPX/SPXW skip this (UW doesn't provide it for index options)
+UW
+Candidate cap
+Top 20 taken
+—
+________________________________________
+STAGE 3: Polygon Data Fetch (parallel for all candidate tickers)
+Per ticker, three Polygon calls happen simultaneously:
+fetchKeyLevels(ticker) — Polygon stocks data:
+Daily bars (last 7 days) → prior day high/low/close/open, today's open/high/low
+5-min intraday bars (today) → VWAP calculation: cumulative (H+L+C)/3 × volume / total volume
+Pivot points calculated: Pivot = (PDH + PDL + PDC) / 3, R1 = 2×Pivot - PDL, S1 = 2×Pivot - PDH
+Current price priority: Polygon WebSocket price → UW underlying_price → Polygon snapshot → last intraday bar close → prior day close
+fetchRecentCandles(ticker, "1m", 10) — 1-minute bars for price action confirmation
+fetchStructureCandles(ticker) — 15-minute bars over 5 days for ICT/SMC structure analysis
+Finds swing highs/lows (3-bar pivot detection)
+NOTE: These swing levels are used for Claude's ICT analysis but NOT for target generation on algo/whale signals
+________________________________________
+STAGE 4: Price Action Confirmation
+Function: detectPriceActionConfirmation() — uses 1-minute candles
+Gamma Zone (based on strike distance from current price):
+Distance
+Zone
+Meaning
+≤ 2% from strike
+Negative gamma
+Moves amplified, acceleration zone
+2-5% from strike
+Positive gamma
+Moves suppressed, mean-reversion/pinning
+> 5% from strike
+Neutral
+Directional flow driven, no dealer influence
+Candle Pattern Detection (last 5 bars):
+For calls: looks for Support Tag + 2 green bars at key level (higher low + higher high = confirmed)
+For puts: looks for Resistance Tag + 2 red bars at key level (lower high + lower low = confirmed)
+Key levels checked: PDH, PDL, R1, R2, S1, S2, Pivot, Strike price
+________________________________________
+STAGE 5: Hard Filters (reject bad signals)
+Filter
+Rule
+What it catches
+Price divergence
+Polygon price vs UW price differ > 20%
+Bad/stale data
+Strike/price ratio
+Must be 0.33x – 3x
+Nonsense strikes
+No live price
+Must have a current price from somewhere
+Can't set entry levels
+Deep OTM
+Strike > 15% out of the money
+Low probability plays
+Deep ITM
+Strike > 5% in the money
+Likely institutional hedges
+Far expiry
+> 45 days out
+Not actionable short-term
+________________________________________
+STAGE 6: Confidence Scoring (algorithmic, before Claude)
+Base score: 5
+Factor
+Bonus/Penalty
+Source
+Has sweep
++1
+UW
+Aggression ≥ 80%
++1
+UW
+Aggression ≥ 95%
++0.5
+UW
+Vol/OI ≥ 2
++0.5
+UW
+Vol/OI ≥ 5
++0.5
+UW
+Premium ≥ $100K
++0.5
+UW
+Premium ≥ $500K
++0.5
+UW
+Premium ≥ $1M
++0.5
+UW
+Price confirmed (candle pattern)
++1
+Polygon 1m bars
+ATM (< 2% from strike)
++1
+Polygon price
+Near ATM (2-5% from strike)
++0.5
+Polygon price
+Far OTM (> 10% from strike)
+-1
+Polygon price
+Expiry ≤ 7 days
++0.5
+UW
+Price aligned with VWAP (calls above, puts below)
+—
+Polygon VWAP
+Price NOT aligned + whale flow
+-0.5
+Polygon VWAP
+Price NOT aligned + regular flow
+-1.0
+Polygon VWAP
+Price aligned + confirmed pattern
++0.5
+Both
+Minimum score to survive: 5 (anything below is dropped)
+________________________________________
+STAGE 7: Category Assignment
+Category
+Rule
+Algorithm
+Default — everything that passes filters
+Whale
+Premium ≥ $2M, OR premium ≥ $1M AND (has sweep OR aggression ≥ 90%)
+Spread
+has_multileg = true from UW (overrides both algo and whale)
+________________________________________
+STAGE 8: Tag Assignment
+Tag
+Condition
+Sweep
+has_sweep = true
+Call Flow / Put Flow
+Always applied
+High Volume
+Vol/OI ≥ 5
+ATM
+Strike within 3% of current price
+0DTE
+Expiry = today
+Price Confirmed
+Candle pattern detected
+Negative Gamma
+Gamma zone = negative
+Positive Gamma
+Gamma zone = positive
+________________________________________
+STAGE 9: Entry Trigger Generation (Algo & Whale — from Polygon stock data)
+For CALLS:
+Condition
+Entry Text
+Act Now?
+Whale flow (≥$1M or $500K+sweep)
+Whale sweep at $[price]
+Yes
+Price at VWAP (within 0.5%)
+At VWAP ($X) — Near $Y
+Yes
+Price above VWAP
+Above VWAP ($X) — Near $Y
+Yes
+Price below VWAP
+On bounce from VWAP ($X) — Near $Y
+No (wait)
+No VWAP, has pivot
+Near Pivot ($X) — $Y
+Yes if price ≥ pivot
+No VWAP, no pivot
+Near $Y (no VWAP data)
+No
+For PUTS: (mirror logic — below VWAP = act now, above = wait)
+Condition
+Entry Text
+Act Now?
+Whale flow
+Whale sweep at $[price]
+Yes
+Price at VWAP (within 0.5%)
+At VWAP ($X) — Near $Y
+Yes
+Price below VWAP
+Below VWAP ($X) — Near $Y
+Yes
+Price above VWAP
+On rejection from VWAP ($X) — Near $Y
+No (wait)
+No VWAP, has pivot
+Near Pivot ($X) — $Y
+Yes if price ≤ pivot
+No VWAP, no pivot
+Near $Y (no VWAP data)
+No
+________________________________________
+STAGE 10: Target Generation (Algo & Whale — NOT using swing data)
+For CALLS — picks nearest level ABOVE current price:
+Priority list (sorted by distance, takes closest 2):
+VWAP (if above price)
+Strike price (if above price)
+Prior Day High (PDH)
+R1 (first pivot resistance)
+Pivot (if above price)
+For PUTS — picks nearest level BELOW current price:
+Priority list (sorted by distance, takes closest 2):
+VWAP (if below price)
+Strike price (if below price)
+Prior Day Low (PDL)
+S1 (first pivot support)
+Pivot (if below price)
+Fallback (no levels qualify): flat +2% / -2% from current price
+Safety check: If target is in wrong direction (call target ≤ price, or put target ≥ price), reset to ±2%
+⚠️ THIS IS THE WEAKNESS — No Polygon swing highs/lows used here. Hit rates: Strike=30%, Pivot=37.5%, Swing=86%
+________________________________________
+STAGE 11: Invalidation Generation (Algo & Whale)
+For CALLS — nearest support level BELOW current price:
+PDL (prior day low)
+S1 (first pivot support)
+Pivot (if below price)
+Fallback: -2% from current price
+For PUTS — nearest resistance level ABOVE current price:
+PDH (prior day high)
+R1 (first pivot resistance)
+Pivot (if above price)
+Fallback: +2% from current price
+________________________________________
+STAGE 12: Claude AI Evaluation (ICT/SMC analysis)
+Top 15 candidates (sorted by confidence) are sent to Claude claude-sonnet-4-6 with:
+All signal data (premium, aggression, strike, entry, category)
+1-minute candle trend description
+Full ICT/SMC market structure from fetchStructureCandles:
+Multi-day trend (uptrend/downtrend/ranging)
+Premium/Discount zone (is price above or below equilibrium)
+Break of Structure (BOS) — trend continuation
+Change of Character (CHoCH) — trend reversal
+Fair Value Gaps (FVGs) — unfilled price imbalances
+Inversed FVGs (IFVGs) — violated gaps that flipped meaning
+Order Blocks — last opposing candle before impulse
+Liquidity Levels — equal highs/lows where stops rest
+Claude scores each signal:
+Score
+Criteria
+8-10
+Trend-aligned + Discount/Premium zone correct + multiple ICT confluences (BOS + FVG + OB)
+5-8
+Valid reversal (CHoCH confirmed) or FVG play with some confluence
+3-5
+Counter-trend without structure, or likely hedge
+Claude returns per signal:
+is_hedge: true/false
+adjusted_confidence: 1-10
+signal_quality: "strong" / "moderate" / "weak" / "hedge"
+recommended_category: can override algo→whale or vice versa
+Post-Claude filter: Must have is_hedge = false AND confidence ≥ 6 to survive
+________________________________________
+STAGE 13: Biddie Picks ⭐ Selection
+All three must be true:
+Claude says is_hedge = false
+Claude adjusted_confidence ≥ 8
+Claude signal_quality = "strong" or "moderate"
+Only Biddie Picks are returned by the main /api/whale/signals endpoint — this is what shows on the dashboard. The signals page has its own expanded view.
+________________________________________
+STAGE 14: Spread Generation (Claude AI)
+Top 6 signals with confidence ≥ 7 are sent to Claude for spread analysis:
+Claude decides if a spread makes more sense than outright options
+Must have risk/reward ≥ 1:1.5
+Max 2 spread suggestions per pipeline run
+Spread overrides the parent signal's category to "spread"
+________________________________________
+STAGE 15: SPX-Only Enrichment (on top of everything above)
+Only applies to signals where ticker = SPX or SPXW
+15a. GEX Enrichment (Polygon options chain data):
+Fetches full SPX options chain from Polygon
+Computes: gamma flip, call wall, put wall, magnet level, dealer positioning
+Condition
+Tag
+Zone
+Strike near call wall (within 0.5%)
+"GEX Call Wall"
+Positive — strong resistance
+Strike near put wall (within 0.5%)
+"GEX Put Wall"
+Negative — strong support
+Strike near gamma flip (within 0.5%)
+"GEX Flip Zone"
+Neutral — transition
+Strike above gamma flip
+—
+Positive — moves suppressed
+Strike below gamma flip
+—
+Negative — moves amplified
+15b. VWAP Enrichment (Polygon I:SPX index data):
+Fetches 5-minute bars from I:SPX (no volume weighting — indices have zero volume)
+VWAP = cumulative (H+L+C)/3
+5-bar pivot swing detection for highs and lows
+SPX Entry (overrides Stage 9):
+Condition
+Entry
+Bonus
+Broke above VWAP + retest from above
+VWAP retest from above — bounce is your entry
++1 confidence, "VWAP Retest" tag
+Broke above VWAP
+Broke above VWAP — wait for retest then enter on bounce
+"VWAP Break" tag
+Above VWAP
+Above VWAP ($X) — Near $Y
+—
+Below VWAP (calls)
+Below VWAP — needs reclaim above $X for entry
+—
+Broke below VWAP + retest from below
+VWAP retest from below — rejection is your entry
++1 confidence, "VWAP Retest" tag
+Broke below VWAP
+Broke below VWAP — wait for retest then enter on rejection
+"VWAP Break" tag
+Below VWAP (puts)
+Below VWAP ($X) — Near $Y
+—
+Above VWAP (puts)
+Above VWAP — needs break below $X for entry
+—
+SPX Target (overrides Stage 10) — USES POLYGON SWING DATA:
+Bullish: Nearest swing high above current price from I:SPX bars, plus next swing high
+Bearish: Nearest swing low below current price from I:SPX bars, plus next swing low
+Fallback: VWAP context swing high/low
+SPX Invalidation (overrides Stage 11):
+Bullish: Below $VWAP (VWAP break invalidates bullish thesis)
+Bearish: Above $VWAP (VWAP reclaim invalidates bearish thesis)
+________________________________________
+STAGE 16: Deduplication & Save
+Dedup key: ticker | category | strike | option_type — same combo won't save twice
+Signals sorted by confidence (highest first)
+Saved to signal_outcomes table with all fields
+________________________________________
+THE GAP (what's missing)
+Area
+SPX Tab
+Algo & Whale Tabs
+Current price
+UW price (preferred) or Polygon
+Polygon price (preferred) or UW
+VWAP
+Polygon I:SPX (H+L+C)/3, no volume
+Polygon stock bars, volume-weighted
+Swing targets
+✅ Polygon I:SPX swing highs/lows
+❌ Uses Strike/Pivot/PDH/R1 instead
+GEX
+✅ Full options chain GEX
+❌ Only basic gamma zone from strike distance
+Invalidation
+VWAP-based
+PDL/S1/Pivot-based
+ICT/SMC
+✅ Via Claude
+✅ Via Claude (same)
+Target hit rate
+86% (swing-based)
+30-37% (strike/pivot fallback)

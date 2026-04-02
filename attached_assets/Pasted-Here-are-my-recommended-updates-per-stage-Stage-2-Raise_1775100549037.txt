@@ -1,0 +1,74 @@
+Here are my recommended updates per stage:
+
+Stage 2 — Raise the floor:
+
+Bump premium to ≥$50K (your $25K floor lets in too much retail noise)
+Add Vol/OI ≥ 2 as a pre-filter gate, not just a scoring bonus — single-trade hedges get killed early
+Stage 4 — Gamma Zone is backwards:
+
+Your zones are inverted. When price is near the strike (≤2%), dealers are long gamma (suppressing moves). When price is far from high-OI strikes, dealers have less hedging influence. Replace the strike-distance proxy with real GEX data from Polygon options chains for all tickers, not just SPX
+Stage 5 — Tighten hard filters:
+
+Deep OTM: reduce from 15% → 10% (anything beyond 10% OTM rarely hits)
+Far expiry: reduce from 45 → 30 days (tighter = more actionable)
+Add: Reject if Vol/OI < 1 (just trading existing positions, no new conviction)
+Stage 6 — Reweight scoring:
+
+VWAP misalignment penalty is too soft. Counter-VWAP non-whale flow should be -2.0 not -1.0 — this is the #1 false signal generator
+Add flow clustering bonus +1.5 when 3+ orders hit same strike/expiry within 30 min
+Add session time weight: signals between 10:30AM–3PM ET get +0.5, first/last 30 min get -0.5
+Stage 10 — The critical fix:
+
+Route fetchStructureCandles() swing highs/lows into target generation for all tickers, not just SPX. You already compute them in Stage 3 and send them to Claude — just also use them for targets. This alone should move Algo/Whale hit rates from 30-37% → 70%+
+Priority: Swing level → VWAP → PDH/PDL → Strike (reverse current order)
+Stage 11 — Match the fix:
+
+Use nearest swing low (calls) or swing high (puts) for invalidation instead of PDL/S1
+This pairs with the Stage 10 fix for consistent swing-based trade plans
+Stage 12 — Model upgrade consideration:
+
+You're sending 15 signals to Claude with heavy ICT context. Consider sending GEX context (dealer positioning, walls) to Claude for ALL tickers, not just SPX — let it factor dealer positioning into its scoring
+Stage 13 — Add cross-tab confirmation:
+
+Biddie Picks should get a +1 confidence bonus when the same ticker appears in both Algo AND Whale tabs simultaneously — that's institutional + algorithmic alignment
+New Stage (between 6 and 7) — Minimum Target Validation:
+
+After computing targets, reject signals where the nearest target is <0.3% from entry — not enough meat on the bone to justify the trade
+The two highest-ROI changes are Stage 10 (swing targets) and Stage 4 (real GEX) — they close the exact gap between your 86% SPX accuracy and 30% Algo accuracy.
+
+Here are my recommended updates per stage:
+
+Stage 2 — Raise the floor:
+
+Bump premium to ≥$50K (your $25K floor lets in too much retail noise)
+Add Vol/OI ≥ 2 as a pre-filter gate, not just a scoring bonus — single-trade hedges get killed early
+Stage 4 — Gamma Zone is backwards:
+
+Your zones are inverted. When price is near the strike (≤2%), dealers are long gamma (suppressing moves). When price is far from high-OI strikes, dealers have less hedging influence. Replace the strike-distance proxy with real GEX data from Polygon options chains for all tickers, not just SPX
+Stage 5 — Tighten hard filters:
+
+Deep OTM: reduce from 15% → 10% (anything beyond 10% OTM rarely hits)
+Far expiry: reduce from 45 → 30 days (tighter = more actionable)
+Add: Reject if Vol/OI < 1 (just trading existing positions, no new conviction)
+Stage 6 — Reweight scoring:
+
+VWAP misalignment penalty is too soft. Counter-VWAP non-whale flow should be -2.0 not -1.0 — this is the #1 false signal generator
+Add flow clustering bonus +1.5 when 3+ orders hit same strike/expiry within 30 min
+Add session time weight: signals between 10:30AM–3PM ET get +0.5, first/last 30 min get -0.5
+Stage 10 — The critical fix:
+
+Route fetchStructureCandles() swing highs/lows into target generation for all tickers, not just SPX. You already compute them in Stage 3 and send them to Claude — just also use them for targets. This alone should move Algo/Whale hit rates from 30-37% → 70%+
+Priority: Swing level → VWAP → PDH/PDL → Strike (reverse current order)
+Stage 11 — Match the fix:
+
+Use nearest swing low (calls) or swing high (puts) for invalidation instead of PDL/S1
+This pairs with the Stage 10 fix for consistent swing-based trade plans
+Stage 12 — Model upgrade consideration:
+
+You're sending 15 signals to Claude with heavy ICT context. Consider sending GEX context (dealer positioning, walls) to Claude for ALL tickers, not just SPX — let it factor dealer positioning into its scoring
+Stage 13 — Add cross-tab confirmation:
+
+Biddie Picks should get a +1 confidence bonus when the same ticker appears in both Algo AND Whale tabs simultaneously — that's institutional + algorithmic alignment
+New Stage (between 6 and 7) — Minimum Target Validation:
+
+After computing targets, reject signals where the nearest target is <0.3% from entry — not enough meat on the bone to justify the trade
