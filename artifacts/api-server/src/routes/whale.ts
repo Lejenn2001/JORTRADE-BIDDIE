@@ -3181,7 +3181,7 @@ setInterval(async () => {
   } catch (e: any) {
     console.error("[signals] scheduled refresh failed:", e.message);
   }
-}, 5 * 60 * 1000);
+}, 3 * 60 * 1000);
 
 router.get("/whale/analyze/:ticker", async (req, res) => {
   const ticker = (req.params.ticker || "").toUpperCase().replace(/[^A-Z]/g, "");
@@ -7742,7 +7742,7 @@ async function processLiveSpxSignals() {
   }
 }
 
-setInterval(processLiveSpxSignals, 5 * 60 * 1000);
+setInterval(processLiveSpxSignals, 3 * 60 * 1000);
 setTimeout(processLiveSpxSignals, 10_000);
 
 router.get("/whale/flow-archive", async (req, res) => {
