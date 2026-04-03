@@ -136,13 +136,15 @@ const AdminSpxAnalytics = () => {
 
   const resolveStatus = (s: SpxSignal): string => {
     let ts = s.trade_status || "watching";
-    if (ts === "watching" || ts === "active") {
-      const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
-      const mfe = s.mfe_percent ?? 0;
-      if (isExpired && mfe >= 75) ts = "hit";
-      else if (isExpired && mfe >= 50) ts = "partial";
-      else if (isExpired && mfe >= 30) ts = "near_miss";
-      else if (isExpired) ts = "miss";
+    const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+    const mfe = s.mfe_percent ?? 0;
+    if (isExpired && mfe >= 50) {
+      if (mfe >= 75) ts = "hit";
+      else ts = "partial";
+    } else if (isExpired && mfe >= 30) {
+      ts = "near_miss";
+    } else if (isExpired && mfe < 30) {
+      ts = "miss";
     }
     return ts;
   };

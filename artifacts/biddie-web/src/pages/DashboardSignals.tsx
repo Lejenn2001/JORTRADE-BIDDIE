@@ -1379,18 +1379,20 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             {(() => {
               let ts = signal.tradeStatus || "watching";
               const o = signal.outcome;
+              const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+              const mfe = signal.mfePercent ?? 0;
               if (o === "hit" || o === "win") ts = "hit";
               else if (o === "partial_hit") ts = "partial_hit";
               else if (o === "near_miss") ts = "near_miss";
               else if (o === "missed" || o === "loss") ts = "miss";
               else if (o === "expired") ts = "expired";
-              else if (ts === "watching" || ts === "active") {
-                const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-                const mfe = signal.mfePercent ?? 0;
-                if (isExpired && mfe >= 75) ts = "hit";
-                else if (isExpired && mfe >= 50) ts = "partial_hit";
-                else if (isExpired && mfe >= 30) ts = "near_miss";
-                else if (isExpired) ts = "miss";
+              if (isExpired && mfe >= 50) {
+                if (mfe >= 75) ts = "hit";
+                else ts = "partial_hit";
+              } else if (isExpired && !o && mfe >= 30) {
+                ts = "near_miss";
+              } else if (isExpired && !o && mfe < 30) {
+                ts = "miss";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
                 hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
