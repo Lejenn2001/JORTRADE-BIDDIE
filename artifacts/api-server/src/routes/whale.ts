@@ -1994,6 +1994,27 @@ async function runSignalsPipeline() {
   const candleMap: Record<string, CandleBar[]> = {};
   uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
 
+  const hasSpx = uniqueTickers.some(t => t === "SPX" || t === "SPXW");
+  if (hasSpx && POLYGON_KEY()) {
+    try {
+      const idxRes = await fetch(`https://api.polygon.io/v3/snapshot?ticker.any_of=I:SPX&apiKey=${POLYGON_KEY()}`, { signal: AbortSignal.timeout(5000) });
+      if (idxRes.ok) {
+        const idxJson = await idxRes.json();
+        const idxResult = idxJson.results?.[0];
+        if (idxResult?.value) {
+          const spxPrice = idxResult.value;
+          console.log(`[signals] Polygon I:SPX index price: $${spxPrice.toFixed(2)}`);
+          for (const t of ["SPX", "SPXW"]) {
+            if (!keyLevels[t]) keyLevels[t] = {};
+            keyLevels[t].current_price = spxPrice;
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[signals] Polygon I:SPX fetch failed:`, err.message);
+    }
+  }
+
   const structureMap: Record<string, MarketStructure> = {};
   uniqueTickers.forEach((t, i) => {
     const sCandles = structureResults[i] || [];
@@ -5984,6 +6005,23 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
     const keyLevels: Record<string, any> = {};
     uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
 
+    if (POLYGON_KEY()) {
+      try {
+        const idxRes = await fetch(`https://api.polygon.io/v3/snapshot?ticker.any_of=I:SPX&apiKey=${POLYGON_KEY()}`, { signal: AbortSignal.timeout(5000) });
+        if (idxRes.ok) {
+          const idxJson = await idxRes.json();
+          const idxResult = idxJson.results?.[0];
+          if (idxResult?.value) {
+            console.log(`[admin-spx] Polygon I:SPX index price: $${idxResult.value.toFixed(2)}`);
+            for (const t of ["SPX", "SPXW"]) {
+              if (!keyLevels[t]) keyLevels[t] = {};
+              keyLevels[t].current_price = idxResult.value;
+            }
+          }
+        }
+      } catch {}
+    }
+
     const candleMap: Record<string, CandleBar[]> = {};
     uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
 
@@ -7486,6 +7524,23 @@ async function processLiveSpxSignals() {
 
     const keyLevels: Record<string, any> = {};
     uniqueTickers.forEach((t, i) => { if (levelResults[i]) keyLevels[t] = levelResults[i]; });
+
+    if (POLYGON_KEY()) {
+      try {
+        const idxRes = await fetch(`https://api.polygon.io/v3/snapshot?ticker.any_of=I:SPX&apiKey=${POLYGON_KEY()}`, { signal: AbortSignal.timeout(5000) });
+        if (idxRes.ok) {
+          const idxJson = await idxRes.json();
+          const idxResult = idxJson.results?.[0];
+          if (idxResult?.value) {
+            console.log(`[admin-spx] Polygon I:SPX index price: $${idxResult.value.toFixed(2)}`);
+            for (const t of ["SPX", "SPXW"]) {
+              if (!keyLevels[t]) keyLevels[t] = {};
+              keyLevels[t].current_price = idxResult.value;
+            }
+          }
+        }
+      } catch {}
+    }
 
     const candleMap: Record<string, CandleBar[]> = {};
     uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
