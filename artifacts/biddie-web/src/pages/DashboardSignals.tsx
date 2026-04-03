@@ -404,16 +404,15 @@ const DashboardSignals = () => {
   const filtered = useMemo(() => {
     let list = [...signals];
 
-    if (!showResolved) {
-      const now = Date.now();
+    if (showResolved) {
       list = list.filter((s) => {
         const o = s.outcome;
-        if (!o || o === "pending") return true;
-        if (s.resolvedAt) {
-          const resolvedTime = new Date(s.resolvedAt).getTime();
-          if (now - resolvedTime < 300_000) return true;
-        }
-        return false;
+        return o && o !== "pending";
+      });
+    } else {
+      list = list.filter((s) => {
+        const o = s.outcome;
+        return !o || o === "pending";
       });
     }
 
