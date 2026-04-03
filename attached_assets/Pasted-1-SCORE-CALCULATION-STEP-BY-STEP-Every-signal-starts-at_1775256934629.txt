@@ -1,0 +1,125 @@
+1. SCORE CALCULATION — STEP BY STEP
+Every signal starts at 5 points, then gets bonuses or penalties:
+
+Bonuses (adding points)
+Condition	Points	Line
+Has a sweep order	+1	2116
+Ask aggression ≥ 80%	+1	2117
+Ask aggression ≥ 95%	+0.5 more	2118
+Volume/OI ratio ≥ 2	+0.5	2119
+Volume/OI ratio ≥ 5	+0.5 more	2120
+Premium ≥ $100K	+0.5	2121
+Premium ≥ $500K	+0.5 more	2122
+Premium ≥ $1M	+0.5 more	2123
+Price action confirmed by chart	+1	2124
+Strike within 2% of price (ATM)	+1	2129
+Strike within 5% of price	+0.5	2130
+Expiry within 7 days	+0.5	2139
+Price aligned with VWAP AND chart confirmed	+0.5	2159–2161
+Max possible score: 5 + 1 + 1 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5 + 0.5 + 1 + 1 + 0.5 + 0.5 = ~12.5 (capped at 10)
+
+Penalties (subtracting points)
+Condition	Points	Line
+Strike more than 10% from price	−1	2131
+Price against VWAP (regular flow)	−1	2157
+Price against VWAP (whale-sized flow)	−0.5	2155
+Minimum to survive: After bonuses and penalties, the score is rounded and must be at least 5 or the signal is killed (line 2164).
+
+2. IMMEDIATE REJECTION — HARD FILTERS
+These run before any scoring. If any one fails, the signal is instantly thrown out:
+
+Filter	Rule	Line
+Price divergence	Key levels price vs UW price differ by >20%	2067–2073
+Bad strike	Strike is >3x or <0.33x the current price	2076–2082
+No price	No live price from any source	2085–2088
+Deep OTM	Strike is more than 15% out of the money	2095
+Deep ITM	Strike is more than 5% in the money	2096–2099
+Far expiry	More than 45 days to expiration	2109
+Expired	Expiry date already passed	2110
+Low score	Final score below 5 after all bonuses/penalties	2164
+3. MOST AGGRESSIVE RULES (KILLING THE MOST SIGNALS)
+In order from most lethal to least:
+
+Deep ITM > 5% — This kills a LOT of legitimate institutional flow. Big money often buys ITM options for higher delta. The code assumes ITM = hedge, but that's not always true.
+
+No live price — If Polygon WebSocket is down AND UW has no price AND Polygon snapshot fails, the signal is dead. Nothing can save it.
+
+Deep OTM > 15% — Reasonable for stocks, but for SPX (which trades at ~5,600), 15% OTM = ~$840 away. This filter is actually very generous for SPX but could kill legitimate lottery plays on smaller stocks.
+
+Score below 5 — A basic signal (no sweep, low aggression, no confirmation, against VWAP) can easily land at 5 − 1 = 4 and get filtered.
+
+Ask aggression < 50% — This one happens even earlier (line 1924 in pre-filter), before scoring starts. It kills any flow where the buyer wasn't paying above the ask price. Note: SPX/SPXW are exempt from this filter.
+
+4. HOW VWAP IS USED IN SCORING
+VWAP affects scoring in one place (lines 2144–2161):
+
+The code asks: "Is price on the right side of VWAP for this trade?"
+
+Call signal: Price should be above VWAP (bullish momentum)
+Put signal: Price should be below VWAP (bearish momentum)
+Three outcomes:
+
+Situation	Effect
+Price aligned with VWAP (calls above, puts below) + chart confirmed	+0.5
+Price aligned with VWAP but no chart confirmation	No change (0)
+Price against VWAP (calls below, puts above) — regular flow	−1
+Price against VWAP — whale flow ($1M+ or $500K+ sweep)	−0.5 (smaller penalty)
+5. WHERE REVERSAL TRADES GET PENALIZED
+This is the biggest weakness for reversals. Two places:
+
+Penalty 1: VWAP alignment (line 2153–2158)
+A classic reversal call (buying calls when price is below VWAP, betting on a bounce) gets −1 point. That's a huge penalty when you start at 5.
+
+Example: Stock dumps to $95, VWAP is $100, someone buys aggressive calls betting on a bounce. The score starts at 5, gets −1 for "price below VWAP on a call" = 4. Dead. Filtered out at line 2164.
+
+Whale-sized reversals ($500K+ sweep or $1M+) only get −0.5, so they have a better chance of surviving.
+
+Penalty 2: Price action confirmation (line 2124)
+The detectPriceActionConfirmation() function checks if the chart already confirms the direction. Reversals by definition happen before the chart confirms — the whole point is to catch the turn early. So reversal plays almost never get the +1 confirmation bonus.
+
+Net effect on reversals:
+A reversal call with good flow (sweep + 80% aggression + $100K premium) would score:
+
+Start: 5
+Sweep: +1 = 6
+Aggression: +1 = 7
+Premium: +0.5 = 7.5
+VWAP penalty: −1 = 6.5 → rounds to 7
+It survives, but barely. A weaker reversal (no sweep, 70% aggression) could easily score 5 − 1 = 4 and die.
+
+6. SPX PRICE SOURCE DURING SCORING
+For SPX/SPXW, the price used during scoring is set at line 2062:
+
+SPX/SPXW: price = uwPrice ?? klPrice
+This means:
+
+First choice: Unusual Whales underlying_price from the flow alert
+Fallback: Key levels price (which for SPX is actually the Polygon I:SPX index snapshot — set at line 2005–2009)
+So for SPX, scoring typically uses the UW price, with the Polygon index price as backup.
+
+7. WHICH VWAP DOES SPX SCORING USE?
+During scoreSignal(), the VWAP comes from line 2184:
+
+const vwap = kl?.vwap ?? null;
+This is the normal key levels VWAP — calculated from Polygon 5-minute bars inside fetchKeyLevels(). It is NOT the separate SPX VWAP tracker system.
+
+The separate SPX VWAP tracker (spxVwapState / getSpxVwapContext()) is used later — at lines 2952–3017, after scoring is complete, to overwrite the entry triggers and targets. But it does NOT affect the score calculation itself.
+
+So there's a disconnect:
+
+Scoring uses the basic key levels VWAP (one-time calculation)
+Entry triggers use the live SPX VWAP tracker (updates every 60 seconds with cross/retest detection)
+A signal could get penalized in scoring for being "against VWAP" using the basic VWAP, but then get a bullish entry trigger from the live VWAP tracker if a cross happened recently.
+
+8. SCORING vs. POLYGON OPTIONS ENRICHMENT — TIMING
+The order is:
+
+scoreSignal() runs (lines 2454–2472) — uses klPrice or uwPrice
+Polygon options enrichment runs (lines 2474–2545) — can replace sig.current_price if Polygon's price differs >0.5%
+Claude evaluation runs (lines 2547+) — sees the potentially updated price
+The price swap happens AFTER scoring. This means:
+
+The confidence score (5–10) was calculated using the old price
+The entry triggers and targets were calculated using the old price
+But Claude sees the new (Polygon) price
+If the Polygon options price is significantly different from what scoring used, the entry/target/invalidation levels could be slightly off because they were calculated with a different price. The score itself is never recalculated.
