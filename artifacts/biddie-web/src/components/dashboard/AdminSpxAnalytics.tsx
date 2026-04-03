@@ -134,56 +134,70 @@ const AdminSpxAnalytics = () => {
     return `$${n.toFixed(0)}`;
   };
 
-  const totalSignals = signals.length;
-  const biddiePickCount = signals.filter(s => s.is_biddie_pick).length;
-  const bullish = signals.filter(s => s.direction === "bullish").length;
-  const bearish = signals.filter(s => s.direction === "bearish").length;
+  const resolveStatus = (s: SpxSignal): string => {
+    let ts = s.trade_status || "watching";
+    if (ts === "watching" || ts === "active") {
+      const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+      const mfe = s.mfe_percent ?? 0;
+      if (isExpired && mfe >= 75) ts = "hit";
+      else if (isExpired && mfe >= 50) ts = "partial";
+      else if (isExpired && mfe >= 30) ts = "near_miss";
+      else if (isExpired) ts = "miss";
+    }
+    return ts;
+  };
+
+  const resolved_signals = signals.map(s => ({ ...s, trade_status: resolveStatus(s) }));
+  const totalSignals = resolved_signals.length;
+  const biddiePickCount = resolved_signals.filter(s => s.is_biddie_pick).length;
+  const bullish = resolved_signals.filter(s => s.direction === "bullish").length;
+  const bearish = resolved_signals.filter(s => s.direction === "bearish").length;
   const neutral = totalSignals - bullish - bearish;
 
-  const hits = signals.filter(s => s.trade_status === "hit").length;
-  const misses = signals.filter(s => s.trade_status === "miss").length;
-  const partials = signals.filter(s => ["partial", "partial_hit"].includes(s.trade_status)).length;
-  const nearMisses = signals.filter(s => s.trade_status === "near_miss").length;
-  const active = signals.filter(s => s.trade_status === "active").length;
-  const watching = signals.filter(s => s.trade_status === "watching").length;
-  const expired = signals.filter(s => s.trade_status === "expired").length;
+  const hits = resolved_signals.filter(s => s.trade_status === "hit").length;
+  const misses = resolved_signals.filter(s => s.trade_status === "miss").length;
+  const partials = resolved_signals.filter(s => ["partial", "partial_hit"].includes(s.trade_status)).length;
+  const nearMisses = resolved_signals.filter(s => s.trade_status === "near_miss").length;
+  const active = resolved_signals.filter(s => s.trade_status === "active").length;
+  const watching = resolved_signals.filter(s => s.trade_status === "watching").length;
+  const expired = resolved_signals.filter(s => s.trade_status === "expired").length;
   const resolved = hits + partials + misses + nearMisses;
   const winRate = resolved > 0 ? (((hits + partials) / resolved) * 100).toFixed(1) : "—";
 
   const avgConfidence = totalSignals > 0
-    ? (signals.reduce((sum, s) => sum + (s.confidence || 0), 0) / totalSignals).toFixed(1)
+    ? (resolved_signals.reduce((sum, s) => sum + (s.confidence || 0), 0) / totalSignals).toFixed(1)
     : "—";
 
-  const totalPremium = signals.reduce((sum, s) => sum + (s.premium || 0), 0);
+  const totalPremium = resolved_signals.reduce((sum, s) => sum + (s.premium || 0), 0);
 
   const byCategory: Record<string, SpxSignal[]> = {};
-  signals.forEach(s => {
+  resolved_signals.forEach(s => {
     const cat = s.category || "unknown";
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(s);
   });
 
   const byOptionType: Record<string, number> = {};
-  signals.forEach(s => {
+  resolved_signals.forEach(s => {
     const ot = s.option_type || "unknown";
     byOptionType[ot] = (byOptionType[ot] || 0) + 1;
   });
 
   const gammaZones: Record<string, number> = {};
-  signals.forEach(s => {
+  resolved_signals.forEach(s => {
     if (s.gamma_zone) {
       gammaZones[s.gamma_zone] = (gammaZones[s.gamma_zone] || 0) + 1;
     }
   });
 
   const byExpiry: Record<string, number> = {};
-  signals.forEach(s => {
+  resolved_signals.forEach(s => {
     const exp = s.expiry || "unknown";
     byExpiry[exp] = (byExpiry[exp] || 0) + 1;
   });
 
   const byQuality: Record<string, number> = {};
-  signals.forEach(s => {
+  resolved_signals.forEach(s => {
     const q = s.signal_quality || "standard";
     byQuality[q] = (byQuality[q] || 0) + 1;
   });
