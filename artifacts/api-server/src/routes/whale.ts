@@ -7370,8 +7370,61 @@ function getSpxVwapContext(): SpxVwapState | null {
   return spxVwapState;
 }
 
+let spxMultiDaySwings: { highs: number[]; lows: number[]; updatedAt: string } | null = null;
+
+async function fetchSpxMultiDaySwings(): Promise<void> {
+  try {
+    const apiKey = process.env["POLYGON_API_KEY"] ?? "";
+    if (!apiKey) return;
+
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 10);
+    const startStr = start.toISOString().slice(0, 10);
+    const endStr = end.toISOString().slice(0, 10);
+
+    const url = `https://api.polygon.io/v2/aggs/ticker/I:SPX/range/15/minute/${startStr}/${endStr}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[spx-swings] Polygon multi-day fetch failed: ${res.status}`);
+      return;
+    }
+    const json = await res.json() as any;
+    const bars: { h: number; l: number; c: number }[] = json.results || [];
+    if (bars.length < 10) return;
+
+    const highs = bars.map(b => b.h);
+    const lows = bars.map(b => b.l);
+    const swingHighs: number[] = [];
+    const swingLows: number[] = [];
+
+    for (let i = 3; i < highs.length - 3; i++) {
+      if (highs[i] > highs[i-1] && highs[i] > highs[i-2] && highs[i] > highs[i-3] &&
+          highs[i] > highs[i+1] && highs[i] > highs[i+2] && highs[i] > highs[i+3]) {
+        swingHighs.push(Math.round(highs[i] * 100) / 100);
+      }
+      if (lows[i] < lows[i-1] && lows[i] < lows[i-2] && lows[i] < lows[i-3] &&
+          lows[i] < lows[i+1] && lows[i] < lows[i+2] && lows[i] < lows[i+3]) {
+        swingLows.push(Math.round(lows[i] * 100) / 100);
+      }
+    }
+
+    const uniqueHighs = [...new Set(swingHighs)].sort((a, b) => a - b);
+    const uniqueLows = [...new Set(swingLows)].sort((a, b) => b - a);
+
+    spxMultiDaySwings = { highs: uniqueHighs, lows: uniqueLows, updatedAt: new Date().toISOString() };
+    console.log(`[spx-swings] Multi-day swings: ${uniqueHighs.length} highs, ${uniqueLows.length} lows (10d of 15m bars, ${bars.length} candles)`);
+    if (uniqueHighs.length > 0) console.log(`[spx-swings] Swing highs: ${uniqueHighs.slice(-5).join(', ')}`);
+    if (uniqueLows.length > 0) console.log(`[spx-swings] Swing lows: ${uniqueLows.slice(0, 5).join(', ')}`);
+  } catch (err: any) {
+    console.warn(`[spx-swings] Error:`, err.message);
+  }
+}
+
 setInterval(fetchSpxVwapFromPolygon, 60_000);
 fetchSpxVwapFromPolygon();
+setInterval(fetchSpxMultiDaySwings, 5 * 60_000);
+fetchSpxMultiDaySwings();
 
 // ── Daily Flow Archiver (post-close only) ───────────────────────────────────
 let flowArchiveRanToday = false;
