@@ -1,0 +1,80 @@
+Here's the complete price source map for whale.ts:
+
+YOUR 4 PRICE SOURCES
+#	Source	What it is	How it connects
+1	Polygon WebSocket	Real-time stock price stream	Runs constantly via priceMonitor, updates every few seconds
+2	Polygon REST API	On-demand candle bars, snapshots, index prices	Called when needed (aggs, snapshot, I:SPX)
+3	Unusual Whales	underlying_price field on each flow alert	Comes with the options flow data
+4	Database	price_at_signal saved when signal was created	Used for verification after the fact
+WHERE EACH SOURCE IS USED
+Current Price — fetchKeyLevels() (Lines 283–301)
+This is the main price function used across the system. It tries sources in this order:
+
+Priority	Source	Line
+1st	Polygon WebSocket (priceMonitor.getPrice)	283–286
+2nd	Unusual Whales (uwPrice parameter)	289–291
+3rd	Polygon REST Snapshot (fetchPolygonSnapshot)	293–295
+4th	Last Polygon intraday bar close	296–298
+5th	Previous day's close	299–301
+Result stored as: keyLevels[ticker].current_price
+
+VWAP — Two Separate Systems
+Regular tickers (all stocks): (Lines 271–280)
+
+Source: Polygon REST — fetches today's 5-minute bars, calculates VWAP using (high + low + close) / 3 × volume
+Lives inside fetchKeyLevels(), returned as keyLevels[ticker].vwap
+SPX only: (Lines 7276–7398)
+
+Source: Polygon REST — fetches I:SPX 5-minute bars, calculates VWAP the same way
+Also detects VWAP crosses (broke above/below) and retests
+Finds swing highs and swing lows from the bars
+Updates every 60 seconds via setInterval
+Lives in its own state object (spxVwapState)
+Signal Scoring — scoreSignal() (Lines 2059–2062)
+Chooses price based on ticker type:
+
+Ticker	Priority	Line
+SPX/SPXW	Unusual Whales first, then key levels	uwPrice ?? klPrice
+Everything else	Key levels first, then Unusual Whales	klPrice ?? uwPrice
+Why the difference? Polygon doesn't have a direct ticker for SPX options — it uses I:SPX as an index. The key levels fetch can be unreliable for SPX, so UW price is preferred.
+
+Bad data check (Lines 2067–2073): If the two sources disagree by more than 20%, the signal is rejected entirely.
+
+Polygon Options Enrichment (Lines 2527–2534)
+Source: Polygon REST — options contract snapshot
+Gets underlying_price from the options contract data
+Replaces the current price if it differs from UW by more than 0.5%
+This is the one place where a price gets swapped after scoring:
+
+If Polygon options price ≠ UW price by >0.5% → use Polygon
+Entry Triggers (Lines 2211–2310)
+Uses: current price (from scoring) + VWAP (from key levels)
+Compares price vs VWAP to decide: "Act Now", "Wait for bounce", "Wait for rejection"
+For SPX specifically (Lines 2952–3017): uses the SPX VWAP tracker which has cross/retest detection
+SPX Index Price (Lines 1998–2016)
+Source: Polygon REST — I:SPX index snapshot
+Fetched only if SPX/SPXW signals exist in the batch
+Overwrites keyLevels["SPX"].current_price and keyLevels["SPXW"].current_price
+This means for SPX, the key levels price is actually from the Polygon index, not the normal waterfall
+Signal Verification — realtimeVerifySignals() + fetchPriceHistory() (Lines 4642–4943, 3740–3807)
+For checking if signals hit or missed after creation:
+
+Data	Source
+Price history (high/low since signal)	Polygon REST — 15-min bars (short-term) or daily bars (long-term)
+Current price for comparison	Polygon WebSocket first, then Polygon REST snapshot, then last bar close
+Entry/target reference price	Database — price_at_signal saved when signal was created
+SUMMARY: WHERE SOURCES MIX OR GET REPLACED
+Location	What happens
+fetchKeyLevels (line 283–301)	Waterfall: WebSocket → UW → Polygon snapshot → last bar → prev close
+scoreSignal (line 2062)	SPX prefers UW price; everything else prefers key levels price
+Polygon options enrichment (line 2529–2534)	If Polygon's options contract price differs >0.5% from current, replaces it
+SPX index fetch (line 2005–2009)	Polygon I:SPX index price overwrites key levels price for SPX
+SPX VWAP (line 2952)	SPX signals get a completely separate VWAP system (with cross/retest), replacing the basic key levels VWAP
+Verification (line 3780–3791)	WebSocket → Polygon snapshot → last bar close (same waterfall pattern)
+THE KEY INSIGHT
+Price flows through 3 stages and the source can change at each stage:
+
+Initial → fetchKeyLevels sets current_price (WebSocket → UW → Polygon snapshot)
+Scoring → scoreSignal picks between key levels price and UW price (depends on ticker)
+Post-scoring → Polygon options enrichment can override the price if it differs >0.5%
+For SPX specifically, there's an extra override where the Polygon I:SPX index price replaces whatever fetchKeyLevels found, and a separate VWAP tracker replaces the basic VWAP.
