@@ -748,8 +748,11 @@ function toLocalDateStr(d: Date): string {
 
 function signalDateStr(s: HistoricalSignal): string {
   const raw = s.detected_at || s.created_at;
+  if (typeof raw === "string" && raw.length >= 10) {
+    return raw.slice(0, 10);
+  }
   const d = new Date(raw);
-  return toLocalDateStr(d);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats> {
@@ -778,19 +781,23 @@ function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats
   return byDay;
 }
 
+function toUtcDateStr(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) {
   const now = new Date();
-  const todayStr = toLocalDateStr(now);
+  const todayStr = toUtcDateStr(now);
 
-  const dayOfWeek = now.getDay();
+  const dayOfWeek = now.getUTCDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(now);
-  monday.setDate(monday.getDate() + mondayOffset);
-  const mondayStr = toLocalDateStr(monday);
+  monday.setUTCDate(monday.getUTCDate() + mondayOffset);
+  const mondayStr = toUtcDateStr(monday);
 
   const friday = new Date(monday);
-  friday.setDate(friday.getDate() + 4);
-  const fridayStr = toLocalDateStr(friday);
+  friday.setUTCDate(friday.getUTCDate() + 4);
+  const fridayStr = toUtcDateStr(friday);
   const weekEndStr = todayStr < fridayStr ? todayStr : fridayStr;
 
   const todaySignals = allSignals.filter(s => signalDateStr(s) === todayStr);
@@ -904,7 +911,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
     return "text-red-400";
   };
 
-  const todayStr = toLocalDateStr(new Date());
+  const todayStr = toUtcDateStr(new Date());
 
   return (
     <motion.div

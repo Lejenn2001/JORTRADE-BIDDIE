@@ -72,7 +72,8 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
   const dailyStats = useMemo(() => {
     const byDay: Record<string, DayStats> = {};
     for (const s of signals) {
-      const dateStr = new Date(s.detected_at || s.created_at || "").toLocaleDateString("en-CA");
+      const raw = s.detected_at || s.created_at || "";
+      const dateStr = typeof raw === "string" && raw.length >= 10 ? raw.slice(0, 10) : new Date(raw).toISOString().slice(0, 10);
       if (!byDay[dateStr]) {
         byDay[dateStr] = { date: dateStr, hits: 0, misses: 0, pending: 0, total: 0, winRate: null, signals: [], algoVersion: algoVersions[dateStr] || algoVersionDefault };
       }
