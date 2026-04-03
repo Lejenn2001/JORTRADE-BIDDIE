@@ -3433,7 +3433,8 @@ router.get("/whale/signals/calendar", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
     const result = await dbQuery(
-      `SELECT so.id, so.ticker, so.signal_type, so.option_type AS "put_call", so.confidence, so.strike, so.expiry,
+      `SELECT DISTINCT ON (so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'UTC'))
+              so.id, so.ticker, so.signal_type, so.option_type AS "put_call", so.confidence, so.strike, so.expiry,
               so.outcome, so.created_at, so.detected_at, so.resolved_at, so.category, so.price_at_signal,
               so.target AS target_price, so.invalidation, so.entry_trigger, so.direction,
               so.max_favorable_price, so.mfe_percent, so.max_adverse_price,
@@ -3444,21 +3445,24 @@ router.get("/whale/signals/calendar", async (req, res) => {
        FROM signal_outcomes so
        LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text
        WHERE so.signal_source = 'replit' AND COALESCE(so.category, '') != 'spread'
-       ORDER BY so.detected_at DESC
-       LIMIT $1`,
-      [limit]
+       ORDER BY so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'UTC'),
+                CASE WHEN so.outcome IN ('hit','partial_hit') THEN 0 WHEN so.outcome IN ('missed','near_miss') THEN 1 ELSE 2 END,
+                so.detected_at ASC`,
+      []
     );
-    const statsResult = await dbQuery(
-      `SELECT outcome, COUNT(*)::int AS count FROM signal_outcomes
-       WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread' GROUP BY outcome`
-    );
-    const stats: Record<string, number> = {};
-    for (const row of (statsResult?.rows || [])) {
-      stats[row.outcome || "pending"] = row.count;
+    const allRows = result?.rows || [];
+    const limited = allRows.slice(0, limit);
+    const statsMap: Record<string, number> = {};
+    for (const row of allRows) {
+      const o = row.outcome || "pending";
+      statsMap[o] = (statsMap[o] || 0) + 1;
     }
+    const sortedRows = [...allRows].sort((a: any, b: any) =>
+      new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime()
+    );
     res.json({
-      signals: result?.rows || [],
-      stats,
+      signals: sortedRows.slice(0, limit),
+      stats: statsMap,
       algoVersions: ALGO_VERSION_MAP,
       algoVersionDefault: ALGO_VERSION_DEFAULT,
     });
