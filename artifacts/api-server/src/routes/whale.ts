@@ -2480,9 +2480,10 @@ async function runSignalsPipeline() {
           const strikeStr = strikeInt.toString().padStart(8, '0');
 
           const isSpxWeekly = ticker === "SPXW";
-          const polyTicker = isSpxWeekly ? "SPX" : ticker;
-          const oTicker = `O:${polyTicker}${expDate.replace(/-/g, '').slice(2)}${contractType === 'call' ? 'C' : 'P'}${strikeStr}`;
-          const url = `https://api.polygon.io/v3/snapshot/options/${polyTicker}/${oTicker}?apiKey=${polygonKey}`;
+          const parentTicker = isSpxWeekly ? "SPX" : ticker;
+          const contractTicker = isSpxWeekly ? "SPXW" : ticker;
+          const oTicker = `O:${contractTicker}${expDate.replace(/-/g, '').slice(2)}${contractType === 'call' ? 'C' : 'P'}${strikeStr}`;
+          const url = `https://api.polygon.io/v3/snapshot/options/${parentTicker}/${oTicker}?apiKey=${polygonKey}`;
 
           const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (res.ok) {
