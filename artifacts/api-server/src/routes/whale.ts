@@ -2450,6 +2450,78 @@ async function runSignalsPipeline() {
   preScreened.sort((a, b) => b.confidence - a.confidence);
   const topCandidates = preScreened.slice(0, 15);
 
+  // Step 1b: Enrich with Polygon options contract data (IV, greeks, bid/ask)
+  const polygonOptionsData: Record<string, any> = {};
+  const polygonKey = POLYGON_KEY();
+  if (polygonKey) {
+    const uniqueTickers = [...new Set(topCandidates.map(s => s.ticker))];
+    await Promise.all(uniqueTickers.map(async (ticker) => {
+      try {
+        const tickerSignals = topCandidates.filter(s => s.ticker === ticker);
+        for (const sig of tickerSignals) {
+          const expDate = (() => {
+            try {
+              let d = new Date(sig.expiry);
+              if (isNaN(d.getTime())) {
+                const m = sig.expiry.match(/(\w+)\s+(\d+),?\s+(\d{4})/);
+                if (m) d = new Date(`${m[1]} ${m[2]}, ${m[3]}`);
+              }
+              if (isNaN(d.getTime())) return null;
+              const y = d.getFullYear();
+              const mo = String(d.getMonth() + 1).padStart(2, '0');
+              const dy = String(d.getDate()).padStart(2, '0');
+              return `${y}-${mo}-${dy}`;
+            } catch { return null; }
+          })();
+          if (!expDate) continue;
+
+          const contractType = sig.option_type === "call" ? "call" : "put";
+          const strikeInt = Math.round(sig.strike * 1000);
+          const strikeStr = strikeInt.toString().padStart(8, '0');
+
+          const isSpxWeekly = ticker === "SPXW";
+          const polyTicker = isSpxWeekly ? "SPX" : ticker;
+          const oTicker = `O:${polyTicker}${expDate.replace(/-/g, '').slice(2)}${contractType === 'call' ? 'C' : 'P'}${strikeStr}`;
+          const url = `https://api.polygon.io/v3/snapshot/options/${polyTicker}/${oTicker}?apiKey=${polygonKey}`;
+
+          const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          if (res.ok) {
+            const json = await res.json();
+            const r = json.results;
+            if (r) {
+              const greeks = r.greeks || {};
+              const key = `${ticker}-${sig.strike}-${sig.option_type}`;
+              polygonOptionsData[key] = {
+                implied_volatility: r.implied_volatility ? Math.round(r.implied_volatility * 10000) / 100 : null,
+                delta: greeks.delta ? Math.round(greeks.delta * 1000) / 1000 : null,
+                gamma: greeks.gamma ? Math.round(greeks.gamma * 10000) / 10000 : null,
+                theta: greeks.theta ? Math.round(greeks.theta * 100) / 100 : null,
+                vega: greeks.vega ? Math.round(greeks.vega * 100) / 100 : null,
+                bid: r.day?.close || r.last_quote?.bid || null,
+                ask: r.last_quote?.ask || null,
+                mid: r.last_quote?.midpoint || null,
+                option_volume: r.day?.volume || null,
+                open_interest: r.open_interest || null,
+                underlying_price: r.underlying_asset?.price || null,
+              };
+              if (polygonOptionsData[key].underlying_price && sig.current_price) {
+                const polyPrice = polygonOptionsData[key].underlying_price;
+                if (Math.abs(polyPrice - sig.current_price) / sig.current_price > 0.005) {
+                  console.log(`[signals] ${ticker}: Polygon live price $${polyPrice.toFixed(2)} vs UW price $${sig.current_price.toFixed(2)} — using Polygon`);
+                  sig.current_price = polyPrice;
+                }
+              }
+              console.log(`[signals] ${ticker} ${sig.option_type} $${sig.strike}: IV=${polygonOptionsData[key].implied_volatility}%, delta=${polygonOptionsData[key].delta}, OI=${polygonOptionsData[key].open_interest}`);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[signals] Polygon options fetch failed for ${ticker}:`, err.message);
+      }
+    }));
+    console.log(`[signals] Polygon options enrichment: ${Object.keys(polygonOptionsData).length}/${topCandidates.length} contracts found`);
+  }
+
   // Step 2: Claude AI evaluation — distinguish directional bets from hedges
   let signals = topCandidates;
   try {
@@ -2517,6 +2589,7 @@ async function runSignalsPipeline() {
           liquidity_levels: structure.liquidity_levels,
           structure_summary: structure.structure_summary,
         } : null,
+        polygon_options: polygonOptionsData[`${s.ticker}-${s.strike}-${s.option_type}`] || null,
       };
     });
 
@@ -2524,7 +2597,15 @@ async function runSignalsPipeline() {
 
 CRITICAL DATA YOU HAVE FOR EACH SIGNAL:
 1. "trend_description" + "intraday_trend" — what the stock is doing TODAY
-2. "market_structure" — FULL ICT/SMC structural analysis including:
+2. "polygon_options" — LIVE options contract data from Polygon.io including:
+   - implied_volatility: IV as percentage (e.g. 85.5 = 85.5%)
+   - delta, gamma, theta, vega: option greeks
+   - bid/ask/mid: live option prices
+   - option_volume: today's volume on this contract
+   - open_interest: existing OI on this contract
+   - underlying_price: Polygon's real-time stock price (more accurate than UW)
+   Use IV, delta, and volume/OI to assess signal quality. High IV + high delta (>0.3) + volume > OI = strong conviction.
+3. "market_structure" — FULL ICT/SMC structural analysis including:
    - multi_day_trend: uptrend/downtrend/ranging (swing highs & lows)
    - premium_discount: is price in premium (above equilibrium), discount (below), or at equilibrium?
    - nearest_support / nearest_resistance: key structural levels
