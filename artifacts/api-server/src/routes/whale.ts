@@ -3443,14 +3443,14 @@ router.get("/whale/signals/calendar", async (req, res) => {
               sr.status AS review_status, sr.note AS review_note
        FROM signal_outcomes so
        LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text
-       WHERE so.signal_source = 'replit'
+       WHERE so.signal_source = 'replit' AND COALESCE(so.category, '') != 'spread'
        ORDER BY so.detected_at DESC
        LIMIT $1`,
       [limit]
     );
     const statsResult = await dbQuery(
       `SELECT outcome, COUNT(*)::int AS count FROM signal_outcomes
-       WHERE signal_source = 'replit' GROUP BY outcome`
+       WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread' GROUP BY outcome`
     );
     const stats: Record<string, number> = {};
     for (const row of (statsResult?.rows || [])) {
@@ -3660,7 +3660,7 @@ router.get("/whale/signals/export", async (req, res) => {
               outcome, tags, detected_at, created_at, resolved_at,
               max_favorable_price, mfe_percent
        FROM signal_outcomes
-       WHERE signal_source = 'replit'
+       WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread'
        ORDER BY detected_at DESC`
     );
 
@@ -3705,7 +3705,7 @@ router.get("/whale/signals/history", async (req, res) => {
       `SELECT d.*, sr.status AS review_status, sr.note AS review_note
        FROM signal_outcomes d
        LEFT JOIN signal_reviews sr ON sr.signal_id = d.id::text
-       WHERE d.signal_source = 'replit'
+       WHERE d.signal_source = 'replit' AND COALESCE(d.category, '') != 'spread'
        ORDER BY d.detected_at DESC LIMIT $1`,
       [limit]
     );
@@ -3713,7 +3713,7 @@ router.get("/whale/signals/history", async (req, res) => {
       `SELECT
         COUNT(*) FILTER (WHERE outcome = 'pending' OR outcome IS NULL) AS pending_count,
         COUNT(*) AS total_count
-       FROM signal_outcomes WHERE signal_source = 'replit'`
+       FROM signal_outcomes WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread'`
     );
     const counts = countResult?.rows?.[0] || {};
     res.json({
@@ -6857,7 +6857,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
   const signals = await dbQuery(
     `SELECT ticker, outcome, conviction_score, is_biddie_pick
      FROM signal_outcomes
-     WHERE signal_source = 'replit'
+     WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread'
        AND detected_at >= $1 AND detected_at < $2`,
     [weekStart.toISOString(), queryEnd.toISOString()]
   );
@@ -6867,9 +6867,10 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
   const hits = rows.filter((r: any) => r.outcome === "hit").length;
   const partialHits = rows.filter((r: any) => r.outcome === "partial_hit").length;
   const misses = rows.filter((r: any) => r.outcome === "missed").length;
+  const nearMisses = rows.filter((r: any) => r.outcome === "near_miss").length;
   const expired = rows.filter((r: any) => r.outcome === "expired").length;
   const pending = rows.filter((r: any) => !r.outcome || r.outcome === "pending").length;
-  const resolved = hits + partialHits + misses;
+  const resolved = hits + partialHits + misses + nearMisses;
   const winRate = resolved > 0 ? ((hits + partialHits) / resolved * 100).toFixed(2) : "0";
   const scores = rows.filter((r: any) => r.conviction_score).map((r: any) => r.conviction_score);
   const avgConviction = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(2) : "0";
@@ -6881,7 +6882,7 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
     if (!tickerCounts[tk]) tickerCounts[tk] = { hits: 0, misses: 0, pending: 0, total: 0 };
     tickerCounts[tk].total++;
     if (outcome === "hit" || outcome === "partial_hit") tickerCounts[tk].hits++;
-    else if (outcome === "missed") tickerCounts[tk].misses++;
+    else if (outcome === "missed" || outcome === "near_miss") tickerCounts[tk].misses++;
     else tickerCounts[tk].pending++;
   }
   const topTickers = Object.entries(tickerCounts)
@@ -6890,9 +6891,9 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
     .map(([ticker, data]) => ({ ticker, ...data }));
 
   const biddiePicks = rows.filter((r: any) => r.is_biddie_pick);
-  const biddieResolved = biddiePicks.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit" || r.outcome === "missed");
+  const biddieResolved = biddiePicks.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit" || r.outcome === "missed" || r.outcome === "near_miss");
   const biddieHits = biddieResolved.filter((r: any) => r.outcome === "hit" || r.outcome === "partial_hit").length;
-  const biddieMisses = biddieResolved.filter((r: any) => r.outcome === "missed").length;
+  const biddieMisses = biddieResolved.filter((r: any) => r.outcome === "missed" || r.outcome === "near_miss").length;
   const biddiePending = biddiePicks.filter((r: any) => !r.outcome || r.outcome === "pending").length;
   const biddieWinRate = biddieResolved.length > 0 ? ((biddieHits / biddieResolved.length) * 100).toFixed(2) : "0";
 
