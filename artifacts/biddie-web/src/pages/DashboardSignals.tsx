@@ -407,12 +407,16 @@ const DashboardSignals = () => {
     if (showResolved) {
       list = list.filter((s) => {
         const o = s.outcome;
-        return o && o !== "pending";
+        if (o && o !== "pending") return true;
+        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+        return isExpired;
       });
     } else {
       list = list.filter((s) => {
         const o = s.outcome;
-        return !o || o === "pending";
+        if (o && o !== "pending") return false;
+        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+        return !isExpired;
       });
     }
 
@@ -1374,15 +1378,24 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             </span>
             {(() => {
               let ts = signal.tradeStatus || "watching";
-              if (ts === "watching" || ts === "active") {
-                if (signal.outcome === "hit") ts = "hit";
-                else if (signal.outcome === "partial_hit") ts = "partial_hit";
-                else if (isLoser) ts = "miss";
-                else if (signal.outcome === "expired") ts = "expired";
+              const o = signal.outcome;
+              if (o === "hit" || o === "win") ts = "hit";
+              else if (o === "partial_hit") ts = "partial_hit";
+              else if (o === "near_miss") ts = "near_miss";
+              else if (o === "missed" || o === "loss") ts = "miss";
+              else if (o === "expired") ts = "expired";
+              else if (ts === "watching" || ts === "active") {
+                const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+                const mfe = signal.mfePercent ?? 0;
+                if (isExpired && mfe >= 75) ts = "hit";
+                else if (isExpired && mfe >= 50) ts = "partial_hit";
+                else if (isExpired && mfe >= 30) ts = "near_miss";
+                else if (isExpired) ts = "miss";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
                 hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
                 partial_hit: { label: "WIN", desc: "Good move in the right direction — past 50% of the target, counts as a win!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right direction but below 50% win threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
                 miss: { label: "LOSS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                 expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },

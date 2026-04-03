@@ -249,12 +249,19 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                         ) : null}
                         {(() => {
                           let ts = signal.tradeStatus || "watching";
-                          if (ts === "watching" || ts === "active") {
-                            if (signal.outcome === "hit" || signal.outcome === "win") ts = "hit";
-                            else if (signal.outcome === "partial_hit") ts = "partial";
-                            else if (signal.outcome === "near_miss") ts = "near_miss";
-                            else if (signal.outcome === "missed" || signal.outcome === "loss") ts = "miss";
-                            else if (signal.outcome === "expired") ts = "expired";
+                          const o = signal.outcome;
+                          if (o === "hit" || o === "win") ts = "hit";
+                          else if (o === "partial_hit") ts = "partial";
+                          else if (o === "near_miss") ts = "near_miss";
+                          else if (o === "missed" || o === "loss") ts = "miss";
+                          else if (o === "expired") ts = "expired";
+                          else if (ts === "watching" || ts === "active") {
+                            const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+                            const mfe = signal.mfePercent ?? 0;
+                            if (isExpired && mfe >= 75) ts = "hit";
+                            else if (isExpired && mfe >= 50) ts = "partial";
+                            else if (isExpired && mfe >= 30) ts = "near_miss";
+                            else if (isExpired) ts = "miss";
                           }
                           const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
                             hit: { label: "WIN", desc: "Price reached 75%+ of the target — full hit, real profit opportunity", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
