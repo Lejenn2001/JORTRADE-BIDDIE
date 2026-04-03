@@ -2273,16 +2273,16 @@ async function runSignalsPipeline() {
           if (distToVwap < 0.005) {
             entryTrigger = `At VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = true;
-          } else if (price < vwap) {
-            entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+          } else if (price > vwap) {
+            entryTrigger = `Above VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
             actNow = true;
           } else {
-            entryTrigger = `On rejection from VWAP ($${vwap.toFixed(2)}) — Near $${price.toFixed(2)}`;
+            entryTrigger = `Below VWAP ($${vwap.toFixed(2)}) — wait for bounce to $${vwap.toFixed(2)} then enter on rejection`;
             actNow = false;
           }
         } else if (pivot) {
           entryTrigger = `Near Pivot ($${pivot.toFixed(2)}) — $${price.toFixed(2)}`;
-          actNow = price <= pivot;
+          actNow = price >= pivot;
         } else {
           entryTrigger = `Near $${price.toFixed(2)} (no VWAP data)`;
           actNow = false;
