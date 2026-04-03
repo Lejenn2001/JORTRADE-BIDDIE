@@ -1,0 +1,114 @@
+1. WHERE EACH POLYGON DATA TYPE COULD BE BETTER USED
+Second Aggregates
+What you have: 1-second OHLCV bars for any ticker
+
+Where underused today:
+
+VWAP is calculated from 5-minute bars — you could use 1-second or 1-minute bars for a much more accurate intraday VWAP
+Price action confirmation (detectPriceActionConfirmation) uses 1-minute bars — second bars would detect candle patterns (rejection wicks, engulfings) in real time rather than waiting a minute
+VWAP cross/retest detection for SPX runs every 60 seconds — second aggregates would make this near-instant
+Minute Aggregates
+What you have: 1-minute OHLCV bars
+
+Where underused today:
+
+Already used in price action confirmation (good)
+Not used in VWAP calculation for regular tickers (uses 5-min instead)
+Not used to detect intraday breakouts above prior day high/low in real time
+The morning briefing fetches key levels but doesn't analyze recent intraday bars — it could characterize the opening range using first 30 minutes of 1-min bars
+Trades (tick data)
+What you have: Individual trade prints, size, exchange, conditions
+
+Where underused today: Completely unused. Every price in your system comes from aggregated bars or snapshots. With tick data you could:
+
+Detect large single prints (block trades) independent of UW
+Identify the exact price where a sweep started
+Confirm that price actually traded at an entry level vs just touched it
+Quotes (bid/ask)
+What you have: Real-time bid/ask spread, size on each side
+
+Where underused today: Completely unused for stocks. You only use bid/ask from Polygon options contracts, not the underlying stock. For stocks you could:
+
+Measure spread width to detect illiquid conditions
+See which side the market is leaning (bid size vs ask size)
+Detect quote stuffing or manipulation patterns
+Snapshots
+What you have: Point-in-time summary per ticker (last price, day high/low, prev close, volume)
+
+Where used today: As a fallback when WebSocket is stale. This is correct usage, though it could be called more aggressively instead of waiting for multiple fallbacks.
+
+Options Greeks / IV / OI
+What you have: Per-contract delta, gamma, theta, vega, IV, bid/ask, volume, OI
+
+Where underused today:
+
+Fetched after scoring (Claude sees it, coded rules don't)
+IV is not used in scoring at all
+Delta is not used to validate whether the strike makes sense
+OI per contract is not cross-checked against the UW "vol/OI ratio" claim
+Not used in the morning briefing at all
+Not used in the chat system's analysis
+2. WHICH WOULD MOST IMPROVE EACH AREA
+Price Accuracy
+Best improvement: Replace the UW underlying_price fallback with direct WebSocket price. The WebSocket is already running — it just gets skipped if data is more than 2 minutes old. Tightening that window (or subscribing more aggressively) would mean UW's potentially-stale price is never used.
+
+Second best: Use 1-minute bars instead of 5-minute bars for VWAP. Tighter bars = more accurate VWAP throughout the day, especially around opens and major moves.
+
+SPX Accuracy
+Best improvement: The SPX VWAP tracker already uses Polygon 5-min bars. Switching to 1-min bars would give more accurate cross/retest detection — crosses detected a bar sooner, retests confirmed faster. Second aggregates would make it near-real-time.
+
+Second best: The I:SPX index snapshot is fetched once per pipeline run. With a persistent WebSocket subscription to I:SPX, you'd have a continuous, accurate SPX price instead of a point-in-time snapshot.
+
+Entry Precision
+Best improvement: Options Greeks — specifically delta. Right now entry triggers are based purely on price vs VWAP. Delta tells you how sensitive the option is to a $1 move in the underlying. A 0.70 delta call entering above VWAP is a very different trade from a 0.20 delta call — but they'd get the same entry trigger today.
+
+Second best: Real-time quotes on the options contract (bid/ask spread). A wide spread means your entry price will be worse than expected. This should affect whether "Act Now" is shown.
+
+Target Precision
+Best improvement: Open Interest per strike from Polygon options chain. High OI strikes act as magnets — price is drawn to them before expiry. Targets should be adjusted toward high-OI strikes, not just swing highs/lows. This is more precise than GEX walls alone.
+
+Second best: IV percentile context. If IV is very elevated, the option's price moves are amplified — targets can be wider. If IV is crushed, tighter targets are more appropriate.
+
+Contract Selection
+Best improvement: This is entirely driven by UW flow today — the contract that UW reports is the one that gets analyzed. Polygon's options data could validate whether that contract is actually liquid (volume > OI, tight bid/ask spread, reasonable IV) and flag it if not. Right now a UW-reported contract with a $2 bid/ask spread would pass through without warning.
+
+3. WHICH SHOULD INFLUENCE EACH DECISION LAYER
+Scoring (confidence 1–10)
+Data	How it should influence score
+IV	High IV = option moves more — but also costs more. Elevated IV (>80th percentile) with a sweep = strong conviction, small +0.5 bonus. Crushed IV with massive premium = likely hedge, small penalty
+Delta	Delta 0.40–0.70 = directional conviction. Deep OTM (delta <0.20) with huge premium = likely lottery/hedge. Could tighten the OTM rejection rule
+Bid/ask spread	Wide spread on options contract (>15% of mid) = poor liquidity, −0.5 penalty
+Volume vs OI	Polygon's per-contract volume vs OI validates or contradicts UW's reported ratio
+1-min candles for VWAP	More accurate VWAP = more accurate VWAP alignment penalty/bonus
+Entry Timing
+Data	How it should influence entry
+Second aggregates	Near-instant VWAP cross detection — entry trigger text updates as it happens
+Delta	Entry text could say "high delta (0.65) — acts like stock" vs "low delta (0.25) — needs bigger move"
+Options bid/ask spread	Wide spread = don't "Act Now" — wait for better fill
+Real-time quote on underlying	Confirm price is actually at/near VWAP at the moment of signal, not 2 minutes ago
+Target / Invalidation
+Data	How it should influence targets
+High-OI strikes	Targets should favor strikes with high OI — price pins there before expiry
+Call/put walls from OI	Already used for non-SPX via GEX — needs to be extended to SPX targets
+IV level	High IV environment = widen targets. Low IV = tighter targets
+1-min bars for swing levels	More candles = more swing high/low detection points = more precise targets
+Morning Briefings
+Data	How it should be added
+Premarket quotes	Polygon has premarket bid/ask — could show tighter premarket prices vs the current snapshot-based gaps
+Options IV on key ETFs	SPY/QQQ IV vs prior week tells you regime context (fear is rising or falling)
+OI on key strikes	"SPY has massive OI at $570 this Friday" is actionable morning context
+Opening range from 1-min bars	Once market opens, first 30 minutes of 1-min bars define the opening range — this is key ICT context
+Chat Analysis
+Data	How it should be used
+Options snapshot on demand	When user asks "what's the best entry for NVDA calls," the chat should pull live IV, delta, bid/ask — not just VWAP and key levels
+Real-time quote	When user asks "is AAPL above VWAP," the answer should use the WebSocket price, not whatever survived the waterfall
+High-OI strikes	When user asks "where will SPY pin?" the answer should reference OI — this data is available from Polygon
+IV rank/percentile	When user asks "should I buy or sell premium?" IV rank tells you the answer — Polygon has the raw IV data to calculate this
+PRIORITY ORDER (biggest impact first)
+1-minute bars for VWAP — affects every price-based decision, low complexity
+Options IV + Delta in scoring — affects signal quality filtering before Claude, medium complexity
+WebSocket for SPX (I:SPX) — gives continuous SPX price without polling, medium complexity
+Options bid/ask spread in entry timing — prevents "Act Now" on illiquid contracts, low complexity
+High-OI strikes in target logic — makes targets more precise for near-expiry signals, medium complexity
+IV context in chat and morning briefing — makes those responses more useful and specific, lower complexity
+Second aggregates for VWAP cross detection — highest precision, but most complex to implement
