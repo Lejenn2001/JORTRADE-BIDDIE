@@ -64,8 +64,8 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
   }, []);
 
   const classifyOutcome = (outcome: string | null) => {
-    if (outcome === "hit") return "hit";
-    if (outcome === "missed") return "missed";
+    if (outcome === "hit" || outcome === "partial_hit") return "hit";
+    if (outcome === "missed" || outcome === "near_miss") return "missed";
     return "pending";
   };
 
@@ -286,9 +286,9 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               {selectedDay.signals.map(s => (
                 <div key={s.id} className="flex items-center gap-2 text-[10px] py-1 px-2 rounded bg-muted/10">
-                  {s.outcome === "hit" ? (
+                  {s.outcome === "hit" || s.outcome === "partial_hit" ? (
                     <CheckCircle className="h-3 w-3 text-emerald-400 shrink-0" />
-                  ) : s.outcome === "missed" ? (
+                  ) : s.outcome === "missed" || s.outcome === "near_miss" ? (
                     <XCircle className="h-3 w-3 text-destructive shrink-0" />
                   ) : (
                     <Clock className="h-3 w-3 text-amber-400 shrink-0" />
@@ -429,9 +429,9 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
           <div className="space-y-1 max-h-[300px] overflow-y-auto">
             {selectedDay.signals.map(s => (
               <div key={s.id} className="flex items-center gap-2 text-[11px] py-1.5 px-3 rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
-                {s.outcome === "hit" ? (
+                {s.outcome === "hit" || s.outcome === "partial_hit" ? (
                   <CheckCircle className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                ) : s.outcome === "missed" ? (
+                ) : s.outcome === "missed" || s.outcome === "near_miss" ? (
                   <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
                 ) : (
                   <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
