@@ -476,7 +476,7 @@ const DashboardAnalytics = () => {
           setAllSignals(historyData.signals);
           const allSigs = historyData.signals;
           const biddiePicks = allSigs.filter((s: any) => s.is_biddie_pick);
-          const resolved = allSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed");
+          const resolved = allSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
 
           const convictions = allSigs.filter((s: any) => s.confidence != null).map((s: any) => Number(s.confidence));
@@ -762,13 +762,13 @@ function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats
     const day = byDay[dateStr];
     day.total++;
     if (s.outcome === "hit" || s.outcome === "partial_hit") day.hits++;
-    else if (s.outcome === "missed") day.misses++;
+    else if (s.outcome === "missed" || s.outcome === "near_miss") day.misses++;
     else day.pending++;
 
     if (!day.tickers[s.ticker]) day.tickers[s.ticker] = { hits: 0, misses: 0, pending: 0, total: 0 };
     day.tickers[s.ticker].total++;
     if (s.outcome === "hit" || s.outcome === "partial_hit") day.tickers[s.ticker].hits++;
-    else if (s.outcome === "missed") day.tickers[s.ticker].misses++;
+    else if (s.outcome === "missed" || s.outcome === "near_miss") day.tickers[s.ticker].misses++;
     else day.tickers[s.ticker].pending++;
   }
   for (const day of Object.values(byDay)) {
@@ -802,7 +802,7 @@ function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) 
   const computeBlock = (sigs: HistoricalSignal[]) => {
     const total = sigs.length;
     const hits = sigs.filter(s => s.outcome === "hit" || s.outcome === "partial_hit").length;
-    const misses = sigs.filter(s => s.outcome === "missed").length;
+    const misses = sigs.filter(s => s.outcome === "missed" || s.outcome === "near_miss").length;
     const pending = total - hits - misses;
     const resolved = hits + misses;
     const winRate = resolved > 0 ? Math.round((hits / resolved) * 100) : -1;
@@ -1382,7 +1382,7 @@ function computeLearningInsights(userTrades: UserTrade[], userTopTickers: { tick
     else if (rate < 30) insights.push({ text: `${catLabels[cat] || cat} have a low hit rate for you (${rate}%)`, type: "warning" });
   }
 
-  const resolvedTrades = userTrades.filter(t => t.signal_outcome === "hit" || t.signal_outcome === "partial_hit" || t.signal_outcome === "missed");
+  const resolvedTrades = userTrades.filter(t => t.signal_outcome === "hit" || t.signal_outcome === "partial_hit" || t.signal_outcome === "missed" || t.signal_outcome === "near_miss");
   if (resolvedTrades.length >= 5) {
     const recent5 = resolvedTrades.slice(0, 5);
     const recentWins = recent5.filter(t => t.signal_outcome === "hit" || t.signal_outcome === "partial_hit").length;
