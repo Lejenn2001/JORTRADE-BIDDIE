@@ -3414,6 +3414,18 @@ Respond in this exact JSON format:
   }
 });
 
+const ALGO_VERSION_MAP: Record<string, string> = {
+  "2026-03-27": "v5",
+  "2026-03-28": "v5",
+  "2026-03-29": "v5",
+  "2026-03-30": "v5",
+  "2026-03-31": "v5",
+  "2026-04-01": "v5",
+  "2026-04-02": "v5",
+  "2026-04-03": "v5",
+};
+const ALGO_VERSION_DEFAULT = "v5";
+
 router.get("/whale/signals/calendar", async (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.set("ETag", `W/"cal-${Date.now()}"`);
@@ -3446,6 +3458,8 @@ router.get("/whale/signals/calendar", async (req, res) => {
     res.json({
       signals: result?.rows || [],
       stats,
+      algoVersions: ALGO_VERSION_MAP,
+      algoVersionDefault: ALGO_VERSION_DEFAULT,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -25,6 +25,7 @@ interface DayStats {
   total: number;
   winRate: number | null;
   signals: SignalRecord[];
+  algoVersion?: string;
 }
 
 interface Props {
@@ -35,6 +36,8 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const PerformanceCalendar = ({ compact = false }: Props) => {
   const [signals, setSignals] = useState<SignalRecord[]>([]);
+  const [algoVersions, setAlgoVersions] = useState<Record<string, string>>({});
+  const [algoVersionDefault, setAlgoVersionDefault] = useState("v5");
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<DayStats | null>(null);
   const [viewMonth, setViewMonth] = useState(() => {
@@ -49,6 +52,8 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
         if (resp.ok) {
           const data = await resp.json();
           setSignals(data.signals || []);
+          if (data.algoVersions) setAlgoVersions(data.algoVersions);
+          if (data.algoVersionDefault) setAlgoVersionDefault(data.algoVersionDefault);
         }
       } catch (e) {
         console.warn("Failed to fetch signal calendar:", e);
@@ -69,7 +74,7 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
     for (const s of signals) {
       const dateStr = new Date(s.detected_at || s.created_at || "").toLocaleDateString("en-CA");
       if (!byDay[dateStr]) {
-        byDay[dateStr] = { date: dateStr, hits: 0, misses: 0, pending: 0, total: 0, winRate: null, signals: [] };
+        byDay[dateStr] = { date: dateStr, hits: 0, misses: 0, pending: 0, total: 0, winRate: null, signals: [], algoVersion: algoVersions[dateStr] || algoVersionDefault };
       }
       byDay[dateStr].total++;
       byDay[dateStr].signals.push(s);
@@ -83,7 +88,7 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
       day.winRate = resolved > 0 ? (day.hits / resolved) * 100 : null;
     }
     return byDay;
-  }, [signals]);
+  }, [signals, algoVersions, algoVersionDefault]);
 
   const overallStats = useMemo(() => {
     let hits = 0, misses = 0, pending = 0;
@@ -215,7 +220,7 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
                 {day ? (
                   <button
                     onClick={() => day.total > 0 && setSelectedDay(selectedDay?.date === day.date ? null : day)}
-                    className={`w-full h-full rounded text-[9px] font-bold flex items-center justify-center border transition-all ${
+                    className={`w-full h-full rounded text-[9px] font-bold flex flex-col items-center justify-center border transition-all relative ${
                       getDayCellColor(day)
                     } ${getDayTextColor(day)} ${
                       day.date === today ? "ring-1 ring-primary/60" : ""
@@ -224,6 +229,9 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
                     }`}
                   >
                     {parseInt(day.date.split("-")[2])}
+                    {day.total > 0 && day.algoVersion && (
+                      <span className="text-[6px] font-medium text-primary/70 leading-none">{day.algoVersion}</span>
+                    )}
                   </button>
                 ) : <div />}
               </div>
@@ -256,9 +264,14 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
             className="border-t border-border/40 px-3 py-2"
           >
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-foreground">
-                {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] font-semibold text-foreground">
+                  {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                </p>
+                {selectedDay.algoVersion && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/20 text-primary">{selectedDay.algoVersion.toUpperCase()}</span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 {selectedDay.winRate !== null && (
                   <span className={`text-[10px] font-bold ${selectedDay.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
@@ -359,6 +372,9 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
                       {day.hits + day.misses > 0 ? `${day.winRate?.toFixed(0)}%` : `${day.pending}p`}
                     </span>
                   )}
+                  {day.total > 0 && day.algoVersion && (
+                    <span className="text-[7px] font-medium text-primary/60 leading-none">{day.algoVersion}</span>
+                  )}
                 </button>
               ) : <div />}
             </div>
@@ -391,9 +407,14 @@ const PerformanceCalendar = ({ compact = false }: Props) => {
           className="border-t border-border/40 px-4 py-3"
         >
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-foreground">
-              {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-foreground">
+                {new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+              </p>
+              {selectedDay.algoVersion && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/20 text-primary">{selectedDay.algoVersion.toUpperCase()}</span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               {selectedDay.winRate !== null && (
                 <span className={`text-xs font-bold ${selectedDay.winRate >= 50 ? "text-emerald-400" : "text-destructive"}`}>
