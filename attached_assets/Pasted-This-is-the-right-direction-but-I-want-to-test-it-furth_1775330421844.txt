@@ -1,0 +1,78 @@
+This is the right direction, but I want to test it further before building it live.
+
+Do NOT implement confirmation logic yet.
+
+I want a larger backtest sample using confirmed-entry scenarios, and it is okay to use different signals than before.
+
+Requirements:
+
+1. Use 15–20 regular-hours signals
+
+* Only 9:30 AM – 4:00 PM ET
+* Use different signals/setups where possible
+* Include a mix of calls, puts, sweeps, VWAP-related setups, and trend continuation/reversal cases
+
+2. For each signal, show:
+
+* ticker
+* date
+* exact time ET
+* call or put
+* underlying price at signal time
+* VWAP at signal time
+
+3. Target logic (IMPORTANT — lock this for testing)
+
+Use the original target logic for all signals:
+
+* previous swing highs/lows
+* GEX / liquidity levels
+* clear reaction levels
+
+Do NOT use:
+
+* micro targets near price
+* nearest structure without context
+* VWAP as a default target unless it is clearly the next reaction level
+
+Targets should represent the first meaningful move, not noise.
+
+4. Then show:
+
+Current engine
+
+* current entry
+* target 1
+* target 2
+* invalidation
+
+Confirmed-entry version
+
+* pending confirmation setup
+* exact confirmation trigger
+* whether confirmation actually occurred
+* confirmed entry price if triggered
+* same target 1 and target 2
+* same invalidation
+
+5. For each replayed signal, include:
+
+* Did confirmation occur? yes/no
+* If yes, when and at what price?
+* Did Target 1 hit after confirmation?
+* Did invalidation breach after confirmation?
+* MFE after confirmation if triggered
+
+6. Do NOT just give me a summary table first.
+   Give me the actual signal-by-signal replay output so I can review it.
+
+7. Design choice for now:
+   Do NOT suppress unconfirmed signals entirely.
+   Mark them as:
+
+* Pending confirmation
+* Confirmed
+* Never confirmed
+
+Goal:
+I want to compare immediate-entry logic vs confirmed-entry logic across a larger sample and see whether confirmation improves entry quality while keeping realistic, meaningful targets.

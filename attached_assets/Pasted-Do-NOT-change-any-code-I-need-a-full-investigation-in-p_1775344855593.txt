@@ -1,0 +1,49 @@
+Do NOT change any code.
+
+I need a full investigation in plain English of everything that happened to SPX when I moved SPX signals to their own tab.
+
+Context:
+- This happened about 3 days ago
+- I believe it was around Tuesday at 5:30 PM CST
+- After that change, SPX signal accuracy became extremely good
+- I want to understand exactly what changed and what logic SPX was using at that point
+
+Please do a full audit and explain in plain English:
+
+1. identify the exact change or set of changes that moved SPX/SPXW signals to their own tab
+2. identify the exact date/time of that change from commits, deploy history, file history, or logs
+3. show me every file that was touched for that change
+4. explain exactly what SPX logic existed at that moment, including:
+   - how SPX signals were classified
+   - what made a signal go to the SPX tab
+   - what data sources SPX used
+   - how SPX price was determined
+   - how SPX VWAP was determined
+   - how SPX entry was determined
+   - how SPX target was determined
+   - how SPX invalidation was determined
+   - how GEX was used
+   - whether Claude was used
+   - whether SPX confidence scoring was different from non-SPX
+
+5. explain every step the SPX signal pipeline took at that time, in order, from:
+   - flow comes in
+   - signal gets classified
+   - scoring happens
+   - signal appears on SPX tab
+
+6. compare that version of SPX logic to the current SPX logic and tell me:
+   - what is the same
+   - what changed
+   - what may have improved or hurt accuracy
+
+7. tell me whether the move to its own tab was only a display/UI change, or whether it also changed backend logic or filtering
+
+8. if there were any related changes around the same time, include them too even if they were not directly labeled “SPX tab”
+
+Important:
+- I want this in plain English, not just code references
+- include exact filenames, function names, and timestamps where possible
+- do NOT modify anything
+- do NOT summarize too briefly
+- I want a full chronological explanation
