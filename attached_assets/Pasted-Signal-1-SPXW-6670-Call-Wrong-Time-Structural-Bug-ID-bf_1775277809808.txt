@@ -1,0 +1,50 @@
+Signal 1: SPXW $6670 Call — Wrong Time (Structural Bug)
+ID: bf270f4c
+
+Field	Current Value	Should Be	Reasoning
+detected_at	2026-04-03 00:00:00+00	~2026-04-02 19:00:00+00 (approx)	The SPX pipeline uses just a date string ("2026-04-03") as detected_at on line 7927. PostgreSQL converts that to midnight UTC. The flow actually happened during the Apr 2 regular session. The price ($6582.68) and VWAP ($6559.4) are consistent with Apr 2 afternoon levels.
+price_at_signal	$6582.68	$6582.68 ✅	Matches the entry trigger context and is within the Apr 2 trading range. No change needed.
+confidence	8.50	Probably stays ~8	Strike $6670 is ~1.3% OTM on a 4-day expiry. Delta would be roughly 0.20–0.30. That's borderline — it might get a −0.5 or might clear. Without the live delta snapshot from that day, hard to be precise.
+Root cause: This is a code bug in the SPX pipeline (line 7927: today is a date string, not a timestamp). Every single SPX signal in the database has this problem. It's a structural fix for later — not something to manually correct for every SPX card.
+
+Signal 2: QQQ $590 Call — After-Hours Pipeline Run
+ID: 00719b9f
+
+Field	Current Value	Should Be	Reasoning
+detected_at	2026-04-03 01:59:16+00	~2026-04-02 19:30:00+00 (approx)	01:59 UTC = 9:59 PM ET. Market was closed. The regular pipeline uses NOW() (line 3257), so this timestamp is when the pipeline ran, not when the flow happened. The flow itself occurred during Apr 2 regular hours. Other Apr 2 signals were detected at 17:09–21:15 UTC — this one was just processed later.
+price_at_signal	$584.80	$584.80 or $585.04	Entry says "Near Pivot ($584.16) — $585.04". The reason says "Price at $585.04." The $0.24 difference between $584.80 and $585.04 suggests the price was fetched at a slightly different moment than when the entry text was generated. Either value is reasonable — the $585.04 from the reason text is probably more accurate since it's what scoring used.
+confidence	8.00	8.00 ✅	QQQ $590 call when QQQ is at ~$585 — about 0.9% OTM on a 5-day expiry. Delta would be ~0.35–0.40. Solidly in the no-adjustment zone.
+Signal 3: TSLA $400 Call — Price Mismatch (Most Important Test Case)
+ID: 2e4dd2c1
+
+Field	Current Value	Should Be	Reasoning
+detected_at	2026-04-01 16:10:40+00	2026-04-01 16:10:40+00 ✅	12:10 PM ET. Market was open. Time is correct.
+price_at_signal	$361.26	$382.44	This is the clearest data error of the five. The entry says "Near $382.44", the reason says "Price at $382.44", the VWAP is $378.60 (price must be above it for the entry trigger to work). The $361.26 is off by $21 — it was likely a stale or wrong price source. This is exactly the kind of error the price waterfall fix was designed to prevent going forward.
+confidence	5.00	Would likely drop further	TSLA $400 call with TSLA at $382.44 — that's ~4.6% OTM on a 1-day expiry (Apr 2). Delta would be roughly 0.05–0.10 — a lottery ticket. Under the new delta rules: −1 penalty. From 5 → 4 → filtered out entirely. The original confidence of 5 was already correct in flagging this as weak. The signal outcome was "missed," confirming the low score was warranted.
+Signal 4: GLD $430 Call — After-Hours Pipeline Run
+ID: 476874d6
+
+Field	Current Value	Should Be	Reasoning
+detected_at	2026-04-03 04:13:16+00	~2026-04-02 19:00:00+00 (approx)	04:13 UTC = 12:13 AM ET. Market was closed. This $850K sweep was processed in an overnight pipeline run. The actual sweep occurred during Apr 2 regular hours.
+price_at_signal	$429.44	$429.44 ✅	Entry says "Whale sweep at $429.44" and reason confirms the same price. The price matches — only the time is wrong.
+confidence	7.00	7.00 ✅	GLD $430 call when GLD is at $429.44 — only $0.56 OTM, essentially ATM. On a 7-day expiry, delta would be ~0.45–0.50. Perfect sweet spot — no delta adjustment needed.
+Signal 5: SPX $6835 Put — Wrong Time + Far OTM
+ID: 5a4c40c6
+
+Field	Current Value	Should Be	Reasoning
+detected_at	2026-04-02 00:00:00+00	~2026-04-01 19:00:00+00 (approx)	Same midnight-UTC bug as Signal 1. The detected_at was set from a date string. This flow happened during Apr 1 regular hours — midnight Apr 2 UTC = 8 PM ET Apr 1, which is after market close.
+price_at_signal	$6568.10	$6568.10 ✅	Entry references VWAP at $6551.89 with price above. The $6568.10 is consistent with Apr 1 afternoon SPX levels. No change needed.
+confidence	7.50	Possibly 7.00	SPX $6835 put when SPX is at $6568.10 — strike is $267 above price, about 4% OTM. On a 43-day expiry (May 15), this far-OTM put would have delta ~0.15–0.20. Under delta rules: −0.5 penalty. 7.5 → 7. Still shows up but no longer a potential Biddie Pick.
+Summary Table
+#	Signal	Fix Time?	Fix Price?	Fix Confidence?
+1	SPXW $6670 call	Yes — midnight bug	No	Maybe −0.5 (borderline delta)
+2	QQQ $590 call	Yes — after hours	Minor ($584.80 → $585.04)	No (delta is fine)
+3	TSLA $400 call	No — time is correct	Yes — $361.26 → $382.44	Already 5, would drop to 4 with delta
+4	GLD $430 call	Yes — after hours	No	No (ATM, delta fine)
+5	SPX $6835 put	Yes — midnight bug	No	Maybe −0.5 (borderline far OTM)
+The TSLA signal is the strongest proof that the price waterfall fix matters — a $21 price error directly impacted the signal card. Signal 3 is the one worth correcting first to see the difference on the dashboard.
+
+For the SPX midnight-UTC timestamps: there's a structural bug on line 7927 that affects every SPX signal. Manually fixing 2 cards is fine for testing, but the real fix is changing that one line from today to new Date().toISOString() — that's a future code change, not a manual correction.
+
+
+Worked for 2 minutes
