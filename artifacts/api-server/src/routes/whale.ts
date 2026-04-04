@@ -6280,10 +6280,23 @@ router.get("/whale/admin/replay", async (req, res) => {
 
       if (driftOnly && !hasDrift) continue;
 
+      const detectedDate = saved.detected_at;
+      const utcStr = `${detectedDate.getUTCFullYear()}-${String(detectedDate.getUTCMonth() + 1).padStart(2, '0')}-${String(detectedDate.getUTCDate()).padStart(2, '0')} ${String(detectedDate.getUTCHours()).padStart(2, '0')}:${String(detectedDate.getUTCMinutes()).padStart(2, '0')} UTC`;
+      const etOffset = detectedDate.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true, year: "numeric", month: "2-digit", day: "2-digit" });
+      const etParts = etOffset.match(/(\d+)\/(\d+)\/(\d+),?\s+(\d+):(\d+)\s+(AM|PM)/);
+      let etStr = utcStr;
+      if (etParts) {
+        etStr = `${etParts[3]}-${etParts[1].padStart(2, '0')}-${etParts[2].padStart(2, '0')} ${etParts[4]}:${etParts[5]} ${etParts[6]} ET`;
+      }
+
       results.push({
         id: saved.id,
         ticker: saved.ticker,
-        detected_at: saved.detected_at,
+        option_type: optType,
+        strike: strike,
+        detected_at_utc: utcStr,
+        detected_at_et: etStr,
+        tradingview_lookup: `${saved.ticker} ${etStr.replace(' ET', '')}`,
         outcome: saved.outcome,
         has_drift: hasDrift,
         drift_score: Math.round(driftScore * 100) / 100,
