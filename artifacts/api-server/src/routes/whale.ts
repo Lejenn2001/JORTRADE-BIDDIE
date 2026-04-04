@@ -45,7 +45,7 @@ function adjustExpiryForHolidays(dateStr: string): string {
 }
 
 interface PolygonBar {
-  open: number; high: number; low: number; close: number; volume: number; timestamp: number;
+  open: number; high: number; low: number; close: number; volume: number; timestamp: number; vw: number;
 }
 
 async function fetchPolygonAggs(ticker: string, mult: number, span: string, fromDate: string, toDate: string): Promise<PolygonBar[]> {
@@ -58,7 +58,7 @@ async function fetchPolygonAggs(ticker: string, mult: number, span: string, from
     const bars = res.data?.results;
     if (!Array.isArray(bars)) return [];
     return bars.map((b: any) => ({
-      open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v ?? 0, timestamp: Math.floor(b.t / 1000),
+      open: b.o, high: b.h, low: b.l, close: b.c, volume: b.v ?? 0, timestamp: Math.floor(b.t / 1000), vw: b.vw ?? 0,
     }));
   } catch {
     return [];
@@ -548,9 +548,13 @@ function computeStructuredTargets(
     return distA - distB;
   });
 
+  const minDistPct = price > 500 ? 0.003 : price > 100 ? 0.005 : 0.007;
+
   const deduped: TargetCandidate[] = [];
   for (const c of candidates) {
-    if (!deduped.some(d => Math.abs(d.level - c.level) / price < 0.001)) {
+    const distFromPrice = Math.abs(c.level - price) / price;
+    if (distFromPrice < minDistPct) continue;
+    if (!deduped.some(d => Math.abs(d.level - c.level) / price < 0.002)) {
       deduped.push(c);
     }
   }
@@ -6188,25 +6192,28 @@ router.get("/whale/admin/replay", async (req, res) => {
       const dailyBars = barCache[dailyKey];
 
       let replayVwap: number | null = null;
-      let cumTPV = 0, cumVol = 0;
+      let cumVwV = 0, cumVol = 0;
       let priceAtTime: number | null = null;
       for (const b of intradayBars) {
-        if (b.high && b.low && b.close && b.volume) {
-          cumTPV += ((b.high + b.low + b.close) / 3) * b.volume;
-          cumVol += b.volume;
-        }
-        const barTs = b.timestamp * 1000;
-        if (barTs <= signalTs) {
+        const barStartMs = b.timestamp * 1000;
+        const barEndMs = barStartMs + 60000;
+        if (barEndMs <= signalTs) {
           priceAtTime = b.close;
-          replayVwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
+          if (b.volume > 0) {
+            const vwPrice = b.vw > 0 ? b.vw : (b.high + b.low + b.close) / 3;
+            cumVwV += vwPrice * b.volume;
+            cumVol += b.volume;
+          }
+          replayVwap = cumVol > 0 ? Math.round((cumVwV / cumVol) * 100) / 100 : null;
         }
       }
 
       if (isSpx && cumVol === 0 && intradayBars.length > 0) {
         let cumTP = 0, barCount = 0;
         for (const b of intradayBars) {
-          const barTs = b.timestamp * 1000;
-          if (barTs <= signalTs) {
+          const barStartMs = b.timestamp * 1000;
+          const barEndMs = barStartMs + 60000;
+          if (barEndMs <= signalTs) {
             cumTP += (b.high + b.low + b.close) / 3;
             barCount++;
             priceAtTime = b.close;
@@ -6315,7 +6322,7 @@ router.get("/whale/admin/replay", async (req, res) => {
       const replayConfidence = Math.min(10, Math.max(1, Math.round(confidence + deltaAdj)));
       const origConfidence = parseFloat(saved.confidence) || 0;
 
-      const structureCandles = intradayBars.filter(b => b.timestamp * 1000 <= signalTs);
+      const structureCandles = intradayBars.filter(b => (b.timestamp * 1000 + 60000) <= signalTs);
       const candlesBars: CandleBar[] = structureCandles.map(b => ({
         open: b.open, high: b.high, low: b.low, close: b.close,
         volume: b.volume || 0, timestamp: b.timestamp,
@@ -6539,8 +6546,8 @@ router.get("/whale/admin/replay", async (req, res) => {
           max_adverse_price: parseFloat(saved.max_adverse_price) || null,
         },
         approximations: {
-          price: "EXACT — from historical Polygon 1-min bar closest to detected_at",
-          vwap: isSpx ? "APPROXIMATE — SPX index bars have no volume, using simple TP average" : "EXACT — calculated from historical 1-min bars with volume weighting",
+          price: "EXACT — close of last completed 1-min bar before signal (no future data)",
+          vwap: isSpx ? "APPROXIMATE — SPX index bars have no volume, using simple TP average" : "EXACT — cumulative Polygon vw-weighted VWAP from completed bars before signal",
           delta: replayDelta !== null ? "APPROXIMATE — uses current delta, not historical" : "UNAVAILABLE — contract likely expired",
           confidence: "APPROXIMATE — local scoring only (no Claude)",
         },
