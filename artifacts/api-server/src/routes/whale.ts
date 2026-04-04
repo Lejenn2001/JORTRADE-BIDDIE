@@ -6214,6 +6214,8 @@ router.get("/whale/admin/replay", async (req, res) => {
         ? Math.round(((prevHigh + prevLow + prevClose) / 3) * 100) / 100 : null;
       const r1 = pivot && prevLow ? Math.round((2 * pivot - prevLow) * 100) / 100 : null;
       const s1 = pivot && prevHigh ? Math.round((2 * pivot - prevHigh) * 100) / 100 : null;
+      const r2 = pivot && prevHigh && prevLow ? Math.round((pivot + (prevHigh - prevLow)) * 100) / 100 : null;
+      const s2 = pivot && prevHigh && prevLow ? Math.round((pivot - (prevHigh - prevLow)) * 100) / 100 : null;
 
       const premium = parseFloat(saved.premium) || 0;
       const strike = parseFloat(saved.strike) || 0;
@@ -6320,28 +6322,52 @@ router.get("/whale/admin/replay", async (req, res) => {
       }
 
       const structureCandles = intradayBars.filter(b => b.timestamp * 1000 <= signalTs);
-      let replayTarget = "", replayInvalidation = "";
-      if (structureCandles.length > 5) {
-        const highs = structureCandles.map(b => b.high).sort((a, b) => b - a);
-        const lows = structureCandles.map(b => b.low).sort((a, b) => a - b);
-        if (optType === "call" || saved.direction === "bullish") {
-          const swingHigh = highs.find(h => h > price && (h - price) >= price * 0.005);
-          replayTarget = swingHigh
-            ? `$${swingHigh.toFixed(2)} (intraday swing high)`
-            : `$${(price * 1.02).toFixed(2)} (2% above entry)`;
-          const swingLow = [...lows].reverse().find(l => l < price);
-          replayInvalidation = swingLow
-            ? `Below $${swingLow.toFixed(2)} (intraday swing low)`
-            : `Below $${(price * 0.98).toFixed(2)}`;
+      const candlesBars: CandleBar[] = structureCandles.map(b => ({
+        open: b.open, high: b.high, low: b.low, close: b.close,
+        volume: b.volume || 0, timestamp: b.timestamp,
+      }));
+      const replayStructure: MarketStructure | null = candlesBars.length > 5 ? {
+        swing_highs: findSwingPoints(candlesBars).filter(s => s.type === "high"),
+        swing_lows: findSwingPoints(candlesBars).filter(s => s.type === "low"),
+      } : null;
+      const replayHTFSwings = candlesBars.length > 10 ? computeHTFSwings(candlesBars) : null;
+
+      const replayKl = {
+        vwap: replayVwap,
+        prior_day: { high: prevHigh, low: prevLow, close: prevClose },
+        pivot_points: { pivot, r1, r2, s1, s2 },
+      };
+      const replayDir: "call" | "put" = optType === "call" ? "call" : "put";
+      const structTargets = computeStructuredTargets(price, replayDir, replayKl, replayStructure, replayHTFSwings);
+      let replayTarget = structTargets.target;
+      let replayTargetNear = structTargets.targetNear;
+
+      let replayInvalidation = "";
+      if (optType === "call" || saved.direction === "bullish") {
+        if (replayVwap && price >= replayVwap * 0.995) {
+          const invalLevel = Math.round(replayVwap * 0.997 * 100) / 100;
+          replayInvalidation = `Below $${invalLevel.toFixed(2)} (VWAP break invalidates bullish thesis)`;
+        } else if (prevLow && prevLow < price) {
+          replayInvalidation = `Below PDL at $${prevLow.toFixed(2)}`;
+        } else if (s1 && s1 < price) {
+          replayInvalidation = `Below S1 at $${s1.toFixed(2)}`;
+        } else if (pivot && pivot < price) {
+          replayInvalidation = `Below Pivot at $${pivot.toFixed(2)}`;
         } else {
-          const swingLow = lows.find(l => l < price && (price - l) >= price * 0.005);
-          replayTarget = swingLow
-            ? `$${swingLow.toFixed(2)} (intraday swing low)`
-            : `$${(price * 0.98).toFixed(2)} (2% below entry)`;
-          const swingHigh = [...highs].reverse().find(h => h > price);
-          replayInvalidation = swingHigh
-            ? `Above $${swingHigh.toFixed(2)} (intraday swing high)`
-            : `Above $${(price * 1.02).toFixed(2)}`;
+          replayInvalidation = `Below $${(price * 0.98).toFixed(2)}`;
+        }
+      } else {
+        if (replayVwap && price <= replayVwap * 1.005) {
+          const invalLevel = Math.round(replayVwap * 1.003 * 100) / 100;
+          replayInvalidation = `Above $${invalLevel.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
+        } else if (prevHigh && prevHigh > price) {
+          replayInvalidation = `Above PDH at $${prevHigh.toFixed(2)}`;
+        } else if (r1 && r1 > price) {
+          replayInvalidation = `Above R1 at $${r1.toFixed(2)}`;
+        } else if (pivot && pivot > price) {
+          replayInvalidation = `Above Pivot at $${pivot.toFixed(2)}`;
+        } else {
+          replayInvalidation = `Above $${(price * 1.02).toFixed(2)}`;
         }
       }
 
@@ -6424,7 +6450,10 @@ router.get("/whale/admin/replay", async (req, res) => {
           confidence: origConfidence,
           entry_trigger: saved.entry_trigger,
           target: saved.target,
+          target_near: saved.target_near,
           invalidation: saved.invalidation,
+          max_favorable_price: parseFloat(saved.max_favorable_price) || null,
+          max_adverse_price: parseFloat(saved.max_adverse_price) || null,
         },
         replayed: {
           price_at_signal: priceAtTime,
@@ -6435,6 +6464,7 @@ router.get("/whale/admin/replay", async (req, res) => {
           delta_adjustment: deltaAdj,
           entry_trigger: replayEntry,
           target: replayTarget,
+          target_near: replayTargetNear,
           invalidation: replayInvalidation,
         },
         approximations: {
