@@ -2749,6 +2749,34 @@ Respond ONLY with a JSON array of objects. No markdown, no explanation. Example:
     // Fall back to local scoring if Claude fails
   }
 
+  // Step 2b: Delta-based confidence adjustment (post-Claude, pre-spread)
+  // Uses Polygon options data already fetched for top 15 candidates
+  // Delta = market's real-time probability of finishing in the money
+  for (const s of signals) {
+    const key = `${s.ticker}-${s.strike}-${s.option_type}`;
+    const polyData = polygonOptionsData[key];
+    if (!polyData?.delta) continue;
+
+    const absDelta = Math.abs(polyData.delta);
+    let deltaAdj = 0;
+
+    // Lottery ticket — ~10% or less probability
+    if (absDelta < 0.10) deltaAdj = -1;
+    // Far OTM — needs a big move
+    else if (absDelta < 0.20) deltaAdj = -0.5;
+    // Deep ITM — expensive, limited leverage
+    else if (absDelta > 0.80) deltaAdj = -0.5;
+
+    // Cap total delta penalty at -1
+    deltaAdj = Math.max(deltaAdj, -1);
+
+    if (deltaAdj !== 0) {
+      const before = s.confidence;
+      s.confidence = Math.min(10, Math.max(1, Math.round(s.confidence + deltaAdj)));
+      console.log(`[signals] ${s.ticker} $${s.strike} ${s.option_type}: delta=${absDelta.toFixed(3)}, confidence ${before}→${s.confidence} (${deltaAdj})`);
+    }
+  }
+
   // Step 3: Generate spread ideas from the top directional signals
   const whaleAndAlgoSignals = signals.filter((s) => s.confidence >= 7);
   if (whaleAndAlgoSignals.length >= 2) {
