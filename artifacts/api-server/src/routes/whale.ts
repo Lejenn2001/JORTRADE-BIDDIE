@@ -453,6 +453,128 @@ function findSwingPoints(candles: CandleBar[], lookback = 3): SwingPoint[] {
   return swings;
 }
 
+function aggregateCandles(candles: CandleBar[], periodMinutes: number): CandleBar[] {
+  if (candles.length === 0) return [];
+  const periodMs = periodMinutes * 60 * 1000;
+  const grouped = new Map<number, CandleBar[]>();
+  for (const c of candles) {
+    const bucket = Math.floor((c.timestamp * 1000) / periodMs) * periodMs;
+    if (!grouped.has(bucket)) grouped.set(bucket, []);
+    grouped.get(bucket)!.push(c);
+  }
+  const result: CandleBar[] = [];
+  for (const [bucket, bars] of grouped) {
+    bars.sort((a, b) => a.timestamp - b.timestamp);
+    result.push({
+      open: bars[0].open,
+      high: Math.max(...bars.map(b => b.high)),
+      low: Math.min(...bars.map(b => b.low)),
+      close: bars[bars.length - 1].close,
+      volume: bars.reduce((sum, b) => sum + b.volume, 0),
+      timestamp: bucket / 1000,
+    });
+  }
+  result.sort((a, b) => a.timestamp - b.timestamp);
+  return result;
+}
+
+interface HTFSwings {
+  highs_30m: number[];
+  lows_30m: number[];
+  highs_1h: number[];
+  lows_1h: number[];
+}
+
+function computeHTFSwings(candles5m: CandleBar[]): HTFSwings {
+  const candles30m = aggregateCandles(candles5m, 30);
+  const candles1h = aggregateCandles(candles5m, 60);
+  const swings30m = findSwingPoints(candles30m, 3);
+  const swings1h = findSwingPoints(candles1h, 3);
+  return {
+    highs_30m: swings30m.filter(s => s.type === "high").map(s => s.price),
+    lows_30m: swings30m.filter(s => s.type === "low").map(s => s.price),
+    highs_1h: swings1h.filter(s => s.type === "high").map(s => s.price),
+    lows_1h: swings1h.filter(s => s.type === "low").map(s => s.price),
+  };
+}
+
+function computeStructuredTargets(
+  price: number,
+  direction: "call" | "put",
+  kl: any,
+  structure: MarketStructure | null,
+  htfSwings: HTFSwings | null,
+): { target: string; targetNear: string } {
+  const pdh = kl?.prior_day?.high ?? null;
+  const pdl = kl?.prior_day?.low ?? null;
+  const r1 = kl?.pivot_points?.r1 ?? null;
+  const r2 = kl?.pivot_points?.r2 ?? null;
+  const s1 = kl?.pivot_points?.s1 ?? null;
+  const s2 = kl?.pivot_points?.s2 ?? null;
+  const vwap = kl?.vwap ?? null;
+
+  const swingHighs5m = (structure?.swing_highs || []).map(s => s.price);
+  const swingLows5m = (structure?.swing_lows || []).map(s => s.price);
+
+  interface TargetCandidate { level: number; name: string; priority: number; }
+  const candidates: TargetCandidate[] = [];
+
+  if (direction === "call") {
+    if (pdh && pdh > price) candidates.push({ level: pdh, name: "PDH", priority: 1 });
+    if (r1 && r1 > price) candidates.push({ level: r1, name: "R1", priority: 2 });
+    if (r2 && r2 > price) candidates.push({ level: r2, name: "R2", priority: 2 });
+    if (htfSwings) {
+      for (const p of htfSwings.highs_1h.filter(p => p > price)) candidates.push({ level: p, name: "1h swing high", priority: 3 });
+      for (const p of htfSwings.highs_30m.filter(p => p > price)) candidates.push({ level: p, name: "30m swing high", priority: 3 });
+    }
+    if (vwap && vwap > price) candidates.push({ level: vwap, name: "VWAP", priority: 4 });
+    for (const p of swingHighs5m.filter(p => p > price)) candidates.push({ level: p, name: "swing high", priority: 5 });
+  } else {
+    if (pdl && pdl < price) candidates.push({ level: pdl, name: "PDL", priority: 1 });
+    if (s1 && s1 < price) candidates.push({ level: s1, name: "S1", priority: 2 });
+    if (s2 && s2 < price) candidates.push({ level: s2, name: "S2", priority: 2 });
+    if (htfSwings) {
+      for (const p of htfSwings.lows_1h.filter(p => p < price)) candidates.push({ level: p, name: "1h swing low", priority: 3 });
+      for (const p of htfSwings.lows_30m.filter(p => p < price)) candidates.push({ level: p, name: "30m swing low", priority: 3 });
+    }
+    if (vwap && vwap < price) candidates.push({ level: vwap, name: "VWAP", priority: 4 });
+    for (const p of swingLows5m.filter(p => p < price)) candidates.push({ level: p, name: "swing low", priority: 5 });
+  }
+
+  candidates.sort((a, b) => {
+    const distA = Math.abs(a.level - price);
+    const distB = Math.abs(b.level - price);
+    if (Math.abs(distA - distB) < price * 0.001) return a.priority - b.priority;
+    return distA - distB;
+  });
+
+  const deduped: TargetCandidate[] = [];
+  for (const c of candidates) {
+    if (!deduped.some(d => Math.abs(d.level - c.level) / price < 0.001)) {
+      deduped.push(c);
+    }
+  }
+
+  if (deduped.length >= 2) {
+    return {
+      target: `${deduped[0].name} at $${deduped[0].level.toFixed(2)}`,
+      targetNear: `${deduped[1].name} at $${deduped[1].level.toFixed(2)}`,
+    };
+  } else if (deduped.length === 1) {
+    const fallbackMult = direction === "call" ? 1.02 : 0.98;
+    return {
+      target: `${deduped[0].name} at $${deduped[0].level.toFixed(2)}`,
+      targetNear: `$${(deduped[0].level * fallbackMult).toFixed(2)}`,
+    };
+  } else {
+    if (direction === "call") {
+      return { target: `$${(price * 1.02).toFixed(2)}`, targetNear: `$${(price * 1.04).toFixed(2)}` };
+    } else {
+      return { target: `$${(price * 0.98).toFixed(2)}`, targetNear: `$${(price * 0.96).toFixed(2)}` };
+    }
+  }
+}
+
 function findFairValueGaps(candles: CandleBar[]): FairValueGap[] {
   const fvgs: FairValueGap[] = [];
   for (let i = 2; i < candles.length; i++) {
@@ -2016,10 +2138,12 @@ async function runSignalsPipeline() {
   }
 
   const structureMap: Record<string, MarketStructure> = {};
+  const htfSwingsMap: Record<string, HTFSwings> = {};
   uniqueTickers.forEach((t, i) => {
     const sCandles = structureResults[i] || [];
     const price = keyLevels[t]?.current_price ?? null;
     structureMap[t] = analyzeMarketStructure(sCandles, price);
+    htfSwingsMap[t] = computeHTFSwings(sCandles);
   });
 
   // Run price action confirmation for each candidate
@@ -2047,7 +2171,7 @@ async function runSignalsPipeline() {
   }
 
   // ── Local scoring — no Claude call needed ──
-  function scoreSignal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null): any {
+  function scoreSignal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null, htfSwings?: HTFSwings | null): any {
     const ticker = c.ticker as string;
     const strike = parseFloat(String(c.strike)) || 0;
     const premium = c.total_premium || 0;
@@ -2233,34 +2357,9 @@ async function runSignalsPipeline() {
           actNow = false;
         }
 
-        const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
-        const minTargetDist = price * 0.005;
-
-        const validSwingHighs = swingHighs.filter(p => (p - price) >= minTargetDist);
-        if (validSwingHighs.length >= 2) {
-          target = `$${validSwingHighs[0].toFixed(2)} (previous swing high), then $${validSwingHighs[1].toFixed(2)}`;
-          targetNear = `$${validSwingHighs[1].toFixed(2)}`;
-        } else if (validSwingHighs.length === 1) {
-          target = `$${validSwingHighs[0].toFixed(2)} (previous swing high)`;
-          targetNear = `$${(validSwingHighs[0] * 1.01).toFixed(2)}`;
-        } else {
-          const callTargets = [
-            vwap && vwap > price && (vwap - price) >= minTargetDist ? { level: vwap, name: "VWAP" } : null,
-            pdh && pdh > price && (pdh - price) >= minTargetDist ? { level: pdh, name: "PDH" } : null,
-            r1 && r1 > price && (r1 - price) >= minTargetDist ? { level: r1, name: "R1" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          callTargets.sort((a, b) => a.level - b.level);
-          if (callTargets.length >= 2) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-          } else if (callTargets.length === 1) {
-            target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
-          } else {
-            target = `$${(price * 1.02).toFixed(2)}`;
-            targetNear = `$${(price * 1.04).toFixed(2)}`;
-          }
-        }
+        const structTargets = computeStructuredTargets(price, "call", kl, structure, htfSwings ?? null);
+        target = structTargets.target;
+        targetNear = structTargets.targetNear;
 
         if (vwap && price >= vwap * 0.995) {
           const vwapBuffer = vwap * (1 - 0.003);
@@ -2309,34 +2408,9 @@ async function runSignalsPipeline() {
           actNow = false;
         }
 
-        const swingLowsPut = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
-        const minTargetDistPut = price * 0.005;
-
-        const validSwingLows = swingLowsPut.filter(p => (price - p) >= minTargetDistPut);
-        if (validSwingLows.length >= 2) {
-          target = `$${validSwingLows[0].toFixed(2)} (previous swing low), then $${validSwingLows[1].toFixed(2)}`;
-          targetNear = `$${validSwingLows[1].toFixed(2)}`;
-        } else if (validSwingLows.length === 1) {
-          target = `$${validSwingLows[0].toFixed(2)} (previous swing low)`;
-          targetNear = `$${(validSwingLows[0] * 0.99).toFixed(2)}`;
-        } else {
-          const putTargets = [
-            vwap && vwap < price && (price - vwap) >= minTargetDistPut ? { level: vwap, name: "VWAP" } : null,
-            pdl && pdl < price && (price - pdl) >= minTargetDistPut ? { level: pdl, name: "PDL" } : null,
-            s1 && s1 < price && (price - s1) >= minTargetDistPut ? { level: s1, name: "S1" } : null,
-          ].filter((l): l is { level: number; name: string } => !!l);
-          putTargets.sort((a, b) => b.level - a.level);
-          if (putTargets.length >= 2) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-          } else if (putTargets.length === 1) {
-            target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-            targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
-          } else {
-            target = `$${(price * 0.98).toFixed(2)}`;
-            targetNear = `$${(price * 0.96).toFixed(2)}`;
-          }
-        }
+        const structTargetsPut = computeStructuredTargets(price, "put", kl, structure, htfSwings ?? null);
+        target = structTargetsPut.target;
+        targetNear = structTargetsPut.targetNear;
 
         if (vwap && price <= vwap * 1.005) {
           const vwapBuffer = vwap * (1 + 0.003);
@@ -2462,7 +2536,8 @@ async function runSignalsPipeline() {
     const kl = keyLevels[ticker];
     const confirmation = priceConfirmations[key];
     const structure = structureMap[ticker] || null;
-    const sig = scoreSignal(c, kl, confirmation, structure);
+    const htfSwings = htfSwingsMap[ticker] || null;
+    const sig = scoreSignal(c, kl, confirmation, structure, htfSwings);
     if (sig && !seenTickers.has(`${ticker}-${optType}`)) {
       seenTickers.add(`${ticker}-${optType}`);
       preScreened.push(sig);
@@ -5881,27 +5956,27 @@ router.post("/whale/admin/reprocess-v5", async (req, res) => {
         const optionType = sig.option_type;
         const existingTags: string[] = sig.tags || [];
 
-        const structureCandles = await fetchStructureCandles(ticker);
+        const [structureCandles, kl] = await Promise.all([
+          fetchStructureCandles(ticker),
+          fetchKeyLevels(ticker).catch(() => null),
+        ]);
         const structure = structureCandles.length > 10 ? analyzeMarketStructure(structureCandles) : null;
+        const htfSwings = computeHTFSwings(structureCandles);
 
         const gex = await fetchTickerGex(ticker, price);
 
-        let target = "", targetNear = "", invalidation = "";
-        const minTargetDist = price * 0.005;
+        const rDir = (direction === "bullish" || optionType === "call") ? "call" as const : "put" as const;
+        const rTargets = computeStructuredTargets(price, rDir, kl, structure, htfSwings);
+        let target = rTargets.target, targetNear = rTargets.targetNear, invalidation = "";
 
-        if (direction === "bullish" || optionType === "call") {
-          const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
-          const validSwingHighs = swingHighs.filter(p => (p - price) >= minTargetDist);
-          if (validSwingHighs.length >= 2) {
-            target = `$${validSwingHighs[0].toFixed(2)} (previous swing high), then $${validSwingHighs[1].toFixed(2)}`;
-            targetNear = `$${validSwingHighs[1].toFixed(2)}`;
-          } else if (validSwingHighs.length === 1) {
-            target = `$${validSwingHighs[0].toFixed(2)} (previous swing high)`;
-            targetNear = `$${(validSwingHighs[0] * 1.01).toFixed(2)}`;
-          } else {
-            target = `$${(price * 1.02).toFixed(2)} (2% above entry)`;
-            targetNear = `$${(price * 1.04).toFixed(2)}`;
-          }
+        const vwap = kl?.vwap ?? null;
+        const pdh = kl?.prior_day?.high ?? null;
+        const pdl = kl?.prior_day?.low ?? null;
+        const r1 = kl?.pivot_points?.r1 ?? null;
+        const s1 = kl?.pivot_points?.s1 ?? null;
+        const pivot = kl?.pivot_points?.pivot ?? null;
+
+        if (rDir === "call") {
           if (vwap && price >= vwap * 0.995) {
             const vwapBuffer = vwap * (1 - 0.003);
             invalidation = `Below $${vwapBuffer.toFixed(2)} (VWAP break invalidates bullish thesis)`;
@@ -5917,18 +5992,6 @@ router.post("/whale/admin/reprocess-v5", async (req, res) => {
               : `Below $${(price * 0.98).toFixed(2)}`;
           }
         } else {
-          const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
-          const validSwingLows = swingLows.filter(p => (price - p) >= minTargetDist);
-          if (validSwingLows.length >= 2) {
-            target = `$${validSwingLows[0].toFixed(2)} (previous swing low), then $${validSwingLows[1].toFixed(2)}`;
-            targetNear = `$${validSwingLows[1].toFixed(2)}`;
-          } else if (validSwingLows.length === 1) {
-            target = `$${validSwingLows[0].toFixed(2)} (previous swing low)`;
-            targetNear = `$${(validSwingLows[0] * 0.99).toFixed(2)}`;
-          } else {
-            target = `$${(price * 0.98).toFixed(2)} (2% below entry)`;
-            targetNear = `$${(price * 0.96).toFixed(2)}`;
-          }
           if (vwap && price <= vwap * 1.005) {
             const vwapBuffer = vwap * (1 + 0.003);
             invalidation = `Above $${vwapBuffer.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
@@ -6470,10 +6533,12 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
     uniqueTickers.forEach((t, i) => { candleMap[t] = candleResults[i] || []; });
 
     const structureMap: Record<string, any> = {};
+    const htfSwingsMapReplay: Record<string, HTFSwings> = {};
     uniqueTickers.forEach((t, i) => {
       const sCandles = structureResults[i] || [];
       const price = uwPricesMap[t.toUpperCase()] ?? keyLevels[t]?.current_price ?? null;
       if (sCandles.length > 0 && price) structureMap[t] = analyzeMarketStructure(sCandles, price);
+      htfSwingsMapReplay[t] = computeHTFSwings(sCandles);
     });
 
     const priceConfirmations: Record<string, any> = {};
@@ -6498,7 +6563,7 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
       priceConfirmations[key] = { ...confirmation, trade_recommendation: tradeRec };
     }
 
-    function scoreSignalLocal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null): any {
+    function scoreSignalLocal(c: any, kl: any, confirmation: any, structure?: MarketStructure | null, htfSwings?: HTFSwings | null): any {
       const ticker = c.ticker as string;
       const strike = parseFloat(String(c.strike)) || 0;
       const premium = c.total_premium || 0;
@@ -6653,33 +6718,9 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             actNow = false;
           }
 
-          const aSwingHighs = (structure?.swing_highs || []).map((s: any) => s.price).filter((p: number) => p > price).sort((a: number, b: number) => a - b);
-          const aMinTargetDist = price * 0.005;
-          const aValidSwingHighs = aSwingHighs.filter((p: number) => (p - price) >= aMinTargetDist);
-          if (aValidSwingHighs.length >= 2) {
-            target = `$${aValidSwingHighs[0].toFixed(2)} (previous swing high), then $${aValidSwingHighs[1].toFixed(2)}`;
-            targetNear = `$${aValidSwingHighs[1].toFixed(2)}`;
-          } else if (aValidSwingHighs.length === 1) {
-            target = `$${aValidSwingHighs[0].toFixed(2)} (previous swing high)`;
-            targetNear = `$${(aValidSwingHighs[0] * 1.01).toFixed(2)}`;
-          } else {
-            const callTargets = [
-              vwap && vwap > price && (vwap - price) >= aMinTargetDist ? { level: vwap, name: "VWAP" } : null,
-              pdh && pdh > price && (pdh - price) >= aMinTargetDist ? { level: pdh, name: "PDH" } : null,
-              r1 && r1 > price && (r1 - price) >= aMinTargetDist ? { level: r1, name: "R1" } : null,
-            ].filter((l): l is { level: number; name: string } => !!l);
-            callTargets.sort((a, b) => a.level - b.level);
-            if (callTargets.length >= 2) {
-              target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-              targetNear = `${callTargets[1].name} at $${callTargets[1].level.toFixed(2)}`;
-            } else if (callTargets.length === 1) {
-              target = `${callTargets[0].name} at $${callTargets[0].level.toFixed(2)}`;
-              targetNear = `$${(callTargets[0].level * 1.02).toFixed(2)}`;
-            } else {
-              target = `$${(price * 1.02).toFixed(2)}`;
-              targetNear = `$${(price * 1.04).toFixed(2)}`;
-            }
-          }
+          const structTargetsCall = computeStructuredTargets(price, "call", kl, structure, htfSwings ?? null);
+          target = structTargetsCall.target;
+          targetNear = structTargetsCall.targetNear;
 
           if (vwap && price >= vwap * 0.995) {
             const vwapBuffer = vwap * (1 - 0.003);
@@ -6727,33 +6768,9 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             actNow = false;
           }
 
-          const aSwingLowsPut = (structure?.swing_lows || []).map((s: any) => s.price).filter((p: number) => p < price).sort((a: number, b: number) => b - a);
-          const aMinTargetDistPut = price * 0.005;
-          const aValidSwingLowsPut = aSwingLowsPut.filter((p: number) => (price - p) >= aMinTargetDistPut);
-          if (aValidSwingLowsPut.length >= 2) {
-            target = `$${aValidSwingLowsPut[0].toFixed(2)} (previous swing low), then $${aValidSwingLowsPut[1].toFixed(2)}`;
-            targetNear = `$${aValidSwingLowsPut[1].toFixed(2)}`;
-          } else if (aValidSwingLowsPut.length === 1) {
-            target = `$${aValidSwingLowsPut[0].toFixed(2)} (previous swing low)`;
-            targetNear = `$${(aValidSwingLowsPut[0] * 0.99).toFixed(2)}`;
-          } else {
-            const putTargets = [
-              vwap && vwap < price && (price - vwap) >= aMinTargetDistPut ? { level: vwap, name: "VWAP" } : null,
-              pdl && pdl < price && (price - pdl) >= aMinTargetDistPut ? { level: pdl, name: "PDL" } : null,
-              s1 && s1 < price && (price - s1) >= aMinTargetDistPut ? { level: s1, name: "S1" } : null,
-            ].filter((l): l is { level: number; name: string } => !!l);
-            putTargets.sort((a, b) => b.level - a.level);
-            if (putTargets.length >= 2) {
-              target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-              targetNear = `${putTargets[1].name} at $${putTargets[1].level.toFixed(2)}`;
-            } else if (putTargets.length === 1) {
-              target = `${putTargets[0].name} at $${putTargets[0].level.toFixed(2)}`;
-              targetNear = `$${(putTargets[0].level * 0.98).toFixed(2)}`;
-            } else {
-              target = `$${(price * 0.98).toFixed(2)}`;
-              targetNear = `$${(price * 0.96).toFixed(2)}`;
-            }
-          }
+          const structTargetsPut = computeStructuredTargets(price, "put", kl, structure, htfSwings ?? null);
+          target = structTargetsPut.target;
+          targetNear = structTargetsPut.targetNear;
 
           if (vwap && price <= vwap * 1.005) {
             const vwapBuffer = vwap * (1 + 0.003);
@@ -6842,7 +6859,8 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
       const kl = keyLevels[ticker];
       const confirmation = priceConfirmations[`${ticker}-${strike}-${c.type}`];
       const archStructure = structureMap[ticker] || null;
-      const sig = scoreSignalLocal(c, kl, confirmation, archStructure);
+      const archHtfSwings = htfSwingsMapReplay[ticker] || null;
+      const sig = scoreSignalLocal(c, kl, confirmation, archStructure, archHtfSwings);
       if (sig && !seenStrikes.has(key)) {
         seenStrikes.add(key);
         preScreened.push(sig);
