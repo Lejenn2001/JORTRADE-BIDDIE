@@ -5970,6 +5970,254 @@ router.post("/whale/admin/reprocess-v5", async (req, res) => {
   }
 });
 
+router.get("/whale/admin/replay", async (req, res) => {
+  try {
+    const adminUserId = req.headers["x-user-id"] as string;
+    if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
+    if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
+
+    const defaultIds = [
+      "ad62d320-844c-4496-be13-116ea7dbcad8",
+      "db9f513d-d034-47ee-b0db-a48f483ca9ef",
+      "01dba2a5-6015-47a9-ae35-0b06562a4f85",
+      "d04ee7fd-7c3d-4110-857b-e6f65eb1a075",
+      "520a476f-b665-4540-8f26-12388b780e14",
+    ];
+    const inputIds = req.query.ids
+      ? (req.query.ids as string).split(",").slice(0, 10)
+      : defaultIds;
+
+    const results: any[] = [];
+
+    for (const sid of inputIds) {
+      const sigRes = await pool.query(
+        `SELECT * FROM signal_outcomes WHERE id = $1`, [sid]
+      );
+      if (sigRes.rows.length === 0) {
+        results.push({ id: sid, status: "not_found" });
+        continue;
+      }
+      const saved = sigRes.rows[0];
+      const ticker = saved.ticker === "SPXW" ? "SPX" : saved.ticker;
+      const isSpx = ["SPX", "SPXW"].includes(saved.ticker);
+      const signalDate = saved.detected_at.toISOString().slice(0, 10);
+      const signalTs = saved.detected_at.getTime();
+
+      const prevDate = new Date(saved.detected_at);
+      prevDate.setDate(prevDate.getDate() - 7);
+      const prevDateStr = prevDate.toISOString().slice(0, 10);
+
+      const polygonTicker = isSpx ? "I:SPX" : saved.ticker;
+      const [dailyBars, intradayBars] = await Promise.all([
+        fetchPolygonAggs(isSpx ? "SPY" : saved.ticker, 1, "day", prevDateStr, signalDate),
+        fetchPolygonAggs(polygonTicker, 1, "minute", signalDate, signalDate),
+      ]);
+
+      let replayVwap: number | null = null;
+      let cumTPV = 0, cumVol = 0;
+      let priceAtTime: number | null = null;
+      for (const b of intradayBars) {
+        if (b.high && b.low && b.close && b.volume) {
+          cumTPV += ((b.high + b.low + b.close) / 3) * b.volume;
+          cumVol += b.volume;
+        }
+        const barTs = b.timestamp * 1000;
+        if (barTs <= signalTs) {
+          priceAtTime = b.close;
+          replayVwap = cumVol > 0 ? Math.round((cumTPV / cumVol) * 100) / 100 : null;
+        }
+      }
+
+      if (isSpx && cumVol === 0 && intradayBars.length > 0) {
+        let cumTP = 0, barCount = 0;
+        for (const b of intradayBars) {
+          const barTs = b.timestamp * 1000;
+          if (barTs <= signalTs) {
+            cumTP += (b.high + b.low + b.close) / 3;
+            barCount++;
+            priceAtTime = b.close;
+          }
+        }
+        replayVwap = barCount > 0 ? Math.round((cumTP / barCount) * 100) / 100 : null;
+      }
+
+      if (priceAtTime) priceAtTime = Math.round(priceAtTime * 100) / 100;
+
+      let prevClose: number | null = null, prevHigh: number | null = null, prevLow: number | null = null;
+      if (dailyBars.length >= 2) {
+        const prev = dailyBars[dailyBars.length - 2];
+        prevClose = prev.close; prevHigh = prev.high; prevLow = prev.low;
+      }
+      const pivot = prevHigh && prevLow && prevClose
+        ? Math.round(((prevHigh + prevLow + prevClose) / 3) * 100) / 100 : null;
+      const r1 = pivot && prevLow ? Math.round((2 * pivot - prevLow) * 100) / 100 : null;
+      const s1 = pivot && prevHigh ? Math.round((2 * pivot - prevHigh) * 100) / 100 : null;
+
+      const premium = parseFloat(saved.premium) || 0;
+      const strike = parseFloat(saved.strike) || 0;
+      const optType = saved.option_type;
+      const hasSweep = (saved.tags || []).some((t: string) => t === "Sweep");
+      const price = priceAtTime || parseFloat(saved.price_at_signal) || 0;
+
+      let confidence = 5;
+      if (hasSweep) confidence += 1;
+      if (premium >= 100_000) confidence += 0.5;
+      if (premium >= 500_000) confidence += 0.5;
+      if (premium >= 1_000_000) confidence += 0.5;
+
+      if (price && strike) {
+        const diff = Math.abs(strike - price) / price;
+        if (diff < 0.02) confidence += 1;
+        else if (diff < 0.05) confidence += 0.5;
+        else if (diff > 0.10) confidence -= 1;
+      }
+
+      if (price && replayVwap) {
+        const priceAligned = optType === "call" ? price > replayVwap : price < replayVwap;
+        if (!priceAligned) {
+          confidence -= (premium >= 1_000_000) ? 0.5 : 1;
+        } else {
+          confidence += 0.5;
+        }
+      }
+
+      if (saved.expiry) {
+        try {
+          const expStr = saved.expiry.includes("-") ? saved.expiry : new Date(saved.expiry).toISOString().slice(0, 10);
+          const daysOut = (new Date(expStr + "T16:00:00").getTime() - signalTs) / (1000 * 60 * 60 * 24);
+          if (daysOut > 0 && daysOut <= 7) confidence += 0.5;
+        } catch {}
+      }
+
+      let replayDelta: number | null = null;
+      let deltaAdj = 0;
+      const polygonKey = POLYGON_KEY();
+      if (polygonKey && !isSpx) {
+        try {
+          const expDate = (() => {
+            try {
+              let d = new Date(saved.expiry);
+              if (isNaN(d.getTime())) return null;
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            } catch { return null; }
+          })();
+          if (expDate) {
+            const contractType = optType === "call" ? "C" : "P";
+            const strikeStr = Math.round(strike * 1000).toString().padStart(8, '0');
+            const oTicker = `O:${saved.ticker}${expDate.replace(/-/g, '').slice(2)}${contractType}${strikeStr}`;
+            const snapUrl = `https://api.polygon.io/v3/snapshot/options/${saved.ticker}/${oTicker}?apiKey=${polygonKey}`;
+            const snapRes = await fetch(snapUrl, { signal: AbortSignal.timeout(5000) });
+            if (snapRes.ok) {
+              const snapJson = await snapRes.json() as any;
+              const greeks = snapJson.results?.greeks;
+              if (greeks?.delta) {
+                replayDelta = Math.round(Math.abs(greeks.delta) * 1000) / 1000;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (replayDelta !== null) {
+        if (replayDelta < 0.10) deltaAdj = -1;
+        else if (replayDelta < 0.20) deltaAdj = -0.5;
+        else if (replayDelta > 0.80) deltaAdj = -0.5;
+        deltaAdj = Math.max(deltaAdj, -1);
+      }
+
+      const replayConfidence = Math.min(10, Math.max(1, Math.round(confidence + deltaAdj)));
+
+      let replayEntry = "";
+      if (replayVwap && price) {
+        const vwapStr = `$${replayVwap.toLocaleString()}`;
+        if (Math.abs(price - replayVwap) / replayVwap < 0.003) {
+          replayEntry = `At VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "call" && price > replayVwap) {
+          replayEntry = `Above VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "put" && price < replayVwap) {
+          replayEntry = `Below VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else {
+          replayEntry = hasSweep
+            ? `${optType === "call" ? "Bullish" : "Bearish"} sweep at $${price.toFixed(2)} — VWAP at ${vwapStr}`
+            : `Near $${price.toFixed(2)} — VWAP at ${vwapStr}`;
+        }
+      } else {
+        replayEntry = `Near $${price.toFixed(2)} (VWAP not available)`;
+      }
+
+      const structureCandles = intradayBars.filter(b => b.timestamp * 1000 <= signalTs);
+      let replayTarget = "", replayInvalidation = "";
+      if (structureCandles.length > 5) {
+        const highs = structureCandles.map(b => b.high).sort((a, b) => b - a);
+        const lows = structureCandles.map(b => b.low).sort((a, b) => a - b);
+        if (optType === "call" || saved.direction === "bullish") {
+          const swingHigh = highs.find(h => h > price && (h - price) >= price * 0.005);
+          replayTarget = swingHigh
+            ? `$${swingHigh.toFixed(2)} (intraday swing high)`
+            : `$${(price * 1.02).toFixed(2)} (2% above entry)`;
+          const swingLow = [...lows].reverse().find(l => l < price);
+          replayInvalidation = swingLow
+            ? `Below $${swingLow.toFixed(2)} (intraday swing low)`
+            : `Below $${(price * 0.98).toFixed(2)}`;
+        } else {
+          const swingLow = lows.find(l => l < price && (price - l) >= price * 0.005);
+          replayTarget = swingLow
+            ? `$${swingLow.toFixed(2)} (intraday swing low)`
+            : `$${(price * 0.98).toFixed(2)} (2% below entry)`;
+          const swingHigh = [...highs].reverse().find(h => h > price);
+          replayInvalidation = swingHigh
+            ? `Above $${swingHigh.toFixed(2)} (intraday swing high)`
+            : `Above $${(price * 1.02).toFixed(2)}`;
+        }
+      }
+
+      results.push({
+        id: sid,
+        ticker: saved.ticker,
+        original: {
+          detected_at: saved.detected_at,
+          price_at_signal: parseFloat(saved.price_at_signal),
+          confidence: parseFloat(saved.confidence),
+          entry_trigger: saved.entry_trigger,
+          target: saved.target,
+          invalidation: saved.invalidation,
+          reason: saved.reason,
+          outcome: saved.outcome,
+        },
+        replayed: {
+          detected_at: saved.detected_at,
+          price_at_signal: priceAtTime,
+          vwap: replayVwap,
+          confidence: replayConfidence,
+          confidence_before_delta: Math.min(10, Math.max(1, Math.round(confidence))),
+          delta: replayDelta,
+          delta_adjustment: deltaAdj,
+          entry_trigger: replayEntry,
+          target: replayTarget,
+          invalidation: replayInvalidation,
+          pivot, r1, s1,
+          reason: `Replayed: $${(premium / 1000).toFixed(0)}K ${optType} flow at $${strike} strike. Price at $${price.toFixed(2)}${replayVwap ? ` vs VWAP $${replayVwap}` : ""}.${replayDelta !== null ? ` Delta: ${replayDelta}` : ""}`,
+        },
+        approximations: {
+          price_at_signal: "EXACT — from historical Polygon 1-min bar closest to detected_at",
+          vwap: isSpx ? "APPROXIMATE — SPX index bars have no volume, using simple TP average" : "EXACT — calculated from historical 1-min bars with volume weighting",
+          delta: replayDelta !== null ? "APPROXIMATE — uses current delta, not historical (contract may have decayed)" : "UNAVAILABLE — contract likely expired, no current snapshot",
+          confidence: "APPROXIMATE — uses local scoring rules only (no Claude re-evaluation)",
+          targets: "APPROXIMATE — uses intraday swing highs/lows from historical bars, not full multi-day structure",
+        },
+        bars_used: intradayBars.length,
+        bars_before_signal: structureCandles.length,
+      });
+    }
+
+    console.log(`[admin] replay: ${results.filter(r => r.id).length} signals replayed (read-only)`);
+    res.json({ success: true, mode: "read-only replay", results });
+  } catch (e: any) {
+    console.error("[admin] replay error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/process-archived-spx", async (req, res) => {
   try {
     const { adminSecret } = req.body;
