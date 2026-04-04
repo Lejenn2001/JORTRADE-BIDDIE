@@ -251,7 +251,7 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
 
     const [dailyBars, intradayBars] = await Promise.all([
       fetchPolygonAggs(ticker, 1, "day", fmtDate(from5d), today),
-      fetchPolygonAggs(ticker, 5, "minute", today, today),
+      fetchPolygonAggs(ticker, 1, "minute", today, today),
     ]);
 
     let prevClose: number | null = null, prevHigh: number | null = null;
@@ -7312,7 +7312,7 @@ async function fetchSpxVwapFromPolygon(): Promise<void> {
     const todayStr = todayDate.toISOString().slice(0, 10);
     const yesterdayStr = yesterday.toISOString().slice(0, 10);
     const apiKey = process.env["POLYGON_API_KEY"] ?? "";
-    const url = `https://api.polygon.io/v2/aggs/ticker/I:SPX/range/15/minute/${yesterdayStr}/${todayStr}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
+    const url = `https://api.polygon.io/v2/aggs/ticker/I:SPX/range/1/minute/${yesterdayStr}/${todayStr}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
     const res = await fetch(url);
     if (!res.ok) {
       console.warn(`[spx-vwap] Polygon I:SPX fetch failed: ${res.status}`);
