@@ -5976,29 +5976,63 @@ router.get("/whale/admin/replay", async (req, res) => {
     if (!adminUserId) return res.status(401).json({ error: "Not authenticated" });
     if (!(await isAdminUser(adminUserId))) return res.status(403).json({ error: "Not an admin" });
 
-    const defaultIds = [
-      "ad62d320-844c-4496-be13-116ea7dbcad8",
-      "db9f513d-d034-47ee-b0db-a48f483ca9ef",
-      "01dba2a5-6015-47a9-ae35-0b06562a4f85",
-      "d04ee7fd-7c3d-4110-857b-e6f65eb1a075",
-      "520a476f-b665-4540-8f26-12388b780e14",
-    ];
-    const inputIds = req.query.ids
-      ? (req.query.ids as string).split(",").slice(0, 10)
-      : defaultIds;
+    const dateParam = req.query.date as string | undefined;
+    const driftOnly = req.query.drift === "true";
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 25);
+
+    let signalRows: any[] = [];
+
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const dateRes = await pool.query(
+        `SELECT * FROM signal_outcomes
+         WHERE detected_at::date = $1
+           AND COALESCE(category, '') != 'spread'
+           AND detected_at != date_trunc('day', detected_at)
+           AND EXTRACT(HOUR FROM detected_at AT TIME ZONE 'America/New_York') BETWEEN 9 AND 16
+         ORDER BY detected_at ASC
+         LIMIT 25`,
+        [dateParam]
+      );
+      signalRows = dateRes.rows;
+    } else if (req.query.ids) {
+      const inputIds = (req.query.ids as string).split(",").slice(0, 10);
+      for (const sid of inputIds) {
+        const r = await pool.query(`SELECT * FROM signal_outcomes WHERE id = $1`, [sid]);
+        if (r.rows.length > 0) signalRows.push(r.rows[0]);
+      }
+    } else {
+      const recentRes = await pool.query(
+        `SELECT DISTINCT detected_at::date as d FROM signal_outcomes
+         WHERE COALESCE(category, '') != 'spread'
+           AND detected_at != date_trunc('day', detected_at)
+           AND EXTRACT(HOUR FROM detected_at AT TIME ZONE 'America/New_York') BETWEEN 9 AND 16
+         ORDER BY d DESC LIMIT 2`
+      );
+      const recentDates = recentRes.rows.map((r: any) => r.d);
+      if (recentDates.length > 0) {
+        const allRes = await pool.query(
+          `SELECT * FROM signal_outcomes
+           WHERE detected_at::date = ANY($1)
+             AND COALESCE(category, '') != 'spread'
+             AND detected_at != date_trunc('day', detected_at)
+             AND EXTRACT(HOUR FROM detected_at AT TIME ZONE 'America/New_York') BETWEEN 9 AND 16
+           ORDER BY detected_at ASC
+           LIMIT 25`,
+          [recentDates]
+        );
+        signalRows = allRes.rows;
+      }
+    }
+
+    if (signalRows.length === 0) {
+      return res.json({ success: true, mode: "read-only replay", signals_found: 0, results: [] });
+    }
+
+    const barCache: Record<string, any[]> = {};
 
     const results: any[] = [];
 
-    for (const sid of inputIds) {
-      const sigRes = await pool.query(
-        `SELECT * FROM signal_outcomes WHERE id = $1`, [sid]
-      );
-      if (sigRes.rows.length === 0) {
-        results.push({ id: sid, status: "not_found" });
-        continue;
-      }
-      const saved = sigRes.rows[0];
-      const ticker = saved.ticker === "SPXW" ? "SPX" : saved.ticker;
+    for (const saved of signalRows) {
       const isSpx = ["SPX", "SPXW"].includes(saved.ticker);
       const signalDate = saved.detected_at.toISOString().slice(0, 10);
       const signalTs = saved.detected_at.getTime();
@@ -6008,10 +6042,20 @@ router.get("/whale/admin/replay", async (req, res) => {
       const prevDateStr = prevDate.toISOString().slice(0, 10);
 
       const polygonTicker = isSpx ? "I:SPX" : saved.ticker;
-      const [dailyBars, intradayBars] = await Promise.all([
-        fetchPolygonAggs(isSpx ? "SPY" : saved.ticker, 1, "day", prevDateStr, signalDate),
-        fetchPolygonAggs(polygonTicker, 1, "minute", signalDate, signalDate),
-      ]);
+      const dailyTicker = isSpx ? "SPY" : saved.ticker;
+
+      const intradayKey = `${polygonTicker}:${signalDate}`;
+      const dailyKey = `${dailyTicker}:daily:${prevDateStr}:${signalDate}`;
+
+      if (!barCache[intradayKey]) {
+        barCache[intradayKey] = await fetchPolygonAggs(polygonTicker, 1, "minute", signalDate, signalDate);
+      }
+      if (!barCache[dailyKey]) {
+        barCache[dailyKey] = await fetchPolygonAggs(dailyTicker, 1, "day", prevDateStr, signalDate);
+      }
+
+      const intradayBars = barCache[intradayKey];
+      const dailyBars = barCache[dailyKey];
 
       let replayVwap: number | null = null;
       let cumTPV = 0, cumVol = 0;
@@ -6058,6 +6102,7 @@ router.get("/whale/admin/replay", async (req, res) => {
       const optType = saved.option_type;
       const hasSweep = (saved.tags || []).some((t: string) => t === "Sweep");
       const price = priceAtTime || parseFloat(saved.price_at_signal) || 0;
+      const origPrice = parseFloat(saved.price_at_signal) || 0;
 
       let confidence = 5;
       if (hasSweep) confidence += 1;
@@ -6072,9 +6117,19 @@ router.get("/whale/admin/replay", async (req, res) => {
         else if (diff > 0.10) confidence -= 1;
       }
 
+      const origVwapMatch = saved.entry_trigger?.match(/VWAP\s*\(\$?([\d,.]+)\)/);
+      const origVwap = origVwapMatch ? parseFloat(origVwapMatch[1].replace(/,/g, '')) : null;
+
+      let origAligned: boolean | null = null;
+      let replayAligned: boolean | null = null;
+
+      if (origVwap && origPrice) {
+        origAligned = optType === "call" ? origPrice > origVwap : origPrice < origVwap;
+      }
+
       if (price && replayVwap) {
-        const priceAligned = optType === "call" ? price > replayVwap : price < replayVwap;
-        if (!priceAligned) {
+        replayAligned = optType === "call" ? price > replayVwap : price < replayVwap;
+        if (!replayAligned) {
           confidence -= (premium >= 1_000_000) ? 0.5 : 1;
         } else {
           confidence += 0.5;
@@ -6126,6 +6181,7 @@ router.get("/whale/admin/replay", async (req, res) => {
       }
 
       const replayConfidence = Math.min(10, Math.max(1, Math.round(confidence + deltaAdj)));
+      const origConfidence = parseFloat(saved.confidence) || 0;
 
       let replayEntry = "";
       if (replayVwap && price) {
@@ -6171,21 +6227,75 @@ router.get("/whale/admin/replay", async (req, res) => {
         }
       }
 
+      const driftReasons: string[] = [];
+      let driftScore = 0;
+
+      const priceDiff = Math.abs(price - origPrice);
+      const pricePct = origPrice > 0 ? (priceDiff / origPrice) * 100 : 0;
+      if (priceDiff > 0.50 || pricePct > 0.5) {
+        driftReasons.push(`Price: $${origPrice} → $${price} (${priceDiff > 0 ? (price > origPrice ? "+" : "-") : ""}$${priceDiff.toFixed(2)}, ${pricePct.toFixed(1)}%)`);
+        driftScore += pricePct;
+      }
+
+      if (origAligned !== null && replayAligned !== null && origAligned !== replayAligned) {
+        const origSide = origAligned ? "aligned" : "unaligned";
+        const replaySide = replayAligned ? "aligned" : "unaligned";
+        driftReasons.push(`VWAP alignment flipped: ${origSide} → ${replaySide} (orig VWAP $${origVwap}, replay VWAP $${replayVwap})`);
+        driftScore += 3;
+      } else if (origVwap && replayVwap) {
+        const vwapDiff = Math.abs(origVwap - replayVwap);
+        const vwapPct = origVwap > 0 ? (vwapDiff / origVwap) * 100 : 0;
+        if (vwapPct > 0.5) {
+          driftReasons.push(`VWAP shifted: $${origVwap} → $${replayVwap} (${vwapPct.toFixed(1)}%)`);
+          driftScore += vwapPct * 0.5;
+        }
+      }
+
+      if (!origVwap && replayVwap) {
+        driftReasons.push(`VWAP now available: $${replayVwap} (was missing in original)`);
+        driftScore += 2;
+      }
+
+      const confDiff = Math.abs(replayConfidence - origConfidence);
+      if (confDiff >= 0.5) {
+        driftReasons.push(`Confidence: ${origConfidence} → ${replayConfidence} (${replayConfidence > origConfidence ? "+" : ""}${replayConfidence - origConfidence})`);
+        driftScore += confDiff * 2;
+      }
+
+      if (replayDelta !== null && deltaAdj !== 0) {
+        driftReasons.push(`Delta adjustment: ${replayDelta} delta → ${deltaAdj} confidence penalty`);
+        driftScore += Math.abs(deltaAdj) * 2;
+      }
+
+      if (saved.entry_trigger && replayEntry) {
+        const origHasVwap = saved.entry_trigger.includes("VWAP");
+        const replayHasVwap = replayEntry.includes("VWAP");
+        if (!origHasVwap && replayHasVwap) {
+          driftReasons.push(`Entry now includes VWAP context (was missing)`);
+          driftScore += 1;
+        }
+      }
+
+      const hasDrift = driftReasons.length > 0;
+
+      if (driftOnly && !hasDrift) continue;
+
       results.push({
-        id: sid,
+        id: saved.id,
         ticker: saved.ticker,
+        detected_at: saved.detected_at,
+        outcome: saved.outcome,
+        has_drift: hasDrift,
+        drift_score: Math.round(driftScore * 100) / 100,
+        drift_summary: driftReasons,
         original: {
-          detected_at: saved.detected_at,
-          price_at_signal: parseFloat(saved.price_at_signal),
-          confidence: parseFloat(saved.confidence),
+          price_at_signal: origPrice,
+          confidence: origConfidence,
           entry_trigger: saved.entry_trigger,
           target: saved.target,
           invalidation: saved.invalidation,
-          reason: saved.reason,
-          outcome: saved.outcome,
         },
         replayed: {
-          detected_at: saved.detected_at,
           price_at_signal: priceAtTime,
           vwap: replayVwap,
           confidence: replayConfidence,
@@ -6195,23 +6305,29 @@ router.get("/whale/admin/replay", async (req, res) => {
           entry_trigger: replayEntry,
           target: replayTarget,
           invalidation: replayInvalidation,
-          pivot, r1, s1,
-          reason: `Replayed: $${(premium / 1000).toFixed(0)}K ${optType} flow at $${strike} strike. Price at $${price.toFixed(2)}${replayVwap ? ` vs VWAP $${replayVwap}` : ""}.${replayDelta !== null ? ` Delta: ${replayDelta}` : ""}`,
         },
         approximations: {
-          price_at_signal: "EXACT — from historical Polygon 1-min bar closest to detected_at",
+          price: "EXACT — from historical Polygon 1-min bar closest to detected_at",
           vwap: isSpx ? "APPROXIMATE — SPX index bars have no volume, using simple TP average" : "EXACT — calculated from historical 1-min bars with volume weighting",
-          delta: replayDelta !== null ? "APPROXIMATE — uses current delta, not historical (contract may have decayed)" : "UNAVAILABLE — contract likely expired, no current snapshot",
-          confidence: "APPROXIMATE — uses local scoring rules only (no Claude re-evaluation)",
-          targets: "APPROXIMATE — uses intraday swing highs/lows from historical bars, not full multi-day structure",
+          delta: replayDelta !== null ? "APPROXIMATE — uses current delta, not historical" : "UNAVAILABLE — contract likely expired",
+          confidence: "APPROXIMATE — local scoring only (no Claude)",
         },
-        bars_used: intradayBars.length,
-        bars_before_signal: structureCandles.length,
       });
     }
 
-    console.log(`[admin] replay: ${results.filter(r => r.id).length} signals replayed (read-only)`);
-    res.json({ success: true, mode: "read-only replay", results });
+    results.sort((a, b) => b.drift_score - a.drift_score);
+    const limited = results.slice(0, limit);
+    const driftCount = limited.filter(r => r.has_drift).length;
+
+    console.log(`[admin] replay: ${signalRows.length} signals replayed, ${driftCount} with drift (read-only, no writes)`);
+    res.json({
+      success: true,
+      mode: "read-only replay (no database writes)",
+      signals_scanned: signalRows.length,
+      signals_with_drift: driftCount,
+      showing: limited.length,
+      results: limited,
+    });
   } catch (e: any) {
     console.error("[admin] replay error:", e.message);
     res.status(500).json({ error: e.message });
