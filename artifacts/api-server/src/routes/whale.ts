@@ -555,16 +555,51 @@ function computeStructuredTargets(
     }
   }
 
+  const formatZone = (lvl: number, name: string, idx: number): string => {
+    const bandPct = price > 500 ? 0.0008 : price > 100 ? 0.001 : 0.0015;
+    let lo = lvl, hi = lvl;
+
+    const nearby = candidates.filter(c =>
+      c !== deduped[idx] &&
+      Math.abs(c.level - lvl) / price < 0.005 &&
+      Math.abs(c.level - lvl) / price > 0.0005
+    );
+    if (nearby.length > 0) {
+      const closest = nearby.reduce((a, b) =>
+        Math.abs(a.level - lvl) < Math.abs(b.level - lvl) ? a : b
+      );
+      lo = Math.min(lvl, closest.level);
+      hi = Math.max(lvl, closest.level);
+    } else {
+      const half = lvl * bandPct;
+      if (direction === "call") {
+        lo = lvl - half * 0.3;
+        hi = lvl + half * 0.7;
+      } else {
+        lo = lvl - half * 0.7;
+        hi = lvl + half * 0.3;
+      }
+    }
+
+    lo = Math.round(lo * 100) / 100;
+    hi = Math.round(hi * 100) / 100;
+    if (lo === hi) {
+      return `${name} at $${lo.toFixed(2)}`;
+    }
+    return `${name} zone $${lo.toFixed(2)}–$${hi.toFixed(2)}`;
+  };
+
   if (deduped.length >= 2) {
     return {
-      target: `${deduped[0].name} at $${deduped[0].level.toFixed(2)}`,
-      targetNear: `${deduped[1].name} at $${deduped[1].level.toFixed(2)}`,
+      target: formatZone(deduped[0].level, deduped[0].name, 0),
+      targetNear: formatZone(deduped[1].level, deduped[1].name, 1),
     };
   } else if (deduped.length === 1) {
     const fallbackMult = direction === "call" ? 1.02 : 0.98;
+    const fallbackLvl = deduped[0].level * fallbackMult;
     return {
-      target: `${deduped[0].name} at $${deduped[0].level.toFixed(2)}`,
-      targetNear: `$${(deduped[0].level * fallbackMult).toFixed(2)}`,
+      target: formatZone(deduped[0].level, deduped[0].name, 0),
+      targetNear: `$${fallbackLvl.toFixed(2)}`,
     };
   } else {
     if (direction === "call") {
