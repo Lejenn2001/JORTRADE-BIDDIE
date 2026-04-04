@@ -281,17 +281,17 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     }
 
     const rtData = priceMonitor.getPrice(ticker);
-    const polygonLive = rtData && Date.now() - rtData.lastUpdate < 120000
+    const polygonLive = rtData && Date.now() - rtData.lastUpdate < 30000
       ? Math.round(rtData.price * 100) / 100
       : null;
 
     let currentPrice: number | null = polygonLive ?? null;
-    if (!currentPrice && uwPrice) {
-      currentPrice = Math.round(uwPrice * 100) / 100;
-    }
     if (!currentPrice) {
       const snap = await fetchPolygonSnapshot(ticker);
       if (snap) currentPrice = Math.round(snap.price * 100) / 100;
+    }
+    if (!currentPrice && uwPrice) {
+      currentPrice = Math.round(uwPrice * 100) / 100;
     }
     if (!currentPrice && intradayBars.length > 0) {
       currentPrice = Math.round(intradayBars[intradayBars.length - 1].close * 100) / 100;
