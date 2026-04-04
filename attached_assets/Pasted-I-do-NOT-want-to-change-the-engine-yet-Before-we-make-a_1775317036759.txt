@@ -1,0 +1,89 @@
+I do NOT want to change the engine yet.
+
+Before we make any improvements, I want you to analyze historical signal data and determine which logic has actually been the most successful.
+
+Goal:
+Identify which signal components (entry, invalidation, targets) are producing the best real-world outcomes so future changes are evidence-based, not assumptions.
+
+Analyze the following:
+
+1. Entry logic performance
+   Compare:
+
+* “Act Now” entries (immediate execution)
+* VWAP-based entries
+* reclaim entries
+* retest entries
+* hold/rejection confirmation entries
+* whale sweep immediate entries
+
+2. Invalidation logic performance
+   Compare:
+
+* nearest swing invalidation (current system)
+* VWAP/thesis-based invalidation
+* pivot / PDH / PDL fallback invalidation
+* % based fallback invalidation
+
+3. Target logic performance
+   Compare:
+
+* 1-min swing high/low targets (current system)
+* support/resistance-based targets
+* pivot / VWAP / PDH / PDL targets
+* fixed % fallback targets
+
+IMPORTANT:
+I specifically want you to test whether support/resistance-based targets perform better than the current swing-only logic.
+
+Include levels such as:
+
+* intraday resistance/support
+* prior day high / prior day low
+* pivot / R1 / S1
+* VWAP as structure
+* multi-hour swing levels (not just 1-min)
+
+For each signal, evaluate:
+
+* Did target 1 hit?
+* Did target 2 hit?
+* Max favorable excursion (MFE)
+* Max adverse excursion (MAE)
+* Did invalidation trigger first?
+* Time to target vs time to failure
+* Was entry too early (before confirmation)?
+
+Also classify signals into setup types:
+
+* above VWAP continuation
+* below VWAP continuation
+* VWAP reclaim
+* VWAP rejection
+* whale sweep momentum
+* support bounce
+* resistance rejection
+* mechanical swing-based setup
+
+Then provide:
+
+1. Ranked entry types by success (win rate + quality of move)
+2. Ranked invalidation logic by stability (least noise stop-outs)
+3. Ranked target logic by realism and hit rate
+4. Whether “Act Now” entries underperform confirmation-based entries
+5. Whether VWAP/thesis-based setups outperform mechanical setups
+6. Whether support/resistance targets outperform current logic
+
+Final output:
+
+* Clear summary of findings
+* What should be kept
+* What should be replaced
+* What should NOT be touched
+* Recommendation on whether non-SPX should move toward SPX’s thesis-based model
+
+CRITICAL:
+Use actual historical signal data and replay/backtest-style evaluation where possible.
+Do NOT assume — I want conclusions based on data.
+
+We will use this analysis to drive the next phase of engine improvements.

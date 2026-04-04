@@ -2262,9 +2262,9 @@ async function runSignalsPipeline() {
           }
         }
 
-        const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
-        if (swingLows.length > 0) {
-          invalidation = `Below $${swingLows[0].toFixed(2)} (previous swing low)`;
+        if (vwap && price >= vwap * 0.995) {
+          const vwapBuffer = vwap * (1 - 0.003);
+          invalidation = `Below $${vwapBuffer.toFixed(2)} (VWAP break invalidates bullish thesis)`;
         } else {
           const supportLevels = [
             pdl ? { level: pdl, name: "PDL" } : null,
@@ -2338,9 +2338,9 @@ async function runSignalsPipeline() {
           }
         }
 
-        const swingHighsPut = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
-        if (swingHighsPut.length > 0) {
-          invalidation = `Above $${swingHighsPut[0].toFixed(2)} (previous swing high)`;
+        if (vwap && price <= vwap * 1.005) {
+          const vwapBuffer = vwap * (1 + 0.003);
+          invalidation = `Above $${vwapBuffer.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
         } else {
           const resistanceLevels = [
             pdh ? { level: pdh, name: "PDH" } : null,
@@ -5902,10 +5902,20 @@ router.post("/whale/admin/reprocess-v5", async (req, res) => {
             target = `$${(price * 1.02).toFixed(2)} (2% above entry)`;
             targetNear = `$${(price * 1.04).toFixed(2)}`;
           }
-          const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
-          invalidation = swingLows.length > 0
-            ? `Below $${swingLows[0].toFixed(2)} (previous swing low)`
-            : `Below $${(price * 0.98).toFixed(2)}`;
+          if (vwap && price >= vwap * 0.995) {
+            const vwapBuffer = vwap * (1 - 0.003);
+            invalidation = `Below $${vwapBuffer.toFixed(2)} (VWAP break invalidates bullish thesis)`;
+          } else {
+            const rSupportLevels = [
+              pdl ? { level: pdl, name: "PDL" } : null,
+              s1 ? { level: s1, name: "S1" } : null,
+              pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l && l.level < price);
+            rSupportLevels.sort((a, b) => b.level - a.level);
+            invalidation = rSupportLevels.length > 0
+              ? `Below ${rSupportLevels[0].name} at $${rSupportLevels[0].level.toFixed(2)}`
+              : `Below $${(price * 0.98).toFixed(2)}`;
+          }
         } else {
           const swingLows = (structure?.swing_lows || []).map(s => s.price).filter(p => p < price).sort((a, b) => b - a);
           const validSwingLows = swingLows.filter(p => (price - p) >= minTargetDist);
@@ -5919,10 +5929,20 @@ router.post("/whale/admin/reprocess-v5", async (req, res) => {
             target = `$${(price * 0.98).toFixed(2)} (2% below entry)`;
             targetNear = `$${(price * 0.96).toFixed(2)}`;
           }
-          const swingHighs = (structure?.swing_highs || []).map(s => s.price).filter(p => p > price).sort((a, b) => a - b);
-          invalidation = swingHighs.length > 0
-            ? `Above $${swingHighs[0].toFixed(2)} (previous swing high)`
-            : `Above $${(price * 1.02).toFixed(2)}`;
+          if (vwap && price <= vwap * 1.005) {
+            const vwapBuffer = vwap * (1 + 0.003);
+            invalidation = `Above $${vwapBuffer.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
+          } else {
+            const rResistanceLevels = [
+              pdh ? { level: pdh, name: "PDH" } : null,
+              r1 ? { level: r1, name: "R1" } : null,
+              pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
+            ].filter((l): l is { level: number; name: string } => !!l && l.level > price);
+            rResistanceLevels.sort((a, b) => a.level - b.level);
+            invalidation = rResistanceLevels.length > 0
+              ? `Above ${rResistanceLevels[0].name} at $${rResistanceLevels[0].level.toFixed(2)}`
+              : `Above $${(price * 1.02).toFixed(2)}`;
+          }
         }
 
         let gammaZone = "neutral", gammaDescription = "";
@@ -6661,9 +6681,9 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             }
           }
 
-          const aSwingLows = (structure?.swing_lows || []).map((s: any) => s.price).filter((p: number) => p < price).sort((a: number, b: number) => b - a);
-          if (aSwingLows.length > 0) {
-            invalidation = `Below $${aSwingLows[0].toFixed(2)} (previous swing low)`;
+          if (vwap && price >= vwap * 0.995) {
+            const vwapBuffer = vwap * (1 - 0.003);
+            invalidation = `Below $${vwapBuffer.toFixed(2)} (VWAP break invalidates bullish thesis)`;
           } else {
             const supportLevels = [
               pdl ? { level: pdl, name: "PDL" } : null,
@@ -6735,9 +6755,9 @@ router.post("/whale/admin/process-archived-spx", async (req, res) => {
             }
           }
 
-          const aSwingHighsPut = (structure?.swing_highs || []).map((s: any) => s.price).filter((p: number) => p > price).sort((a: number, b: number) => a - b);
-          if (aSwingHighsPut.length > 0) {
-            invalidation = `Above $${aSwingHighsPut[0].toFixed(2)} (previous swing high)`;
+          if (vwap && price <= vwap * 1.005) {
+            const vwapBuffer = vwap * (1 + 0.003);
+            invalidation = `Above $${vwapBuffer.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
           } else {
             const resistanceLevels = [
               pdh ? { level: pdh, name: "PDH" } : null,
