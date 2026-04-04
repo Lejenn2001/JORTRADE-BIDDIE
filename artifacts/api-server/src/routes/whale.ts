@@ -6148,6 +6148,18 @@ router.get("/whale/admin/replay", async (req, res) => {
 
     const barCache: Record<string, any[]> = {};
 
+    const preFilterCount = signalRows.length;
+    signalRows = signalRows.filter((s: any) => {
+      const d = s.detected_at;
+      if (!d) return false;
+      const etStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
+      const etDate = new Date(etStr);
+      const hour = etDate.getHours();
+      const min = etDate.getMinutes();
+      const totalMin = hour * 60 + min;
+      return totalMin >= 9 * 60 + 30 && totalMin <= 16 * 60;
+    });
+
     const results: any[] = [];
 
     for (const saved of signalRows) {
@@ -6303,32 +6315,15 @@ router.get("/whale/admin/replay", async (req, res) => {
       const replayConfidence = Math.min(10, Math.max(1, Math.round(confidence + deltaAdj)));
       const origConfidence = parseFloat(saved.confidence) || 0;
 
-      let replayEntry = "";
-      if (replayVwap && price) {
-        const vwapStr = `$${replayVwap.toLocaleString()}`;
-        if (Math.abs(price - replayVwap) / replayVwap < 0.003) {
-          replayEntry = `At VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
-        } else if (optType === "call" && price > replayVwap) {
-          replayEntry = `Above VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
-        } else if (optType === "put" && price < replayVwap) {
-          replayEntry = `Below VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
-        } else {
-          replayEntry = hasSweep
-            ? `${optType === "call" ? "Bullish" : "Bearish"} sweep at $${price.toFixed(2)} — VWAP at ${vwapStr}`
-            : `Near $${price.toFixed(2)} — VWAP at ${vwapStr}`;
-        }
-      } else {
-        replayEntry = `Near $${price.toFixed(2)} (VWAP not available)`;
-      }
-
       const structureCandles = intradayBars.filter(b => b.timestamp * 1000 <= signalTs);
       const candlesBars: CandleBar[] = structureCandles.map(b => ({
         open: b.open, high: b.high, low: b.low, close: b.close,
         volume: b.volume || 0, timestamp: b.timestamp,
       }));
+      const swingPts = candlesBars.length > 5 ? findSwingPoints(candlesBars) : [];
       const replayStructure: MarketStructure | null = candlesBars.length > 5 ? {
-        swing_highs: findSwingPoints(candlesBars).filter(s => s.type === "high"),
-        swing_lows: findSwingPoints(candlesBars).filter(s => s.type === "low"),
+        swing_highs: swingPts.filter(s => s.type === "high"),
+        swing_lows: swingPts.filter(s => s.type === "low"),
       } : null;
       const replayHTFSwings = candlesBars.length > 10 ? computeHTFSwings(candlesBars) : null;
 
@@ -6338,37 +6333,103 @@ router.get("/whale/admin/replay", async (req, res) => {
         pivot_points: { pivot, r1, r2, s1, s2 },
       };
       const replayDir: "call" | "put" = optType === "call" ? "call" : "put";
-      const structTargets = computeStructuredTargets(price, replayDir, replayKl, replayStructure, replayHTFSwings);
-      let replayTarget = structTargets.target;
-      let replayTargetNear = structTargets.targetNear;
 
-      let replayInvalidation = "";
+      let oldTarget = "", oldTargetNear = "", oldInvalidation = "";
+      if (candlesBars.length > 5) {
+        const swingHighs = swingPts.filter(s => s.type === "high").map(s => s.price).sort((a, b) => a - b);
+        const swingLows = swingPts.filter(s => s.type === "low").map(s => s.price).sort((a, b) => b - a);
+        if (replayDir === "call") {
+          const sh = swingHighs.filter(h => h > price && (h - price) >= price * 0.005);
+          if (sh.length >= 2) { oldTarget = `$${sh[0].toFixed(2)} (swing high)`; oldTargetNear = `$${sh[1].toFixed(2)} (swing high)`; }
+          else if (sh.length === 1) { oldTarget = `$${sh[0].toFixed(2)} (swing high)`; oldTargetNear = `$${(sh[0] * 1.02).toFixed(2)}`; }
+          else { oldTarget = `$${(price * 1.02).toFixed(2)}`; oldTargetNear = `$${(price * 1.04).toFixed(2)}`; }
+          const sl = swingLows.find(l => l < price);
+          oldInvalidation = sl ? `Below $${sl.toFixed(2)} (swing low)` : `Below $${(price * 0.98).toFixed(2)}`;
+        } else {
+          const sl = swingLows.filter(l => l < price && (price - l) >= price * 0.005);
+          if (sl.length >= 2) { oldTarget = `$${sl[0].toFixed(2)} (swing low)`; oldTargetNear = `$${sl[1].toFixed(2)} (swing low)`; }
+          else if (sl.length === 1) { oldTarget = `$${sl[0].toFixed(2)} (swing low)`; oldTargetNear = `$${(sl[0] * 0.98).toFixed(2)}`; }
+          else { oldTarget = `$${(price * 0.98).toFixed(2)}`; oldTargetNear = `$${(price * 0.96).toFixed(2)}`; }
+          const sh = swingHighs.reverse().find(h => h > price);
+          oldInvalidation = sh ? `Above $${sh.toFixed(2)} (swing high)` : `Above $${(price * 1.02).toFixed(2)}`;
+        }
+      } else {
+        if (replayDir === "call") {
+          oldTarget = `$${(price * 1.02).toFixed(2)}`; oldTargetNear = `$${(price * 1.04).toFixed(2)}`;
+          oldInvalidation = `Below $${(price * 0.98).toFixed(2)}`;
+        } else {
+          oldTarget = `$${(price * 0.98).toFixed(2)}`; oldTargetNear = `$${(price * 0.96).toFixed(2)}`;
+          oldInvalidation = `Above $${(price * 1.02).toFixed(2)}`;
+        }
+      }
+
+      let oldEntry = "";
+      if (replayVwap && price) {
+        const vwapStr = `$${replayVwap.toLocaleString()}`;
+        if (Math.abs(price - replayVwap) / replayVwap < 0.005) {
+          oldEntry = `At VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "call" && price > replayVwap) {
+          oldEntry = `Above VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "put" && price < replayVwap) {
+          oldEntry = `Below VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "call") {
+          oldEntry = `On bounce from VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else {
+          oldEntry = `On rejection from VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        }
+      } else {
+        oldEntry = `Near $${price.toFixed(2)} (no VWAP data)`;
+      }
+
+      const structTargets = computeStructuredTargets(price, replayDir, replayKl, replayStructure, replayHTFSwings);
+      let newTarget = structTargets.target;
+      let newTargetNear = structTargets.targetNear;
+
+      let newInvalidation = "";
       if (optType === "call" || saved.direction === "bullish") {
         if (replayVwap && price >= replayVwap * 0.995) {
           const invalLevel = Math.round(replayVwap * 0.997 * 100) / 100;
-          replayInvalidation = `Below $${invalLevel.toFixed(2)} (VWAP break invalidates bullish thesis)`;
+          newInvalidation = `Below $${invalLevel.toFixed(2)} (VWAP break invalidates bullish thesis)`;
         } else if (prevLow && prevLow < price) {
-          replayInvalidation = `Below PDL at $${prevLow.toFixed(2)}`;
+          newInvalidation = `Below PDL at $${prevLow.toFixed(2)}`;
         } else if (s1 && s1 < price) {
-          replayInvalidation = `Below S1 at $${s1.toFixed(2)}`;
+          newInvalidation = `Below S1 at $${s1.toFixed(2)}`;
         } else if (pivot && pivot < price) {
-          replayInvalidation = `Below Pivot at $${pivot.toFixed(2)}`;
+          newInvalidation = `Below Pivot at $${pivot.toFixed(2)}`;
         } else {
-          replayInvalidation = `Below $${(price * 0.98).toFixed(2)}`;
+          newInvalidation = `Below $${(price * 0.98).toFixed(2)}`;
         }
       } else {
         if (replayVwap && price <= replayVwap * 1.005) {
           const invalLevel = Math.round(replayVwap * 1.003 * 100) / 100;
-          replayInvalidation = `Above $${invalLevel.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
+          newInvalidation = `Above $${invalLevel.toFixed(2)} (VWAP reclaim invalidates bearish thesis)`;
         } else if (prevHigh && prevHigh > price) {
-          replayInvalidation = `Above PDH at $${prevHigh.toFixed(2)}`;
+          newInvalidation = `Above PDH at $${prevHigh.toFixed(2)}`;
         } else if (r1 && r1 > price) {
-          replayInvalidation = `Above R1 at $${r1.toFixed(2)}`;
+          newInvalidation = `Above R1 at $${r1.toFixed(2)}`;
         } else if (pivot && pivot > price) {
-          replayInvalidation = `Above Pivot at $${pivot.toFixed(2)}`;
+          newInvalidation = `Above Pivot at $${pivot.toFixed(2)}`;
         } else {
-          replayInvalidation = `Above $${(price * 1.02).toFixed(2)}`;
+          newInvalidation = `Above $${(price * 1.02).toFixed(2)}`;
         }
+      }
+
+      let newEntry = "";
+      if (replayVwap && price) {
+        const vwapStr = `$${replayVwap.toLocaleString()}`;
+        if (Math.abs(price - replayVwap) / replayVwap < 0.003) {
+          newEntry = `At VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "call" && price > replayVwap) {
+          newEntry = `Above VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else if (optType === "put" && price < replayVwap) {
+          newEntry = `Below VWAP (${vwapStr}) — Near $${price.toFixed(2)}`;
+        } else {
+          newEntry = hasSweep
+            ? `${optType === "call" ? "Bullish" : "Bearish"} sweep at $${price.toFixed(2)} — VWAP at ${vwapStr}`
+            : `Near $${price.toFixed(2)} — VWAP at ${vwapStr}`;
+        }
+      } else {
+        newEntry = `Near $${price.toFixed(2)} (VWAP not available)`;
       }
 
       const driftReasons: string[] = [];
@@ -6411,9 +6472,9 @@ router.get("/whale/admin/replay", async (req, res) => {
         driftScore += Math.abs(deltaAdj) * 2;
       }
 
-      if (saved.entry_trigger && replayEntry) {
+      if (saved.entry_trigger && newEntry) {
         const origHasVwap = saved.entry_trigger.includes("VWAP");
-        const replayHasVwap = replayEntry.includes("VWAP");
+        const replayHasVwap = newEntry.includes("VWAP");
         if (!origHasVwap && replayHasVwap) {
           driftReasons.push(`Entry now includes VWAP context (was missing)`);
           driftScore += 1;
@@ -6445,27 +6506,37 @@ router.get("/whale/admin/replay", async (req, res) => {
         has_drift: hasDrift,
         drift_score: Math.round(driftScore * 100) / 100,
         drift_summary: driftReasons,
-        original: {
-          price_at_signal: origPrice,
-          confidence: origConfidence,
+        market_data: {
+          price_at_signal: priceAtTime || origPrice,
+          vwap_at_signal: replayVwap,
+          pdh: prevHigh, pdl: prevLow,
+          pivot, r1, s1, r2, s2,
+        },
+        production: {
           entry_trigger: saved.entry_trigger,
           target: saved.target,
           target_near: saved.target_near,
           invalidation: saved.invalidation,
+          confidence: origConfidence,
+        },
+        old_engine: {
+          entry: oldEntry,
+          target: oldTarget,
+          target_near: oldTargetNear,
+          invalidation: oldInvalidation,
+          method: "swing-based targets (0.5% min distance), swing-based invalidation",
+        },
+        new_engine: {
+          entry: newEntry,
+          target: newTarget,
+          target_near: newTargetNear,
+          invalidation: newInvalidation,
+          method: "structured zones (PDH/PDL→R1/S1→HTF swings→VWAP→5m swings), VWAP-thesis invalidation",
+        },
+        outcome_data: {
+          outcome: saved.outcome,
           max_favorable_price: parseFloat(saved.max_favorable_price) || null,
           max_adverse_price: parseFloat(saved.max_adverse_price) || null,
-        },
-        replayed: {
-          price_at_signal: priceAtTime,
-          vwap: replayVwap,
-          confidence: replayConfidence,
-          confidence_before_delta: Math.min(10, Math.max(1, Math.round(confidence))),
-          delta: replayDelta,
-          delta_adjustment: deltaAdj,
-          entry_trigger: replayEntry,
-          target: replayTarget,
-          target_near: replayTargetNear,
-          invalidation: replayInvalidation,
         },
         approximations: {
           price: "EXACT — from historical Polygon 1-min bar closest to detected_at",
@@ -6480,11 +6551,13 @@ router.get("/whale/admin/replay", async (req, res) => {
     const limited = results.slice(0, limit);
     const driftCount = limited.filter(r => r.has_drift).length;
 
-    console.log(`[admin] replay: ${signalRows.length} signals replayed, ${driftCount} with drift (read-only, no writes)`);
+    console.log(`[admin] replay: ${signalRows.length} signals replayed (${preFilterCount - signalRows.length} excluded after-hours), ${driftCount} with drift (read-only, no writes)`);
     res.json({
       success: true,
-      mode: "read-only replay (no database writes)",
-      signals_scanned: signalRows.length,
+      mode: "read-only side-by-side replay (old vs new engine, no database writes)",
+      signals_scanned: preFilterCount,
+      after_hours_excluded: preFilterCount - signalRows.length,
+      signals_replayed: signalRows.length,
       signals_with_drift: driftCount,
       showing: limited.length,
       results: limited,
