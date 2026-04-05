@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, Component, type ReactNode, type ErrorInfo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -11,36 +11,48 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
-import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription } from "@/lib/simplifyDescription";
 
-type FilterType = "all" | "call" | "put";
-type ViewTab = "algorithm" | "whale" | "spread" | "spx";
-
-interface GexData {
-  gammaFlip: number | null;
-  callWall: { price: number; gex: number } | null;
-  putWall: { price: number; gex: number } | null;
-  keyMagnet: { price: number; gex: number };
-  dealerPositioning: string;
-  currentPrice: number;
-  updatedAt: string;
+class SignalErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[SignalCard Error]", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
+          <AlertTriangle className="h-5 w-5 text-red-400 mx-auto mb-2" />
+          <p className="text-xs text-red-300">Card failed to render</p>
+          <button onClick={() => this.setState({ hasError: false, error: null })} className="text-[10px] text-red-400 underline mt-1">Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
-const ALGO_SECTION_META = {
+type FilterType = "all" | "call" | "put";
+type ViewTab = "algorithm" | "whale" | "spread";
+
+const ALGO_SECTION_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
   buy_now: {
     label: "🔥 ACT NOW",
-    iconComponent: Zap,
-    iconClass: "h-4 w-4 text-emerald-400",
+    icon: <Zap className="h-4 w-4 text-emerald-400" />,
     description: "Price confirmed — act immediately",
   },
   short_term: {
     label: "⚡ 1–3 DAY TRADE",
-    iconComponent: Clock,
-    iconClass: "h-4 w-4 text-emerald-400",
+    icon: <Clock className="h-4 w-4 text-emerald-400" />,
     description: "Algorithm-detected setups with short-term expiry",
   },
-} as const;
+};
 
 
 const cardVariants = {
@@ -162,8 +174,6 @@ function dbRecordToSignal(record: any): MarketSignal {
     spreadDetails: record.spread_details || null,
     reviewStatus: record.review_status || null,
     reviewNote: record.review_note || null,
-    gammaZone: record.gamma_zone || undefined,
-    gammaDescription: record.gamma_description || undefined,
   };
 }
 
@@ -202,8 +212,6 @@ const DashboardSignals = () => {
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
   const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
-  const [gexData, setGexData] = useState<GexData | null>(null);
-  const [gexLoading, setGexLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -311,6 +319,17 @@ const DashboardSignals = () => {
   }, [user?.id, alertSignal, alertPrice, alertCondition, toast]);
 
   useEffect(() => {
+    if (showResolved) return;
+    const hasRecentlyResolved = signals.some(s => {
+      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
+      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
+    });
+    if (!hasRecentlyResolved) return;
+    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
+    return () => clearInterval(interval);
+  }, [signals, showResolved]);
+
+  useEffect(() => {
     const loadRecentSignals = async () => {
       setDbLoading(true);
       try {
@@ -319,7 +338,7 @@ const DashboardSignals = () => {
         todayET.setHours(0, 0, 0, 0);
         const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
-        const resp = await fetch('/api/whale/signals/history?limit=300');
+        const resp = await fetch('/api/whale/signals/history?limit=100');
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 
@@ -361,17 +380,6 @@ const DashboardSignals = () => {
     return allSignals.filter(s => s.reviewStatus !== "wrong");
   }, [allSignals, isAdmin]);
 
-  useEffect(() => {
-    if (showResolved) return;
-    const hasRecentlyResolved = signals.some(s => {
-      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
-      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
-    });
-    if (!hasRecentlyResolved) return;
-    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
-    return () => clearInterval(interval);
-  }, [signals, showResolved]);
-
   const handleReviewChange = useCallback((signalId: string, status: "correct" | "wrong" | null) => {
     setDbSignals(prev => prev.map(s => s.id === signalId ? { ...s, reviewStatus: status } : s));
   }, []);
@@ -383,9 +391,7 @@ const DashboardSignals = () => {
     const target = signals.find((s: any) => s.id === highlightId);
     if (target) {
       const cat = (target as any).category || "algorithm";
-      const ticker = (target as any).ticker || "";
-      if (ticker === "SPX" || ticker === "SPXW") setViewTab("spx");
-      else if (cat === "whale") setViewTab("whale");
+      if (cat === "whale") setViewTab("whale");
       else if (cat === "spread") setViewTab("spread");
       else setViewTab("algorithm");
     }
@@ -404,19 +410,16 @@ const DashboardSignals = () => {
   const filtered = useMemo(() => {
     let list = [...signals];
 
-    if (showResolved) {
+    if (!showResolved) {
+      const now = Date.now();
       list = list.filter((s) => {
         const o = s.outcome;
-        if (o && o !== "pending") return true;
-        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
-        return isExpired;
-      });
-    } else {
-      list = list.filter((s) => {
-        const o = s.outcome;
-        if (o && o !== "pending") return false;
-        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
-        return !isExpired;
+        if (!o || o === "pending") return true;
+        if (s.resolvedAt) {
+          const resolvedTime = new Date(s.resolvedAt).getTime();
+          if (now - resolvedTime < 300_000) return true;
+        }
+        return false;
       });
     }
 
@@ -456,48 +459,9 @@ const DashboardSignals = () => {
     return filtered.filter(s => s.category === 'spread');
   }, [filtered]);
 
-  const [dbSpxSignals, setDbSpxSignals] = useState<any[]>([]);
-
-  useEffect(() => {
-    const loadSpxFromDb = async () => {
-      try {
-        const res = await fetch('/api/whale/spx-signals');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.signals) setDbSpxSignals(data.signals);
-        }
-      } catch {}
-    };
-    loadSpxFromDb();
-    const interval = setInterval(loadSpxFromDb, 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const spxSignals = useMemo(() => {
-    return dbSpxSignals.map(dbRecordToSignal).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [dbSpxSignals]);
-
-  useEffect(() => {
-    const loadGex = async () => {
-      setGexLoading(true);
-      try {
-        const res = await fetch('/api/whale/gex/spx');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.gex) setGexData(data.gex);
-        }
-      } catch {}
-      setGexLoading(false);
-    };
-    loadGex();
-    const interval = setInterval(loadGex, 180_000);
-    return () => clearInterval(interval);
-  }, []);
-
   const algoCount = algorithmSignals.buy_now.length + algorithmSignals.short_term.length;
   const whaleCount = whaleSignals.length;
   const spreadCount = spreadSignals.length;
-  const spxCount = spxSignals.length;
   const totalCount = signals.length;
 
   return (
@@ -590,43 +554,9 @@ const DashboardSignals = () => {
                 viewTab === "spread" ? "bg-violet-500/30" : "bg-muted/50"
               }`}>{spreadCount}</span>
             </button>
-            <button
-              onClick={() => setViewTab("spx")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                viewTab === "spx"
-                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
-                  : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              }`}
-            >
-              <Gauge className="h-4 w-4" />
-              SPX / GEX
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                viewTab === "spx" ? "bg-cyan-500/30" : "bg-muted/50"
-              }`}>{spxCount}</span>
-            </button>
             <span className="ml-auto text-xs text-muted-foreground font-semibold">
               Total: <span className="text-foreground">{totalCount}</span>
             </span>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              placeholder="Search ticker (SPY, TSLA, QQQ...)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value.toUpperCase())}
-              className="pl-9 pr-9 h-10 bg-muted/30 border-border/40 text-sm font-semibold tracking-wider placeholder:text-muted-foreground/50 placeholder:font-normal placeholder:tracking-normal focus-visible:ring-emerald-500/40"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <XCircle className="h-4 w-4" />
-              </button>
-            )}
           </div>
 
           {/* Filters */}
@@ -688,7 +618,7 @@ const DashboardSignals = () => {
                 return (
                   <div key={timeframe} className="space-y-3">
                     <div className="flex items-center gap-2 px-1">
-                      <meta.iconComponent className={meta.iconClass} />
+                      {meta.icon}
                       <span className="font-bold text-xs sm:text-sm text-emerald-400">{meta.label}</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full ml-auto">
                         {sectionSignals.length}
@@ -770,140 +700,6 @@ const DashboardSignals = () => {
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {viewTab === "spx" && (
-            <>
-              <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-[hsl(232,30%,7%)] to-slate-950/30 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Gauge className="h-5 w-5 text-cyan-400" />
-                  <span className="font-bold text-sm text-cyan-400 tracking-wide">SPX GAMMA EXPOSURE</span>
-                  {gexLoading && <span className="text-[9px] text-muted-foreground animate-pulse ml-2">updating...</span>}
-                  {gexData && (
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      SPX ${gexData.currentPrice.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-
-                {!gexData && !gexLoading && (
-                  <p className="text-xs text-muted-foreground">GEX data not available — check back during market hours.</p>
-                )}
-
-                {gexData && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Gamma Flip</div>
-                      <div className="text-lg font-black text-cyan-400 mt-0.5">
-                        {gexData.gammaFlip ? `$${gexData.gammaFlip.toLocaleString()}` : "N/A"}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">
-                        {gexData.gammaFlip && gexData.currentPrice > gexData.gammaFlip
-                          ? `${((gexData.currentPrice - gexData.gammaFlip) / gexData.gammaFlip * 100).toFixed(1)}% above`
-                          : gexData.gammaFlip
-                          ? `${((gexData.gammaFlip - gexData.currentPrice) / gexData.currentPrice * 100).toFixed(1)}% below`
-                          : ""}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Call Wall</div>
-                      <div className="text-lg font-black text-emerald-400 mt-0.5">
-                        {gexData.callWall ? `$${gexData.callWall.price.toLocaleString()}` : "N/A"}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">Resistance — dealers sell here</div>
-                    </div>
-
-                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Put Wall</div>
-                      <div className="text-lg font-black text-red-400 mt-0.5">
-                        {gexData.putWall ? `$${gexData.putWall.price.toLocaleString()}` : "N/A"}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">Support — dealers buy here</div>
-                    </div>
-
-                    <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Key Magnet</div>
-                      <div className="text-lg font-black text-amber-400 mt-0.5">
-                        ${gexData.keyMagnet.price.toLocaleString()}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">Highest GEX concentration</div>
-                    </div>
-                  </div>
-                )}
-
-                {gexData && (
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold ${
-                    gexData.dealerPositioning.includes("Long")
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : gexData.dealerPositioning.includes("Short")
-                      ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                      : "bg-muted/20 text-muted-foreground border border-white/10"
-                  }`}>
-                    <MapPin className="h-3.5 w-3.5" />
-                    Dealer Positioning: {gexData.dealerPositioning}
-                  </div>
-                )}
-              </div>
-
-              {spxCount === 0 && !loading && (
-                <div className="glass-panel rounded-xl p-8 text-center border border-cyan-500/20">
-                  <Gauge className="h-8 w-8 text-cyan-400/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground text-sm">No SPX/SPXW signals detected yet. SPX flow signals appear here when institutional activity is detected on the S&P 500 index.</p>
-                </div>
-              )}
-
-              {spxSignals.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 px-1">
-                    <Gauge className="h-4 w-4 text-cyan-400" />
-                    <span className="font-bold text-xs sm:text-sm text-cyan-400">SPX INDEX SIGNALS</span>
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline">— S&P 500 with gamma context</span>
-                    <span className="text-[10px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded-full ml-auto">
-                      {spxSignals.length}
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {spxSignals.map((signal, i) => {
-                      let enrichedSignal = signal;
-                      if (!signal.gammaDescription && gexData && signal.strike) {
-                        const strike = Number(String(signal.strike).replace(/[^0-9.]/g, ""));
-                        let gexContext: string | undefined;
-                        let gexZone: "positive" | "negative" | "neutral" | undefined;
-                        if (gexData.callWall && Math.abs(strike - gexData.callWall.price) / gexData.callWall.price < 0.005) {
-                          gexContext = `Near call wall at $${gexData.callWall.price.toLocaleString()}`;
-                          gexZone = "positive";
-                        } else if (gexData.putWall && Math.abs(strike - gexData.putWall.price) / gexData.putWall.price < 0.005) {
-                          gexContext = `Near put wall at $${gexData.putWall.price.toLocaleString()}`;
-                          gexZone = "negative";
-                        } else if (gexData.gammaFlip && Math.abs(strike - gexData.gammaFlip) / gexData.gammaFlip < 0.005) {
-                          gexContext = `Near gamma flip at $${gexData.gammaFlip.toLocaleString()}`;
-                          gexZone = "neutral";
-                        } else if (gexData.gammaFlip) {
-                          if (strike > gexData.gammaFlip) {
-                            gexContext = `Above gamma flip — long gamma territory`;
-                            gexZone = "positive";
-                          } else {
-                            gexContext = `Below gamma flip — short gamma territory`;
-                            gexZone = "negative";
-                          }
-                        }
-                        if (gexContext) {
-                          enrichedSignal = { ...signal, gammaDescription: gexContext, gammaZone: gexZone };
-                        }
-                      }
-                      return (
-                        <motion.div key={`spx-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
-                          <SignalErrorBoundary>
-                            <SpxSignalCard signal={enrichedSignal} gexData={gexData} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
-                          </SignalErrorBoundary>
-                        </motion.div>
-                      );
-                    })}
                   </div>
                 </div>
               )}
@@ -1004,110 +800,6 @@ const DashboardSignals = () => {
     </div>
   );
 };
-
-function SpxSignalCard({ signal, gexData, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; gexData: GexData | null; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
-  const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
-  const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
-
-  return (
-    <div className={`rounded-xl border overflow-hidden transition-shadow ${
-      score >= 85
-        ? "shadow-[0_0_15px_-3px_rgba(6,182,212,0.4)] border-cyan-500/40"
-        : "shadow-[0_0_10px_-3px_rgba(6,182,212,0.25)] border-cyan-500/30"
-    } ${isCall ? "bg-cyan-500/5" : "bg-red-500/5"}`}>
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-black tracking-wider text-cyan-300">{signal.ticker}</span>
-              <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
-                isCall ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-              }`}>
-                {isCall ? "CALL" : "PUT"}
-              </span>
-              {signal.strike && <span className="text-xs text-muted-foreground">${signal.strike}</span>}
-              {signal.expiry && <span className="text-xs text-muted-foreground">{signal.expiry}</span>}
-              {signal.category === 'whale' && (
-                <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">WHALE</span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{compactDescription(signal)}</p>
-          </div>
-          <ConvictionScoreRing score={score} label={signal.convictionLabel || "Conviction"} size="sm" />
-        </div>
-
-        {signal.gammaDescription && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold ${
-            signal.gammaZone === "positive"
-              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-              : signal.gammaZone === "neutral"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "bg-red-500/10 text-red-400 border border-red-500/20"
-          }`}>
-            <Crosshair className="h-3 w-3 flex-shrink-0" />
-            {signal.gammaDescription}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
-          {signal.entryTrigger && (
-            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
-              <span className="text-muted-foreground">Entry:</span>{" "}
-              <span className="text-foreground font-medium">{signal.entryTrigger}</span>
-            </div>
-          )}
-          {signal.targetZone && (
-            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
-              <span className="text-muted-foreground">Target:</span>{" "}
-              <span className="text-foreground font-medium">{signal.targetZone}</span>
-            </div>
-          )}
-          {signal.invalidation && (
-            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
-              <span className="text-muted-foreground">Invalidation:</span>{" "}
-              <span className="text-foreground font-medium">{signal.invalidation}</span>
-            </div>
-          )}
-          {signal.premium && (
-            <div className="bg-muted/20 rounded-lg px-2.5 py-1.5">
-              <span className="text-muted-foreground">Premium:</span>{" "}
-              <span className="text-foreground font-medium">{signal.premium}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            onClick={() => onTakeTrade?.(signal)}
-            disabled={isTaking}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-              isTaken
-                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                : "bg-muted/30 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 border border-white/10"
-            }`}
-          >
-            {isTaken ? <><Check className="h-3 w-3" /> Taken</> : <><Plus className="h-3 w-3" /> Take Trade</>}
-          </button>
-          <button
-            onClick={() => onSetAlert?.(signal)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
-              hasAlert
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                : "bg-muted/30 text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 border border-white/10"
-            }`}
-          >
-            <Bell className="h-3 w-3" />
-          </button>
-          <span className="ml-auto text-[10px] text-muted-foreground">{signal.timestamp}</span>
-        </div>
-
-        {isAdmin && userId && (
-          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} />
-        )}
-      </div>
-    </div>
-  );
-}
 
 function AdminReviewPanel({ signalId, userId, onReviewChange, signalMeta }: { signalId: string; userId: string; onReviewChange?: (status: "correct" | "wrong" | null) => void; signalMeta?: any }) {
   const [status, setStatus] = useState<"correct" | "wrong" | "pending" | null>(null);
@@ -1230,7 +922,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
     : "border-destructive/20";
 
   const isWinner = signal.outcome === "hit" || signal.outcome === "partial_hit" || signal.outcome === "win";
-  const isLoser = signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "near_miss";
+  const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
   const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
@@ -1326,9 +1018,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           ) : (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
           )}
-          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 75 ? (
+          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 70 ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
-          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 75) ? (
+          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 70) ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
           ) : null}
           {isAI && (
@@ -1378,27 +1070,16 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             </span>
             {(() => {
               let ts = signal.tradeStatus || "watching";
-              const o = signal.outcome;
-              const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const mfe = signal.mfePercent ?? 0;
-              if (o === "hit" || o === "win") ts = "hit";
-              else if (o === "partial_hit") ts = "partial_hit";
-              else if (o === "near_miss") ts = "near_miss";
-              else if (o === "missed" || o === "loss") ts = "miss";
-              else if (o === "expired") ts = "expired";
-              if (isExpired && mfe >= 50) {
-                if (mfe >= 75) ts = "hit";
-                else ts = "partial_hit";
-              } else if (isExpired && !o && mfe >= 30) {
-                ts = "near_miss";
-              } else if (isExpired && !o && mfe < 30) {
-                ts = "miss";
+              if (ts === "watching") {
+                if (signal.outcome === "hit") ts = "hit";
+                else if (signal.outcome === "partial_hit") ts = "partial_hit";
+                else if (isLoser) ts = "miss";
+                else if (signal.outcome === "expired") ts = "expired";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "WIN", desc: "Good move in the right direction — past 50% of the target, counts as a win!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right direction but below 50% win threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
-                miss: { label: "LOSS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "PARTIAL HIT", desc: "Good move in the right direction but didn't quite reach the full target — like getting to 3rd base!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                 expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                 watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
@@ -1415,32 +1096,25 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                 </span>
               );
             })()}
-            {signal.mfePercent != null && (() => {
-              const isResolved = signal.outcome === "hit" || signal.outcome === "win" || signal.outcome === "partial_hit" || signal.outcome === "near_miss" || signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "expired";
-              const isExpiredDate = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const isDone = isResolved || isExpiredDate;
-              return (
-                <span className="relative group inline-flex">
-                  <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
-                    signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
-                    signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
-                    signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
-                    isDone ? "bg-red-400/15 text-red-400" :
-                    "bg-muted/20 text-muted-foreground"
-                  }`}>
-                    MFE {signal.mfePercent.toFixed(0)}%
-                  </span>
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg max-w-[200px] text-wrap">
-                    {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
-                     signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
-                     signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
-                     signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
-                     "Miss — below 50% of target"}
-                    {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
-                  </span>
+            {signal.mfePercent != null && (
+              <span className="relative group inline-flex">
+                <span className={`inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
+                  signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
+                  signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
+                  signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
+                  "bg-red-400/15 text-red-400"
+                }`}>
+                  MFE {signal.mfePercent.toFixed(0)}%
                 </span>
-              );
-            })()}
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                  {signal.mfePercent >= 100 ? "Home run! Price went all the way to the target" :
+                   signal.mfePercent >= 50 ? "Good progress — price got over halfway to the target" :
+                   signal.mfePercent > 0 ? "Moved in the right direction but didn't get far" :
+                   "Went the wrong way — price moved against us"}
+                  {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
+                </span>
+              </span>
+            )}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
