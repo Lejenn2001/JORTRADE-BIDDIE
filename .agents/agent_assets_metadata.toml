@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "t1k9AAJQQmnEna78TMgvO"
+uri = "file://exports/prod_all_signals_full.csv"
+type = "table"
+title = "All Production Signals — Full Format (483 signals)"
+
+[[outputs]]
+id = "MDK4TrdaNd_2XNDa2wi13"
+uri = "file://exports/prod_reviewed_only_full.csv"
+type = "table"
+title = "Reviewed Signals Only — Full Format (78 signals)"
+
+[[outputs]]
+id = "J_V4JcjI1U-syCXCkD-pO"
+uri = "file://exports/prod_spx_spxw_full.csv"
+type = "table"
+title = "SPX/SPXW Signals — Full Format (78 signals)"
+
+[[outputs]]
+id = "WAllTTjFMkLKU49RQ8asW"
+uri = "file://exports/prod_all_signals_review_sheet.csv"
+type = "table"
+title = "All Signals — Review Sheet (19 key columns)"
+
+[[outputs]]
+id = "p32li2W4nSfXc4w1giXEJ"
+uri = "file://exports/prod_reviewed_review_sheet.csv"
+type = "table"
+title = "Reviewed Signals — Review Sheet"
+
+[[outputs]]
+id = "sI74YKXhlCyliBkGjdyNt"
+uri = "file://exports/prod_spx_spxw_review_sheet.csv"
+type = "table"
+title = "SPX/SPXW — Review Sheet"
+
+[[outputs]]
+id = "GOKHjNKeLHctj4RFiASsO"
+uri = "file://exports/comparison_summary.txt"
+type = "text"
+title = "Production vs Dev Comparison Summary"

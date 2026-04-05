@@ -1,0 +1,33 @@
+PRODUCTION vs DEVELOPMENT — Signal Comparison Summary
+Generated: 2026-04-05T05:17:23.306Z
+Period: March 26 – April 5, 2026
+
+Date             Prod    Dev   Diff  Notes
+────────────── ────── ────── ──────  ──────────────────────────────
+2026-03-26          6      2 +    4  4 signals exist only in prod
+2026-03-27         77     57 +   20  20 signals exist only in prod
+2026-03-28          2      1 +    1  1 signals exist only in prod
+2026-03-30        129     86 +   43  43 signals exist only in prod
+2026-03-31         72     33 +   39  39 signals exist only in prod
+2026-04-01        104     46 +   58  58 signals exist only in prod
+2026-04-02         77     77      0  Matched
+2026-04-03         16     14 +    2  2 signals exist only in prod
+2026-04-05          0      1     -1  DEV ONLY — not in production
+────────────── ────── ────── ──────
+TOTAL             483    317 +  166
+
+KEY FINDINGS:
+• Production has 166 MORE signals than development
+• Production has 78 SPX/SPXW signals (dev has 62)
+• Production has 80 human reviews (53 correct, 27 wrong)
+• Development has only 1 human review
+• Production algo versions: v2 (399 signals), v4 (84 signals)
+• Development algo versions: v2 (271 signals), v4 (46 signals)
+• March 26 gap: Production generated 6 signals, dev only captured 2
+• Biggest gap: March 30 — prod has 129 signals, dev has 86 (43 missing from dev)
+• April 1 gap: prod has 104, dev has 46 (58 missing from dev)
+
+DATES WITH PRODUCTION-ONLY DATA NOT IN DEV:
+• No dates are entirely production-only (both have some signals on every active day)
+• But every day has MORE signals in production than dev (except Apr 2 which matched at 77)
+• Dev is missing signals on every day due to server restarts/rebuilds during development
