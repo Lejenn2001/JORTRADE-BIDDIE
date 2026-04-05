@@ -1,0 +1,78 @@
+Ask it to do **one thing only**:
+
+**Audit the current Admin + Analytics logic and show exactly what is being used right now, before changing anything.**
+
+Send this:
+
+I want to focus only on Admin and Analytics right now so we can clean up the JORTRADE production site.
+
+Do not redesign anything yet. Do not suggest new logic yet.
+
+First, I need you to audit the CURRENT Admin + Analytics implementation and show me exactly what is already in place.
+
+Please provide a clear breakdown of:
+
+1. Current outcome logic
+
+* How signals are currently classified
+* Exact statuses and outcomes used now (for example: active, watching, hit, partial hit, near miss, miss, expired, invalidated)
+* What conditions move a signal from active to a final outcome
+
+2. Current verification logic
+
+* Which function(s) determine MFE, MAE, invalidation, expiration, target hits, and final outcome
+* Exact thresholds currently used in code
+* Whether final outcome is based on MFE thresholds, target hits, invalidation, expiration, or a combination
+
+3. Admin page logic
+
+* What the Admin signal review page currently shows
+* Which fields are editable vs read-only
+* Whether Admin overrides affect Analytics
+* Whether Admin is still using any old target assumptions instead of the new TP1 / TP2 model
+
+4. Analytics page logic
+
+* How Overview calculates win rate
+* How My Trades calculates win rate
+* How weekly stats are calculated
+* Which tables and fields are used for each metric
+* Whether Analytics is using current live verification logic or older stored values
+
+5. Historical consistency
+
+* Whether historical signals in signal_outcomes are mixed between old and new logic
+* Whether Admin and Analytics are currently interpreting old and new signals the same way
+* Any places where legacy field usage could make reporting inaccurate
+
+6. Frontend field mapping
+
+* Which exact frontend components render Admin and Analytics data
+* Which fields they read for:
+
+  * status
+  * outcome
+  * MFE
+  * MAE
+  * target
+  * target_near / TP2
+  * invalidation
+* Whether any UI still assumes target_near means “near target” instead of TP2
+
+7. Gap analysis
+
+* List the exact mismatches between:
+
+  * backend verification logic
+  * stored database values
+  * Admin UI
+  * Analytics UI
+
+Important:
+I am trying to establish one clean baseline for Admin and Analytics so production reporting is trustworthy.
+
+Do not make changes yet.
+First show me exactly what currently exists, where it lives, and what is inconsistent.
+
+That gets you back to the starting point and stops the rabbit hole. After Replit answers, the next step will be obvious:
+either the current logic is usable with small cleanup, or it needs a targeted rebuild.

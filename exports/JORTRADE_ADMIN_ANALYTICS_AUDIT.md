@@ -1,0 +1,661 @@
+# JORTRADE — Admin + Analytics Audit
+### Current Implementation Baseline — April 5, 2026
+### Read-Only Audit: No Changes Were Made
+
+---
+
+## TABLE OF CONTENTS
+
+1. Current Outcome Logic
+2. Current Verification Logic
+3. Admin Page Logic
+4. Analytics Page Logic
+5. Historical Consistency
+6. Frontend Field Mapping
+7. Gap Analysis
+
+---
+
+## 1. CURRENT OUTCOME LOGIC
+
+### All Possible Values
+
+**`trade_status` column (signal_outcomes):**
+`watching` → `active` → `hit` | `partial` | `near_miss` | `miss` | `expired`
+
+**`outcome` column (signal_outcomes):**
+`pending` → `hit` | `partial_hit` | `near_miss` | `missed` | `expired` | `pending_revert`
+
+### Status Transition Map
+
+```
+Signal Created
+    │
+    ▼
+trade_status = "watching"
+outcome = "pending"
+    │
+    │   Price reaches entry_trigger?
+    │   (Bullish: highSince >= entryPrice)
+    │   (Bearish: lowSince <= entryPrice)
+    │
+    ▼
+trade_status = "active"
+outcome = "pending"
+entry_hit_at = NOW()
+    │
+    ├── MFE-to-Target ≥ 75% ──────────► outcome = "hit", trade_status = "hit"
+    │
+    ├── MFE-to-Target ≥ 50% ──────────► outcome = "partial_hit", trade_status = "partial"
+    │
+    ├── Invalidation breached           
+    │   ├── MFE was ≥ 30% ────────────► outcome = "near_miss", trade_status = "near_miss"
+    │   └── MFE was < 30% ────────────► outcome = "missed", trade_status = "miss"
+    │
+    ├── Expiry reached (no other outcome)
+    │   ├── MFE ≥ 75% ────────────────► outcome = "hit"
+    │   ├── MFE ≥ 50% ────────────────► outcome = "partial_hit"
+    │   ├── MFE ≥ 30% ────────────────► outcome = "near_miss"
+    │   ├── MFE < 30% ────────────────► outcome = "missed"
+    │   └── No MFE data ──────────────► outcome = "expired"
+    │
+    └── Recovery (special case)
+        Signal was "missed" but price recovered
+        back past invalidation + not expired
+        ──────────────────────────────► outcome = "pending_revert" → "pending"
+                                        trade_status = "active"
+```
+
+### Key Points About Outcome Classification
+
+- **Outcome is based on MFE-to-Target percentage**, NOT on whether the stock literally hit the target price
+- The "target" used for MFE calculation is parsed from the `target` column (text field containing strings like "$640.00")
+- A signal can be marked "hit" even if it didn't literally reach the target — it just needs 75% of the move
+- `pending_revert` is a transient state — the system reverts "missed" signals to "pending" if price recovers; this is then reset to "active" on the next verification pass
+- Outcome is determined entirely by automated verification — admin review does NOT change the outcome
+
+---
+
+## 2. CURRENT VERIFICATION LOGIC
+
+### Function: `realtimeVerifySignals()` in `whale.ts` (Line 4310)
+
+**Runs every 5 minutes during market hours, every 30 minutes after hours.**
+
+### Step-by-Step Process
+
+1. **Fetch pending signals**: `SELECT` up to 100 signals from `signal_outcomes` where `outcome = 'pending'`
+2. **Get price history**: For each ticker, fetch `current`, `highSince`, and `lowSince` from priceMonitor or Polygon
+3. **Determine direction**: Bullish (calls) or Bearish (puts)
+4. **Calculate reference price**: `refPrice2 = signalPrice || entryPrice || 0` (line 4355)
+5. **Calculate MFE-to-Target percentage**
+6. **Check invalidation breach**
+7. **Check expiration**
+8. **Update database with new status/outcome**
+
+### MFE Calculation (Exact Formula)
+
+```
+refPrice2 = price_at_signal || entry_price || 0
+
+For CALLS (Bullish):
+  favorable = highSince - refPrice2
+  distToTarget = |targetPrice - refPrice2|
+  mfeToTarget = (favorable / distToTarget) × 100
+
+For PUTS (Bearish):
+  favorable = refPrice2 - lowSince
+  distToTarget = |refPrice2 - targetPrice|
+  mfeToTarget = (favorable / distToTarget) × 100
+```
+
+**Target price parsing**: The verification function parses the `target` text field to extract a numeric price. It looks for `$X.XX` patterns in the stored target string.
+
+### MFE Percent (Stored in DB)
+
+Separate from mfeToTarget, this is the stored `mfe_percent` column:
+
+```
+For CALLS:
+  mfePct = ((highSince - refPrice2) / (targetPrice - refPrice2)) × 100
+
+For PUTS:
+  mfePct = ((refPrice2 - lowSince) / (refPrice2 - targetPrice)) × 100
+```
+
+### MAE Calculation
+
+```
+For CALLS: max_adverse_price = lowest price seen since signal detection
+For PUTS: max_adverse_price = highest price seen since signal detection
+
+pct_past_invalidation:
+  For CALLS: ((invalidationPrice - lowestPrice) / invalidationPrice) × 100
+  For PUTS: ((highestPrice - invalidationPrice) / invalidationPrice) × 100
+```
+
+### Exact Outcome Thresholds
+
+| Outcome | MFE-to-Target Threshold | Additional Condition |
+|---|---|---|
+| `hit` | ≥ 75% | None — immediately resolved |
+| `partial_hit` | ≥ 50%, < 75% | None — immediately resolved |
+| `near_miss` | ≥ 30%, < 50% | Only when invalidation breached OR signal expired |
+| `missed` | < 30% | Only when invalidation breached OR signal expired |
+| `expired` | N/A | Expiry date passed + no other threshold met + no MFE data |
+
+**Fallback outcomes (no target data)**:
+- If no target can be parsed but price moved ≥ 1.5% in signal direction: `hit`
+- If expired with ≥ 1.5% favorable move: `partial_hit`
+
+### Invalidation Check Logic
+
+```
+effectiveInvalidation:
+  - If signal has invalidation field: parse the $ value from it
+  - If no invalidation: use default
+    - SPX/SPXW: refPrice2 × (1 ± 0.75%)
+    - All others: refPrice2 × (1 ± 2.5%)
+
+Invalidation buffer: 0.25% (INV_BUFFER_PCT)
+  For CALLS: breach if lowSince <= invalidation × (1 - 0.0025)
+  For PUTS: breach if highSince >= invalidation × (1 + 0.0025)
+```
+
+### Expiration Check
+
+```
+expiryDate = parsed from signal's expiry field
+actualExpiry = expiryDate + 20 hours (allows for settlement)
+isActuallyExpired = actualExpiry < now
+```
+
+### Entry Hit Detection
+
+```
+For CALLS: entry hit if highSince >= entryPriceVal
+For PUTS: entry hit if lowSince <= entryPriceVal
+When entry is hit: trade_status changes from "watching" to "active", entry_hit_at = NOW()
+```
+
+### Database Fields Updated by Verification
+
+| Column | When Updated |
+|---|---|
+| `outcome` | On every status change (hit/miss/expired/etc.) |
+| `trade_status` | On every status change |
+| `max_favorable_price` | Every verification cycle (tracks best price) |
+| `max_adverse_price` | Every verification cycle (tracks worst price) |
+| `mfe_percent` | Every verification cycle |
+| `pct_past_invalidation` | When invalidation breached |
+| `entry_price_reached` | When entry trigger is hit |
+| `invalidation_breached` | When invalidation is breached |
+| `entry_hit_at` | Once, when entry is first reached |
+| `status_updated_at` | On every status change |
+| `resolved_at` | When signal reaches final outcome |
+| `time_at_target` | When target is first reached |
+
+### User Trades Sync
+
+After updating `signal_outcomes`, the verification function also runs:
+```sql
+UPDATE user_trades SET signal_outcome = $1, resolved_at = $2
+WHERE signal_id = $3 AND (signal_outcome IS NULL OR signal_outcome = 'pending')
+```
+
+This syncs the outcome to any user who "took" that signal.
+
+---
+
+## 3. ADMIN PAGE LOGIC
+
+### File: `artifacts/biddie-web/src/pages/DashboardAdmin.tsx`
+### Component: `artifacts/biddie-web/src/components/dashboard/AdminSignalInsights.tsx`
+
+### What Admin Signal Review Shows
+
+**Summary Stats (AdminSignalInsights top section):**
+- Total signals, total wins (hit + partial_hit), total losses (missed + near_miss), expired, pending
+- Win rate: `wins / (wins + losses + expired) × 100` — NOTE: expired ARE counted as losses here
+- Call win %, Put win %
+- Source stats (performance by category: whale, algorithm, spread)
+
+**Signal Log Table (AdminSignalInsights):**
+
+| Column | Source Field | Notes |
+|---|---|---|
+| Status/Outcome | `outcome` | Color-coded: hit=green, partial=blue, near_miss=orange, missed=red, expired=gray |
+| Ticker | `ticker` | |
+| Option Detail | `put_call`, `strike`, `expiry` | Formatted as "CALL $500 exp 04/20" |
+| Score | `confidence` | 0–10 scale |
+| Source | `category` | whale, algorithm, spread |
+| Entry | `price_at_signal` | Numeric price at detection |
+| Target | `target_price` | **This is the `target` column aliased as `target_price`** |
+| Invalidation | `invalidation` | Text field |
+| MFE % | `mfe_percent` | Color-coded: ≥75% green, ≥50% blue, ≥30% orange, <30% red |
+| Invalidation Breached | `invalidation_breached` | YES/NO |
+| Time at Target | `time_at_target` | Timestamp or "—" |
+| Detected | `detected_at` | Signal creation timestamp |
+
+**Expanded Detail View (via `/api/whale/signals/detail/:id`):**
+- Full price history chart (Polygon 5-min or daily bars since detection)
+- Target price (numeric), Invalidation price (numeric)
+- MFE/MAE tracking with actual price series
+- Explanation of why the outcome was scored as it was
+
+### Editable vs. Read-Only
+
+| Feature | Editable? | Notes |
+|---|---|---|
+| Outcome (hit/miss/etc.) | **READ-ONLY** | Cannot be changed by admin — set by automated verification |
+| Trade status | **READ-ONLY** | Cannot be changed by admin |
+| MFE / MAE | **READ-ONLY** | Calculated by verification loop |
+| Review status (correct/wrong) | **EDITABLE** | Admin can mark signal as "correct" or "wrong" |
+| Review note | **EDITABLE** | Admin can add text notes |
+| Delete signal | **EDITABLE** | Admin can permanently delete a signal and its user_trades |
+| Sorting/filtering | **EDITABLE** | Admin can filter by outcome, sort by any column |
+| CSV export | **Available** | Download full signal history |
+
+### Admin Actions and Their Effects
+
+**1. Mark as "correct" or "wrong":**
+- Endpoint: `POST /api/whale/admin/signal-review`
+- Writes to `signal_reviews` table (separate from `signal_outcomes`)
+- Does NOT change `outcome`, `trade_status`, `mfe_percent`, or any analytics field in `signal_outcomes`
+- Signals marked "wrong" are hidden from non-admin users on the Signals page
+- Effect on Analytics: **NONE** — Analytics reads `outcome` from `signal_outcomes`, not `status` from `signal_reviews`
+
+**2. Delete signal:**
+- Endpoint: `DELETE /api/whale/admin/signal/:id`
+- Deletes the row from `signal_outcomes`
+- Also deletes matching rows from `user_trades`
+- Effect on Analytics: **YES** — deleting a signal removes it from all win rate calculations
+
+**3. Key limitation: Admin cannot manually change a signal's outcome.** If the automated verification scored something incorrectly, the only admin option is to either mark it "wrong" (hides it from users but it STILL counts in analytics) or delete it entirely.
+
+### Does Admin Use Old Target Assumptions?
+
+**The Admin signal table receives `so.target AS target_price`** (line 3107 of whale.ts). This is the same `target` column that the blended trade-plan logic populates. So Admin is reading the current TP1 value.
+
+**However, Admin does NOT display `target_near` / TP2 at all.** The `AdminSignalInsights.tsx` interface (line 11-41) has no `target_near` field. Admin only sees TP1.
+
+### `signal_reviews` Table Structure
+
+```sql
+CREATE TABLE signal_reviews (
+  id SERIAL PRIMARY KEY,
+  signal_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',    -- 'correct', 'wrong', or 'pending'
+  note TEXT,
+  reviewed_by TEXT NOT NULL,
+  reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+  signal_meta JSONB                          -- added via ALTER TABLE
+);
+```
+
+This table is NOT in the Drizzle schema — it's created via raw SQL at server startup (line 143). It is joined into the calendar query via `LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text`.
+
+---
+
+## 4. ANALYTICS PAGE LOGIC
+
+### File: `artifacts/biddie-web/src/pages/DashboardAnalytics.tsx`
+
+### Overview Tab — Win Rate Calculation
+
+**Data source:** `GET /api/whale/signals/calendar?limit=1000`
+**Table queried:** `signal_outcomes` (LEFT JOIN `signal_reviews`)
+
+**Frontend formula (line 504):**
+```
+resolved = signals where outcome IN ("hit", "partial_hit", "missed", "near_miss")
+hits = signals where outcome IN ("hit", "partial_hit")
+winRate = Math.round((hits / resolved.length) × 100)
+```
+
+**Key behavior:**
+- `partial_hit` counts as a WIN
+- `near_miss` counts as a LOSS
+- `expired` signals are EXCLUDED from both numerator and denominator
+- `pending` signals are EXCLUDED
+- Signals marked "wrong" by admin review ARE STILL INCLUDED — admin review status is not checked
+
+**Additional overview metrics:**
+- Average conviction score: computed from `confidence` field
+- Biddie Pick accuracy: filters for `is_biddie_pick === true`, same win formula
+- Top tickers: grouped by ticker, sorted by hit count
+- Category breakdown: grouped by `category` (whale/algorithm/spread)
+
+### My Trades Tab — Win Rate Calculation
+
+**Data source:** `GET /api/whale/trades/stats?userId={id}`
+**Tables queried:** `user_trades` LEFT JOIN `signal_outcomes`
+
+**Backend formula (line 5494):**
+```
+resolved = trades where outcome === "hit" OR outcome === "missed"
+hits = resolved where outcome === "hit"
+winRate = Math.round((hits / resolved.length) × 100)
+```
+
+**Key behavior — DIFFERENT from Overview:**
+- `partial_hit` is EXCLUDED from both numerator and denominator
+- `near_miss` is EXCLUDED from both numerator and denominator
+- `expired` is EXCLUDED
+- Only strict `hit` vs `missed` are counted
+- Win streak counts consecutive `hit` outcomes
+
+**Frontend "Learning Insights" (separate from header stats, line 1395):**
+```
+recentWins = recent5.filter(t => signal_outcome === "hit" || signal_outcome === "partial_hit")
+```
+This client-side calculation DOES include `partial_hit` — creating an inconsistency with the header stats.
+
+### Weekly Stats — How Calculated
+
+**Function:** `autoSnapshotWeeklyStats()` → `snapshotWeek()` (line 5740)
+**Runs:** Every 1 hour
+**Table written:** `weekly_signal_stats`
+
+**Backend query (line 5648):**
+```sql
+SELECT ticker, outcome, conviction_score, is_biddie_pick
+FROM signal_outcomes
+WHERE signal_source = 'replit'
+  AND COALESCE(category, '') != 'spread'
+  AND detected_at >= $weekStart AND detected_at < $weekEnd
+```
+
+**Note: Spreads are EXCLUDED from weekly stats.**
+
+**Backend formula (line 5665):**
+```
+resolved = hits + partialHits + misses + nearMisses
+winRate = ((hits + partialHits) / resolved) × 100
+```
+
+**Fields written:**
+- `total_signals`, `hits`, `misses`, `partial_hits`, `expired`, `pending`
+- `win_rate` (as string, 2 decimal places)
+- `avg_conviction` (average of `conviction_score` for resolved signals)
+- `top_tickers` (JSON: per-ticker hit/miss counts — "hits" includes partial_hit, "misses" includes near_miss)
+- `biddie_pick_hits`, `biddie_pick_total`, `biddie_pick_win_rate`, `biddie_pick_misses`, `biddie_pick_pending`
+
+**Frontend display (DashboardAnalytics line 1137):**
+- Weekly win rate from pre-computed `win_rate` field
+- Color coding: ≥80% emerald, ≥60% blue, ≥40% yellow, <40% red
+
+### Summary: Three Different Win Rate Formulas
+
+| Location | Formula | partial_hit | near_miss | expired |
+|---|---|---|---|---|
+| **Overview tab (frontend)** | (hit + partial) / (hit + partial + missed + near_miss) | ✅ Counts as WIN | ✅ Counts as LOSS | ❌ Excluded |
+| **My Trades (backend stats)** | hit / (hit + missed) | ❌ Excluded entirely | ❌ Excluded entirely | ❌ Excluded |
+| **My Trades "Insights" (frontend)** | includes partial_hit as win | ✅ Counts as WIN | N/A (not checked) | N/A |
+| **Weekly stats (backend)** | (hit + partial) / (hit + partial + missed + near_miss) | ✅ Counts as WIN | ✅ Counts as LOSS | ❌ Excluded |
+
+### Which Metrics Are Automated vs. Manual
+
+| Metric | Automated or Manual | Source |
+|---|---|---|
+| `outcome` | **Automated** | `realtimeVerifySignals()` |
+| `mfe_percent` | **Automated** | `realtimeVerifySignals()` |
+| `max_favorable_price` | **Automated** | `realtimeVerifySignals()` |
+| `max_adverse_price` | **Automated** | `realtimeVerifySignals()` |
+| `entry_hit_at` | **Automated** | `realtimeVerifySignals()` |
+| `invalidation_breached` | **Automated** | `realtimeVerifySignals()` |
+| `trade_status` | **Automated** | `realtimeVerifySignals()` |
+| Weekly stats snapshot | **Automated** | `autoSnapshotWeeklyStats()` (hourly) |
+| Admin review (correct/wrong) | **Manual** | Admin action via `signal_reviews` table |
+| P&L entries | **Manual** | User enters daily dollar amounts |
+| Signal deletion | **Manual** | Admin action |
+
+### Where signal_outcomes and user_trades Can Differ
+
+| Scenario | What Happens | Impact |
+|---|---|---|
+| **Normal operation** | `user_trades.signal_outcome` is synced from `signal_outcomes.outcome` during verification | In sync |
+| **Verification sync timing** | Verification updates `signal_outcomes` first, then runs UPDATE on `user_trades`. If server crashes between these two queries, `user_trades` could lag. | Temporary — fixed on next verification cycle |
+| **Signal deleted by admin** | `signal_outcomes` row deleted, `user_trades` rows deleted in same request. If `user_trades` DELETE fails, orphaned records remain. | Permanent orphan risk |
+| **user_trades.signal_outcome already resolved** | The sync query has `WHERE signal_outcome IS NULL OR signal_outcome = 'pending'`. If a user trade was already marked with an outcome and the signal outcome later changes (e.g., via `pending_revert`), the user trade will NOT be updated back to pending. | **Stale user trade outcome** |
+| **Win rate formula difference** | Overview counts partial_hit as win; My Trades backend excludes partial_hit entirely | Same signal, different win rate display |
+
+---
+
+## 5. HISTORICAL CONSISTENCY
+
+### Are Historical Signals Mixed Between Old and New Logic?
+
+**Yes.** The `signal_outcomes` table contains signals generated under multiple versions of the scoring and trade-plan logic:
+
+| Period | Logic Version | What Was Different |
+|---|---|---|
+| Before March 27 | Original | Different entry wording, sorted-array targets, different target_near meaning |
+| March 27 | Pre-filter changes | Filters 0a/0b/0c added mid-day; deep ITM filter added |
+| March 28–April 4 | With filters, old trade plan | Filters active, but old entry/target/invalidation format |
+| April 5 onward | Blended trade plan | New VWAP entry, TP1=strike/key level, TP2=key level, VWAP invalidation |
+| April 5 (latest) | Deep ITM tag | Deep ITM no longer rejected, tagged instead |
+
+### What Changed in the `target` Column Over Time
+
+**Old signals (before April 5):**
+- `target` contained a sorted nearest key level (PDH, PDL, pivot, etc.)
+- `target_near` contained the second-nearest sorted key level
+- These were literal "near" and "far" targets
+
+**New signals (April 5 onward):**
+- `target` = TP1 (strike price if forward/OTM, or nearest key level if deep ITM)
+- `target_near` = TP2 (next key level beyond TP1 in trade direction)
+
+### How Verification Handles Mixed Signals
+
+**The verification function does NOT know which logic version generated the signal.** It parses the `target` text field to extract a price, regardless of how that target was calculated. This means:
+
+- Old signals: MFE is calculated against the old sorted-nearest-level target
+- New signals: MFE is calculated against the new TP1 (strike or key level)
+- The 75%/50%/30% thresholds apply identically to both
+
+**This is functionally correct** — verification just needs a price to measure against. However, the *meaning* of "75% of target" differs between old and new signals because the targets themselves are set differently.
+
+### Are Admin and Analytics Interpreting Old and New Signals the Same Way?
+
+**Yes — both pages use the same `outcome` column**, which is set by the same verification function. Neither Admin nor Analytics knows or cares about the trade-plan version that generated the signal. They display whatever outcome the verification loop determined.
+
+**Potential inaccuracy:** If an old signal had a very different target than what the current logic would produce, its outcome may be "correct" by old standards but "wrong" by new standards (or vice versa). There is no way to retroactively re-evaluate old signals against new logic without recalculating their targets.
+
+### Legacy Field Issues
+
+| Field | Old Meaning | New Meaning | Risk |
+|---|---|---|---|
+| `target` | Nearest sorted key level | TP1 (strike or key level) | Verification treats both the same — parses $ value |
+| `target_near` | Second-nearest sorted key level | TP2 (next key level beyond TP1) | Frontend fallback logic (lines 128-151) tries to synthesize a `target_near` for old signals that don't have one — this may produce values inconsistent with the new TP2 model |
+| `entry_trigger` | "Whale sweep at $X" / "At VWAP" / "On bounce" | "Holding above VWAP at $X — confirmed (price $Y)" | Display-only — no analytics impact |
+| `invalidation` | Support/resistance level | VWAP ± 0.5% buffer | Verification uses whatever value is stored — old signals have different invalidation levels |
+
+---
+
+## 6. FRONTEND FIELD MAPPING
+
+### Admin — `AdminSignalInsights.tsx`
+
+**Interface (lines 11-41):**
+
+| UI Field | Source Property | DB Column | Notes |
+|---|---|---|---|
+| Outcome badge | `s.outcome` | `outcome` | "hit", "partial_hit", "near_miss", "missed", "expired", or "pending" |
+| MFE % | `s.mfe_percent` | `mfe_percent` | Numeric, color-coded by threshold |
+| Target | `s.target_price` | `target` (aliased as `target_price` in SQL) | Text field, displayed as-is |
+| Invalidation | `s.invalidation` | `invalidation` | Text field, displayed as-is |
+| Entry | `s.price_at_signal` | `price_at_signal` | Numeric price |
+| Entry trigger | `s.entry_trigger` | `entry_trigger` | Text (displayed in detail view) |
+| MAE | `s.max_adverse_price` | `max_adverse_price` | Numeric (displayed in detail view) |
+| Invalidation breached | `s.invalidation_breached` | `invalidation_breached` | Boolean YES/NO |
+| Trade status | NOT directly shown | `trade_status` | Not in the interface — only outcome is shown |
+| target_near / TP2 | **NOT SHOWN** | `target_near` | Admin does not display TP2 |
+
+### Analytics — `DashboardAnalytics.tsx`
+
+**Overview Tab reads:**
+
+| UI Field | Source Property | DB Column | Notes |
+|---|---|---|---|
+| Win rate | Computed client-side | `outcome` from `signal_outcomes` | (hit + partial) / resolved |
+| Total signals | `allSignals.length` | count of `signal_outcomes` rows | |
+| Average conviction | Computed from `confidence` | `confidence` | |
+| Biddie Pick rate | Filtered by `is_biddie_pick` | `is_biddie_pick` | |
+| Top tickers | Grouped by `ticker` | `ticker` | |
+
+**My Trades Tab reads:**
+
+| UI Field | Source Property | DB Column | Notes |
+|---|---|---|---|
+| Win rate (header) | `userStats.winRate` | Computed server-side from `user_trades` JOIN `signal_outcomes` | hit / (hit + missed) only |
+| Win rate (insights) | Computed client-side | `signal_outcome` from `user_trades` | Includes partial_hit |
+| Trade count | `userStats.total` | count of `user_trades` rows | |
+| Win streak | `userStats.streak` | Computed server-side | Consecutive hits |
+
+**Neither tab reads:** `target_near`, `entry_trigger`, `invalidation`, `max_favorable_price`, `max_adverse_price`, or `trade_status`. Analytics cares only about `outcome` and aggregate counts.
+
+### Signals Page — `DashboardSignals.tsx`
+
+| UI Field | Source Property | DB Column | Notes |
+|---|---|---|---|
+| Entry | `signal.entryTrigger` | `entry_trigger` | Text |
+| Target (TP1) | `signal.targetZone` | `target` | Text |
+| TP2 | `signal.targetNear` | `target_near` | Text — OR synthesized fallback |
+| Invalidation | `signal.invalidation` | `invalidation` | Text |
+| Outcome | `signal.outcome` | `outcome` | From signal_outcomes |
+| MFE | `signal.mfePercent` | `mfe_percent` | Shown as "MFE XX%" badge |
+| Review status | `signal.reviewStatus` | `signal_reviews.status` (joined) | "correct" or "wrong" |
+| Conviction | `signal.convictionScore` | `confidence` × 10 (adjusted) | Circular gauge |
+
+### Does Any UI Still Assume target_near Means "Near Target" Instead of TP2?
+
+**Yes — partially.** In `SignalFeedPanel.tsx` (lines 357-374) and `DashboardSignals.tsx` (lines 128-151):
+
+The display logic labels the two values as "Strike target" and "Extended target" based on which numeric value is closer to price. The label names work regardless of the underlying model — they don't say "near target" vs "far target."
+
+**However**, the fallback logic in `DashboardSignals.tsx` (lines 128-151) synthesizes a `targetNear` for old signals that don't have one:
+```javascript
+// If target_near is missing, calculate 60% of distance between price and target
+targetNear = priceVal + (tgtVal - priceVal) * 0.6   // for calls
+targetNear = priceVal - (priceVal - tgtVal) * 0.6   // for puts
+```
+
+This fallback assumes "target_near" means "a level between entry and target" — which is the OLD meaning. For new signals this fallback is not triggered (target_near is always populated), but for historical signals without target_near, the synthesized value may not match what TP2 would have been under the new logic.
+
+---
+
+## 7. GAP ANALYSIS
+
+### Mismatches Between Backend Verification, Database, Admin UI, and Analytics UI
+
+---
+
+### GAP 1: Three Different Win Rate Formulas
+
+| Component | Formula | Result for Same Data |
+|---|---|---|
+| Analytics Overview (frontend) | (hit + partial_hit) / (hit + partial_hit + missed + near_miss) | Most generous |
+| My Trades header (backend) | hit / (hit + missed) | Most strict |
+| My Trades "insights" (frontend) | Counts partial_hit as win in recent-5 | Mixed |
+| Weekly stats (backend) | (hit + partial_hit) / (hit + partial_hit + missed + near_miss) | Matches Overview |
+
+**Impact:** A user who took 10 trades (3 hit, 2 partial_hit, 3 missed, 2 near_miss) would see:
+- Overview: 50% win rate (5/10)
+- My Trades header: 50% win rate (3/6 — partial and near_miss excluded)
+- Weekly stats: 50% win rate (5/10)
+- But if the mix were 2 hit, 3 partial_hit, 4 missed, 1 near_miss: Overview = 50%, My Trades = 33%
+
+---
+
+### GAP 2: Admin Review Does Not Affect Analytics
+
+| What Admin Does | Effect on signal_outcomes | Effect on Analytics |
+|---|---|---|
+| Mark "wrong" | No change to outcome/trade_status | Signal STILL counted in win rate |
+| Mark "correct" | No change | No change |
+| Delete signal | Row removed | Signal removed from analytics |
+
+**Impact:** If an admin marks a signal "wrong" because the data was bad, it is hidden from users but STILL counted as a hit or miss in the Overview win rate and weekly stats. The only way to remove a bad signal from analytics is to DELETE it entirely.
+
+---
+
+### GAP 3: Admin Does Not See TP2
+
+Admin signal table shows `target` (aliased as `target_price`) but does NOT show `target_near`. Admin cannot inspect what TP2 was set to for any signal. The expanded detail view also only shows the single target price.
+
+---
+
+### GAP 4: Weekly Stats Exclude Spreads
+
+The weekly stats query filters out `category = 'spread'` (line 5649). Overview does NOT filter out spreads (it loads all signals from calendar). This means:
+
+- Overview win rate includes spread signals
+- Weekly stats win rate excludes spread signals
+- These can differ even when looking at the same week
+
+---
+
+### GAP 5: Frontend target_near Fallback Creates Ghost TP2 Values
+
+For historical signals that don't have a stored `target_near`, the frontend (DashboardSignals.tsx lines 128-151) synthesizes one using 60% of the distance to target. These synthesized values:
+- Were never generated by the scoring engine
+- May not correspond to any real key level
+- Appear identical to real TP2 values in the UI — the user cannot tell the difference
+
+---
+
+### GAP 6: user_trades Outcome Sync Has a One-Way Lock
+
+The sync query (in realtimeVerifySignals) only updates user_trades when `signal_outcome IS NULL OR signal_outcome = 'pending'`. If a signal's outcome changes AFTER it was already synced (e.g., via `pending_revert`), the user_trade keeps the OLD outcome. This means:
+
+- Signal outcome: `missed` → `pending` (recovery) → later `hit`
+- user_trade outcome: `missed` (stuck — never updated to `hit`)
+
+---
+
+### GAP 7: Admin Overview Win Rate Counts Expired as Losses
+
+In `AdminSignalInsights.tsx` (line 181), the admin overview uses:
+```javascript
+outcome === "expired" ? "missed" : ...
+```
+This counts expired signals as losses in the admin win/loss chart. But in Analytics Overview, expired signals are EXCLUDED from the win rate entirely. So admin and analytics show different win rates for the same data.
+
+---
+
+### GAP 8: signal_reviews Table Not in Drizzle Schema
+
+The `signal_reviews` table is created via raw SQL at server startup (line 143), not via the Drizzle ORM schema in `lib/db/src/schema/index.ts`. This means:
+- It won't appear in schema migrations
+- It has no TypeScript type definitions in the shared schema
+- It exists only if the server has been started at least once
+
+---
+
+### GAP 9: Verification Uses refPrice2 but Display Uses price_at_signal
+
+The verification function calculates MFE using `refPrice2 = signalPrice || entryPrice || 0`. But the Admin UI shows `price_at_signal` as the "Entry" price. If `price_at_signal` is null but `entry_price` has a value (or vice versa), the displayed entry price may not match what verification used as its reference.
+
+---
+
+### SUMMARY TABLE
+
+| Gap # | Area | Severity | Description |
+|---|---|---|---|
+| 1 | Win Rate | **High** | Three different win rate formulas across components |
+| 2 | Admin → Analytics | **High** | "Wrong" signals still count in analytics; delete is the only removal |
+| 3 | Admin UI | **Low** | Admin cannot see TP2 values |
+| 4 | Weekly vs Overview | **Medium** | Spreads excluded from weekly but included in overview |
+| 5 | Frontend Fallback | **Medium** | Ghost TP2 values synthesized for old signals |
+| 6 | user_trades Sync | **Medium** | One-way lock prevents outcome updates after initial sync |
+| 7 | Admin vs Analytics | **Medium** | Admin counts expired as losses; analytics excludes them |
+| 8 | Schema | **Low** | signal_reviews table not in Drizzle schema |
+| 9 | Price Reference | **Low** | Verification may use different reference price than what admin displays |
+
+---
+
+*Audit completed April 5, 2026*
+*All findings based on current production code — no changes made*
+*Files audited: whale.ts, DashboardAdmin.tsx, AdminSignalInsights.tsx, DashboardAnalytics.tsx, DashboardSignals.tsx, SignalFeedPanel.tsx, schema/index.ts*

@@ -54,3 +54,9 @@ id = "b3R-6_wsU8ddg-7NNbeEc"
 uri = "file://exports/JORTRADE_SYSTEM_AUDIT.md"
 type = "text"
 title = "JORTRADE System Audit — Full Documentation with Appendixes"
+
+[[outputs]]
+id = "wRKuEkhXzCst9EdB2R30g"
+uri = "file://exports/JORTRADE_ADMIN_ANALYTICS_AUDIT.md"
+type = "text"
+title = "JORTRADE Admin + Analytics Baseline Audit"
