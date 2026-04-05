@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, Component, type ReactNode, type ErrorInfo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -11,48 +11,26 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
+import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription } from "@/lib/simplifyDescription";
-
-class SignalErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
-  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[SignalCard Error]", error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
-          <AlertTriangle className="h-5 w-5 text-red-400 mx-auto mb-2" />
-          <p className="text-xs text-red-300">Card failed to render</p>
-          <button onClick={() => this.setState({ hasError: false, error: null })} className="text-[10px] text-red-400 underline mt-1">Retry</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
 
-const ALGO_SECTION_META: Record<string, { label: string; icon: React.ReactNode; description: string }> = {
+const ALGO_SECTION_META = {
   buy_now: {
     label: "🔥 ACT NOW",
-    icon: <Zap className="h-4 w-4 text-emerald-400" />,
+    iconComponent: Zap,
+    iconClass: "h-4 w-4 text-emerald-400",
     description: "Price confirmed — act immediately",
   },
   short_term: {
     label: "⚡ 1–3 DAY TRADE",
-    icon: <Clock className="h-4 w-4 text-emerald-400" />,
+    iconComponent: Clock,
+    iconClass: "h-4 w-4 text-emerald-400",
     description: "Algorithm-detected setups with short-term expiry",
   },
-};
+} as const;
 
 
 const cardVariants = {
@@ -174,6 +152,8 @@ function dbRecordToSignal(record: any): MarketSignal {
     spreadDetails: record.spread_details || null,
     reviewStatus: record.review_status || null,
     reviewNote: record.review_note || null,
+    gammaZone: record.gamma_zone || undefined,
+    gammaDescription: record.gamma_description || undefined,
   };
 }
 
@@ -319,17 +299,6 @@ const DashboardSignals = () => {
   }, [user?.id, alertSignal, alertPrice, alertCondition, toast]);
 
   useEffect(() => {
-    if (showResolved) return;
-    const hasRecentlyResolved = signals.some(s => {
-      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
-      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
-    });
-    if (!hasRecentlyResolved) return;
-    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
-    return () => clearInterval(interval);
-  }, [signals, showResolved]);
-
-  useEffect(() => {
     const loadRecentSignals = async () => {
       setDbLoading(true);
       try {
@@ -338,7 +307,7 @@ const DashboardSignals = () => {
         todayET.setHours(0, 0, 0, 0);
         const todayStart = new Date(todayET.toISOString().split('T')[0] + 'T04:00:00Z');
 
-        const resp = await fetch('/api/whale/signals/history?limit=100');
+        const resp = await fetch('/api/whale/signals/history?limit=300');
         if (!resp.ok) throw new Error('Failed to fetch signal history');
         const result = await resp.json();
 
@@ -380,6 +349,17 @@ const DashboardSignals = () => {
     return allSignals.filter(s => s.reviewStatus !== "wrong");
   }, [allSignals, isAdmin]);
 
+  useEffect(() => {
+    if (showResolved) return;
+    const hasRecentlyResolved = signals.some(s => {
+      if (!s.outcome || s.outcome === "pending" || !s.resolvedAt) return false;
+      return Date.now() - new Date(s.resolvedAt).getTime() < 300_000;
+    });
+    if (!hasRecentlyResolved) return;
+    const interval = setInterval(() => setResolvedTick(t => t + 1), 5000);
+    return () => clearInterval(interval);
+  }, [signals, showResolved]);
+
   const handleReviewChange = useCallback((signalId: string, status: "correct" | "wrong" | null) => {
     setDbSignals(prev => prev.map(s => s.id === signalId ? { ...s, reviewStatus: status } : s));
   }, []);
@@ -391,6 +371,7 @@ const DashboardSignals = () => {
     const target = signals.find((s: any) => s.id === highlightId);
     if (target) {
       const cat = (target as any).category || "algorithm";
+      const ticker = (target as any).ticker || "";
       if (cat === "whale") setViewTab("whale");
       else if (cat === "spread") setViewTab("spread");
       else setViewTab("algorithm");
@@ -410,16 +391,19 @@ const DashboardSignals = () => {
   const filtered = useMemo(() => {
     let list = [...signals];
 
-    if (!showResolved) {
-      const now = Date.now();
+    if (showResolved) {
       list = list.filter((s) => {
         const o = s.outcome;
-        if (!o || o === "pending") return true;
-        if (s.resolvedAt) {
-          const resolvedTime = new Date(s.resolvedAt).getTime();
-          if (now - resolvedTime < 300_000) return true;
-        }
-        return false;
+        if (o && o !== "pending") return true;
+        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+        return isExpired;
+      });
+    } else {
+      list = list.filter((s) => {
+        const o = s.outcome;
+        if (o && o !== "pending") return false;
+        const isExpired = s.expiry ? new Date(s.expiry) < new Date() : false;
+        return !isExpired;
       });
     }
 
@@ -559,6 +543,26 @@ const DashboardSignals = () => {
             </span>
           </div>
 
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search ticker (SPY, TSLA, QQQ...)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value.toUpperCase())}
+              className="pl-9 pr-9 h-10 bg-muted/30 border-border/40 text-sm font-semibold tracking-wider placeholder:text-muted-foreground/50 placeholder:font-normal placeholder:tracking-normal focus-visible:ring-emerald-500/40"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           {/* Filters */}
           <div className="glass-panel rounded-xl p-3 flex flex-col sm:flex-row gap-2">
             <div className="flex items-center gap-1.5">
@@ -618,7 +622,7 @@ const DashboardSignals = () => {
                 return (
                   <div key={timeframe} className="space-y-3">
                     <div className="flex items-center gap-2 px-1">
-                      {meta.icon}
+                      <meta.iconComponent className={meta.iconClass} />
                       <span className="font-bold text-xs sm:text-sm text-emerald-400">{meta.label}</span>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full ml-auto">
                         {sectionSignals.length}
@@ -705,6 +709,7 @@ const DashboardSignals = () => {
               )}
             </>
           )}
+
         </main>
 
         <AnimatePresence>
@@ -922,7 +927,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
     : "border-destructive/20";
 
   const isWinner = signal.outcome === "hit" || signal.outcome === "partial_hit" || signal.outcome === "win";
-  const isLoser = signal.outcome === "missed" || signal.outcome === "loss";
+  const isLoser = signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "near_miss";
   const isExpired = signal.outcome === "expired";
   const isPending = isAI && !isWinner && !isLoser && !isExpired;
   const hasUpdatedLogic = signal.tags?.some((t: string) => t.toUpperCase().includes('UPDATED LOGIC'));
@@ -1018,9 +1023,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           ) : (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
           )}
-          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 70 ? (
+          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 75 ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
-          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 70) ? (
+          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 75) ? (
             <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
           ) : null}
           {isAI && (
@@ -1070,16 +1075,27 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
             </span>
             {(() => {
               let ts = signal.tradeStatus || "watching";
-              if (ts === "watching") {
-                if (signal.outcome === "hit") ts = "hit";
-                else if (signal.outcome === "partial_hit") ts = "partial_hit";
-                else if (isLoser) ts = "miss";
-                else if (signal.outcome === "expired") ts = "expired";
+              const o = signal.outcome;
+              const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+              const mfe = signal.mfePercent ?? 0;
+              if (o === "hit" || o === "win") ts = "hit";
+              else if (o === "partial_hit") ts = "partial_hit";
+              else if (o === "near_miss") ts = "near_miss";
+              else if (o === "missed" || o === "loss") ts = "miss";
+              else if (o === "expired") ts = "expired";
+              if (isExpired && mfe >= 50) {
+                if (mfe >= 75) ts = "hit";
+                else ts = "partial_hit";
+              } else if (isExpired && !o && mfe >= 30) {
+                ts = "near_miss";
+              } else if (isExpired && !o && mfe < 30) {
+                ts = "miss";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "HIT", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "PARTIAL HIT", desc: "Good move in the right direction but didn't quite reach the full target — like getting to 3rd base!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                miss: { label: "MISS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "WIN", desc: "Good move in the right direction — past 50% of the target, counts as a win!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right direction but below 50% win threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
+                miss: { label: "LOSS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
                 expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                 watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
@@ -1096,25 +1112,32 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
                 </span>
               );
             })()}
-            {signal.mfePercent != null && (
-              <span className="relative group inline-flex">
-                <span className={`inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
-                  signal.mfePercent >= 100 ? "bg-emerald-400/15 text-emerald-400" :
-                  signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
-                  signal.mfePercent > 0 ? "bg-yellow-400/15 text-yellow-400" :
-                  "bg-red-400/15 text-red-400"
-                }`}>
-                  MFE {signal.mfePercent.toFixed(0)}%
+            {signal.mfePercent != null && (() => {
+              const isResolved = signal.outcome === "hit" || signal.outcome === "win" || signal.outcome === "partial_hit" || signal.outcome === "near_miss" || signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "expired";
+              const isExpiredDate = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+              const isDone = isResolved || isExpiredDate;
+              return (
+                <span className="relative group inline-flex">
+                  <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
+                    signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
+                    signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
+                    signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
+                    isDone ? "bg-red-400/15 text-red-400" :
+                    "bg-muted/20 text-muted-foreground"
+                  }`}>
+                    MFE {signal.mfePercent.toFixed(0)}%
+                  </span>
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg max-w-[200px] text-wrap">
+                    {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
+                     signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
+                     signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
+                     signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
+                     "Miss — below 50% of target"}
+                    {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
+                  </span>
                 </span>
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                  {signal.mfePercent >= 100 ? "Home run! Price went all the way to the target" :
-                   signal.mfePercent >= 50 ? "Good progress — price got over halfway to the target" :
-                   signal.mfePercent > 0 ? "Moved in the right direction but didn't get far" :
-                   "Went the wrong way — price moved against us"}
-                  {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
-                </span>
-              </span>
-            )}
+              );
+            })()}
           </div>
           <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
         </div>
