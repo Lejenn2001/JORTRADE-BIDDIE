@@ -42,3 +42,9 @@ id = "GOKHjNKeLHctj4RFiASsO"
 uri = "file://exports/comparison_summary.txt"
 type = "text"
 title = "Production vs Dev Comparison Summary"
+
+[[outputs]]
+id = "d3pflln8n-oALjf8TCT16"
+uri = "file://exports/forensic_mar27_0936_1036.md"
+type = "text"
+title = "Forensic Reconstruction: March 27, 9:36-10:36 AM ET"
