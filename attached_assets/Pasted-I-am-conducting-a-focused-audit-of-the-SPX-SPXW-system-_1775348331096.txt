@@ -1,0 +1,201 @@
+I am conducting a focused audit of the SPX/SPXW system before and after the SPX tab was introduced.
+
+IMPORTANT:
+
+* Do NOT make any code changes
+* Do NOT optimize or suggest improvements
+* Do NOT redesign anything
+* This is investigation and reconstruction only
+
+I need a precise, timestamped audit with file/function/commit-level detail.
+
+---
+
+1. SPX BEFORE THE TAB (PRE-MARCH 31)
+
+Determine whether SPX/SPXW signals existed BEFORE the SPX tab was created.
+
+For that period:
+
+* Show actual examples of SPX/SPXW signals
+* Include TRUE timestamps (not display time)
+* Confirm whether they were processed inside the main Algorithm pipeline
+* Show the exact criteria and logic used at that time:
+
+  * entry logic
+  * scoring logic
+  * filtering (aggression, premium, etc.)
+  * invalidation logic
+  * target logic
+* Confirm whether Claude processed those signals
+
+---
+
+2. WHEN SPX GEX ENRICHMENT WAS INTRODUCED
+
+Identify the exact moment SPX GEX context was added.
+
+* Locate the file/function/commit where `fetchSpxGex()` (or equivalent) was introduced
+* Show whether the following were present at that time:
+
+  * gamma flip
+  * call wall
+  * put wall
+  * key magnet
+  * dealer positioning
+* Confirm whether GEX was:
+
+  * used in scoring
+  * used as a filter
+  * used only as enrichment/tagging
+* Show whether this changed signal qualification or only added context
+
+---
+
+3. WHEN POLYGON INDEX (I:SPX) SUPPORT WAS INTRODUCED
+
+* Identify when `I:SPX` index pricing was first added
+* Show the exact file/function/commit
+* Confirm whether this required a new Polygon index key or config
+* Show how price sourcing changed:
+
+  * Unusual Whales price vs Polygon index price
+* Confirm whether this change affected:
+
+  * scoring
+  * entry logic
+  * or only display accuracy
+
+---
+
+4. CURRENT PRODUCTION STATE OF SPX
+
+Document the CURRENT live SPX system:
+
+* What pipeline is active (main vs dedicated SPX pipeline)
+* Whether Claude is used or bypassed
+* Whether aggression filtering exists or was removed
+* Whether SPX uses:
+
+  * VWAP retest logic
+  * swing-based targets
+  * VWAP-based invalidation
+* What timestamp field is currently used:
+
+  * detected_at
+  * created_at
+  * other
+* Whether backfill/replay systems are still populating SPX analytics
+* Whether live signals and reconstructed signals are mixed in the UI
+
+---
+
+5. CRITICAL: AFTER-HOURS SIGNAL BEHAVIOR (ROOT CAUSE INVESTIGATION)
+
+I believe at some point the SPX system started generating signals only after market hours, and that is when behavior changed significantly.
+
+Investigate this specifically:
+
+* Was there ever logic introduced that restricted or unintentionally caused SPX signals to occur outside regular trading hours (9:30 AM – 4:00 PM ET)?
+
+* Identify the EXACT moment this behavior started:
+
+  * date
+  * time
+  * file/function/commit responsible
+
+* Determine whether after-hours signals were caused by:
+  A. Live pipeline logic
+  B. Dedicated SPX pipeline
+  C. Backfill / replay system
+  D. Timestamp misassignment (e.g., midnight placeholders)
+  E. Data source timing (Unusual Whales vs Polygon)
+
+* For each of these dates:
+
+  * March 31
+  * April 1
+  * April 2
+  * April 3
+
+Show:
+
+* when signals ACTUALLY occurred (true timestamps)
+
+* whether they were during regular hours or after hours
+
+* whether they were live vs reconstructed
+
+* Confirm whether the system:
+
+  * stopped generating regular-hours signals
+  * or continued generating them but displayed incorrectly
+
+---
+
+6. VERIFY THIS EXACT GEX LOGIC
+
+Check whether this exact GEX logic (or equivalent) was ever implemented and when:
+
+[paste your extractGexLevels function here]
+
+For this logic:
+
+* Identify the file/function where it exists (if it does)
+
+* Identify when it was introduced
+
+* Confirm whether it is:
+
+  * currently active
+  * previously used and replaced
+  * only partially implemented
+
+* Confirm whether its outputs (gammaFlip, callWall, putWall, keyMagnet, dealer positioning):
+
+  * affected signal qualification
+  * affected scoring
+  * or were only used for display/context
+
+---
+
+7. FINAL COMPARISON
+
+Provide a clear comparison between:
+
+A. SPX at its most accurate phase (around March 31 / early April 1)
+B. SPX after later changes
+
+For this comparison, show:
+
+* What logic stayed the same
+* What logic changed
+* What changes affected:
+
+  * signal generation
+  * signal timing
+  * signal frequency
+* What changes only affected:
+
+  * UI
+  * analytics
+  * backfill
+
+---
+
+OUTPUT FORMAT
+
+Return this as a structured audit report with:
+
+* Timeline of changes
+* Before vs after comparison
+* Exact files/functions involved
+* Identification of the AFTER-HOURS behavior root cause
+* Clear distinction between:
+
+  * live signals
+  * reconstructed/backfilled signals
+
+Again:
+This is investigation only.
+No changes, no recommendations, no code rewrites.

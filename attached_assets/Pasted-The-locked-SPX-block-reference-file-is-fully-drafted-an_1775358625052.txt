@@ -1,0 +1,22 @@
+The locked SPX block reference file is fully drafted and ready to write. Here's what it covers:
+
+6 labeled components, each with conditions, override behavior, and full code:
+1. SPX GEX Enrichment — Fetches Unusual Whales spot-exposures for SPX. Overwrites gamma_description, gamma_zone, and adds tags (GEX Call Wall / Put Wall / Flip Zone) based on strike proximity to GEX levels (0.5% threshold). This replaces whatever the main pipeline's detectPriceActionConfirmation set.
+
+2. VWAP Cross Detection — fetchSpxVwapFromPolygon() polls Polygon I:SPX 1-minute bars every 60 seconds. Detects broke_below / broke_above events by comparing consecutive bar closes vs computed VWAP.
+
+3. VWAP Retest Detection — After a cross, if price returns within 0.1% of VWAP after 5+ minutes, it detects retest_from_below or retest_from_above.
+
+4. Entry Override Logic — Uses cross + retest state to completely overwrite the entry_trigger field. For example, a bearish signal with broke_below + retest_from_below gets: "VWAP retest from below at $V — rejection is your entry" with a +1 confidence boost. Without retest: "wait for retest at $V then enter on rejection."
+
+5. Target Override Logic — Uses intraday swing highs/lows from 1-minute bars (4-bar lookback). This is what produced the ~$1.10 targets on April 2 — consecutive swings on choppy 1-minute SPX data are very close together, vs the main pipeline's key-level targets which are 50–200+ points apart.
+
+6. Invalidation Override Logic — Replaces support/resistance invalidation with pure VWAP thesis: "Above $V (VWAP reclaim invalidates bearish thesis)". On a whipsaw day, both bull and bear invalidations fire in the same session — which is exactly what happened April 2 when all 35 signals had both entry AND invalidation breached.
+
+Plus: the non-SPX GEX enrichment (fetchTickerGex) which uses Polygon options chain data for all other tickers.
+
+Confirmation:
+This block will be removed from execution in the restore
+It is fully preserved in .local/preserved_spx_locked_block.md for future controlled testing
+No code is lost — every line, interface, and helper function is documented with conditions and override behavior
+Please switch me to Build mode so I can write this reference file, and then we can proceed with Task #7 approval.

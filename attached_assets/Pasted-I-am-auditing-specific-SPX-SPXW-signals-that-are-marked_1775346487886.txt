@@ -1,0 +1,96 @@
+I am auditing specific SPX/SPXW signals that are marked as WIN in the SPX analytics portal.
+
+I need to reconstruct EXACTLY when these signals actually triggered and which pipeline generated them.
+
+This is investigation only:
+
+* do NOT modify code
+* do NOT optimize anything
+* do NOT rebuild anything
+
+I want to trace specific signals such as:
+
+* SPXW CALL 6530 (~$309K)
+* SPXW CALL 6900 (~$383K)
+* SPXW PUT 6500 (~$269K)
+* SPXW CALL 6490 (~$532K)
+* SPXW PUT 6550 (~$188K)
+
+These are currently showing in the analytics UI as wins, but all appear with identical timestamps.
+
+Please do the following:
+
+1. For each of these signals:
+
+* find the ORIGINAL event in logs or database
+* show the TRUE generation timestamp (not display time)
+* show when it entered the pipeline
+* show when it was displayed
+* show when it was evaluated as a WIN
+
+2. Identify which pipeline generated each signal:
+
+* main pipeline (with Claude)
+* SPX dedicated pipeline (no Claude)
+
+3. For each signal, show:
+
+* confidence score at generation
+* whether Claude processed it (yes/no)
+* whether it was filtered or adjusted by Claude
+* what entry logic was used at that time
+* what invalidation logic was active
+
+4. Determine whether these signals were:
+
+* generated live in real-time
+  OR
+* reconstructed during replay/backtest/analytics
+
+5. If they were reconstructed:
+
+* show what logic was used during reconstruction
+* confirm whether that logic matches the original live system or a later version
+
+6. Show the full timeline for each signal:
+
+* signal detected
+* signal scored
+* signal filtered
+* signal displayed
+* signal outcome calculated
+
+7. Also provide:
+
+A count of SPX/SPXW signals generated on:
+
+* March 31
+* April 1
+* April 2
+* April 3
+
+For each day include:
+
+* total signals generated
+* how many were calls vs puts
+* which pipeline generated them
+* how many passed Claude vs bypassed Claude
+
+8. Finally:
+   Show 5–10 REAL examples of SPX signals from March 31 and April 1 in their ORIGINAL format (not reconstructed UI format), including:
+
+* timestamp (real)
+* ticker
+* strike
+* premium
+* entry description
+* target
+* invalidation
+* confidence
+* whether Claude processed it
+
+I want to compare original signal format vs current format.
+
+Again:
+This is a full audit and reconstruction only.
+No changes.

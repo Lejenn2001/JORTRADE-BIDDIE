@@ -1,0 +1,77 @@
+I am doing an audit of the SPX system only.
+
+I do NOT want code changes.
+I do NOT want recommendations.
+I do NOT want optimization.
+I only want investigation and reconstruction.
+
+Context:
+When I first moved SPX into its own tab, it became extremely accurate and a lot of the SPX calls entering the pipeline were very good.
+
+I want to understand exactly what the SPX algorithm was at that point, what refinements were made after that, and what criteria it was using before later updates.
+
+Please investigate and document the following:
+
+1. Starting from the point when SPX was first moved into its own tab:
+
+* what files changed
+* what functions changed
+* what SPX-specific conditions were added, removed, or refined
+* what logic was truly algorithmic vs just UI / tab separation
+
+2. Reconstruct the ORIGINAL SPX logic at the time it first became highly accurate:
+
+* what was the exact entry logic
+* what was the exact confirmation logic
+* what was the invalidation logic
+* what was the target logic
+* how VWAP was used
+* how GEX was used
+* what other filters or criteria were involved besides GEX + VWAP
+
+3. Identify every refinement made AFTER that point:
+
+* entry refinements
+* confirmation refinements
+* invalidation refinements
+* target refinements
+* scoring / filtering refinements
+* timing / structure refinements
+* any changes to how SPX calls entered the pipeline
+
+4. I specifically want to know:
+
+* what made so many SPX calls qualify at that time
+* why those calls were good
+* whether the system was broader then and later became more restrictive
+* whether the logic itself changed, or if the separation into its own tab simply made the good SPX logic easier to isolate
+
+5. Please compare:
+   A. the SPX algorithm when it first moved into its own tab
+   B. the SPX algorithm after later refinements
+
+For that comparison, show:
+
+* what stayed the same
+* what changed
+* which changes affected actual signal behavior
+* which changes only affected organization, UI, or display
+
+6. Please produce the answer as an audit report with these sections:
+
+* Timeline of SPX-related changes
+* Original SPX criteria
+* Refinements added later
+* Files/functions involved
+* Changes that affected signal generation
+* Changes that did NOT affect signal generation
+* Best reconstruction of why SPX was performing so well at that stage
+
+Important:
+
+* Search commit history, version history, logs, comments, configs, condition branches, SPX/SPXW code paths, and any feature flags
+* Check whether SPX had separate logic from non-SPX at that point
+* Check whether there were any later changes that tightened or altered the pipeline
+
+Again: no edits, no redesign, no code output unless needed to show the exact historical logic that was active.
+I only want the investigation.

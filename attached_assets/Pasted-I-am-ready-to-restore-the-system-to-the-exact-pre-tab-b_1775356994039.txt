@@ -1,0 +1,129 @@
+I am ready to restore the system to the exact pre-tab baseline.
+
+This is a controlled rollback. Do NOT redesign, optimize, or add anything.
+
+TARGET RESTORE POINT:
+commit bd2cf955 (March 30)
+
+GOAL:
+Return the system to the exact behavior that existed immediately before the SPX tab and subsequent SPX-specific pipeline/GEX cascade.
+
+IMPORTANT CLARIFICATION:
+The March 30 system already INCLUDED VWAP-relative trade logic. I want that preserved exactly.
+
+---
+
+REQUIREMENTS:
+
+1. Restore the unified pipeline:
+
+* runSignalsPipeline() exactly as it existed on March 30
+* one shared candidate pool (single .slice(0, 20))
+* SPX/SPXW treated like any other ticker (no separation, no special path)
+
+2. Restore filtering and scoring:
+
+* aggression filter ≥ 50% for ALL tickers (including SPX)
+* Claude analysis on ALL signals (no exceptions)
+* remove any SPX-specific scoring or local scoring logic
+
+3. Restore signal construction EXACTLY as March 30:
+
+ENTRY:
+
+* VWAP-relative logic using existing language such as:
+
+  * “bounce from”
+  * “rejection from”
+
+TARGETS:
+
+* simple key-level targets based on:
+
+  * VWAP
+  * Strike
+  * PDH / PDL
+  * R1 / S1
+  * Pivot
+* expected range roughly 2–4% (NOT HTF swing-based targets)
+
+INVALIDATION:
+
+* support/resistance-based invalidation using:
+
+  * PDL / S1 / Pivot for calls
+  * PDH / R1 / Pivot for puts
+* with ~2% fallback logic
+* NOT VWAP break/reclaim thesis logic
+
+4. Restore correct timing behavior:
+
+* detected_at must use getNowEastern() (real timestamps)
+* remove any date-string or midnight timestamp logic
+
+---
+
+5. REMOVE all post-tab systems completely:
+
+PIPELINE / LOGIC:
+
+* processLiveSpxSignals (dedicated SPX pipeline)
+* any SPX-specific candidate pool logic
+* SPX aggression bypass logic
+* computeStructuredTargets and all HTF swing-based logic
+* SPX-specific VWAP cross/retest detection logic
+* VWAP break/reclaim invalidation overrides
+* any local/non-Claude scoring paths
+
+DATA / SYSTEMS:
+
+* flow_archive system (table may remain but must not be used)
+* all archive/replay/reprocess endpoints
+* any backfill-driven signal generation
+
+ENRICHMENT:
+
+* fetchSpxGex() and all SPX GEX enrichment
+* fetchTickerGex() and any GEX enrichment for other tickers
+* any enrichment that alters behavior (labels only is fine, but no logic impact)
+
+---
+
+6. FRONTEND:
+
+* remove SPX tab completely
+* restore original tabs only:
+
+  * Algorithm
+  * Whale Activity
+  * Spreads & Butterflies
+* SPX/SPXW signals should appear naturally within existing tabs
+* remove all SPX-specific UI, GEX panels, and SPX-only views
+
+---
+
+7. CRITICAL PROTECTION:
+
+DO NOT remove or alter baseline Polygon-based systems that already existed on March 30, including:
+
+* pricing (snapshot, aggs)
+* VWAP (as part of key levels)
+* structure (ICT/SMC logic)
+* key levels (PDH/PDL, pivots, etc.)
+* detectPriceActionConfirmation (including existing gamma_zone logic)
+
+These must remain exactly as they existed in the March 30 baseline.
+
+---
+
+BEFORE EXECUTING:
+
+Show me a complete restore plan including:
+
+1. exact files/functions to be reverted or removed
+2. confirmation of all March 30 behaviors being restored
+3. confirmation of all post-tab systems being removed
+4. confirmation that Polygon pricing/enrichment remains intact
+5. confirmation that VWAP-relative logic (bounce/rejection + key-level targets) is preserved exactly
+
+Do NOT execute until I approve the plan.
