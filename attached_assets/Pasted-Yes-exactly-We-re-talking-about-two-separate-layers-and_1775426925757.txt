@@ -1,0 +1,114 @@
+Yes — exactly. We’re talking about **two separate layers**, and they got mixed together:
+
+## 1. Price source order
+
+This is just: **where the system gets price from first, second, third**.
+
+## 2. Trade-plan logic
+
+This is: **what it does with that price** to make:
+
+* entry
+* TP1 / TP2
+* invalidation
+
+Right now, your question is about **price source order only**.
+
+### March 27 price source order
+
+For non-SPX, it was:
+
+1. **Polygon WebSocket** if fresh enough
+2. **Unusual Whales underlying_price**
+3. **Polygon snapshot API**
+4. **Last intraday bar close**
+5. **Previous day close**
+
+And if all failed, it could still proceed with `null` price. 
+
+### Current price source order
+
+For non-SPX, it is now:
+
+1. **Polygon WebSocket**
+2. **Polygon snapshot API**
+3. **Unusual Whales underlying_price**
+4. **Last intraday bar close**
+5. **Previous day close**
+
+So the big change is:
+
+* **March 27:** UW was **#2**
+* **Now:** UW is **#3**
+* Polygon snapshot moved **ahead** of UW. 
+
+That is what “Polygon 2 vs Unusual Whales 3” really means:
+
+* not that Polygon became the only source
+* but that **the fallback priority changed**
+
+## The other price-structure changes
+
+Also:
+
+* WebSocket freshness changed from **120 seconds** to **30 seconds**
+* VWAP changed from **5-minute bars** to **1-minute bars**
+* SPX now has a special case where **UW is first** for SPX/SPXW only. 
+
+## Why this matters
+
+Even if the trade-plan logic stayed the same, changing the price source order can change:
+
+* the price used at signal time
+* the VWAP relationship
+* whether a setup is “confirmed” or “needs reclaim”
+* targets/invalidation if levels are tied to that price context
+
+So yes — before deciding anything, it makes sense to isolate **just the price structure differences** from the trade-plan differences.
+
+## The clean way to think about it
+
+You are asking:
+
+**Did the pricing foundation change from March 27 to now?**
+
+Answer:
+**Yes.** For non-SPX, the main source-order change is:
+
+* **UW fallback moved down**
+* **Polygon snapshot moved up**. 
+
+## Best next question to Replit
+
+Send this:
+
+Yes — I want to isolate the price structure only, separate from trade-plan logic.
+
+For non-SPX tickers, confirm this clearly:
+
+March 27 price source order:
+
+1. Polygon WebSocket
+2. Unusual Whales underlying_price
+3. Polygon snapshot
+4. Last intraday bar close
+5. Previous day close
+
+Current price source order:
+
+1. Polygon WebSocket
+2. Polygon snapshot
+3. Unusual Whales underlying_price
+4. Last intraday bar close
+5. Previous day close
+
+If that is correct, then explain exactly what effect moving Unusual Whales from #2 to #3 could have on:
+
+* price_at_signal
+* VWAP relationship
+* entry confirmation vs needs reclaim/rejection
+* target/invalidation calculations
+
+Keep this focused on price structure only, not trade-plan logic.
+
+That’s the cleanest next move.

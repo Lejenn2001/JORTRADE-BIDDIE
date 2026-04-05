@@ -253,7 +253,7 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
     }
 
     const rtData = priceMonitor.getPrice(ticker);
-    const polygonLive = rtData && Date.now() - rtData.lastUpdate < 30000
+    const polygonLive = rtData && Date.now() - rtData.lastUpdate < 120000
       ? Math.round(rtData.price * 100) / 100
       : null;
 

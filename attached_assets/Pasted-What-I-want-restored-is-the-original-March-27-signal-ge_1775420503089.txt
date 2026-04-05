@@ -1,0 +1,47 @@
+What I want restored is the original March 27 signal-generation engine from commit e679f484 only.
+
+That means:
+
+* the logic that selected the signal
+* the logic that generated the entry
+* the logic that generated the target
+* the logic that generated the invalidation
+* the original runtime output formatting for those fields
+
+What I do NOT want restored is any later code that edits or rewrites signals after they were already created.
+
+So please exclude anything that:
+
+* recalculates old signal fields
+* syncs or refreshes entry/target/invalidation on existing records
+* adds target_near from later logic
+* reformats old signal text using later display rules
+* appends updated-logic style tags to old signals
+
+Yes — use the attached screenshot only as an anchor set for the exact signals/timestamps I validated.
+
+Important:
+I understand the displayed entry/target/invalidation fields in the current DB were later overwritten, so do NOT use the screenshot as the source of truth for those fields.
+
+Use it only to confirm you are restoring the correct March 27 signal cluster and runtime regime.
+
+Please use the screenshot to verify the exact signals/timestamps I care about, including the 9:36–10:36 AM ET cluster and the additional March 27 names I tested.
+
+Before making any changes, confirm:
+
+1. the exact tickers/timestamps from the screenshot that you will use as the validation set
+2. that the restore will reproduce the original March 27 runtime logic for those signals only
+3. that no later overwrite/update logic will be included
+
+One important clarification before any change:
+
+Are you comparing March 27 to the current file only, or to the actual March 28 live deployed logic?
+
+I only care about restoring the original March 27 runtime logic, not comparing it to whatever exists now unless clearly labeled.
+
+Finally, before applying anything, show me exactly which files/functions are part of:
+
+1. original March 27 signal generation
+2. later rewrite/update logic
+
+I only want #1 restored.
