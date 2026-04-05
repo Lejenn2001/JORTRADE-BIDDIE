@@ -48,3 +48,9 @@ id = "d3pflln8n-oALjf8TCT16"
 uri = "file://exports/forensic_mar27_0936_1036.md"
 type = "text"
 title = "Forensic Reconstruction: March 27, 9:36-10:36 AM ET"
+
+[[outputs]]
+id = "b3R-6_wsU8ddg-7NNbeEc"
+uri = "file://exports/JORTRADE_SYSTEM_AUDIT.md"
+type = "text"
+title = "JORTRADE System Audit — Full Documentation with Appendixes"
