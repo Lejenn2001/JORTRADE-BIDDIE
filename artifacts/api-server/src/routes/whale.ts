@@ -2018,16 +2018,14 @@ async function runSignalsPipeline() {
       return null;
     }
 
-    // Filter 1: Reject deep OTM (>15%) or deep ITM (>5%)
+    // Filter 1: Reject deep OTM (>15%); flag deep ITM (>5%) for monitoring
+    let isDeepItm = false;
     if (price && strike) {
       const isCall = optType === "call";
       const otmPct = isCall ? (strike - price) / price : (price - strike) / price;
       const itmPct = isCall ? (price - strike) / price : (strike - price) / price;
       if (otmPct > 0.15) return null;
-      if (itmPct > 0.05) {
-        console.log(`[signals] REJECTED ${ticker}: $${strike} ${optType} is ${(itmPct * 100).toFixed(1)}% deep ITM at $${price.toFixed(2)} — likely hedge/institutional`);
-        return null;
-      }
+      isDeepItm = itmPct > 0.05;
     }
 
     // Filter 2: Reject far-out expiries (>45 days) — we want near-term signals
@@ -2106,6 +2104,7 @@ async function runSignalsPipeline() {
     tags.push(optType === "call" ? "Call Flow" : "Put Flow");
     if (volOi >= 5) tags.push("High Volume");
     if (price && Math.abs(strike - price) / price < 0.03) tags.push("ATM");
+    if (isDeepItm) tags.push("Deep ITM");
     if (expiryDate === today) tags.push("0DTE");
     if (confirmation?.confirmed) tags.push("Price Confirmed");
     if (confirmation?.gamma_zone === "negative") tags.push("Negative Gamma");
