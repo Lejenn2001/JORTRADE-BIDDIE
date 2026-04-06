@@ -4617,6 +4617,18 @@ async function realtimeVerifySignals() {
       const source = priceMonitor.isConnected() ? "real-time" : "Polygon";
       console.log(`[auto-verify] ${source} | Verified: ${hits} hits, ${partialHits} partial/near-miss, ${misses} misses, ${expired} expired`);
     }
+
+    const driftFix = await dbQuery(
+      `UPDATE user_trades ut
+       SET signal_outcome = so.outcome, resolved_at = so.resolved_at
+       FROM signal_outcomes so
+       WHERE ut.signal_id = so.id::text
+         AND (ut.signal_outcome IS DISTINCT FROM so.outcome
+              OR ut.resolved_at IS DISTINCT FROM so.resolved_at)`
+    );
+    if (driftFix && driftFix.rowCount && driftFix.rowCount > 0) {
+      console.log(`[auto-verify] Drift fix: synced ${driftFix.rowCount} user_trades to match signal_outcomes`);
+    }
   } catch (e: any) {
     console.error("[auto-verify] Error:", e.message);
   }
