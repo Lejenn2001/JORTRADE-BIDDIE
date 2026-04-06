@@ -258,12 +258,12 @@ async function fetchKeyLevels(ticker: string, uwPrice?: number | null) {
       : null;
 
     let currentPrice: number | null = polygonLive ?? null;
+    if (!currentPrice && uwPrice) {
+      currentPrice = Math.round(uwPrice * 100) / 100;
+    }
     if (!currentPrice) {
       const snap = await fetchPolygonSnapshot(ticker);
       if (snap) currentPrice = Math.round(snap.price * 100) / 100;
-    }
-    if (!currentPrice && uwPrice) {
-      currentPrice = Math.round(uwPrice * 100) / 100;
     }
     if (!currentPrice && intradayBars.length > 0) {
       currentPrice = Math.round(intradayBars[intradayBars.length - 1].close * 100) / 100;
@@ -2140,8 +2140,24 @@ async function runSignalsPipeline() {
           entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (price $${price.toFixed(2)})`;
           actNow = false;
         }
+      } else if (pivot && price) {
+        if (price >= pivot) {
+          entryTrigger = `Holding above Pivot at $${pivot.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
+          actNow = true;
+        } else {
+          entryTrigger = `Needs to reclaim Pivot at $${pivot.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = false;
+        }
+      } else if (pdh && price) {
+        if (price > pdh) {
+          entryTrigger = `Above prior day high at $${pdh.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = true;
+        } else {
+          entryTrigger = `Watching for break above PDH at $${pdh.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = false;
+        }
       } else if (price) {
-        entryTrigger = `Above $${strike} (price $${price.toFixed(2)})`;
+        entryTrigger = `No key levels — monitoring near $${price.toFixed(2)}`;
         actNow = false;
       }
 
@@ -2197,8 +2213,24 @@ async function runSignalsPipeline() {
           entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (price $${price.toFixed(2)})`;
           actNow = false;
         }
+      } else if (pivot && price) {
+        if (price <= pivot) {
+          entryTrigger = `Trading below Pivot at $${pivot.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
+          actNow = true;
+        } else {
+          entryTrigger = `Needs rejection at Pivot $${pivot.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = false;
+        }
+      } else if (pdl && price) {
+        if (price < pdl) {
+          entryTrigger = `Below prior day low at $${pdl.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = true;
+        } else {
+          entryTrigger = `Watching for break below PDL at $${pdl.toFixed(2)} (price $${price.toFixed(2)})`;
+          actNow = false;
+        }
       } else if (price) {
-        entryTrigger = `Below $${strike} (price $${price.toFixed(2)})`;
+        entryTrigger = `No key levels — monitoring near $${price.toFixed(2)}`;
         actNow = false;
       }
 
