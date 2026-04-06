@@ -1,0 +1,60 @@
+I need a clean gap analysis against March 27 because we made multiple updates yesterday and I am no longer clear on what is restored vs what is still different.
+
+My goal is for live signal-generation behavior to match the March 27 logic / screenshot behavior as closely as possible.
+
+Please compare CURRENT PRODUCTION against March 27 commit e679f484 and tell me exactly what still does NOT match.
+
+I specifically need this broken down by:
+
+1. Signal selection / scoring
+
+* Does current production use the exact same scoreSignal() logic as March 27?
+* Are any later hard filters, confidence adjustments, or gating rules still active?
+
+2. Entry generation
+
+* Does entry logic now fully match March 27?
+* If not, what is different?
+* Include:
+
+  * Whale sweep behavior
+  * VWAP behavior
+  * Pivot / PDH / PDL fallbacks
+  * actNow assignment
+
+3. Target generation
+
+* Does current production use the exact March 27 target logic?
+* If not, what is different right now?
+
+4. Invalidation generation
+
+* Does current production use the exact March 27 invalidation logic?
+* If not, what is different right now?
+
+5. Price / key-level sourcing
+
+* Does current production now match March 27 source priority exactly?
+* WebSocket freshness
+* Unusual Whales price priority
+* Polygon Snapshot priority
+
+6. Post-creation changes
+
+* Are any later sync, replay, verification, or retroactive-update mechanisms still changing fields after signal creation in ways that did not exist on March 27?
+* If yes, list exactly which ones.
+
+7. Frontend output
+
+* Does the card output now match the March 27-style signal behavior from the screenshot?
+* If not, what fields still behave differently?
+
+I want the answer in this format:
+
+A. Matches March 27 now
+B. Still different from March 27
+C. What exact changes are still needed to fully match March 27 behavior
+
+Important:
+Do not implement anything yet.
+I need a precise checklist of what is left so we can decide whether the task is actually complete or still partial.
