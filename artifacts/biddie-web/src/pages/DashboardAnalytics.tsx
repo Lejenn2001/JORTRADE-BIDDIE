@@ -474,12 +474,12 @@ const DashboardAnalytics = () => {
 
         if (historyData.signals) {
           setAllSignals(historyData.signals);
-          const allSigs = historyData.signals;
-          const biddiePicks = allSigs.filter((s: any) => s.is_biddie_pick);
-          const resolved = allSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
+          const coreSigs = historyData.signals.filter((s: any) => (s.category || "algorithm") !== "spread");
+          const biddiePicks = coreSigs.filter((s: any) => s.is_biddie_pick);
+          const resolved = coreSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
 
-          const convictions = allSigs.filter((s: any) => s.confidence != null).map((s: any) => Number(s.confidence));
+          const convictions = coreSigs.filter((s: any) => s.confidence != null).map((s: any) => Number(s.confidence));
           const avgConviction = convictions.length > 0 ? convictions.reduce((a: number, b: number) => a + b, 0) / convictions.length : 0;
 
           const byTicker: Record<string, { hits: number; total: number }> = {};
@@ -497,13 +497,13 @@ const DashboardAnalytics = () => {
           }
 
           setSignalStats({
-            total: allSigs.length,
+            total: coreSigs.length,
             hits,
             misses: resolved.length - hits,
-            pending: allSigs.filter((s: any) => !s.outcome || s.outcome === "pending").length,
+            pending: coreSigs.filter((s: any) => !s.outcome || s.outcome === "pending").length,
             winRate: resolved.length > 0 ? Math.round((hits / resolved.length) * 100) : 0,
             biddiePicks: biddiePicks.length,
-            biddiePickRate: allSigs.length > 0 ? Math.round((biddiePicks.length / allSigs.length) * 100) : 0,
+            biddiePickRate: coreSigs.length > 0 ? Math.round((biddiePicks.length / coreSigs.length) * 100) : 0,
             avgConviction,
             byTicker,
             byCategory,

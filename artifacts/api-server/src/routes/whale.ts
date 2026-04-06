@@ -5476,10 +5476,10 @@ router.get("/whale/trades/stats", async (req, res) => {
     if (!userId) return res.status(400).json({ error: "userId required" });
 
     const allTrades = await dbQuery(
-      `SELECT ut.*, so.outcome, so.resolved_at, so.created_at as signal_created_at
+      `SELECT ut.*, so.outcome, so.resolved_at, so.created_at as signal_created_at, so.category
        FROM user_trades ut
        LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
-       WHERE ut.user_id = $1
+       WHERE ut.user_id = $1 AND COALESCE(so.category, '') != 'spread'
        ORDER BY ut.taken_at DESC`,
       [userId]
     );
