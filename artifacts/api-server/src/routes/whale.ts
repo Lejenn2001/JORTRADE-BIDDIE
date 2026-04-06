@@ -4547,9 +4547,21 @@ async function realtimeVerifySignals() {
           if (prevStatus === "watching" && didReachEntry) {
             newStatus = "active";
           }
-          if (didBreachInvalidation && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
-            newStatus = "miss";
-            if (!outcome) outcome = "missed";
+          if (effectiveInvalidation && refPrice2 > 0 && canMiss && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
+            const currentlyPastInv = isBullish
+              ? history.current <= effectiveInvalidation
+              : history.current >= effectiveInvalidation;
+            if (currentlyPastInv) {
+              if (!outcome) {
+                if (mfeToTarget !== null && mfeToTarget >= 30) {
+                  outcome = "near_miss";
+                  newStatus = "near_miss";
+                } else {
+                  outcome = "missed";
+                  newStatus = "miss";
+                }
+              }
+            }
           }
           if (outcome === "hit") newStatus = "hit";
           else if (outcome === "partial_hit") newStatus = "partial";
