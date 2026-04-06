@@ -1,0 +1,63 @@
+I want a final full production sign-off for tomorrow.
+
+We’ve made a lot of changes today across the entire system — not just analytics — and I need to confirm everything is fully connected and ready to run in production.
+
+Do not suggest new changes. Do not redesign anything.
+
+I only want confirmation that the LIVE production system is stable and ready for market open.
+
+Please confirm the following in production:
+
+1. Signal pipeline
+
+* Signals will generate tomorrow during market hours without any manual action
+* All required APIs are connected and working (Unusual Whales, Polygon, Anthropic)
+* No scheduler, cron, or worker issues
+
+2. Data flow
+
+* Signals are being written to the production database (signal_outcomes)
+* The live site is reading from the correct production database
+* No environment mismatch or stale data issues
+
+3. Verification + trade lifecycle
+
+* realtimeVerifySignals() is running on schedule
+* MFE, outcomes, invalidation logic, and pending/revert behavior are all active
+* user_trades sync is working and aligned
+
+4. Frontend / UI
+
+* Live site is connected to the correct production endpoints
+* Signals will appear in the feed in real time
+* Analytics and My Trades reflect production data correctly
+
+5. Analytics + Admin (final confirmation)
+
+* Win-rate logic is unified
+* "Wrong" signals are excluded properly
+* Spreads excluded from main analytics
+* No inconsistencies across views
+
+6. Risk check
+
+* Confirm there are NO known production issues that could cause:
+
+  * signals not generating
+  * signals generating but not displaying
+  * analytics not updating
+  * verification not running
+  * stale or incorrect data
+
+For each section, give:
+
+* Status: READY / NOT READY
+* Any risk level: none / low / medium / high
+
+Then give one final answer:
+
+READY FOR MARKET OPEN
+or
+NOT READY + exact blocker(s)
+
+I am not making any more changes tonight. I just need confirmation that everything we built today is fully connected and will run correctly tomorrow.
