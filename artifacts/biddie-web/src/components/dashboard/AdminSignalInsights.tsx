@@ -178,7 +178,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       const cat = s.category || "algorithm";
       if (!tp.categories[cat]) tp.categories[cat] = { hits: 0, misses: 0 };
-      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "partial_hit" ? "hit" : s.outcome === "missed" ? "missed" : s.outcome === "near_miss" ? "missed" : s.outcome === "expired" ? "missed" : "pending";
+      const outcome = s.outcome === "hit" ? "hit" : s.outcome === "partial_hit" ? "hit" : s.outcome === "missed" ? "missed" : s.outcome === "near_miss" ? "missed" : "pending";
 
       if (outcome === "hit") {
         tp.hits++;
@@ -204,7 +204,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
     for (const s of signals) {
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       if (s.outcome === "hit" || s.outcome === "partial_hit") { if (isCall) callHits++; else putHits++; }
-      else if (s.outcome === "missed" || s.outcome === "near_miss" || s.outcome === "expired") { if (isCall) callMisses++; else putMisses++; }
+      else if (s.outcome === "missed" || s.outcome === "near_miss") { if (isCall) callMisses++; else putMisses++; }
     }
     const callResolved = callHits + callMisses;
     const putResolved = putHits + putMisses;
@@ -222,7 +222,7 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       if (!map[cat]) map[cat] = { hits: 0, misses: 0, pending: 0, total: 0 };
       map[cat].total++;
       if (s.outcome === "hit" || s.outcome === "partial_hit") map[cat].hits++;
-      else if (s.outcome === "missed" || s.outcome === "near_miss" || s.outcome === "expired") map[cat].misses++;
+      else if (s.outcome === "missed" || s.outcome === "near_miss") map[cat].misses++;
       else map[cat].pending++;
     }
     return map;

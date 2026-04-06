@@ -5487,15 +5487,15 @@ router.get("/whale/trades/stats", async (req, res) => {
 
     const trades = allTrades.rows;
     const total = trades.length;
-    const resolved = trades.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
-    const hits = resolved.filter((t: any) => t.outcome === "hit").length;
-    const misses = resolved.filter((t: any) => t.outcome === "missed").length;
+    const resolved = trades.filter((t: any) => t.outcome === "hit" || t.outcome === "partial_hit" || t.outcome === "missed" || t.outcome === "near_miss");
+    const hits = resolved.filter((t: any) => t.outcome === "hit" || t.outcome === "partial_hit").length;
+    const misses = resolved.filter((t: any) => t.outcome === "missed" || t.outcome === "near_miss").length;
     const pending = trades.filter((t: any) => !t.outcome || t.outcome === "pending").length;
     const winRate = resolved.length > 0 ? Math.round((hits / resolved.length) * 100) : 0;
 
     let streak = 0;
     for (const t of resolved) {
-      if ((t as any).outcome === "hit") streak++;
+      if ((t as any).outcome === "hit" || (t as any).outcome === "partial_hit") streak++;
       else break;
     }
 
@@ -5504,7 +5504,7 @@ router.get("/whale/trades/stats", async (req, res) => {
       const tk = (t as any).ticker;
       if (!byTicker[tk]) byTicker[tk] = { hits: 0, total: 0 };
       byTicker[tk].total++;
-      if ((t as any).outcome === "hit") byTicker[tk].hits++;
+      if ((t as any).outcome === "hit" || (t as any).outcome === "partial_hit") byTicker[tk].hits++;
     }
 
     const byCategory: Record<string, { hits: number; total: number }> = {};
@@ -5512,14 +5512,14 @@ router.get("/whale/trades/stats", async (req, res) => {
       const cat = (t as any).category || "unknown";
       if (!byCategory[cat]) byCategory[cat] = { hits: 0, total: 0 };
       byCategory[cat].total++;
-      if ((t as any).outcome === "hit") byCategory[cat].hits++;
+      if ((t as any).outcome === "hit" || (t as any).outcome === "partial_hit") byCategory[cat].hits++;
     }
 
     const sunday = getSunday(new Date());
     const thisWeek = trades.filter((t: any) => new Date(t.taken_at) >= sunday);
-    const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "missed");
-    const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit").length;
-    const weekMisses = thisWeekResolved.filter((t: any) => t.outcome === "missed").length;
+    const thisWeekResolved = thisWeek.filter((t: any) => t.outcome === "hit" || t.outcome === "partial_hit" || t.outcome === "missed" || t.outcome === "near_miss");
+    const weekHits = thisWeekResolved.filter((t: any) => t.outcome === "hit" || t.outcome === "partial_hit").length;
+    const weekMisses = thisWeekResolved.filter((t: any) => t.outcome === "missed" || t.outcome === "near_miss").length;
     const weekPending = thisWeek.filter((t: any) => !t.outcome || t.outcome === "pending").length;
     const weekWinRate = thisWeekResolved.length > 0 ? Math.round((weekHits / thisWeekResolved.length) * 100) : 0;
 
