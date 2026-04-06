@@ -1,0 +1,111 @@
+Current Target Logic (lines 2167–2271)
+Calls:
+
+if strike > price (OTM):
+  target = "$strike"                    ← strike IS the target
+  targetNear = PDH (if > strike) → R1 (if > strike) → PDH (if > price) → R1 (if > price) → strike*1.02
+if strike ≤ price (ITM/ATM):
+  target = PDH (if > price) → R1 (if > price) → price*1.02
+  targetNear = R1 (if > PDH) → PDH*1.02 | R1*1.02 | price*1.04
+
+Puts:
+
+if strike < price (OTM):
+  target = "$strike"                    ← strike IS the target
+  targetNear = PDL (if < strike) → S1 (if < strike) → PDL (if < price) → S1 (if < price) → strike*0.98
+if strike ≥ price (ITM/ATM):
+  target = PDL (if < price) → S1 (if < price) → price*0.98
+  targetNear = S1 (if < PDL) → PDL*0.98 | S1*0.98 | price*0.96
+
+No safety clamp — target can be at or behind current price.
+
+Current Invalidation Logic (lines 2198–2206, 2274–2282)
+Calls:
+
+if vwap exists:  "Below $${vwap * 0.995}"     ← VWAP minus 0.5% buffer
+else if pdl:     "Below PDL at $pdl"
+else if s1:      "Below S1 at $s1"
+else:            "Below $${price * 0.98}"
+
+Puts:
+
+if vwap exists:  "Above $${vwap * 1.005}"     ← VWAP plus 0.5% buffer
+else if pdh:     "Above PDH at $pdh"
+else if r1:      "Above R1 at $r1"
+else:            "Above $${price * 1.02}"
+
+Always uses VWAP-buffer first if VWAP exists, regardless of whether there's a closer support/resistance level.
+
+March 30 Target Logic (lines 2148–2189)
+Calls:
+
+callTargets = [
+  VWAP (if > price),
+  Strike (if > price),
+  PDH (if > price),
+  R1 (if > price),
+  Pivot (if > price)
+].sort(ascending by level)
+if 2+ targets: TP1 = nearest above, TP2 = next above
+if 1 target:   TP1 = that level, TP2 = level * 1.02
+if 0 targets:  TP1 = price * 1.02, TP2 = price * 1.04
+
+Puts:
+
+putTargets = [
+  VWAP (if < price),
+  Strike (if < price),
+  PDL (if < price),
+  S1 (if < price),
+  Pivot (if < price)
+].sort(descending by level)
+if 2+ targets: TP1 = nearest below, TP2 = next below
+if 1 target:   TP1 = that level, TP2 = level * 0.98
+if 0 targets:  TP1 = price * 0.98, TP2 = price * 0.96
+
+Safety clamp:
+
+if call target ≤ price → reset to price*1.02 / price*1.04
+if put target ≥ price → reset to price*0.98 / price*0.96
+
+March 30 Invalidation Logic (lines 2169–2178, 2237–2243)
+Calls:
+
+supportLevels = [PDL, S1, Pivot (if < price)]
+  .filter(level < price)
+  .sort(descending)                    ← nearest support first
+if any:  "Below [nearest] at $level"
+else:    "Below $${price * 0.98}"
+
+Puts:
+
+resistanceLevels = [PDH, R1, Pivot (if > price)]
+  .filter(level > price)
+  .sort(ascending)                     ← nearest resistance first
+if any:  "Above [nearest] at $level"
+else:    "Above $${price * 1.02}"
+
+Final Hybrid Version (What Will Be Implemented)
+Targets — Restore March 30 sorted-level approach:
+
+Collect all valid levels in the trade direction (VWAP, Strike, PDH/PDL, R1/S1, Pivot), filter to those actually above price (calls) or below price (puts)
+Sort by proximity to current price
+TP1 = nearest valid level, TP2 = next valid level
+Fallback: price ± 2% / ± 4%
+Safety clamp: if target is at/behind price, reset to price ± 2%
+Invalidation — Restore March 30 nearest-S/R approach:
+
+Calls: collect PDL, S1, Pivot (if below price), sort descending, pick nearest support
+Puts: collect PDH, R1, Pivot (if above price), sort ascending, pick nearest resistance
+Fallback: price ± 2%
+Everything else stays as-is:
+
+1-minute VWAP ✅
+Current source priority ✅
+Whale sweep entry tier ✅
+Current VWAP entry phrasing ✅
+Pivot/PDH/PDL fallback entry tiers ✅
+actNow / ACT NOW ✅
+isDeepItm flag (not hard reject) ✅
+isSpx price path ✅
+Want me to go ahead and implement this?
