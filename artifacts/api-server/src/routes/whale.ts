@@ -2132,7 +2132,10 @@ async function runSignalsPipeline() {
     let actNow = false;
 
     if (optType === "call") {
-      if (vwap && price) {
+      if (isWhaleFlow && price) {
+        entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+        actNow = true;
+      } else if (vwap && price) {
         if (price > vwap) {
           entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
           actNow = true;
@@ -2205,7 +2208,10 @@ async function runSignalsPipeline() {
       keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : `$${strike}`);
       srLevel = r1 ? `R1 at $${r1.toFixed(2)}` : "";
     } else {
-      if (vwap && price) {
+      if (isWhaleFlow && price) {
+        entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
+        actNow = true;
+      } else if (vwap && price) {
         if (price < vwap) {
           entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
           actNow = true;
