@@ -152,9 +152,11 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
     fetchSignals();
   }, []);
 
+  const analyticsSignals = useMemo(() => signals.filter(s => s.review_status !== "wrong"), [signals]);
+
   const stats = useMemo(() => {
     let hits = 0, partialHits = 0, nearMisses = 0, misses = 0, expired = 0, pending = 0;
-    for (const s of signals) {
+    for (const s of analyticsSignals) {
       if (s.outcome === "hit") hits++;
       else if (s.outcome === "partial_hit") partialHits++;
       else if (s.outcome === "near_miss") nearMisses++;
@@ -164,12 +166,12 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
     }
     const resolved = hits + partialHits + nearMisses + misses;
     const successRate = resolved > 0 ? ((hits + partialHits) / resolved) * 100 : null;
-    return { hits, partialHits, nearMisses, misses, expired, pending, total: signals.length, resolved, winRate: successRate };
-  }, [signals]);
+    return { hits, partialHits, nearMisses, misses, expired, pending, total: analyticsSignals.length, resolved, winRate: successRate };
+  }, [analyticsSignals]);
 
   const tickerPatterns = useMemo(() => {
     const map: Record<string, TickerPattern> = {};
-    for (const s of signals) {
+    for (const s of analyticsSignals) {
       if (!map[s.ticker]) {
         map[s.ticker] = { ticker: s.ticker, hits: 0, misses: 0, pending: 0, total: 0, winRate: null, callHits: 0, callMisses: 0, putHits: 0, putMisses: 0, categories: {} };
       }
@@ -197,11 +199,11 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       tp.winRate = resolved > 0 ? (tp.hits / resolved) * 100 : null;
     }
     return Object.values(map).sort((a, b) => b.total - a.total);
-  }, [signals]);
+  }, [analyticsSignals]);
 
   const directionStats = useMemo(() => {
     let callHits = 0, callMisses = 0, putHits = 0, putMisses = 0;
-    for (const s of signals) {
+    for (const s of analyticsSignals) {
       const isCall = s.put_call ? s.put_call === "call" : s.signal_type === "bullish";
       if (s.outcome === "hit" || s.outcome === "partial_hit") { if (isCall) callHits++; else putHits++; }
       else if (s.outcome === "missed" || s.outcome === "near_miss") { if (isCall) callMisses++; else putMisses++; }
@@ -213,11 +215,11 @@ const AdminSignalInsights = ({ onExport, exporting }: { onExport?: () => void; e
       callWinRate: callResolved > 0 ? (callHits / callResolved) * 100 : null,
       putWinRate: putResolved > 0 ? (putHits / putResolved) * 100 : null,
     };
-  }, [signals]);
+  }, [analyticsSignals]);
 
   const categoryStats = useMemo(() => {
     const map: Record<string, { hits: number; misses: number; pending: number; total: number }> = {};
-    for (const s of signals) {
+    for (const s of analyticsSignals) {
       const cat = s.category || "algorithm";
       if (!map[cat]) map[cat] = { hits: 0, misses: 0, pending: 0, total: 0 };
       map[cat].total++;

@@ -474,7 +474,7 @@ const DashboardAnalytics = () => {
 
         if (historyData.signals) {
           setAllSignals(historyData.signals);
-          const coreSigs = historyData.signals.filter((s: any) => (s.category || "algorithm") !== "spread");
+          const coreSigs = historyData.signals.filter((s: any) => (s.category || "algorithm") !== "spread" && s.review_status !== "wrong");
           const biddiePicks = coreSigs.filter((s: any) => s.is_biddie_pick);
           const resolved = coreSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;

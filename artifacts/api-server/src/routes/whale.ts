@@ -5491,7 +5491,9 @@ router.get("/whale/trades/stats", async (req, res) => {
       `SELECT ut.*, so.outcome, so.resolved_at, so.created_at as signal_created_at, so.category
        FROM user_trades ut
        LEFT JOIN signal_outcomes so ON ut.signal_id = so.id::text
+       LEFT JOIN signal_reviews sr ON sr.signal_id = ut.signal_id
        WHERE ut.user_id = $1 AND COALESCE(so.category, '') != 'spread'
+         AND COALESCE(sr.status, '') != 'wrong'
        ORDER BY ut.taken_at DESC`,
       [userId]
     );
@@ -5658,10 +5660,12 @@ async function snapshotWeek(weekStart: Date): Promise<any> {
   );
 
   const signals = await dbQuery(
-    `SELECT ticker, outcome, conviction_score, is_biddie_pick
-     FROM signal_outcomes
-     WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread'
-       AND detected_at >= $1 AND detected_at < $2`,
+    `SELECT so.ticker, so.outcome, so.conviction_score, so.is_biddie_pick
+     FROM signal_outcomes so
+     LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text
+     WHERE so.signal_source = 'replit' AND COALESCE(so.category, '') != 'spread'
+       AND COALESCE(sr.status, '') != 'wrong'
+       AND so.detected_at >= $1 AND so.detected_at < $2`,
     [weekStart.toISOString(), queryEnd.toISOString()]
   );
 
