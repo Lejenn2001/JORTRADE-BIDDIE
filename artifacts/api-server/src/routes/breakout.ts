@@ -197,6 +197,7 @@ interface SqueezeResult {
   contract: ContractRec | null;
   directionContext: string | null;
   scannedAt: string;
+  freshness: "fresh" | "aging" | null;
   thesis: {
     direction: "bullish" | "bearish" | "neutral";
     confidence: number;
@@ -879,6 +880,7 @@ async function scanTicker(ticker: string): Promise<SqueezeResult | null> {
     contract,
     directionContext,
     scannedAt: new Date().toISOString(),
+    freshness: null,
     thesis: {
       direction: thesisDirection,
       confidence: thesisConfidence,
@@ -935,6 +937,61 @@ function saveFirstDetected(map: Map<string, string>): void {
 const squeezeFirstSeen: Map<string, string> = loadSqueezeTracking();
 const firstDetectedMap: Map<string, string> = loadFirstDetected();
 
+const EXPIRED_RANGES_FILE = join(process.cwd(), ".expired-ranges-tracking.json");
+
+function loadExpiredRanges(): Map<string, { high: number; low: number; expiredAt: string }> {
+  try {
+    if (existsSync(EXPIRED_RANGES_FILE)) {
+      const data = JSON.parse(readFileSync(EXPIRED_RANGES_FILE, "utf-8"));
+      return new Map(Object.entries(data));
+    }
+  } catch {}
+  return new Map();
+}
+
+function saveExpiredRanges(map: Map<string, { high: number; low: number; expiredAt: string }>): void {
+  try {
+    writeFileSync(EXPIRED_RANGES_FILE, JSON.stringify(Object.fromEntries(map), null, 2));
+  } catch {}
+}
+
+const expiredRangesMap = loadExpiredRanges();
+
+function tradingDaysSince(isoDate: string): number {
+  const start = new Date(isoDate);
+  const now = new Date();
+  let count = 0;
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  while (cursor < today) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
+const FRESH_DAYS = 3;
+const AGING_DAYS = 5;
+const AGING_DECAY = 0.5;
+
+function isStaleReentry(ticker: string, rangeHigh: number, rangeLow: number, atr: number): boolean {
+  const prev = expiredRangesMap.get(ticker);
+  if (!prev) return false;
+  const expiredAt = new Date(prev.expiredAt);
+  const daysSinceExpiry = (Date.now() - expiredAt.getTime()) / (24 * 60 * 60 * 1000);
+  if (daysSinceExpiry > 10) {
+    expiredRangesMap.delete(ticker);
+    return false;
+  }
+  const highShift = Math.abs(rangeHigh - prev.high);
+  const lowShift = Math.abs(rangeLow - prev.low);
+  if (highShift < atr && lowShift < atr) return true;
+  return false;
+}
+
 async function runFullScan(): Promise<SqueezeResult[]> {
   const now = Date.now();
   if (cachedResults.length > 0 && now - lastScanTime < SCAN_INTERVAL) {
@@ -952,7 +1009,7 @@ async function runFullScan(): Promise<SqueezeResult[]> {
     currentFlowData = null;
   }
 
-  const results: SqueezeResult[] = [];
+  const rawResults: SqueezeResult[] = [];
   const seenTickers = new Set<string>();
 
   const batchSize = 5;
@@ -962,7 +1019,7 @@ async function runFullScan(): Promise<SqueezeResult[]> {
     for (const r of batchResults) {
       if (r && !seenTickers.has(r.ticker)) {
         seenTickers.add(r.ticker);
-        results.push(r);
+        rawResults.push(r);
       }
     }
     if (i + batchSize < WATCHLIST.length) {
@@ -970,16 +1027,60 @@ async function runFullScan(): Promise<SqueezeResult[]> {
     }
   }
 
-  results.sort((a, b) => b.score - a.score);
-
+  const results: SqueezeResult[] = [];
   const activeSqueezeTickers = new Set<string>();
   const activeSetupTickers = new Set<string>();
-  for (const r of results) {
-    activeSetupTickers.add(r.ticker);
+  const expiredTickers: string[] = [];
+  const agingTickers: string[] = [];
+
+  for (const r of rawResults) {
+    if (isStaleReentry(r.ticker, r.rangeHighLow[0], r.rangeHighLow[1], r.atr)) {
+      console.log(`[breakout] Blocked stale re-entry: ${r.ticker} (range unchanged from expired setup)`);
+      continue;
+    }
+
     if (!firstDetectedMap.has(r.ticker)) {
       firstDetectedMap.set(r.ticker, new Date().toISOString());
     }
-    (r as any).firstDetected = firstDetectedMap.get(r.ticker);
+
+    const firstSeen = firstDetectedMap.get(r.ticker)!;
+    const ageTradingDays = tradingDaysSince(firstSeen);
+
+    if (ageTradingDays > AGING_DAYS) {
+      expiredRangesMap.set(r.ticker, {
+        high: r.rangeHighLow[0],
+        low: r.rangeHighLow[1],
+        expiredAt: new Date().toISOString(),
+      });
+      firstDetectedMap.delete(r.ticker);
+      expiredTickers.push(r.ticker);
+      continue;
+    }
+
+    if (ageTradingDays > FRESH_DAYS) {
+      r.score = Math.round(r.score * AGING_DECAY);
+      r.freshness = "aging";
+      r.reason += `. Aging setup (${ageTradingDays} trading days)`;
+      agingTickers.push(r.ticker);
+      if (r.score < 20) {
+        expiredRangesMap.set(r.ticker, {
+          high: r.rangeHighLow[0],
+          low: r.rangeHighLow[1],
+          expiredAt: new Date().toISOString(),
+        });
+        firstDetectedMap.delete(r.ticker);
+        expiredTickers.push(r.ticker);
+        continue;
+      }
+    } else {
+      r.freshness = "fresh";
+    }
+
+    (r as any).firstDetected = firstSeen;
+    (r as any).ageTradingDays = ageTradingDays;
+    activeSetupTickers.add(r.ticker);
+    results.push(r);
+
     if (r.squeezeActive) {
       activeSqueezeTickers.add(r.ticker);
       if (!squeezeFirstSeen.has(r.ticker)) {
@@ -988,6 +1089,9 @@ async function runFullScan(): Promise<SqueezeResult[]> {
       (r as any).squeezeFirstSeen = squeezeFirstSeen.get(r.ticker);
     }
   }
+
+  results.sort((a, b) => b.score - a.score);
+
   for (const [ticker] of squeezeFirstSeen) {
     if (!activeSqueezeTickers.has(ticker)) {
       squeezeFirstSeen.delete(ticker);
@@ -1000,10 +1104,18 @@ async function runFullScan(): Promise<SqueezeResult[]> {
   }
   saveSqueezeTracking(squeezeFirstSeen);
   saveFirstDetected(firstDetectedMap);
+  saveExpiredRanges(expiredRangesMap);
 
   cachedResults = results;
   lastScanTime = Date.now();
-  console.log(`[breakout] Scan complete: ${Date.now() - t0}ms, ${results.length} setups found`);
+  const elapsed = Date.now() - t0;
+  if (expiredTickers.length > 0) {
+    console.log(`[breakout] Expired (removed): ${expiredTickers.join(", ")}`);
+  }
+  if (agingTickers.length > 0) {
+    console.log(`[breakout] Aging (50% decay): ${agingTickers.join(", ")}`);
+  }
+  console.log(`[breakout] Scan complete: ${elapsed}ms, ${results.length} setups found (${expiredTickers.length} expired, ${agingTickers.length} aging)`);
   return results;
 }
 
