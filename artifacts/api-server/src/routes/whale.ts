@@ -2125,15 +2125,26 @@ async function runSignalsPipeline() {
     let keyLevel = "";
     let srLevel = "";
     let actNow = false;
+    let entryAnchorLevel: number | null = null;
 
     const psych = Math.round(strike / 10) * 10;
     const psychLevel = psych > 0 ? `$${psych} psychological level` : "";
+
+    if (!vwap && price) {
+      const etNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const h = etNow.getHours(), m = etNow.getMinutes(), dow = etNow.getDay();
+      const inMarketHours = dow >= 1 && dow <= 5 && (h > 9 || (h === 9 && m >= 30)) && h < 16;
+      if (inMarketHours) {
+        console.log(`[signals] VWAP null for ${ticker} during market hours — using no-VWAP fallback`);
+      }
+    }
 
     if (optType === "call") {
       if (isWhaleFlow && price) {
         entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
         actNow = true;
       } else if (vwap && price) {
+        entryAnchorLevel = vwap;
         if (price > vwap) {
           entryTrigger = `Holding above VWAP at $${vwap.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
           actNow = true;
@@ -2141,24 +2152,9 @@ async function runSignalsPipeline() {
           entryTrigger = `Needs to reclaim VWAP at $${vwap.toFixed(2)} (price $${price.toFixed(2)})`;
           actNow = false;
         }
-      } else if (pivot && price) {
-        if (price >= pivot) {
-          entryTrigger = `Holding above Pivot at $${pivot.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
-          actNow = true;
-        } else {
-          entryTrigger = `Needs to reclaim Pivot at $${pivot.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = false;
-        }
-      } else if (pdh && price) {
-        if (price > pdh) {
-          entryTrigger = `Above prior day high at $${pdh.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = true;
-        } else {
-          entryTrigger = `Watching for break above PDH at $${pdh.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = false;
-        }
       } else if (price) {
-        entryTrigger = `No key levels — monitoring near $${price.toFixed(2)}`;
+        const nearLevel = strike > 0 ? `$${strike.toFixed(2)}` : `$${price.toFixed(2)}`;
+        entryTrigger = `Near ${nearLevel} (no VWAP data)`;
         actNow = false;
       }
 
@@ -2168,7 +2164,7 @@ async function runSignalsPipeline() {
         pdh && pdh > price ? { level: pdh, name: "PDH" } : null,
         r1 && r1 > price ? { level: r1, name: "R1" } : null,
         pivot && pivot > price ? { level: pivot, name: "Pivot" } : null,
-      ].filter((l): l is { level: number; name: string } => !!l);
+      ].filter((l): l is { level: number; name: string } => !!l && (!entryAnchorLevel || Math.abs(l.level - entryAnchorLevel) > 0.005));
       callTargets.sort((a, b) => a.level - b.level);
 
       if (callTargets.length >= 2) {
@@ -2192,13 +2188,14 @@ async function runSignalsPipeline() {
         ? `Below ${supportLevels[0].name} at $${supportLevels[0].level.toFixed(2)}`
         : `Below $${(price * 0.98).toFixed(2)}`;
 
-      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : "");
       srLevel = psychLevel || (r1 ? `R1 at $${r1.toFixed(2)}` : "");
     } else {
       if (isWhaleFlow && price) {
         entryTrigger = `Whale sweep at $${price.toFixed(2)}`;
         actNow = true;
       } else if (vwap && price) {
+        entryAnchorLevel = vwap;
         if (price < vwap) {
           entryTrigger = `Trading below VWAP at $${vwap.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
           actNow = true;
@@ -2206,24 +2203,9 @@ async function runSignalsPipeline() {
           entryTrigger = `Needs rejection at VWAP $${vwap.toFixed(2)} (price $${price.toFixed(2)})`;
           actNow = false;
         }
-      } else if (pivot && price) {
-        if (price <= pivot) {
-          entryTrigger = `Trading below Pivot at $${pivot.toFixed(2)} — confirmed (price $${price.toFixed(2)})`;
-          actNow = true;
-        } else {
-          entryTrigger = `Needs rejection at Pivot $${pivot.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = false;
-        }
-      } else if (pdl && price) {
-        if (price < pdl) {
-          entryTrigger = `Below prior day low at $${pdl.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = true;
-        } else {
-          entryTrigger = `Watching for break below PDL at $${pdl.toFixed(2)} (price $${price.toFixed(2)})`;
-          actNow = false;
-        }
       } else if (price) {
-        entryTrigger = `No key levels — monitoring near $${price.toFixed(2)}`;
+        const nearLevel = strike > 0 ? `$${strike.toFixed(2)}` : `$${price.toFixed(2)}`;
+        entryTrigger = `Near ${nearLevel} (no VWAP data)`;
         actNow = false;
       }
 
@@ -2233,7 +2215,7 @@ async function runSignalsPipeline() {
         pdl && pdl < price ? { level: pdl, name: "PDL" } : null,
         s1 && s1 < price ? { level: s1, name: "S1" } : null,
         pivot && pivot < price ? { level: pivot, name: "Pivot" } : null,
-      ].filter((l): l is { level: number; name: string } => !!l);
+      ].filter((l): l is { level: number; name: string } => !!l && (!entryAnchorLevel || Math.abs(l.level - entryAnchorLevel) > 0.005));
       putTargets.sort((a, b) => b.level - a.level);
 
       if (putTargets.length >= 2) {
@@ -2257,7 +2239,7 @@ async function runSignalsPipeline() {
         ? `Above ${resistanceLevels[0].name} at $${resistanceLevels[0].level.toFixed(2)}`
         : `Above $${(price * 1.02).toFixed(2)}`;
 
-      keyLevel = pivot ? `Pivot at $${pivot.toFixed(2)}` : (vwap ? `VWAP at $${vwap.toFixed(2)}` : "");
+      keyLevel = vwap ? `VWAP at $${vwap.toFixed(2)}` : (pivot ? `Pivot at $${pivot.toFixed(2)}` : "");
       srLevel = psychLevel || (s1 ? `S1 at $${s1.toFixed(2)}` : "");
     }
 
