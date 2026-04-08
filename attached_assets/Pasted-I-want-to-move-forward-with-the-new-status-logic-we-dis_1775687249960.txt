@@ -1,0 +1,59 @@
+I want to move forward with the new status logic we discussed.
+
+Before implementing, I want you to confirm the final design and show me exactly how it will work.
+
+Final rule:
+
+- if entry hit → ACTIVE
+- if entry not hit and MFE < 15% → WATCHING
+- if entry not hit and MFE ≥ 15% → RAN WITHOUT ENTRY
+- if outcome determined → RESOLVED (WIN / LOSS / EXPIRED)
+
+Key principles:
+- MFE stays exactly as it is (no changes to calculation or display)
+- We are NOT forcing signals into ACTIVE if entry was never confirmed
+- We are separating signal quality from entry-trigger accuracy
+- WATCHING should never show high MFE anymore
+- RAN WITHOUT ENTRY captures signals that moved meaningfully without a confirmed entry
+
+Please confirm in plain English:
+
+1. Does this rule fully resolve the WATCHING vs ACTIVE mismatch?
+2. Are there any edge cases where this could behave incorrectly?
+3. Will this rely on:
+   - entry_price_reached
+   - MFE threshold
+   - or both together?
+4. How will this behave if:
+   - entry parsing fails
+   - price clearly moves past entry
+   - MFE is high but entry_price_reached is still false
+5. How will you ensure:
+   - signals don’t flip back and forth between statuses
+   - the logic is stable once a signal moves forward
+
+Implementation plan:
+6. Show me exactly:
+   - where this logic will live (verification loop, status update, etc.)
+   - what fields it will use
+   - how it updates trade_status
+7. Confirm this does NOT change:
+   - MFE calculation
+   - outcome logic (WIN/LOSS)
+   - reinforcement logic
+   - analytics (for now)
+
+Data cleanup:
+8. How will you update existing signals:
+   - WATCHING + high MFE → RAN WITHOUT ENTRY
+   - resolved signals stuck on WATCHING → correct status
+
+UI:
+9. Confirm:
+   - MFE stays visible on all signals
+   - new label “RAN WITHOUT ENTRY” appears with a distinct color
+   - no changes needed to existing ACTIVE/WATCHING display
+
+Important:
+Do NOT implement yet.
+Show me the final logic and plan first so I can approve it.
