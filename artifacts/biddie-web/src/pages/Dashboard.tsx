@@ -97,6 +97,8 @@ const recordToDashboardSignal = (record: any): MarketSignal => {
     resolvedAt: record.resolved_at || null,
     mfePercent: record.mfe_percent != null ? Number(record.mfe_percent) : null,
     maxFavorablePrice: record.max_favorable_price != null ? Number(record.max_favorable_price) : null,
+    reinforcementCount: record.reinforcement_count != null ? Number(record.reinforcement_count) : 1,
+    lastReinforcedAt: record.last_reinforced_at || null,
   };
 };
 
@@ -212,14 +214,18 @@ const Dashboard = () => {
 
   const allMergedSignals = useMemo(() => {
     const mergedSignals = new Map<string, MarketSignal>();
+    const normalizeStrike = (strike?: string) => {
+      if (!strike) return '';
+      return String(strike).replace(/[$,]/g, '').replace(/\.00$/, '').trim();
+    };
 
     for (const signal of persistedSignals) {
-      const key = `${signal.ticker}|${signal.strike}|${signal.expiry}`;
+      const key = `${signal.ticker}|${normalizeStrike(signal.strike)}|${signal.expiry}|${signal.putCall || ''}`;
       mergedSignals.set(key, signal);
     }
 
     for (const signal of signals) {
-      const key = `${signal.ticker}|${signal.strike}|${signal.expiry}`;
+      const key = `${signal.ticker}|${normalizeStrike(signal.strike)}|${signal.expiry}|${signal.putCall || ''}`;
       const existing = mergedSignals.get(key);
 
       mergedSignals.set(key, {

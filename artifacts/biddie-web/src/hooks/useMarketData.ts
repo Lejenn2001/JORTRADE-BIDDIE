@@ -69,6 +69,8 @@ export interface MarketSignal {
   reviewStatus?: "correct" | "wrong" | null;
   reviewNote?: string | null;
   resolvedAt?: string | null;
+  reinforcementCount?: number;
+  lastReinforcedAt?: string | null;
 }
 
 export interface TickerData {
@@ -270,8 +272,13 @@ const CACHE_TTL = 2 * 60 * 1000; // 2 minutes — signals update frequently duri
 const HISTORY_TTL = 16 * 60 * 60 * 1000; // 16 hours — clears overnight so yesterday's signals don't persist
 const MAX_HISTORY = 200;
 
+function normalizeStrike(strike?: string): string {
+  if (!strike) return '';
+  return String(strike).replace(/[$,]/g, '').replace(/\.00$/, '').trim();
+}
+
 function signalUniqueKey(s: MarketSignal): string {
-  return `${s.ticker}|${s.strike}|${s.expiry}|${s.putCall}|${s.category || ''}`;
+  return `${s.ticker}|${normalizeStrike(s.strike)}|${s.expiry}|${s.putCall}|${s.category || ''}`;
 }
 
 function loadCachedSignals(): MarketSignal[] | null {

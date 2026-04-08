@@ -154,6 +154,8 @@ function dbRecordToSignal(record: any): MarketSignal {
     reviewNote: record.review_note || null,
     gammaZone: record.gamma_zone || undefined,
     gammaDescription: record.gamma_description || undefined,
+    reinforcementCount: record.reinforcement_count != null ? Number(record.reinforcement_count) : 1,
+    lastReinforcedAt: record.last_reinforced_at || null,
   };
 }
 
@@ -326,9 +328,13 @@ const DashboardSignals = () => {
   }, []);
 
   const allSignals = useMemo(() => {
-    const dbKeys = new Set(dbSignals.map(s => `${s.ticker}|${s.strike}|${s.putCall}|${s.expiry}`));
+    const normStrike = (strike?: string) => {
+      if (!strike) return '';
+      return String(strike).replace(/[$,]/g, '').replace(/\.00$/, '').trim();
+    };
+    const dbKeys = new Set(dbSignals.map(s => `${s.ticker}|${normStrike(s.strike)}|${s.putCall}|${s.expiry}`));
     const filteredLive = liveSignals.filter(s => {
-      const key = `${s.ticker}|${s.strike}|${s.putCall}|${s.expiry}`;
+      const key = `${s.ticker}|${normStrike(s.strike)}|${s.putCall}|${s.expiry}`;
       return !dbKeys.has(key);
     });
     const all = [...dbSignals, ...filteredLive];
@@ -1253,6 +1259,15 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
               </span>
             );
           })}
+          {(signal.reinforcementCount ?? 0) > 1 && (() => {
+            const count = signal.reinforcementCount!;
+            const suffix = count === 2 ? 'nd' : count === 3 ? 'rd' : 'th';
+            return (
+              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                {count}{suffix} Reinforcement
+              </span>
+            );
+          })()}
           {signal.expiry && (
             <span className="text-[9px] sm:text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full font-medium">
               Exp: {signal.expiry}

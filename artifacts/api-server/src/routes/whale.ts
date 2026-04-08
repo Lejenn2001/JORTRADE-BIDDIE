@@ -149,7 +149,48 @@ const SEED_ADMIN_IDS = [
         reviewed_at TIMESTAMPTZ DEFAULT NOW()
       )`
     );
-    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles`);
+    await dbQuery(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS reinforcement_count INTEGER DEFAULT 1`, []);
+    await dbQuery(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ`, []);
+    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement columns ready`);
+
+    const dupeCheck = await dbQuery(`
+      SELECT ticker, COALESCE(strike, 0) as strike, COALESCE(option_type, '') as opt_type,
+             COALESCE(expiry, '') as expiry,
+             (detected_at AT TIME ZONE 'America/New_York')::date as et_date,
+             COUNT(*) as cnt
+      FROM signal_outcomes
+      WHERE signal_source = 'replit'
+      GROUP BY ticker, COALESCE(strike, 0), COALESCE(option_type, ''),
+               COALESCE(expiry, ''), (detected_at AT TIME ZONE 'America/New_York')::date
+      HAVING COUNT(*) > 1
+    `);
+    const dupeGroups = dupeCheck?.rows || [];
+    if (dupeGroups.length > 0) {
+      console.log(`[reinforcement-cleanup] Found ${dupeGroups.length} same-day exact-contract duplicate groups`);
+      for (const g of dupeGroups) {
+        const rows = await dbQuery(`
+          SELECT id, confidence, detected_at FROM signal_outcomes
+          WHERE ticker = $1 AND COALESCE(strike, 0) = $2 AND COALESCE(option_type, '') = $3
+            AND COALESCE(expiry, '') = $4 AND signal_source = 'replit'
+            AND (detected_at AT TIME ZONE 'America/New_York')::date = $5
+          ORDER BY detected_at ASC
+        `, [g.ticker, g.strike, g.opt_type, g.expiry, g.et_date]);
+        if (!rows || rows.rows.length < 2) continue;
+        const keeper = rows.rows[0];
+        const dupes = rows.rows.slice(1);
+        const maxConf = Math.max(...rows.rows.map((r: any) => Number(r.confidence) || 0));
+        const lastDetected = dupes[dupes.length - 1].detected_at;
+        const dupeIds = dupes.map((d: any) => d.id);
+        await dbQuery(`UPDATE user_trades SET signal_id = $1 WHERE signal_id = ANY($2::uuid[])`, [keeper.id, dupeIds]);
+        await dbQuery(`UPDATE signal_outcomes SET reinforcement_count = $1, last_reinforced_at = $2, confidence = GREATEST(confidence, $3) WHERE id = $4`,
+          [rows.rows.length, lastDetected, maxConf, keeper.id]);
+        await dbQuery(`DELETE FROM signal_outcomes WHERE id = ANY($1::uuid[])`, [dupeIds]);
+        console.log(`[reinforcement-cleanup] ${g.ticker} ${g.opt_type} $${g.strike} ${g.et_date}: kept ${keeper.id}, merged ${dupes.length} dupes → ${rows.rows.length}x reinforcement`);
+      }
+      console.log(`[reinforcement-cleanup] Cleanup complete`);
+    } else {
+      console.log(`[reinforcement-cleanup] No same-day exact-contract duplicates found`);
+    }
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
   }
@@ -2890,15 +2931,25 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
           if (!isNaN(d.getTime())) expiryIso = d.toISOString().slice(0, 10);
         } catch {}
       }
-      const existing = await dbQuery(
+      const existingSameDay = await dbQuery(
         expiryIso
-          ? `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND signal_source = 'replit' AND (COALESCE(expiry, '') = COALESCE($4, '') OR COALESCE(expiry, '') ILIKE '%' || $5 || '%') LIMIT 1`
-          : `SELECT id FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' LIMIT 1`,
+          ? `SELECT id, reinforcement_count, confidence FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND signal_source = 'replit' AND (COALESCE(expiry, '') = COALESCE($4, '') OR COALESCE(expiry, '') ILIKE '%' || $5 || '%') AND (detected_at AT TIME ZONE 'America/New_York')::date = (NOW() AT TIME ZONE 'America/New_York')::date LIMIT 1`
+          : `SELECT id, reinforcement_count, confidence FROM signal_outcomes WHERE ticker = $1 AND COALESCE(strike, 0) = COALESCE($2::numeric, 0) AND COALESCE(option_type, '') = COALESCE($3, '') AND COALESCE(expiry, '') = COALESCE($4, '') AND signal_source = 'replit' AND (detected_at AT TIME ZONE 'America/New_York')::date = (NOW() AT TIME ZONE 'America/New_York')::date LIMIT 1`,
         expiryIso
           ? [s.ticker, s.strike, s.option_type, fixedExpiry, expiryIso]
           : [s.ticker, s.strike, s.option_type, fixedExpiry]
       );
-      if (existing && existing.rows.length > 0) continue;
+      if (existingSameDay && existingSameDay.rows.length > 0) {
+        const row = existingSameDay.rows[0];
+        const newCount = (Number(row.reinforcement_count) || 1) + 1;
+        const newConf = Math.max(Number(row.confidence) || 0, s.confidence);
+        await dbQuery(
+          `UPDATE signal_outcomes SET reinforcement_count = $1, last_reinforced_at = NOW(), confidence = $2 WHERE id = $3`,
+          [newCount, newConf, row.id]
+        );
+        console.log(`[signals] REINFORCED ${s.ticker} ${s.option_type} $${s.strike} → ${newCount}x (same ET day)`);
+        continue;
+      }
 
       const initialStatus = (s.tags || []).includes("⚡ Act Now") ? "active" : "watching";
       const isBiddiePick = !s.is_hedge && s.confidence >= 8 && (s.signal_quality === "strong" || s.signal_quality === "moderate");
