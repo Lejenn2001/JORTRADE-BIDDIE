@@ -738,8 +738,9 @@ interface DayStats {
   hits: number;
   misses: number;
   pending: number;
+  expired: number;
   winRate: number;
-  tickers: Record<string, { hits: number; misses: number; pending: number; total: number }>;
+  tickers: Record<string, { hits: number; misses: number; pending: number; expired: number; total: number }>;
 }
 
 function toLocalDateStr(d: Date): string {
@@ -760,18 +761,20 @@ function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats
   for (const s of signals) {
     const dateStr = signalDateStr(s);
     if (!byDay[dateStr]) {
-      byDay[dateStr] = { date: dateStr, total: 0, hits: 0, misses: 0, pending: 0, winRate: 0, tickers: {} };
+      byDay[dateStr] = { date: dateStr, total: 0, hits: 0, misses: 0, pending: 0, expired: 0, winRate: 0, tickers: {} };
     }
     const day = byDay[dateStr];
     day.total++;
     if (s.outcome === "hit" || s.outcome === "partial_hit") day.hits++;
     else if (s.outcome === "missed" || s.outcome === "near_miss") day.misses++;
+    else if (s.outcome === "expired") day.expired++;
     else day.pending++;
 
-    if (!day.tickers[s.ticker]) day.tickers[s.ticker] = { hits: 0, misses: 0, pending: 0, total: 0 };
+    if (!day.tickers[s.ticker]) day.tickers[s.ticker] = { hits: 0, misses: 0, pending: 0, expired: 0, total: 0 };
     day.tickers[s.ticker].total++;
     if (s.outcome === "hit" || s.outcome === "partial_hit") day.tickers[s.ticker].hits++;
     else if (s.outcome === "missed" || s.outcome === "near_miss") day.tickers[s.ticker].misses++;
+    else if (s.outcome === "expired") day.tickers[s.ticker].expired++;
     else day.tickers[s.ticker].pending++;
   }
   for (const day of Object.values(byDay)) {
@@ -810,10 +813,11 @@ function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) 
     const total = sigs.length;
     const hits = sigs.filter(s => s.outcome === "hit" || s.outcome === "partial_hit").length;
     const misses = sigs.filter(s => s.outcome === "missed" || s.outcome === "near_miss").length;
-    const pending = total - hits - misses;
+    const expired = sigs.filter(s => s.outcome === "expired").length;
+    const pending = total - hits - misses - expired;
     const resolved = hits + misses;
     const winRate = resolved > 0 ? Math.round((hits / resolved) * 100) : -1;
-    return { total, hits, misses, pending, winRate };
+    return { total, hits, misses, expired, pending, winRate };
   };
 
   const today = computeBlock(todaySignals);
@@ -850,7 +854,7 @@ function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) 
                     {data.winRate >= 0 ? "win rate" : "all pending"}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className={`grid ${data.expired > 0 ? "grid-cols-4" : "grid-cols-3"} gap-2`}>
                   <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-1.5 text-center">
                     <div className="text-sm font-black text-emerald-400">{data.hits}</div>
                     <div className="text-[9px] text-muted-foreground">Wins</div>
@@ -863,6 +867,12 @@ function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) 
                     <div className="text-sm font-black text-yellow-400">{data.pending}</div>
                     <div className="text-[9px] text-muted-foreground">Pending</div>
                   </div>
+                  {data.expired > 0 && (
+                    <div className="rounded-lg bg-zinc-500/10 border border-zinc-500/20 p-1.5 text-center">
+                      <div className="text-sm font-black text-zinc-400">{data.expired}</div>
+                      <div className="text-[9px] text-muted-foreground">Expired</div>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -1019,7 +1029,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
               <span className="text-[10px] text-muted-foreground">{selectedDay.total} signals</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${selectedDay.expired > 0 ? "grid-cols-4" : "grid-cols-3"} gap-2`}>
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
                 <div className="text-base font-black text-emerald-400">{selectedDay.hits}</div>
@@ -1035,6 +1045,13 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
                 <div className="text-base font-black text-yellow-400">{selectedDay.pending}</div>
                 <div className="text-[9px] text-muted-foreground">Pending</div>
               </div>
+              {selectedDay.expired > 0 && (
+                <div className="rounded-lg bg-zinc-500/10 border border-zinc-500/20 p-2 text-center">
+                  <Clock className="h-3.5 w-3.5 text-zinc-400 mx-auto mb-0.5" />
+                  <div className="text-base font-black text-zinc-400">{selectedDay.expired}</div>
+                  <div className="text-[9px] text-muted-foreground">Expired</div>
+                </div>
+              )}
             </div>
 
             {Object.keys(selectedDay.tickers).length > 0 && (
@@ -1050,6 +1067,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
                         <span className="text-emerald-400 ml-1.5">{t.hits}W</span>
                         <span className="text-red-400 ml-1">{t.misses}L</span>
                         {t.pending > 0 && <span className="text-yellow-400 ml-1">{t.pending}P</span>}
+                        {t.expired > 0 && <span className="text-zinc-400 ml-1">{t.expired}E</span>}
                       </span>
                     ))}
                 </div>
@@ -1160,7 +1178,7 @@ function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
                       {wr.toFixed(0)}%
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {week.total_signals} signals · {totalWins}W / {week.misses}L / {week.pending + week.expired}P
+                      {week.total_signals} signals · {totalWins}W / {week.misses}L / {week.pending}P{week.expired > 0 ? ` / ${week.expired}E` : ""}
                     </div>
                     <div className="mt-1.5 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                       <div
@@ -1208,7 +1226,7 @@ function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
                         {wr.toFixed(0)}%
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className={`grid grid-cols-2 ${w.expired > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2`}>
                       <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-center">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 mx-auto mb-0.5" />
                         <div className="text-base font-black text-emerald-400">{w.hits + w.partial_hits}</div>
@@ -1221,9 +1239,16 @@ function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
                       </div>
                       <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2 text-center">
                         <Clock className="h-3.5 w-3.5 text-yellow-400 mx-auto mb-0.5" />
-                        <div className="text-base font-black text-yellow-400">{w.pending + w.expired}</div>
-                        <div className="text-[9px] text-muted-foreground">Pending/Expired</div>
+                        <div className="text-base font-black text-yellow-400">{w.pending}</div>
+                        <div className="text-[9px] text-muted-foreground">Pending</div>
                       </div>
+                      {w.expired > 0 && (
+                        <div className="rounded-lg bg-zinc-500/10 border border-zinc-500/20 p-2 text-center">
+                          <Clock className="h-3.5 w-3.5 text-zinc-400 mx-auto mb-0.5" />
+                          <div className="text-base font-black text-zinc-400">{w.expired}</div>
+                          <div className="text-[9px] text-muted-foreground">Expired</div>
+                        </div>
+                      )}
                       <div className="rounded-lg bg-primary/10 border border-primary/20 p-2 text-center">
                         <Activity className="h-3.5 w-3.5 text-primary mx-auto mb-0.5" />
                         <div className="text-base font-black text-primary">{avgConv.toFixed(0)}</div>
