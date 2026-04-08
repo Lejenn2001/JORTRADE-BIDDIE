@@ -181,7 +181,7 @@ const SEED_ADMIN_IDS = [
         const maxConf = Math.max(...rows.rows.map((r: any) => Number(r.confidence) || 0));
         const lastDetected = dupes[dupes.length - 1].detected_at;
         const dupeIds = dupes.map((d: any) => d.id);
-        await dbQuery(`UPDATE user_trades SET signal_id = $1 WHERE signal_id = ANY($2::uuid[])`, [keeper.id, dupeIds]);
+        await dbQuery(`UPDATE user_trades SET signal_id = $1 WHERE signal_id = ANY($2::text[])`, [keeper.id, dupeIds]);
         await dbQuery(`UPDATE signal_outcomes SET reinforcement_count = $1, last_reinforced_at = $2, confidence = GREATEST(confidence, $3) WHERE id = $4`,
           [rows.rows.length, lastDetected, maxConf, keeper.id]);
         await dbQuery(`DELETE FROM signal_outcomes WHERE id = ANY($1::uuid[])`, [dupeIds]);
