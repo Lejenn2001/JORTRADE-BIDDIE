@@ -1,0 +1,56 @@
+Let’s correct the direction here:
+
+The Admin tab can stay more detailed.
+The Analytics tab is user-facing, so it should be simpler.
+But the two should still stay in sync conceptually.
+
+Before making any UI changes, I want to focus only on updating / understanding the CURRENT DATA and how the newer metrics would apply to the existing historical dataset.
+
+Do not implement anything yet.
+Do not redesign the Analytics tab yet.
+
+I want a plain-English analysis of how the updated metrics would apply to ALL current data right now.
+
+Please answer these questions:
+
+1. If we apply the newer logic/definitions across the current historical data, what would the numbers be today for:
+- true pending
+- expired
+- watching
+- active
+- ran_without_entry
+- win / partial_hit / near_miss / missed
+
+2. How would these updated definitions map across the full existing dataset?
+For example:
+- how many existing signals would count as ran_without_entry
+- how many are true pending vs expired
+- how many winners never officially triggered entry
+- how many partial wins never triggered entry
+
+3. If we wanted the user Analytics tab to show a simpler version of this truth, what current metrics could be safely updated immediately without confusing users?
+For example:
+- splitting pending vs expired
+- showing active vs watching counts
+- showing ran_without_entry count
+- showing directional success vs full wins
+
+4. Which of these updated metrics would apply cleanly to all current historical data right now, and which ones would only be fully accurate going forward?
+
+5. Are there any historical-data limitations I should know about before using these updated metrics on the current dataset?
+For example:
+- dedup differences
+- missing older status history
+- signals that resolved before the new status logic existed
+- anything else
+
+6. Then give me a recommendation in plain English:
+- what should be updated first on the user Analytics tab
+- what should stay admin-only for now
+- what questions we still need answered from the current data before making UI changes
+
+Important:
+This is a current-data analysis only.
+Do not implement.
+Do not redesign the UI yet.
+I want to understand how the updated metrics apply to the current full dataset first.
