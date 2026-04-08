@@ -1,0 +1,122 @@
+I need **research only**. **Do not change, implement, patch, refactor, or deploy anything.** I only want you to inspect the current live state of the site and explain what is happening.
+
+I’m seeing multiple issues in Analytics / Biddie and I need a clear diagnosis of the current state.
+
+## What I’m seeing
+
+1. **Today stats appear wrong**
+
+   * The dashboard is showing **90 signals today**
+   * It shows **0 wins, 0 losses, 90 pending**
+   * That does **not** appear to be correct. All of today’s signals should not still be pending.
+
+2. **Possible duplicates**
+
+   * There appear to be **quite a few duplicate signals**
+   * I need to understand whether duplicates are being created in the database, returned by the API, or duplicated only in the UI layer.
+
+3. **Biddie gave incorrect day/time context**
+
+   * Biddie referenced **“Monday’s close”** even though today is **Wednesday**
+   * I need to know why Biddie is using stale or incorrect time context.
+
+## What I need from you
+
+Please investigate and report back on the **current state only**.
+
+### A. Today Analytics / Pending Issue
+
+Please trace exactly how the **Today** card is calculated:
+
+* Which endpoint or query powers it
+* Which database fields determine:
+
+  * wins
+  * losses
+  * pending
+* What date/timezone logic is being used
+* Whether “today” is being calculated in the correct timezone
+* Whether signals from today are failing to update from pending to hit/miss/partial
+* Whether the verification loop is running properly for today’s signals
+* Whether signals are being excluded from win/loss counts due to status mapping issues
+
+I want you to identify:
+
+* the exact query / function / file responsible
+* the current logic being applied
+* the most likely reason the Today card shows all pending
+
+### B. Duplicate Signal Investigation
+
+Please inspect where duplicates may be entering the system:
+
+* signal generation stage
+* DB insert/upsert stage
+* dedup logic
+* analytics query layer
+* frontend rendering layer
+
+I need to know:
+
+* what defines a “unique” signal right now
+* whether duplicates are true DB duplicates or just duplicate display entries
+* whether multiple runs are producing the same signal with slightly different timestamps/IDs
+* whether dedup is failing because of key construction
+
+Please give examples if you find them.
+
+### C. Biddie Incorrect “Monday” Reference
+
+Please investigate why Biddie referenced Monday when it is Wednesday.
+
+Check:
+
+* whether current date/time is passed into the prompt
+* whether timezone is correct
+* whether Biddie is reading stale cached signal context
+* whether the chat endpoint is pulling old signal summaries
+* whether prompt templates contain hardcoded market-session language
+* whether after-hours / previous-session context is leaking into the response
+
+I need the exact reason this could happen in the current setup.
+
+## Important instructions
+
+Again:
+
+* **Do not make any changes**
+* **Do not fix anything yet**
+* **Do not deploy**
+* **Do not rewrite code**
+* **Do not optimize**
+* **Do not suggest implementation until after you first explain the current state**
+
+## Format your response like this
+
+1. **Today stats issue**
+
+   * current source
+   * current logic
+   * likely cause
+
+2. **Duplicate issue**
+
+   * where duplicates are entering
+   * whether DB/API/UI
+   * likely cause
+
+3. **Biddie Monday issue**
+
+   * current prompt/context source
+   * whether date/time is injected
+   * likely cause
+
+4. **Files/functions involved**
+
+   * list exact files, functions, queries, and endpoints you inspected
+
+5. **Confidence level**
+
+   * high / medium / low for each finding
+
+This is a research / diagnosis request only.

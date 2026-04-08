@@ -1,0 +1,143 @@
+Your prior explanation does not reconcile with what I am seeing live.
+
+I need **research only** again. **Do not change anything. Do not deploy. Do not fix. Do not refactor.**
+
+## Why your prior answer does not fully work
+
+You said:
+
+* today only has 6 signals
+* duplicates are not a meaningful issue
+* the Monday reference was likely contextual/history related
+
+But I am looking at the live system and:
+
+* there were **3 SMH signals today alone**
+* I can see **14 signals in Whales / Decision Engine**
+* Analytics / Today is still not reconciling correctly
+* there appear to be duplicates in what I am seeing
+
+So I need you to stop at the actual discrepancy and explain the mismatch across pages.
+
+## What I need investigated now
+
+### 1. Reconcile signal counts across the site
+
+Please compare the exact signal counts for **today only** across all of these:
+
+* Decision Engine / Whales view
+* Analytics Today card
+* Analytics calendar source
+* raw DB rows for today
+* deduped DB rows for today
+* any API response used by each page
+
+I need a side-by-side breakdown showing:
+
+* raw count
+* deduped count
+* displayed count
+* why each count is different
+
+### 2. Explain the SMH contradiction
+
+There were **3 SMH signals today alone**.
+
+Please show:
+
+* each SMH signal from today
+* timestamp
+* strike
+* option type
+* expiry
+* signal ID / unique key
+* whether each one appears in:
+
+  * DB
+  * Decision Engine API
+  * Analytics API
+  * frontend rendered analytics
+
+I need to know whether Analytics is collapsing multiple SMH signals into one, excluding them, or failing to load them.
+
+### 3. Explain why Decision Engine shows 14 but Analytics does not
+
+I need the exact reason the counts differ between:
+
+* Decision Engine / Whales
+* Analytics Today
+
+Check whether this is due to:
+
+* different date filters
+* different timezone handling
+* different dedup rules
+* different source tables
+* analytics only using one signal per ticker/strike/day
+* one page using raw signals and the other using DISTINCT ON
+* caching
+* stale frontend state
+* pagination / limit issues
+* filters hidden in one endpoint but not the other
+
+### 4. Duplicates — research again using today’s actual examples
+
+Do not answer at a general level.
+
+I need you to inspect **today’s actual signals** and tell me:
+
+* which rows look duplicate from the user perspective
+* whether they are true duplicates or just similar contracts
+* whether multiple runs are creating near-identical entries
+* whether the dedup key is too broad or too narrow
+* whether the Analytics query is collapsing valid distinct signals incorrectly
+
+Use real examples from today, especially SMH if applicable.
+
+### 5. Monday reference in Biddie
+
+Your earlier explanation may be partially right, but I need you to prove it using the exact current chat request path.
+
+Please inspect:
+
+* the current prompt sent to Claude
+* the exact chat history being injected
+* whether prior Monday chat content is being passed in
+* whether current flow data includes Monday timestamps
+* whether the model is being told to prioritize old context over current date context
+
+I want the actual current request composition, not just the likely cause.
+
+## Output format
+
+Please respond in this exact structure:
+
+1. **Today count reconciliation**
+
+   * Decision Engine count
+   * Analytics count
+   * raw DB count
+   * deduped DB count
+   * why they differ
+
+2. **SMH today**
+
+   * list all SMH signals today
+   * where each appears / does not appear
+
+3. **Duplicate analysis**
+
+   * actual examples from today
+   * true duplicate vs valid distinct signal
+   * likely cause
+
+4. **Biddie Monday issue**
+
+   * exact history/context passed
+   * whether Monday content was present
+   * likely cause
+
+5. **Files / queries / endpoints inspected**
+
+Again:
+**Research only. No changes. No fixes. No deploy.**

@@ -1,0 +1,98 @@
+I want to move forward with a controlled fix for the duplicate / reinforcement issue in production, but I want the scope kept very tight.
+
+This is the behavior I want:
+
+For the **exact same contract on the same ET trading day**:
+
+* first occurrence = normal signal card
+* second occurrence = update the same card and label it **2nd Reinforcement**
+* third occurrence = update the same card and label it **3rd Reinforcement**
+* fourth occurrence = update the same card and label it **4th Reinforcement**
+* etc.
+
+I do **not** want a second card created for the same exact contract on the same day.
+
+This should only apply when all of these are the same:
+
+* ticker
+* strike
+* option type
+* expiration
+* ET trading day
+
+This should **not** apply to:
+
+* nearby strikes
+* different expirations
+* same-thesis contracts
+* same ticker but different contract
+
+Confidence behavior:
+
+* if the repeated signal has higher confidence, update the existing card upward
+* if the repeated signal has lower confidence, keep the higher existing confidence
+* confidence should never move downward on reinforcement
+
+I also want production cleaned up with this same logic.
+
+What I want done:
+
+1. **Fix the frontend merge bug**
+
+   * normalize the exact-contract key so formatting differences like `675.00` vs `$675` do not create duplicate cards
+
+2. **Implement exact-contract, same-day reinforcement logic**
+
+   * if the same exact contract comes in again later that same ET trading day, do not create a new card
+   * update the original signal instead
+
+3. **Use specific reinforcement labels**
+
+   * 2nd Reinforcement
+   * 3rd Reinforcement
+   * 4th Reinforcement
+   * etc.
+
+4. **Keep one primary signal card**
+
+   * repeated same-day exact-contract flow should reinforce the original card, not create additional cards
+
+5. **Apply this to production**
+
+   * prevent new same-day duplicate cards for the same exact contract
+   * clean up current production duplicates created under the old behavior, where possible
+
+6. **Do not expand the scope**
+
+   * no near-strike grouping
+   * no same-thesis grouping
+   * no merging across different expirations
+   * no broad restructuring beyond this exact-contract daily reinforcement rule
+
+Before implementing, I need you to confirm all of the following:
+
+1. The exact files and functions you will change
+2. Whether this affects:
+
+   * frontend merge only
+   * backend DB insertion
+   * frontend display
+   * existing production records
+3. Exactly how you will determine **same ET trading day**
+
+   * I want this based on ET / market day, not UTC or ambiguous server date
+4. Whether current production duplicates can be merged/cleaned up retroactively, or whether this only applies going forward
+5. How the reinforcement count will be stored
+6. How the reinforcement label will be displayed on the card
+7. Whether confidence will update upward only on reinforcement, never downward
+8. Whether this will reduce duplicate monitoring / unnecessary MFE verification load for exact repeated contracts
+
+Important:
+
+* create a restore point / backup before changing anything
+* do not change unrelated signal logic
+* do not change analytics logic
+* do not change Biddie/chat logic
+* do not implement near-strike or same-thesis grouping
+
+Once you confirm the exact implementation plan and scope, then I will approve.

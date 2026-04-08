@@ -1,0 +1,74 @@
+We are past diagnosis. I need the fix plan, but I also still need the historical comparison.
+
+Research + proposed solution only. Do not implement yet.
+
+I believe the verify system stopped keeping up after about 10:45 AM today. Signals after that point appear to be stuck:
+
+* missing MFE
+* still showing watching/active incorrectly
+* signals that already hit are still unresolved
+* Analytics pending count is therefore likely inflated because verification is not updating the underlying records
+
+At the same time, I need you to address something important:
+**this was working before.**
+As recently as last week, signals were receiving MFE and the system was reflecting live progression much more consistently.
+
+So I need both:
+
+1. the fix plan
+2. the explanation for what changed
+
+Please answer:
+
+1. Did verification coverage break down after roughly 10:45 AM today?
+
+2. How many signals created after 10:45 AM:
+
+   * never received MFE
+   * are still pending
+   * should no longer be watching
+   * already crossed entry or target
+
+3. Is the real issue:
+
+   * Polygon rate limiting from too many parallel requests
+   * backlog growth after signal volume increased
+   * starvation of later signals in the queue
+   * silent fetch failures
+   * all of the above
+
+4. What is the recommended fix order?
+   I want the exact sequence, likely something like:
+
+   * cap concurrency
+   * batch verification
+   * prioritize never-verified signals first
+   * add retry/backoff
+   * add logging
+   * rerun verification for today’s missed signals
+
+5. After the fix, can today’s broken signals be backfilled so MFE/status are corrected retroactively?
+
+6. I also need you to identify how many signals today are currently mislabeled from a user perspective:
+
+   * watching but already hit
+   * active but never verified
+   * pending but should show progression
+
+7. Most importantly: what changed versus when this was working before?
+   Please compare last week vs today:
+
+   * total signals generated
+   * pending queue size at verification time
+   * number of signals receiving MFE
+   * number skipped / never verified
+   * any code changes
+   * any deployment changes
+   * any data volume changes
+   * any Polygon request pattern changes
+
+8. I need a clear conclusion:
+   Is this a regression caused by a code/design change, or is this a scaling failure that only became visible once signal volume increased?
+
+Do not implement yet.
+I want the cleanest production-safe solution plan plus the exact explanation of what changed from the prior working state.

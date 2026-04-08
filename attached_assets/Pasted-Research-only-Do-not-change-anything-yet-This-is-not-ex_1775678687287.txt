@@ -1,0 +1,67 @@
+Research only. Do not change anything yet.
+
+This is not expected behavior and I need you to treat it as a regression.
+
+As recently as last week:
+
+* All signals were receiving MFE updates
+* The verify loop was touching all signals
+* ACTIVE signals consistently showed progression (MFE/MAE)
+
+Now:
+
+* Many signals (including SOXX) have never been updated
+* MFE is missing on a large portion of signals
+* ~70 of 169 pending signals have never been processed
+* ACTIVE is being displayed even when no tracking data exists
+
+This behavior is new and was not present before.
+
+I need you to investigate this as a regression, not just explain current logic.
+
+Please answer:
+
+1. What changed between last week and now that would cause:
+
+   * fetchPriceHistory to return null more frequently
+   * verify loop to skip signals
+   * signals to never receive MFE updates
+
+2. Search for any recent changes to:
+
+   * realtimeVerifySignals
+   * fetchPriceHistory
+   * Polygon REST or WebSocket handling
+   * ticker formatting or symbol mapping
+   * rate limits, timeouts, or error handling
+   * LIMIT 100 query in verification
+
+3. Why are 70 signals never being updated at all?
+
+   * are they all failing price fetch?
+   * are they being skipped due to ordering or cutoff?
+   * are certain tickers failing more than others (e.g., ETFs like SOXX)?
+
+4. Confirm whether fetchPriceHistory failures are:
+
+   * being logged
+   * being retried
+   * silently skipped (current behavior suggests silent skip)
+
+5. Provide examples of 5 signals:
+
+   * that successfully received MFE
+   * that never received MFE
+   * and explain the difference between them
+
+6. Was there any recent deployment or change that could have:
+
+   * increased signal volume (causing backlog)
+   * reduced verification coverage
+   * changed how price data is fetched or validated
+
+7. Confirm whether the LIMIT 100 is now insufficient given current signal volume, and whether this was different last week.
+
+I need a clear before vs after comparison and the exact root cause of why verification coverage dropped.
+
+Do not fix yet. Just identify what changed.
