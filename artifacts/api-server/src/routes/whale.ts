@@ -191,6 +191,53 @@ const SEED_ADMIN_IDS = [
     } else {
       console.log(`[reinforcement-cleanup] No same-day exact-contract duplicates found`);
     }
+
+    const resolvedWatching = await dbQuery(`
+      UPDATE signal_outcomes
+      SET trade_status = CASE outcome
+        WHEN 'hit' THEN 'hit'
+        WHEN 'partial_hit' THEN 'partial'
+        WHEN 'near_miss' THEN 'near_miss'
+        WHEN 'missed' THEN 'miss'
+        WHEN 'expired' THEN 'expired'
+        ELSE trade_status
+      END,
+      status_updated_at = NOW()
+      WHERE signal_source = 'replit'
+        AND trade_status = 'watching'
+        AND outcome != 'pending'
+      RETURNING id, ticker, outcome
+    `);
+    const resolvedCount = resolvedWatching?.rows?.length || 0;
+    if (resolvedCount > 0) {
+      console.log(`[status-cleanup] Fixed ${resolvedCount} resolved signals stuck on WATCHING → matched to outcome`);
+      for (const r of resolvedWatching!.rows) {
+        console.log(`[status-cleanup]   ${r.ticker}: watching → ${r.outcome}`);
+      }
+    }
+
+    const rweResult = await dbQuery(`
+      UPDATE signal_outcomes
+      SET trade_status = 'ran_without_entry',
+          status_updated_at = NOW()
+      WHERE signal_source = 'replit'
+        AND trade_status = 'watching'
+        AND outcome = 'pending'
+        AND entry_price_reached = false
+        AND mfe_percent >= 15
+      RETURNING id, ticker, mfe_percent
+    `);
+    const rweCount = rweResult?.rows?.length || 0;
+    if (rweCount > 0) {
+      console.log(`[status-cleanup] Moved ${rweCount} pending WATCHING signals with MFE >= 15% → ran_without_entry`);
+      for (const r of rweResult!.rows) {
+        console.log(`[status-cleanup]   ${r.ticker}: MFE ${Number(r.mfe_percent).toFixed(1)}% → ran_without_entry`);
+      }
+    }
+
+    if (resolvedCount === 0 && rweCount === 0) {
+      console.log(`[status-cleanup] No status corrections needed`);
+    }
   } catch (e: any) {
     console.error("[admin-seed] Failed:", e.message);
   }
@@ -4591,8 +4638,10 @@ async function realtimeVerifySignals() {
       const hasNoLevels = (signal.entry_trigger || "").includes("Level data not available");
 
       if (duringMarket) {
-        if (prevStatus === "watching" && didReachEntry) {
+        if ((prevStatus === "watching" || prevStatus === "ran_without_entry") && didReachEntry) {
           newStatus = "active";
+        } else if (prevStatus === "watching" && !didReachEntry && mfePct !== null && mfePct >= 15) {
+          newStatus = "ran_without_entry";
         }
         outcome = null;
       } else {
@@ -4605,10 +4654,12 @@ async function realtimeVerifySignals() {
           else if (signal.outcome === "missed") newStatus = "miss";
           else if (signal.outcome === "hit" || signal.outcome === "win") newStatus = "hit";
         } else {
-          if (prevStatus === "watching" && didReachEntry) {
+          if ((prevStatus === "watching" || prevStatus === "ran_without_entry") && didReachEntry) {
             newStatus = "active";
+          } else if (prevStatus === "watching" && !didReachEntry && mfePct !== null && mfePct >= 15) {
+            newStatus = "ran_without_entry";
           }
-          if (effectiveInvalidation && refPrice2 > 0 && canMiss && !["hit", "partial", "partial_hit"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
+          if (effectiveInvalidation && refPrice2 > 0 && canMiss && !["hit", "partial", "partial_hit", "ran_without_entry"].includes(prevStatus) && !["hit", "partial_hit", "near_miss"].includes(outcome || "")) {
             const currentlyPastInv = isBullish
               ? history.current <= effectiveInvalidation
               : history.current >= effectiveInvalidation;
@@ -4636,7 +4687,7 @@ async function realtimeVerifySignals() {
 
       if (shouldUpdateMfp || shouldUpdateMap || didReachEntry !== (signal.entry_price_reached || false) || didBreachInvalidation !== (signal.invalidation_breached || false) || statusChanged) {
         await dbQuery(
-          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2, max_adverse_price = $3, entry_price_reached = $4, invalidation_breached = $5, pct_past_invalidation = $6, entry_price = $7, trade_status = $8, status_updated_at = $9${newStatus === "active" && prevStatus === "watching" ? ", entry_hit_at = $9" : ""} WHERE id = $10`,
+          `UPDATE signal_outcomes SET max_favorable_price = $1, mfe_percent = $2, max_adverse_price = $3, entry_price_reached = $4, invalidation_breached = $5, pct_past_invalidation = $6, entry_price = $7, trade_status = $8, status_updated_at = $9${newStatus === "active" && (prevStatus === "watching" || prevStatus === "ran_without_entry") ? ", entry_hit_at = $9" : ""} WHERE id = $10`,
           [newMfp, mfePct, newMap, didReachEntry, didBreachInvalidation, pctPastInv, entryPriceVal > 0 ? entryPriceVal : null, newStatus, now.toISOString(), signal.id]
         );
         if (statusChanged) {
