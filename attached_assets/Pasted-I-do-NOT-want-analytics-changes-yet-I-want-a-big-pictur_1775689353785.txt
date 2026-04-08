@@ -1,0 +1,70 @@
+I do NOT want analytics changes yet.
+
+I want a big-picture recap of the Analytics/Admin tab as it exists right now in production, in plain English.
+
+Please review the Analytics/Admin tab and answer these questions clearly:
+
+1. BIG PICTURE
+What is the Analytics/Admin tab currently trying to show me?
+Explain the main sections in plain English, including things like:
+- Today
+- This Week
+- Pending
+- Wins / Partial / Near Miss / Loss / Expired
+- any other major counts or summaries
+
+2. SOURCE OF EACH NUMBER
+For each major number/card on the Analytics/Admin tab, tell me exactly what it is based on:
+- outcome
+- trade_status
+- mfe_percent
+- entry_price_reached
+- expiry
+- invalidation
+- or something else
+
+3. IS IT IN SYNC WITH THE SIGNAL CARDS?
+I want a direct answer:
+- Are the Analytics/Admin numbers fully in sync with what the signal cards currently show?
+- If not, where are they out of sync and why?
+
+4. PENDING COUNT
+Right now I am seeing 49 pending.
+Please explain exactly what “pending” means in the Analytics/Admin tab today.
+Then confirm:
+- is that 49 based on outcome = pending?
+- or trade_status?
+- or both?
+- and is 49 currently accurate based on live production data?
+
+5. TODAY / THIS WEEK
+For the Today and This Week sections:
+- explain exactly what data is included
+- what date/time rules are being used
+- whether they are grouped by signal creation date, resolution date, or something else
+- whether the numbers are performance-accurate today
+
+6. TRUSTWORTHY VS NOT TRUSTWORTHY
+For each major analytics section, tell me:
+- which numbers I can trust right now
+- which numbers may still be misleading
+- which numbers are based on true performance
+- which numbers are more operational/lifecycle counts
+
+7. EFFECT OF THE STATUS FIX
+Now that we added:
+- WATCHING
+- ACTIVE
+- RAN WITHOUT ENTRY
+and ensured resolved signals sync to outcome,
+
+tell me:
+- which Analytics/Admin numbers should already be improved automatically
+- which ones will not change at all
+- whether the Analytics/Admin tab still has any mismatch with the cards
+
+Important:
+Do not recommend changes yet.
+Do not implement anything yet.
+I want a current-state analytics truth recap only.
+Explain it like I’m reviewing the business meaning of the dashboard, not the code.
