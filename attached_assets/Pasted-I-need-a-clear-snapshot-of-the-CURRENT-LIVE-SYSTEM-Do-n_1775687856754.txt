@@ -1,0 +1,62 @@
+I need a clear snapshot of the CURRENT LIVE SYSTEM.
+
+Do not give recommendations. Do not propose changes. Just explain exactly what is happening today.
+
+Explain everything in plain English.
+
+1. DATA FIELDS (current state)
+List all relevant fields for a signal and what they store:
+- trade_status
+- outcome
+- entry_price_reached
+- mfe_percent
+- max_favorable_price
+- entry_trigger (text)
+- any other fields used for status, MFE, or outcome
+
+2. STATUS LOGIC (current behavior)
+Explain exactly how trade_status is set today:
+- when is a signal WATCHING
+- when is it ACTIVE
+- how is ACT NOW determined (and how is it different from ACTIVE)
+- does status change after creation or only at creation
+- what conditions trigger status updates
+
+3. ENTRY DETECTION (current behavior)
+Explain how the system determines:
+- whether entry was reached
+- how it reads/parses entry_trigger
+- what happens when parsing fails
+- whether entry_price_reached is reliable
+
+4. MFE LOGIC (current behavior)
+Explain:
+- how mfe_percent is calculated
+- what price data is used
+- when it updates
+- whether it depends on entry being reached or not
+
+5. OUTCOME LOGIC (current behavior)
+Explain exactly how outcome is set:
+- what defines a WIN
+- what defines a LOSS
+- what defines EXPIRED
+- whether partial/near miss logic exists
+- whether MFE plays any role in outcome today
+
+6. RELATIONSHIP BETWEEN THESE SYSTEMS
+Explain clearly:
+- whether status, MFE, and outcome are connected or independent
+- in what order they run
+- whether one system can update without the others
+
+7. CURRENT KNOWN ISSUES (based on live data)
+Using current production data, confirm:
+- how many signals are WATCHING with MFE > 15%
+- how many signals are WIN but still labeled WATCHING
+- whether ACTIVE signals always have entry_price_reached = true
+
+Important:
+Do not suggest fixes.
+Do not redesign anything.
+I just want a clear, accurate picture of how the system works today so I can make decisions.
