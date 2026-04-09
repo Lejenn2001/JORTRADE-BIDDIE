@@ -1124,6 +1124,15 @@ function SetupCard({
                   : "bg-blue-500/15 text-blue-400 border-blue-500/30"
             }`}>{setup.contract.expiryLabel}</span>
           )}
+          {setup.squeezeLength >= 10 ? (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-500/10 text-orange-400/80 border-orange-500/20">
+              LONG SQUEEZE · {setup.squeezeLength} bars
+            </span>
+          ) : setup.consolidationDays >= 10 ? (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-500/10 text-orange-400/80 border-orange-500/20">
+              CONSOLIDATING · {setup.consolidationDays} days
+            </span>
+          ) : null}
           {setup.squeezeFirstSeen && (
             <span className="text-[10px] text-muted-foreground/60">
               Squeeze since {new Date(setup.squeezeFirstSeen).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
