@@ -194,6 +194,7 @@ const DashboardSignals = () => {
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertTickers, setAlertTickers] = useState<Set<string>>(new Set());
   const [viewTab, setViewTab] = useState<ViewTab>("algorithm");
+  const [calendarStats, setCalendarStats] = useState<{ total: number; wins: number; losses: number; pending: number; expired: number; winRate: number; wrongCount: number } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -207,6 +208,26 @@ const DashboardSignals = () => {
       })
       .catch(() => {});
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/whale/signals/calendar?limit=1000")
+      .then(r => r.json())
+      .then(data => {
+        if (!data.signals) return;
+        const sigs = data.signals as any[];
+        const core = sigs.filter((s: any) => s.review_status !== "wrong");
+        const wrongCount = sigs.length - core.length;
+        const resolved = core.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
+        const wins = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
+        const losses = resolved.length - wins;
+        const expired = core.filter((s: any) => s.outcome === "expired").length;
+        const pending = core.filter((s: any) => !s.outcome || s.outcome === "pending").length;
+        const winRate = resolved.length > 0 ? Math.round((wins / resolved.length) * 100) : 0;
+        setCalendarStats({ total: core.length, wins, losses, pending, expired, winRate, wrongCount });
+      })
+      .catch(() => {});
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -499,6 +520,32 @@ const DashboardSignals = () => {
               </div>
             </div>
           </div>
+
+          {isAdmin && calendarStats && (
+            <div className="rounded-xl border border-white/[0.08] bg-[hsl(232,30%,8%)] p-3">
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Signal Insights</span>
+                  <span className="text-[10px] text-muted-foreground/50">(synced with Analytics)</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-bold">
+                  <span className="text-foreground">{calendarStats.total} <span className="text-muted-foreground font-medium">total</span></span>
+                  <span className="text-emerald-400">{calendarStats.wins}W</span>
+                  <span className="text-red-400">{calendarStats.losses}L</span>
+                  <span className="text-yellow-400">{calendarStats.pending}P</span>
+                  {calendarStats.expired > 0 && <span className="text-zinc-400">{calendarStats.expired}E</span>}
+                  <span className={`${calendarStats.winRate >= 70 ? "text-emerald-400" : calendarStats.winRate >= 50 ? "text-blue-400" : "text-yellow-400"}`}>
+                    {calendarStats.winRate}% <span className="text-muted-foreground font-medium">win rate</span>
+                  </span>
+                </div>
+                {calendarStats.wrongCount > 0 && (
+                  <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                    {calendarStats.wrongCount} marked wrong (excluded from stats)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tab Switcher */}
           <div className="flex items-center gap-2">

@@ -3209,7 +3209,7 @@ router.get("/whale/signals/calendar", async (req, res) => {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 500, 1000);
     const result = await dbQuery(
-      `SELECT DISTINCT ON (so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'UTC'))
+      `SELECT DISTINCT ON (so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'America/New_York'))
               so.id, so.ticker, so.signal_type, so.option_type AS "put_call", so.confidence, so.strike, so.expiry,
               so.outcome, so.created_at, so.detected_at, so.resolved_at, so.category, so.price_at_signal,
               so.target AS target_price, so.invalidation, so.entry_trigger, so.direction,
@@ -3221,7 +3221,7 @@ router.get("/whale/signals/calendar", async (req, res) => {
        FROM signal_outcomes so
        LEFT JOIN signal_reviews sr ON sr.signal_id = so.id::text
        WHERE so.signal_source = 'replit' AND COALESCE(so.category, '') != 'spread'
-       ORDER BY so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'UTC'),
+       ORDER BY so.ticker, so.strike, so.option_type, DATE(so.detected_at AT TIME ZONE 'America/New_York'),
                 CASE WHEN so.outcome IN ('hit','partial_hit') THEN 0 WHEN so.outcome IN ('missed','near_miss') THEN 1 ELSE 2 END,
                 so.detected_at ASC`,
       []

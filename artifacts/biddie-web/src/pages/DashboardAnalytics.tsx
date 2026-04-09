@@ -473,8 +473,8 @@ const DashboardAnalytics = () => {
         if (weeklyData?.weeks) setWeeklyStats(weeklyData.weeks);
 
         if (historyData.signals) {
-          setAllSignals(historyData.signals);
           const coreSigs = historyData.signals.filter((s: any) => (s.category || "algorithm") !== "spread" && s.review_status !== "wrong");
+          setAllSignals(coreSigs);
           const biddiePicks = coreSigs.filter((s: any) => s.is_biddie_pick);
           const resolved = coreSigs.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit" || s.outcome === "missed" || s.outcome === "near_miss");
           const hits = resolved.filter((s: any) => s.outcome === "hit" || s.outcome === "partial_hit").length;
@@ -743,17 +743,18 @@ interface DayStats {
   tickers: Record<string, { hits: number; misses: number; pending: number; expired: number; total: number }>;
 }
 
+function toEtDateStr(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+}
+
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function signalDateStr(s: HistoricalSignal): string {
   const raw = s.detected_at || s.created_at;
-  if (typeof raw === "string" && raw.length >= 10) {
-    return raw.slice(0, 10);
-  }
   const d = new Date(raw);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  return toEtDateStr(d);
 }
 
 function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats> {
@@ -784,23 +785,29 @@ function computeDailyStats(signals: HistoricalSignal[]): Record<string, DayStats
   return byDay;
 }
 
-function toUtcDateStr(d: Date): string {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+function getEtNow(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value || "0";
+  return new Date(+get("year"), +get("month") - 1, +get("day"), +get("hour"), +get("minute"), +get("second"));
 }
 
 function TodayThisWeekCards({ allSignals }: { allSignals: HistoricalSignal[] }) {
-  const now = new Date();
-  const todayStr = toUtcDateStr(now);
+  const etNow = getEtNow();
+  const todayStr = toEtDateStr(new Date());
 
-  const dayOfWeek = now.getUTCDay();
+  const dayOfWeek = etNow.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setUTCDate(monday.getUTCDate() + mondayOffset);
-  const mondayStr = toUtcDateStr(monday);
+  const monday = new Date(etNow);
+  monday.setDate(monday.getDate() + mondayOffset);
+  const mondayStr = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
 
   const friday = new Date(monday);
-  friday.setUTCDate(friday.getUTCDate() + 4);
-  const fridayStr = toUtcDateStr(friday);
+  friday.setDate(friday.getDate() + 4);
+  const fridayStr = `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, "0")}-${String(friday.getDate()).padStart(2, "0")}`;
   const weekEndStr = todayStr < fridayStr ? todayStr : fridayStr;
 
   const todaySignals = allSignals.filter(s => signalDateStr(s) === todayStr);
@@ -921,7 +928,7 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
     return "text-red-400";
   };
 
-  const todayStr = toUtcDateStr(new Date());
+  const todayStr = toEtDateStr(new Date());
 
   return (
     <motion.div
