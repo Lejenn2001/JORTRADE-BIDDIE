@@ -176,6 +176,7 @@ const DashboardBreakout = () => {
   const [tickerMessage, setTickerMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [takenTrades, setTakenTrades] = useState<Set<string>>(new Set());
   const [takingTrade, setTakingTrade] = useState<string | null>(null);
+  const [minScoreFilter, setMinScoreFilter] = useState<number>(0);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
@@ -409,6 +410,8 @@ const DashboardBreakout = () => {
   const squeezeSetups = result?.setups.filter(s => !s.breakoutTriggered && s.squeezeActive) || [];
   const buildingSetups = result?.setups.filter(s => !s.breakoutTriggered && !s.squeezeActive) || [];
 
+  const filteredSetups = result?.setups.filter(s => s.score >= minScoreFilter).sort((a, b) => b.score - a.score) ?? [];
+
   return (
     <div className="h-screen flex bg-background overflow-hidden">
       <DashboardSidebar />
@@ -512,6 +515,34 @@ const DashboardBreakout = () => {
                       {watchedTickers.size} watched
                     </span>
                   </>
+                )}
+              </div>
+            )}
+
+            {result && result.count > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground font-medium mr-1">Min Score:</span>
+                {([
+                  { label: "All", value: 0 },
+                  { label: "35+", value: 35 },
+                  { label: "50+", value: 50 },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setMinScoreFilter(opt.value)}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full border transition-all ${
+                      minScoreFilter === opt.value
+                        ? "bg-primary/15 text-primary border-primary/30"
+                        : "bg-white/[0.03] text-muted-foreground border-white/[0.08] hover:border-white/[0.15] hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                {minScoreFilter > 0 && result.setups.length !== filteredSetups.length && (
+                  <span className="text-[10px] text-muted-foreground ml-1">
+                    {filteredSetups.length} of {result.setups.length}
+                  </span>
                 )}
               </div>
             )}
@@ -665,7 +696,7 @@ const DashboardBreakout = () => {
                   className="space-y-5"
                 >
                   <div className="space-y-2">
-                    {[...result.setups].sort((a, b) => b.score - a.score).map((setup, i) => (
+                    {filteredSetups.map((setup, i) => (
                       <motion.div
                         key={setup.ticker}
                         custom={i}
@@ -690,6 +721,17 @@ const DashboardBreakout = () => {
                         />
                       </motion.div>
                     ))}
+                    {minScoreFilter > 0 && filteredSetups.length === 0 && (
+                      <div className="text-center py-6">
+                        <p className="text-sm text-muted-foreground">No setups with score {minScoreFilter}+</p>
+                        <button
+                          onClick={() => setMinScoreFilter(0)}
+                          className="text-xs text-primary hover:underline mt-1"
+                        >
+                          Show all setups
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
