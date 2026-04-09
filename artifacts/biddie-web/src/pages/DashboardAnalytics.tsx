@@ -527,6 +527,22 @@ const DashboardAnalytics = () => {
       .slice(0, 8);
   }, [signalStats]);
 
+  const topWinRate = useMemo(() => {
+    if (!signalStats?.byTicker) return [];
+    return Object.entries(signalStats.byTicker)
+      .map(([ticker, data]) => ({ ticker, ...data, winRate: data.total > 0 ? Math.round((data.hits / data.total) * 100) : 0 }))
+      .filter(t => t.total >= 25)
+      .sort((a, b) => b.winRate - a.winRate || b.total - a.total);
+  }, [signalStats]);
+
+  const mostTraded = useMemo(() => {
+    if (!signalStats?.byTicker) return [];
+    return Object.entries(signalStats.byTicker)
+      .map(([ticker, data]) => ({ ticker, ...data, winRate: data.total > 0 ? Math.round((data.hits / data.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [signalStats]);
+
   const userTopTickers = useMemo(() => {
     if (!userStats?.byTicker) return [];
     return Object.entries(userStats.byTicker)
@@ -599,6 +615,8 @@ const DashboardAnalytics = () => {
                     <OverviewTab
                       signalStats={signalStats}
                       topTickers={topTickers}
+                      topWinRate={topWinRate}
+                      mostTraded={mostTraded}
                       weeklyStats={weeklyStats}
                       allSignals={allSignals}
                     />
@@ -1087,9 +1105,11 @@ function DailySignalCalendar({ allSignals }: { allSignals: HistoricalSignal[] })
   );
 }
 
-function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
+function OverviewTab({ signalStats, topTickers, topWinRate, mostTraded, weeklyStats, allSignals }: {
   signalStats: SignalStats | null;
   topTickers: { ticker: string; hits: number; total: number; winRate: number }[];
+  topWinRate: { ticker: string; hits: number; total: number; winRate: number }[];
+  mostTraded: { ticker: string; hits: number; total: number; winRate: number }[];
   weeklyStats: WeeklyStats[];
   allSignals: HistoricalSignal[];
 }) {
@@ -1344,27 +1364,70 @@ function OverviewTab({ signalStats, topTickers, weeklyStats, allSignals }: {
         )}
       </motion.div>
 
-      {topTickers.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-violet-500/5 via-background to-background">
-          <div className="absolute bottom-0 left-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl translate-y-12 -translate-x-12" />
-          <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-violet-400" />
-            Top Performing Tickers
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            {topTickers.slice(0, 5).map((t, i) => (
-              <div key={t.ticker} className="relative rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center hover:border-white/15 transition-colors">
-                {i === 0 && <div className="absolute -top-1.5 -right-1.5 text-yellow-400 text-xs">&#9733;</div>}
-                <div className="text-sm font-extrabold text-foreground">{t.ticker}</div>
-                <div className={`text-lg font-black mt-0.5 ${t.winRate >= 70 ? "text-emerald-400" : t.winRate >= 50 ? "text-yellow-400" : "text-red-400"}`}>
-                  {t.winRate}%
-                </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{t.hits}/{t.total} wins</div>
+      {(topWinRate.length > 0 || mostTraded.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-emerald-500/5 via-background to-background">
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl translate-y-12 -translate-x-12" />
+            <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+              <Target className="h-4 w-4 text-emerald-400" />
+              Top Win Rate
+            </h3>
+            <p className="text-[10px] text-muted-foreground mb-3">Tickers with 25+ resolved signals, ranked by accuracy</p>
+            {topWinRate.length > 0 ? (
+              <div className="space-y-1.5">
+                {topWinRate.map((t, i) => (
+                  <div key={t.ticker} className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 hover:border-white/15 transition-colors">
+                    <span className="text-[10px] text-muted-foreground w-4 text-right">{i + 1}</span>
+                    <span className="text-sm font-extrabold text-foreground min-w-[48px]">{t.ticker}</span>
+                    <div className="flex-1">
+                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className={`h-full rounded-full ${t.winRate >= 75 ? "bg-emerald-400" : t.winRate >= 60 ? "bg-yellow-400" : "bg-red-400"}`} style={{ width: `${t.winRate}%` }} />
+                      </div>
+                    </div>
+                    <span className={`text-sm font-bold min-w-[40px] text-right ${t.winRate >= 75 ? "text-emerald-400" : t.winRate >= 60 ? "text-yellow-400" : "text-red-400"}`}>
+                      {t.winRate}%
+                    </span>
+                    <span className="text-[10px] text-muted-foreground min-w-[50px] text-right">{t.total} trades</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </motion.div>
+            ) : (
+              <p className="text-xs text-muted-foreground/60 italic">No tickers with 25+ trades yet</p>
+            )}
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            className="relative overflow-hidden rounded-xl p-5 border border-white/10 bg-gradient-to-br from-violet-500/5 via-background to-background">
+            <div className="absolute bottom-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl translate-y-12 translate-x-12" />
+            <h3 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-violet-400" />
+              Most Traded
+            </h3>
+            <p className="text-[10px] text-muted-foreground mb-3">Highest signal volume</p>
+            {mostTraded.length > 0 ? (
+              <div className="space-y-1.5">
+                {mostTraded.map((t, i) => (
+                  <div key={t.ticker} className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 hover:border-white/15 transition-colors">
+                    <span className="text-[10px] text-muted-foreground w-4 text-right">{i + 1}</span>
+                    <span className="text-sm font-extrabold text-foreground min-w-[48px]">{t.ticker}</span>
+                    <div className="flex-1">
+                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-full rounded-full bg-violet-400/70" style={{ width: `${Math.min(100, (t.total / (mostTraded[0]?.total || 1)) * 100)}%` }} />
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-foreground min-w-[30px] text-right">{t.total}</span>
+                    <span className={`text-[10px] min-w-[35px] text-right font-semibold ${t.winRate >= 75 ? "text-emerald-400" : t.winRate >= 60 ? "text-yellow-400" : "text-red-400"}`}>
+                      {t.winRate}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground/60 italic">No signal data yet</p>
+            )}
+          </motion.div>
+        </div>
       )}
     </div>
   );
