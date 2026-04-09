@@ -1,0 +1,135 @@
+IMPORTANT CHANGE-CONTROL + NEXT STEPS — FOLLOW EXACTLY
+
+STRICT SCOPE CONTROL (MANDATORY)
+
+Do not change anything outside the exact scope of this request.
+
+That means:
+
+No refactoring outside scope
+No cleanup outside scope
+No renaming outside scope
+No formatting-only edits outside scope
+No “minor improvements” outside scope
+No behavior changes outside scope
+No touching unrelated files
+No modifying existing logic unless explicitly approved
+
+If anything outside scope is required:
+
+STOP
+Explain why
+Wait for approval
+
+THIS REQUEST: PHASE 1 ONLY (DESIGN — NO IMPLEMENTATION)
+
+We are working on improving the Breakout system.
+
+You are ONLY reviewing and designing Phase 1:
+
+👉 Move breakout persistence from local JSON files to PostgreSQL
+
+DO NOT:
+
+Do not implement code
+Do not modify scanner logic
+Do not change scoring
+Do not change breakout thresholds
+Do not change alert logic
+Do not change Biddie chat
+Do not change analytics
+Do not change deployment unless absolutely required
+
+CONTEXT (FROM CURRENT SYSTEM)
+
+Current problem:
+
+Breakout tracking (first detected, aging, expiration, cooldown) is stored in local JSON files
+These files are wiped on deploy
+This causes repeated stale tickers (e.g., TLT, MARA)
+Aging/expiration logic is effectively broken
+
+Goal of Phase 1:
+
+Persist breakout tracking in PostgreSQL so state survives deploys and restarts
+
+WHAT YOU MUST PROVIDE (BEFORE ANY CODE)
+
+CURRENT STATE ANALYSIS
+Identify ALL files/functions that currently:
+read breakout tracking
+write breakout tracking
+manage aging/expiration/cooldown
+Show exactly where JSON storage is used
+PROPOSED DATABASE DESIGN
+Tables required (names + purpose)
+Fields/columns (first_detected, last_seen, status, cooldown, etc.)
+Primary keys and indexes
+How records are uniquely identified (ticker + timeframe + direction, etc.)
+READ/WRITE FLOW (VERY IMPORTANT)
+Exact points in the pipeline where:
+breakout is first detected → write
+breakout is updated → update
+breakout expires → update
+cooldown is enforced → read
+Show BEFORE vs AFTER flow
+CHANGE SURFACE (STRICT)
+List EXACT files and functions that would need to change
+Confirm nothing else will be touched
+WHAT WILL NOT CHANGE (REQUIRED)
+Explicitly confirm:
+Scanner logic will NOT change
+Scoring will NOT change
+Breakout qualification rules will NOT change
+Alert system will NOT change
+Chat system will NOT change
+Analytics will NOT change
+Existing signal engine will NOT change
+IMPACT ANALYSIS
+Will this affect:
+signal timing?
+breakout frequency?
+performance?
+API usage?
+Any risk of duplicate or missing breakouts?
+RISK + EDGE CASES
+What happens:
+on deploy mid-session?
+if DB write fails?
+if record already exists?
+if multiple breakout detections happen simultaneously?
+MINIMAL IMPLEMENTATION PLAN
+Smallest possible change
+Most isolated approach
+No scope expansion
+
+NEXT PHASES (DO NOT IMPLEMENT — CONTEXT ONLY)
+
+After Phase 1 is complete, future phases will be:
+
+Phase 2:
+
+Expand breakout universe using:
+Unusual Whales flow (top tickers)
+Polygon movers (gainers/losers/volume)
+Smaller core watchlist
+
+Phase 3:
+
+Add Biddie chat announcements for:
+new breakout
+follow-through
+retest
+With strict anti-spam rules (cooldowns, caps, etc.)
+
+DO NOT DESIGN OR IMPLEMENT THESE YET.
+
+FINAL RULE
+
+Do not write any code.
+
+Do not implement anything.
+
+This is a design + impact analysis only.
+
+Wait for approval before any changes are made.
