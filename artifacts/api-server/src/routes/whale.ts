@@ -4442,7 +4442,23 @@ async function realtimeVerifySignals() {
 
     for (const signal of pending) {
       const history = signalPriceMap[signal.id];
-      if (!history) continue;
+      if (!history) {
+        const createdAt = new Date(signal.created_at || signal.detected_at);
+        const hoursAlive = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+        if (hoursAlive >= 24) {
+          await dbQuery(
+            `UPDATE signal_outcomes SET outcome = 'expired', resolved_at = $1, trade_status = 'expired', status_updated_at = $1 WHERE id = $2`,
+            [now.toISOString(), signal.id]
+          );
+          await dbQuery(
+            `UPDATE user_trades SET signal_outcome = 'expired', resolved_at = $1 WHERE signal_id = $2`,
+            [now.toISOString(), signal.id]
+          );
+          expired++;
+          console.log(`[auto-verify] ${signal.ticker} ${signal.option_type}: no price data after ${Math.round(hoursAlive)}h → expired`);
+        }
+        continue;
+      }
       const target_val = parseTargetRange(signal.target_zone || signal.target);
       const invalidationPrice = parsePrice(signal.invalidation);
       const entryPrice = parsePrice(signal.entry_trigger);
