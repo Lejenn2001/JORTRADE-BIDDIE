@@ -4643,6 +4643,11 @@ async function realtimeVerifySignals() {
         } else if (prevStatus === "watching" && !didReachEntry && mfePct !== null && mfePct >= 15) {
           newStatus = "ran_without_entry";
         }
+        if (outcome === "hit") newStatus = "hit";
+        else if (outcome === "partial_hit") newStatus = "partial";
+        else if (outcome === "near_miss") newStatus = "near_miss";
+        else if (outcome === "missed") newStatus = "miss";
+        else if (outcome === "expired") newStatus = "expired";
       } else {
         if (hasNoLevels) {
           if (outcome === "hit") newStatus = "hit";
