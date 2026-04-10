@@ -3609,7 +3609,7 @@ function parseTargetRange(target: string | null): { low: number | null; high: nu
 router.post("/whale/verify-signals", async (_req, res) => {
   try {
     const pendingResult = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at ASC LIMIT 100`
+      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at DESC LIMIT 500`
     );
 
     if (!pendingResult) {
@@ -4419,7 +4419,7 @@ async function realtimeVerifySignals() {
 
   try {
     const pendingResult = await dbQuery(
-      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at ASC LIMIT 100`
+      `SELECT * FROM signal_outcomes WHERE outcome = 'pending' ORDER BY created_at DESC LIMIT 500`
     );
     if (!pendingResult || pendingResult.rows.length === 0) return;
 
@@ -4643,7 +4643,6 @@ async function realtimeVerifySignals() {
         } else if (prevStatus === "watching" && !didReachEntry && mfePct !== null && mfePct >= 15) {
           newStatus = "ran_without_entry";
         }
-        outcome = null;
       } else {
         if (hasNoLevels) {
           if (outcome === "hit") newStatus = "hit";
