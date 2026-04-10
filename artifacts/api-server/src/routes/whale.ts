@@ -4753,21 +4753,27 @@ function startPriceMonitorSystem() {
   setInterval(syncPriceMonitorSubscriptions, 5 * 60 * 1000);
 
   let verifyInterval: ReturnType<typeof setInterval> | null = null;
+  let lastMode: "market" | "after" | null = null;
 
   function adjustVerifyFrequency() {
+    const currentMode = isMarketHours() ? "market" : "after";
+    if (currentMode === lastMode) return;
+    lastMode = currentMode;
+
     if (verifyInterval) clearInterval(verifyInterval);
 
-    if (isMarketHours()) {
+    if (currentMode === "market") {
       verifyInterval = setInterval(realtimeVerifySignals, 5 * 60 * 1000);
       console.log("[auto-verify] Market hours: verifying every 5 minutes");
     } else {
       verifyInterval = setInterval(realtimeVerifySignals, 30 * 60 * 1000);
       console.log("[auto-verify] After hours: verifying every 30 minutes");
+      realtimeVerifySignals();
     }
   }
 
   adjustVerifyFrequency();
-  setInterval(adjustVerifyFrequency, 15 * 60 * 1000);
+  setInterval(adjustVerifyFrequency, 60 * 1000);
 
   setTimeout(realtimeVerifySignals, 30 * 1000);
 }
