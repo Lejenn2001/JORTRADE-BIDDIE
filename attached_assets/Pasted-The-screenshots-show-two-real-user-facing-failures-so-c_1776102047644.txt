@@ -1,0 +1,73 @@
+The screenshots show two real user-facing failures, so “chat is working” is not a sufficient answer.
+
+I need you to investigate these as separate issues:
+
+1. JORTRADE chat
+
+* My message sends
+* but I get no response back
+
+2. Dashboard chat
+
+* My message sends
+* and Biddie responds:
+  “Sorry, I’m having trouble connecting right now.”
+
+So please do not answer this as “no outage” just because some requests returned 200.
+
+I need you to investigate the exact behavior shown in the screenshots and identify why the user experience is failing.
+
+Please check:
+
+1. Whether JORTRADE chat and Dashboard chat use the exact same backend route / handler
+
+   * or different code paths
+   * or different response-handling logic on the frontend
+
+2. For the exact timestamps shown in my screenshots:
+
+   * did the request reach the backend?
+   * what response code was returned?
+   * was a full response payload generated?
+   * did the frontend receive it?
+   * did the UI fail to render it?
+
+3. For the dashboard “Sorry, I’m having trouble connecting right now” message:
+
+   * what exact backend/frontend condition triggered that fallback?
+   * I want the corresponding request log for that specific failed attempt
+
+4. For the JORTRADE chat message that got no reply:
+
+   * did the request complete successfully?
+   * did it hang?
+   * did it return 200 with an empty/invalid payload?
+   * did the frontend fail to append/render the assistant response?
+
+5. Investigate whether DB connection instability is causing:
+
+   * delayed chat generation
+   * dropped chat responses
+   * incomplete payloads
+   * frontend timeouts despite eventual backend success
+
+6. Confirm whether there is any timeout mismatch between:
+
+   * frontend waiting window
+   * backend response time
+   * Claude response generation
+   * DB query latency
+
+7. Tell me whether this is:
+
+   * a backend issue
+   * a frontend rendering issue
+   * an intermittent DB timeout issue
+   * or a split issue where JORTRADE chat and Dashboard chat are failing differently
+
+Important:
+
+* Use the screenshots/timestamps as the source of truth for the failing user experience
+* Do not just tell me other chat requests succeeded
+* I want the exact root cause of THESE failed attempts
+* Do not implement anything yet
