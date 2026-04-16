@@ -241,7 +241,33 @@ const DashboardCommunity = () => {
     return false;
   };
 
+  const isAcknowledgment = (text: string): boolean => {
+    const lower = text.toLowerCase().replace(/[!.,❤️🔥👍💪🙏🫡🤝]+/g, "").trim();
+    const ackPhrases = [
+      "thanks", "thank you", "thanks biddie", "thank you biddie",
+      "got it", "okay", "ok", "cool", "bet", "appreciate it",
+      "nice", "perfect", "word", "solid", "good looks", "good look",
+      "ty", "thx", "aight", "fasho", "for sure", "yessir", "noted",
+    ];
+    return ackPhrases.includes(lower);
+  };
+
+  const ackResponses = [
+    "No problem 👍", "Got you", "Anytime 🔥", "Glad I could help",
+    "You got it", "Always 💪", "Say less 🫡", "Bet 🤝",
+  ];
+
   const triggerBiddie = async (userMessage: string) => {
+    if (isAcknowledgment(userMessage)) {
+      const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
+      await supabase.from("chat_messages").insert({
+        user_id: "00000000-0000-0000-0000-000000000000",
+        user_name: "Biddie AI",
+        content: reply,
+        is_biddie: true,
+      } as any);
+      return;
+    }
     if (!shouldBiddieRespond(userMessage)) return;
     setBiddieThinking(true);
     scrollToBottom();
@@ -671,7 +697,7 @@ const DashboardCommunity = () => {
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Message as ${profile?.chat_alias || firstName}...`}
+              placeholder={`Message as ${profile?.chat_alias || firstName}... Try @biddie for tickers, flow, or market questions`}
               className="bg-muted/30 border-border/50 flex-1 focus:border-primary/50 transition-colors h-9 text-sm"
               maxLength={500}
             />
