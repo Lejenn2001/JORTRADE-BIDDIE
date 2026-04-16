@@ -257,34 +257,42 @@ const DashboardCommunity = () => {
     "You got it", "Always 💪", "Say less 🫡", "Bet 🤝",
   ];
 
-  const triggerBiddie = async (userMessage: string) => {
-    console.log("[TRACE] triggerBiddie CALLED with:", JSON.stringify(userMessage));
+  const triggerBiddie = async (userMessage: string, traceId: string) => {
+    console.log(`[TRACE][${traceId}] triggerBiddie CALLED with:`, JSON.stringify(userMessage));
     if (isAcknowledgment(userMessage)) {
-      console.log("[TRACE] triggerBiddie: isAcknowledgment=true, inserting ack and returning");
+      console.log(`[TRACE][${traceId}] triggerBiddie: isAcknowledgment=true, routing ack through backend`);
       const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
-      await supabase.from("chat_messages").insert({
-        user_id: "00000000-0000-0000-0000-000000000000",
-        user_name: "Biddie AI",
-        content: reply,
-      } as any);
+      try {
+        const res = await fetch('/api/whale/community-chat/ack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reply }),
+        });
+        const data = await res.json();
+        console.log(`[TRACE][${traceId}] ack backend response:`, JSON.stringify(data));
+      } catch (e) {
+        console.error(`[TRACE][${traceId}] ack backend error:`, e);
+      }
       return;
     }
     if (!shouldBiddieRespond(userMessage)) {
-      console.log("[TRACE] triggerBiddie: shouldBiddieRespond=false, returning");
+      console.log(`[TRACE][${traceId}] triggerBiddie: shouldBiddieRespond=false, returning`);
       return;
     }
-    console.log("[TRACE] triggerBiddie: CALLING /whale/community-chat with:", JSON.stringify(userMessage));
+    console.log(`[TRACE][${traceId}] triggerBiddie: CALLING /whale/community-chat`);
     setBiddieThinking(true);
     scrollToBottom();
     try {
       const senderName = profile?.chat_alias || profile?.full_name?.split(" ")[0] || "fam";
-      await fetch('/api/whale/community-chat', {
+      const res = await fetch('/api/whale/community-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage, userName: senderName }),
+        body: JSON.stringify({ message: userMessage, userName: senderName, reqId: traceId }),
       });
+      const data = await res.json();
+      console.log(`[TRACE][${traceId}] community-chat response:`, JSON.stringify({ ok: data.ok, posted: data.posted, reqId: data.reqId, contentLen: data.content?.length }));
     } catch (e) {
-      console.error("Biddie community chat error:", e);
+      console.error(`[TRACE][${traceId}] community-chat error:`, e);
     } finally {
       setBiddieThinking(false);
       scrollToBottom();
@@ -333,6 +341,8 @@ const DashboardCommunity = () => {
     broadcastStopTyping();
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     const messageText = input.trim();
+    const traceId = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    console.log(`[TRACE][${traceId}] sendMessage FIRED messageText=${JSON.stringify(messageText)}`);
     setSending(true);
     const { error } = await supabase.from("chat_messages").insert({
       user_id: session.user.id,
@@ -340,24 +350,29 @@ const DashboardCommunity = () => {
       content: messageText,
     } as any);
     if (error) {
+      console.log(`[TRACE][${traceId}] sendMessage INSERT_FAILED: ${error.message}`);
       toast({ title: "Error sending message", description: error.message, variant: "destructive" });
     } else {
       setInput("");
-      console.log("[TRACE] sendMessage: messageText =", JSON.stringify(messageText));
-      console.log("[TRACE] sendMessage: isAcknowledgment =", isAcknowledgment(messageText));
+      console.log(`[TRACE][${traceId}] sendMessage INSERT_OK isAck=${isAcknowledgment(messageText)}`);
       if (isAcknowledgment(messageText)) {
-        console.log("[TRACE] sendMessage: ACK PATH — inserting ack reply, NOT calling triggerBiddie");
+        console.log(`[TRACE][${traceId}] sendMessage: ACK PATH — routing through backend`);
         const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
-        const ackResult = await supabase.from("chat_messages").insert({
-          user_id: "00000000-0000-0000-0000-000000000000",
-          user_name: "Biddie AI",
-          content: reply,
-        } as any);
-        console.log("[TRACE] sendMessage: ACK insert result error=", ackResult.error?.message || "none");
+        try {
+          const res = await fetch('/api/whale/community-chat/ack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reply }),
+          });
+          const data = await res.json();
+          console.log(`[TRACE][${traceId}] sendMessage: ACK backend response:`, JSON.stringify(data));
+        } catch (e) {
+          console.error(`[TRACE][${traceId}] sendMessage: ACK backend error:`, e);
+        }
       } else {
         const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
-        console.log("[TRACE] sendMessage: NORMAL PATH — calling triggerBiddie with:", JSON.stringify(cleanMsg));
-        setTimeout(() => triggerBiddie(cleanMsg), 300);
+        console.log(`[TRACE][${traceId}] sendMessage: NORMAL PATH — scheduling triggerBiddie with:`, JSON.stringify(cleanMsg));
+        setTimeout(() => triggerBiddie(cleanMsg, traceId), 300);
       }
     }
     setSending(false);

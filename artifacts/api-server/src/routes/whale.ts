@@ -1803,11 +1803,13 @@ NON-NEGOTIABLE:
 - You're the homie who's always watching the tape and drops plays when something pops off`;
 
 router.post("/whale/community-chat", async (req, res) => {
-  const { message, userName } = req.body as { message?: string; userName?: string };
+  const { message, userName, reqId: clientReqId } = req.body as { message?: string; userName?: string; reqId?: string };
   if (!message?.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
   }
+  const reqId = clientReqId || `srv-${Date.now()}`;
+  console.log(`[community-chat] ${reqId} RECEIVED msg="${message.slice(0, 60)}" user=${userName || "unknown"}`);
 
   const now = getNowEastern();
   const lower = message.toLowerCase();
@@ -1884,7 +1886,7 @@ router.post("/whale/community-chat", async (req, res) => {
     dataStr = `\n\n--- CURRENT DATE & TRADING CALENDAR ---\n${getEasternDateContext()}\n\n--- LIVE MARKET DATA (fetched ${now}) ---\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
   }
 
-  console.log(`[community-chat] msg="${message.slice(0,50)}" isCasual=${isCasual} isTradingQ=${isTradingQ} hasData=${!!dataStr} user=${userName || "unknown"}`);
+  console.log(`[community-chat] ${reqId} CLASSIFIED isCasual=${isCasual} isTradingQ=${isTradingQ} hasData=${!!dataStr}`);
   const nameCtx = userName ? `\nThe person talking to you is ${userName}. Use their name naturally when greeting them.` : "";
   const chatInstruction = `User says: ${message}${dataStr}`;
 
@@ -1901,6 +1903,7 @@ router.post("/whale/community-chat", async (req, res) => {
     logApiCall("anthropic", "community-chat");
     logApiCall("replit", "community-chat");
     const content = response.content[0].type === "text" ? response.content[0].text : "";
+    console.log(`[community-chat] ${reqId} CLAUDE_DONE len=${content.length}`);
     let posted = false;
     if (content && content.trim().length > 0) {
       try {
@@ -1910,20 +1913,50 @@ router.post("/whale/community-chat", async (req, res) => {
           { headers: { ...supabaseAdminHeaders(), Prefer: "return=minimal" }, timeout: 5000 }
         );
         posted = true;
+        console.log(`[community-chat] ${reqId} INSERT_OK via Supabase REST`);
       } catch (e: any) {
-        console.error("Failed to insert Biddie community response to Supabase:", e.message);
+        console.error(`[community-chat] ${reqId} Supabase REST failed:`, e.message);
         const insertResult = await dbQuery(
           `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
           [BIDDIE_USER_ID, "assistant", content.trim(), "Biddie AI"]
         );
-        if (insertResult) posted = true;
+        if (insertResult) { posted = true; console.log(`[community-chat] ${reqId} INSERT_OK via local DB fallback`); }
       }
     }
-    res.json({ ok: true, posted, content: content?.trim() || "" });
+    console.log(`[community-chat] ${reqId} RESPONDING posted=${posted}`);
+    res.json({ ok: true, posted, content: content?.trim() || "", reqId });
   } catch (err: any) {
-    console.error("Community chat error:", err.message);
+    console.error(`[community-chat] ${reqId} ERROR:`, err.message);
     res.status(500).json({ error: err.message ?? "Claude API error" });
   }
+});
+
+router.post("/whale/community-chat/ack", async (req, res) => {
+  const { reply } = req.body as { reply?: string };
+  if (!reply?.trim()) {
+    res.status(400).json({ error: "reply is required" });
+    return;
+  }
+  const reqId = `ack-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  console.log(`[community-ack] ${reqId} inserting reply="${reply.trim().slice(0, 60)}"`);
+  let posted = false;
+  try {
+    await axios.post(
+      `${SUPABASE_URL}/rest/v1/chat_messages`,
+      { user_id: BIDDIE_USER_ID, user_name: "Biddie AI", content: reply.trim() },
+      { headers: { ...supabaseAdminHeaders(), Prefer: "return=minimal" }, timeout: 5000 }
+    );
+    posted = true;
+  } catch (e: any) {
+    console.error(`[community-ack] ${reqId} Supabase REST failed:`, e.message);
+    const insertResult = await dbQuery(
+      `INSERT INTO chat_messages (user_id, role, content, user_name) VALUES ($1, $2, $3, $4)`,
+      [BIDDIE_USER_ID, "assistant", reply.trim(), "Biddie AI"]
+    );
+    if (insertResult) posted = true;
+  }
+  console.log(`[community-ack] ${reqId} posted=${posted}`);
+  res.json({ ok: true, posted });
 });
 
 // ── Quick Signal Check ──────────────────────────────────────────────────────────
