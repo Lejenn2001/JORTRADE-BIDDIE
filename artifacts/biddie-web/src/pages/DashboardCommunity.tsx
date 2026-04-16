@@ -338,8 +338,18 @@ const DashboardCommunity = () => {
       toast({ title: "Error sending message", description: error.message, variant: "destructive" });
     } else {
       setInput("");
-      const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
-      setTimeout(() => triggerBiddie(cleanMsg), 300);
+      if (isAcknowledgment(messageText)) {
+        const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
+        await supabase.from("chat_messages").insert({
+          user_id: "00000000-0000-0000-0000-000000000000",
+          user_name: "Biddie AI",
+          content: reply,
+          is_biddie: true,
+        } as any);
+      } else {
+        const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
+        setTimeout(() => triggerBiddie(cleanMsg), 300);
+      }
     }
     setSending(false);
   };
