@@ -115,10 +115,10 @@ const DashboardCommunity = () => {
       const { data } = await supabase
         .from("chat_messages")
         .select("*")
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(100);
       if (data) {
-        setMessages(data as ChatMessage[]);
+        setMessages(data.reverse() as ChatMessage[]);
         scrollToBottom();
         const ids = data.map((m: any) => m.id);
         if (ids.length) fetchReactions(ids);
@@ -194,16 +194,51 @@ const DashboardCommunity = () => {
   const shouldBiddieRespond = (text: string): boolean => {
     const lower = text.toLowerCase();
     if (/\b(biddie|@biddie)\b/i.test(lower)) return true;
-    const chatTriggers = [
-      "spy", "qqq", "nvda", "tsla", "aapl", "amzn", "meta", "amd", "msft",
-      "googl", "nflx", "coin", "pltr", "sofi", "iwm",
-      "calls", "puts", "sweep", "flow", "play", "setup",
-      "bullish", "bearish", "moon", "drilling", "ripping", "tanking",
-      "green", "red", "pump", "dump", "squeeze", "breakout",
-      "what a day", "crazy day", "wild", "insane", "sheesh",
-      "let's go", "we eating", "printing", "money", "bread",
+    const safeTerms = [
+      "trading", "calls", "puts", "flow", "ticker", "setup", "entry",
+      "strike", "sweep", "whale", "breakout", "breakdown", "signal",
+      "premarket", "pre-market", "market", "options", "option", "price",
+      "stock", "earnings", "volume", "unusual", "dark pool", "premium",
+      "support", "resistance", "stop loss", "bullish", "bearish",
+      "squeeze", "rally", "reversal", "vwap", "rsi", "macd",
+      "sector", "etf", "futures", "contract", "portfolio",
+      "what's the move", "any plays", "moon", "drilling", "ripping",
+      "tanking", "printing", "pumping", "dumping",
     ];
-    return chatTriggers.some(w => lower.includes(w));
+    if (safeTerms.some(w => lower.includes(w))) return true;
+    const boundaryTerms = [
+      "play", "trade", "buy", "sell", "dip", "exit", "target", "index", "news",
+    ];
+    if (boundaryTerms.some(w => new RegExp(`\\b${w}s?\\b`).test(lower))) return true;
+    const commonWords = new Set([
+      "i", "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "if",
+      "in", "is", "it", "me", "my", "no", "of", "oh", "ok", "on", "or", "so",
+      "to", "up", "us", "we", "hi", "ha", "hm", "yo", "ya",
+      "all", "and", "any", "are", "but", "can", "day", "did", "for", "get",
+      "got", "had", "has", "her", "him", "his", "how", "its", "let", "lot",
+      "may", "new", "not", "now", "old", "one", "our", "out", "own", "ran",
+      "run", "say", "see", "set", "she", "the", "too", "try", "two", "use",
+      "was", "way", "who", "why", "win", "won", "yes", "yet", "you",
+      "been", "come", "does", "done", "each", "even", "from", "good", "have",
+      "here", "just", "keep", "know", "last", "like", "long", "look", "made",
+      "make", "more", "much", "must", "need", "next", "only", "over", "said",
+      "same", "some", "sure", "take", "tell", "than", "that", "them", "then",
+      "they", "this", "time", "very", "want", "well", "were", "what", "when",
+      "will", "with", "work", "your",
+      "about", "after", "being", "could", "every", "first", "found", "going",
+      "great", "might", "never", "other", "right", "shall", "should", "since",
+      "still", "their", "there", "these", "thing", "think", "those", "today",
+      "under", "until", "where", "which", "while", "would",
+      "lol", "lmao", "omg", "bruh", "bro", "fam", "nah", "yep", "nope",
+      "damn", "dude", "nice", "sick", "fire", "based", "chad", "cope",
+    ]);
+    const words = text.split(/\s+/);
+    const hasTicker = words.some(w => {
+      const cleaned = w.replace(/^\$/, "").replace(/[?.!,]+$/, "");
+      return /^[A-Z]{1,5}$/.test(cleaned) && !commonWords.has(cleaned.toLowerCase());
+    });
+    if (hasTicker) return true;
+    return false;
   };
 
   const triggerBiddie = async (userMessage: string) => {
@@ -323,7 +358,10 @@ const DashboardCommunity = () => {
   };
 
   const formatTime = (iso: string) => {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const d = new Date(iso);
+    const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+    return `${date} • ${time} ET`;
   };
 
   const userColor = (userId: string) => {

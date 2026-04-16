@@ -1,0 +1,71 @@
+We are fixing JORTRADE community chat only.
+
+This is not just a timestamp request. We now have 2 confirmed frontend issues in JORTRADE chat:
+
+1. The initial message load is wrong — it loads the oldest 100 messages instead of the newest 100, which makes the room appear stuck on older content. 
+2. User-triggered Biddie replies are being blocked by the current `shouldBiddieRespond()` logic before the request ever reaches `/whale/community-chat`. 
+
+Proceed with the recommended NEW JORTRADE chat frontend fix, with these exact requirements:
+
+A. Initial message load
+
+* Change the initial fetch to load the newest 100 messages, not the oldest 100
+* Preserve chronological display in the UI after loading
+* Keep this scoped to JORTRADE community chat only
+
+B. Timestamp display
+
+* Show absolute timestamps on every JORTRADE chat message
+* Do NOT use “Today” or “Yesterday”
+* Required format:
+
+  * Apr 10 • 2:00 PM CT
+  * or Apr 10 • 3:00 PM ET
+* Include:
+
+  * date
+  * time
+  * timezone
+* Keep the timezone consistent across all JORTRADE chat messages
+* This is for live production testing and troubleshooting
+
+C. shouldBiddieRespond()
+Use the recommended NEW version, not the old restore.
+
+Required trigger behavior:
+
+* direct `@biddie` / `biddie` mention
+* broader market/trading words
+* ticker detection for symbols like INTC, SPX, BA, GOOG, etc.
+* no broad plain question-mark trigger by itself
+
+The goal is:
+
+* Biddie should respond to real market-related chat
+* Biddie should not respond to unrelated non-market conversation
+
+D. Scope protection
+Do NOT touch:
+
+* signal generation
+* signal scoring
+* signal pipeline
+* breakout scanner
+* monitoring jobs
+* Supabase schema
+* backend whale.ts logic
+* Dashboard Biddie AI chat
+* automated Biddie posting jobs
+
+Keep this scoped to JORTRADE community chat frontend only.
+
+Before implementing, provide the final exact code for:
+
+1. initial message load query
+2. timestamp formatting/display
+3. shouldBiddieRespond()
+
+Also confirm the exact file and line numbers being changed in:
+`artifacts/biddie-web/src/pages/DashboardCommunity.tsx`
+
+Once that is confirmed, proceed.

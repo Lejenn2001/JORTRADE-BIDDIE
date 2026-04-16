@@ -53,6 +53,7 @@ The project is a pnpm monorepo using TypeScript (v5.9) and Node.js (v24), with e
 - **Referral System:** Implements a multi-tier referral program with auto-generated codes, signup integration, and incentives for both referrers and referred users.
 - **Signal Algorithm (JORTRADE FINAL):** Advanced signal generation logic incorporating hybrid VWAP + price entry, swing high/low targets and invalidations, GEX integration for all tickers, flow clustering, and cross-tab confirmation.
 - **Trump Feed:** Monitors and displays recent posts from Donald Trump's Truth Social archive with engagement statistics.
+- **JORTRADE Community Chat:** Live chat room with Supabase Realtime. Biddie AI responds to user messages via `shouldBiddieRespond()` (trading word + ticker detection, no plain question-mark trigger). Automated server-side posts (morning recaps, whale alerts, flow alerts) go through `postBiddieToChat()` in whale.ts. Initial message load fetches newest 100 messages (descending + reverse). Timestamps show full date + time + ET timezone.
 
 ## External Dependencies
 
