@@ -1811,6 +1811,19 @@ router.post("/whale/community-chat", async (req, res) => {
   const reqId = clientReqId || `srv-${Date.now()}`;
   console.log(`[community-chat] ${reqId} RECEIVED msg="${message.slice(0, 60)}" user=${userName || "unknown"}`);
 
+  const ackLower = message.toLowerCase().replace(/[!.,❤️🔥👍💪🙏🫡🤝]+/g, "").trim();
+  const serverAckPhrases = [
+    "thanks", "thank you", "thanks biddie", "thank you biddie",
+    "got it", "okay", "ok", "cool", "bet", "appreciate it",
+    "nice", "perfect", "word", "solid", "good looks", "good look",
+    "ty", "thx", "aight", "fasho", "for sure", "yessir", "noted",
+  ];
+  if (serverAckPhrases.includes(ackLower)) {
+    console.log(`[community-chat] ${reqId} SERVER ACK BLOCK — message is acknowledgment, rejecting`);
+    res.json({ ok: true, posted: false, content: "", reqId, blocked: "ack" });
+    return;
+  }
+
   const now = getNowEastern();
   const lower = message.toLowerCase();
 

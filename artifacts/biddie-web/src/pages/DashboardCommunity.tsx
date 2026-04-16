@@ -47,6 +47,7 @@ const DashboardCommunity = () => {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingBroadcast = useRef<number>(0);
+  const ackBlockRef = useRef<boolean>(false);
 
   const EMOJI_LIST = [
     "🔥","💪","👀","🚀","📈","📉","💰","🤝","😤","😏",
@@ -258,21 +259,13 @@ const DashboardCommunity = () => {
   ];
 
   const triggerBiddie = async (userMessage: string, traceId: string) => {
+    if (ackBlockRef.current) {
+      console.log(`[TRACE][${traceId}] triggerBiddie BLOCKED by ackBlockRef — hard stop`);
+      return;
+    }
     console.log(`[TRACE][${traceId}] triggerBiddie CALLED with:`, JSON.stringify(userMessage));
     if (isAcknowledgment(userMessage)) {
-      console.log(`[TRACE][${traceId}] triggerBiddie: isAcknowledgment=true, routing ack through backend`);
-      const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
-      try {
-        const res = await fetch('/api/whale/community-chat/ack', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reply }),
-        });
-        const data = await res.json();
-        console.log(`[TRACE][${traceId}] ack backend response:`, JSON.stringify(data));
-      } catch (e) {
-        console.error(`[TRACE][${traceId}] ack backend error:`, e);
-      }
+      console.log(`[TRACE][${traceId}] triggerBiddie: isAcknowledgment=true — hard stop, no action`);
       return;
     }
     if (!shouldBiddieRespond(userMessage)) {
@@ -342,7 +335,13 @@ const DashboardCommunity = () => {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     const messageText = input.trim();
     const traceId = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    console.log(`[TRACE][${traceId}] sendMessage FIRED messageText=${JSON.stringify(messageText)}`);
+    const isAck = isAcknowledgment(messageText);
+    console.log(`[TRACE][${traceId}] sendMessage FIRED messageText=${JSON.stringify(messageText)} isAck=${isAck}`);
+
+    if (isAck) {
+      ackBlockRef.current = true;
+    }
+
     setSending(true);
     const { error } = await supabase.from("chat_messages").insert({
       user_id: session.user.id,
@@ -352,29 +351,35 @@ const DashboardCommunity = () => {
     if (error) {
       console.log(`[TRACE][${traceId}] sendMessage INSERT_FAILED: ${error.message}`);
       toast({ title: "Error sending message", description: error.message, variant: "destructive" });
-    } else {
-      setInput("");
-      console.log(`[TRACE][${traceId}] sendMessage INSERT_OK isAck=${isAcknowledgment(messageText)}`);
-      if (isAcknowledgment(messageText)) {
-        console.log(`[TRACE][${traceId}] sendMessage: ACK PATH — routing through backend`);
-        const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
-        try {
-          const res = await fetch('/api/whale/community-chat/ack', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reply }),
-          });
-          const data = await res.json();
-          console.log(`[TRACE][${traceId}] sendMessage: ACK backend response:`, JSON.stringify(data));
-        } catch (e) {
-          console.error(`[TRACE][${traceId}] sendMessage: ACK backend error:`, e);
-        }
-      } else {
-        const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
-        console.log(`[TRACE][${traceId}] sendMessage: NORMAL PATH — scheduling triggerBiddie with:`, JSON.stringify(cleanMsg));
-        setTimeout(() => triggerBiddie(cleanMsg, traceId), 300);
-      }
+      ackBlockRef.current = false;
+      setSending(false);
+      return;
     }
+
+    setInput("");
+
+    if (isAck) {
+      console.log(`[TRACE][${traceId}] sendMessage: ACK PATH — HARD STOP — no triggerBiddie`);
+      const reply = ackResponses[Math.floor(Math.random() * ackResponses.length)];
+      try {
+        const res = await fetch('/api/whale/community-chat/ack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reply }),
+        });
+        const data = await res.json();
+        console.log(`[TRACE][${traceId}] sendMessage: ACK backend response:`, JSON.stringify(data));
+      } catch (e) {
+        console.error(`[TRACE][${traceId}] sendMessage: ACK backend error:`, e);
+      }
+      setSending(false);
+      setTimeout(() => { ackBlockRef.current = false; }, 5000);
+      return;
+    }
+
+    const cleanMsg = messageText.replace(/@?biddie[,:]?\s*/i, "").trim() || messageText;
+    console.log(`[TRACE][${traceId}] sendMessage: NORMAL PATH — scheduling triggerBiddie with:`, JSON.stringify(cleanMsg));
+    setTimeout(() => triggerBiddie(cleanMsg, traceId), 300);
     setSending(false);
   };
 
