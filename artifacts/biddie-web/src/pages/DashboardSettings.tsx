@@ -3,7 +3,10 @@ import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import NotificationSettings from "@/components/dashboard/NotificationSettings";
 import { useAuth } from "@/hooks/useAuth";
-import { User, MessageSquare, Check, Copy, Gift, Star, Crown, Zap, Users, ExternalLink, Share2, ArrowRight } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { User, MessageSquare, Check, Copy, Gift, Star, Crown, Zap, Users, ExternalLink, Share2, ArrowRight, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 const TIERS = [
@@ -407,6 +410,126 @@ const ReferralSection = () => {
   );
 };
 
+const SecuritySection = () => {
+  const { user } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.email) {
+      toast.error("No email on your account — please sign in again");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast.error("New password must be different from current password");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New password and confirmation don't match");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // 1. Verify current password by attempting a sign-in
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (verifyErr) {
+        toast.error("Current password is incorrect");
+        setSubmitting(false);
+        return;
+      }
+
+      // 2. Update to new password
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateErr) {
+        toast.error(updateErr.message || "Failed to update password");
+        setSubmitting(false);
+        return;
+      }
+
+      toast.success("Password updated successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err?.message || "Something went wrong");
+    }
+    setSubmitting(false);
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/[0.08] bg-[hsl(232,30%,7%)] p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
+          <Lock className="h-5 w-5 text-slate-300" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Change Password</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Update the password you use to sign in.</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Current password</label>
+          <Input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            className="bg-muted/30 border-border/50 rounded-lg"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">New password</label>
+          <Input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+            className="bg-muted/30 border-border/50 rounded-lg"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Confirm new password</label>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="bg-muted/30 border-border/50 rounded-lg"
+          />
+        </div>
+        <Button
+          type="submit"
+          disabled={submitting}
+          className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6 py-5 text-sm font-semibold"
+        >
+          {submitting ? "Updating..." : "Update password"}
+        </Button>
+      </form>
+    </section>
+  );
+};
+
 const DashboardSettings = () => {
   return (
     <div className="h-screen flex bg-background overflow-hidden">
@@ -446,6 +569,7 @@ const DashboardSettings = () => {
             </div>
           </div>
           <ProfileSection />
+          <SecuritySection />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <ReferralSection />
             <NotificationSettings />
