@@ -1,0 +1,33 @@
+I have to flag something important before handing you a link — the link generated, but the redirect was overridden by Supabase.
+
+What happened
+The Supabase admin API accepted my request with redirect_to=https://jortrade.com/reset-password, but silently rewrote it to https://jortradeco.lovable.app because that's the only host on your Site URL / Redirect Allowlist in Lovable Cloud. So the recovery link I just created looks like this:
+
+https://koqvhfbgqdwkkukbydwt.supabase.co/auth/v1/verify
+  ?token=...
+  &type=recovery
+  &redirect_to=https://jortradeco.lovable.app   ← NOT jortrade.com
+
+If you click it, Supabase will validate the token correctly, but bounce you to the lovable.app domain — which doesn't have the new /reset-password page I built. You'd land on a hash with the recovery session and no UI to handle it. So I'm not going to hand it to you in this state — it'd just frustrate you again.
+
+Why this happens
+Supabase enforces redirect_to against the Site URL + Additional Redirect URLs allowlist. Anything not on the list gets replaced with Site URL (jortradeco.lovable.app). This is the same root cause as the original login problem and is exactly what Step B is meant to fix.
+
+Three ways forward — your call
+Option 1 — Fastest (recommended): I set a temporary password.
+I use the same admin access to set a one-time password on your account (e.g. something like Jortrade-Temp-X7K9!q2m). You log in with email + that password, then change it from Settings → Change Password. Takes 30 seconds. Doesn't touch Lovable Cloud at all.
+
+Option 2 — Step B first, then a working recovery link.
+You log into Lovable Cloud (separate from jortrade.com — uses your Lovable account), navigate to your project's Auth settings, and:
+
+Set Site URL → https://jortrade.com
+Add to Additional Redirect URLs → https://jortrade.com/**
+Then I regenerate the link and it'll point at jortrade.com correctly.
+
+Option 3 — Combo. I do Option 1 now so you're unblocked, and after you're in we tackle Step B together so the public Forgot Password flow works for everyone else.
+
+Answers to your three questions (for the link concept in general, once Step B is done)
+Points at jortrade.com? Will, after Step B. Right now Supabase forces it to lovable.app.
+Safe & one-time? Yes — Supabase recovery tokens are single-use, expire (default 1 hour), and grant only a password-reset session, not a full login. Once the token is exchanged it's invalid.
+What you'd see on click? You'd land on /reset-password (the new page), which detects the recovery session, shows two password fields, and signs you out so you re-login with the new password.
+Which option do you want — 1, 2, or 3?
