@@ -384,6 +384,7 @@ const DashboardAdmin = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [showReference, setShowReference] = useState(false);
   const [showTiers, setShowTiers] = useState(false);
   const [chatCount, setChatCount] = useState(0);
@@ -489,6 +490,45 @@ const DashboardAdmin = () => {
       toast.error("Failed to update user plan");
     }
     setUpdating(null);
+  };
+
+  const generateLoginLink = async (userId: string, email: string) => {
+    if (!email) {
+      toast.error("This user has no email on file");
+      return;
+    }
+    setGeneratingLink(userId);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        toast.error("Your session has expired — please sign in again");
+        setGeneratingLink(null);
+        return;
+      }
+      const resp = await fetch("/api/whale/admin/generate-recovery-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ email, type: "recovery" }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.link) {
+        toast.error(data.error || "Failed to generate login link");
+      } else {
+        try {
+          await navigator.clipboard.writeText(data.link);
+          toast.success(`Recovery link copied for ${email}`);
+        } catch {
+          window.prompt("Copy this one-time recovery link:", data.link);
+        }
+      }
+    } catch (e: any) {
+      toast.error("Network error: " + (e?.message || "Failed to generate link"));
+    }
+    setGeneratingLink(null);
   };
 
   const toggleAdmin = async (userId: string, currentlyAdmin: boolean) => {
@@ -1283,6 +1323,20 @@ const DashboardAdmin = () => {
                               <td className="px-5 py-3.5 text-right">
                                 {!isSelf && (
                                   <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs h-7 px-3 border-border/50"
+                                      disabled={generatingLink === u.id}
+                                      onClick={() => generateLoginLink(u.id, u.email)}
+                                      title="Generate one-time login link to copy"
+                                    >
+                                      {generatingLink === u.id ? (
+                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <><Copy className="h-3 w-3 mr-1" /> Login link</>
+                                      )}
+                                    </Button>
                                     <Button
                                       size="sm"
                                       variant={u.is_admin ? "destructive" : "outline"}

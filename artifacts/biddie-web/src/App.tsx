@@ -18,6 +18,7 @@ import DashboardBreakout from "./pages/DashboardBreakout.tsx";
 import DashboardTrump from "./pages/DashboardTrump.tsx";
 import DashboardAdmin from "./pages/DashboardAdmin.tsx";
 import Login from "./pages/Login.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import Signup from "./pages/Signup.tsx";
 import Contact from "./pages/Contact.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/dashboard/settings" element={<ProtectedRoute><DashboardSettings /></ProtectedRoute>} />
             <Route path="/dashboard/admin" element={<ProtectedRoute><DashboardAdmin /></ProtectedRoute>} />
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="*" element={<NotFound />} />

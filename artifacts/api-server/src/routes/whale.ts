@@ -5584,6 +5584,75 @@ router.post("/whale/admin/update-plan", async (req, res) => {
   }
 });
 
+const RECOVERY_LINK_REDIRECT_ALLOWLIST: Record<string, string> = {
+  "jortrade.com": "https://jortrade.com",
+  "www.jortrade.com": "https://www.jortrade.com",
+};
+
+router.post("/whale/admin/generate-recovery-link", async (req, res) => {
+  try {
+    const authHeader = (req.headers["authorization"] as string) || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ")
+      ? authHeader.slice(7).trim()
+      : "";
+    if (!bearer) return res.status(401).json({ error: "Missing bearer token" });
+
+    const userResp = await axios.get(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${bearer}` },
+      timeout: 5000,
+      validateStatus: () => true,
+    });
+    if (userResp.status !== 200 || !userResp.data?.id) {
+      return res.status(401).json({ error: "Invalid or expired session" });
+    }
+    const verifiedUserId: string = userResp.data.id;
+    if (!(await isAdminUser(verifiedUserId))) {
+      return res.status(403).json({ error: "Not an admin" });
+    }
+
+    const { email, type } = req.body as { email?: string; type?: "recovery" | "magiclink" };
+    if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+    const linkType = type === "magiclink" ? "magiclink" : "recovery";
+
+    let redirectHost = "jortrade.com";
+    const originHeader = (req.headers["origin"] as string) || "";
+    try {
+      if (originHeader) {
+        const host = new URL(originHeader).host;
+        if (RECOVERY_LINK_REDIRECT_ALLOWLIST[host]) redirectHost = host;
+      }
+    } catch {}
+    const redirectBase = RECOVERY_LINK_REDIRECT_ALLOWLIST[redirectHost];
+    const redirectTo = linkType === "recovery"
+      ? `${redirectBase}/reset-password`
+      : `${redirectBase}/dashboard`;
+
+    const resp = await axios.post(
+      `${SUPABASE_URL}/auth/v1/admin/generate_link`,
+      { type: linkType, email, options: { redirect_to: redirectTo } },
+      { headers: supabaseAdminHeaders(), timeout: 10000, validateStatus: () => true }
+    );
+
+    if (resp.status >= 400) {
+      return res.status(resp.status).json({ error: resp.data?.msg || resp.data?.error || "Failed to generate link" });
+    }
+
+    const actionLink: string =
+      resp.data?.action_link ||
+      resp.data?.properties?.action_link ||
+      "";
+    if (!actionLink) return res.status(500).json({ error: "No action_link returned" });
+
+    console.log(`[admin] Generated ${linkType} link for ${email} by admin ${verifiedUserId}`);
+    res.json({ success: true, link: actionLink, type: linkType });
+  } catch (e: any) {
+    console.error("[admin] generate-recovery-link error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/toggle-admin", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;
