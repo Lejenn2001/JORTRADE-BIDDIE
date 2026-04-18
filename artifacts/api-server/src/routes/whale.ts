@@ -5653,6 +5653,170 @@ router.post("/whale/admin/generate-recovery-link", async (req, res) => {
   }
 });
 
+// In-memory rate limiter for admin self-recovery (per IP)
+const adminRecoveryAttempts = new Map<string, { count: number; resetAt: number }>();
+const ADMIN_RECOVERY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const ADMIN_RECOVERY_MAX_PER_WINDOW = 5;
+
+function checkAdminRecoveryRate(ip: string): boolean {
+  const now = Date.now();
+  const entry = adminRecoveryAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    adminRecoveryAttempts.set(ip, { count: 1, resetAt: now + ADMIN_RECOVERY_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= ADMIN_RECOVERY_MAX_PER_WINDOW) return false;
+  entry.count++;
+  return true;
+}
+
+async function postToDiscord(content: string): Promise<boolean> {
+  const webhook = process.env["DISCORD_WEBHOOK_URL"];
+  if (!webhook) return false;
+  try {
+    const r = await axios.post(webhook, { content }, { timeout: 5000, validateStatus: () => true });
+    if (r.status >= 200 && r.status < 300) return true;
+    console.error(`[discord] webhook returned non-2xx status ${r.status}`);
+    return false;
+  } catch (e: any) {
+    console.error("[discord] webhook error:", e?.message);
+    return false;
+  }
+}
+
+router.post("/whale/admin-self-recovery", async (req, res) => {
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+    || req.socket.remoteAddress
+    || "unknown";
+
+  try {
+    if (!checkAdminRecoveryRate(ip)) {
+      console.warn(`[admin-recovery] rate-limited IP ${ip}`);
+      return res.status(429).json({ error: "Too many attempts. Try again later." });
+    }
+
+    const recoverySecret = process.env["ADMIN_RECOVERY_SECRET"] || "";
+    if (!recoverySecret || recoverySecret.length < 32) {
+      console.error("[admin-recovery] ADMIN_RECOVERY_SECRET not configured");
+      return res.status(503).json({ error: "Admin recovery is not configured" });
+    }
+
+    const { email, secret } = req.body as { email?: string; secret?: string };
+    if (!email || !secret || typeof email !== "string" || typeof secret !== "string") {
+      return res.status(400).json({ error: "Email and secret are required" });
+    }
+
+    // Constant-time secret comparison
+    const crypto = await import("crypto");
+    const a = Buffer.from(secret);
+    const b = Buffer.from(recoverySecret);
+    const secretValid = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+    // Always look up user (even if secret is wrong) so timing doesn't leak which one failed
+    const userResp = await axios.get(
+      `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email.toLowerCase())}`,
+      { headers: supabaseAdminHeaders(), timeout: 5000, validateStatus: () => true }
+    );
+    const userObj = userResp.data?.users?.[0] || (userResp.data?.id ? userResp.data : null);
+    const userId: string | null = userObj?.id || null;
+    const userIsAdmin = userId ? await isAdminUser(userId) : false;
+
+    if (!secretValid || !userId || !userIsAdmin) {
+      console.warn(`[admin-recovery] FAIL ip=${ip} email=${email} secretOk=${secretValid} adminOk=${userIsAdmin}`);
+      await postToDiscord(
+        `🚨 **Admin recovery FAILED** at ${new Date().toISOString()}\n` +
+        `IP: \`${ip}\`\nEmail attempted: \`${email}\`\n` +
+        `If this wasn't you, rotate ADMIN_RECOVERY_SECRET immediately.`
+      );
+      // Generic error — don't leak which field was wrong
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Generate recovery link
+    const linkResp = await axios.post(
+      `${SUPABASE_URL}/auth/v1/admin/generate_link`,
+      {
+        type: "recovery",
+        email: userObj.email,
+        options: { redirect_to: "https://jortrade.com/reset-password" },
+      },
+      { headers: supabaseAdminHeaders(), timeout: 10000, validateStatus: () => true }
+    );
+
+    if (linkResp.status >= 400) {
+      console.error("[admin-recovery] generate_link failed:", linkResp.status, linkResp.data);
+      return res.status(500).json({ error: "Failed to generate recovery link" });
+    }
+
+    const actionLink: string =
+      linkResp.data?.action_link ||
+      linkResp.data?.properties?.action_link || "";
+    if (!actionLink) return res.status(500).json({ error: "No recovery link returned" });
+
+    const discordOk = await postToDiscord(
+      `🔐 **Admin recovery link** for \`${userObj.email}\`\n` +
+      `Triggered at ${new Date().toISOString()} from IP \`${ip}\`\n` +
+      `Click to reset password (single-use, expires ~1 hour):\n${actionLink}\n` +
+      `If this wasn't you, rotate ADMIN_RECOVERY_SECRET immediately.`
+    );
+
+    if (!discordOk) {
+      console.error("[admin-recovery] Discord webhook delivery failed");
+      return res.status(500).json({ error: "Recovery link generated but Discord delivery failed. Contact support." });
+    }
+
+    console.log(`[admin-recovery] SUCCESS ip=${ip} email=${userObj.email}`);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[admin-recovery] error:", e.message);
+    res.status(500).json({ error: "Recovery request failed" });
+  }
+});
+
+router.get("/whale/admin/last-sign-ins", async (req, res) => {
+  try {
+    const authHeader = (req.headers["authorization"] as string) || "";
+    const bearer = authHeader.toLowerCase().startsWith("bearer ")
+      ? authHeader.slice(7).trim() : "";
+    if (!bearer) return res.status(401).json({ error: "Missing bearer token" });
+
+    const userResp = await axios.get(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${bearer}` },
+      timeout: 5000, validateStatus: () => true,
+    });
+    if (userResp.status !== 200 || !userResp.data?.id) {
+      return res.status(401).json({ error: "Invalid session" });
+    }
+    if (!(await isAdminUser(userResp.data.id))) {
+      return res.status(403).json({ error: "Not an admin" });
+    }
+
+    // Page through all users from auth.users
+    const map: Record<string, string | null> = {};
+    let page = 1;
+    const perPage = 1000;
+    while (true) {
+      const r = await axios.get(
+        `${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=${perPage}`,
+        { headers: supabaseAdminHeaders(), timeout: 10000, validateStatus: () => true }
+      );
+      if (r.status !== 200) break;
+      const users = r.data?.users || [];
+      for (const u of users) {
+        map[u.id] = u.last_sign_in_at || null;
+      }
+      if (users.length < perPage) break;
+      page++;
+      if (page > 20) break; // safety
+    }
+
+    res.json({ lastSignIns: map });
+  } catch (e: any) {
+    console.error("[last-sign-ins] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/whale/admin/toggle-admin", async (req, res) => {
   try {
     const adminUserId = req.headers["x-user-id"] as string;

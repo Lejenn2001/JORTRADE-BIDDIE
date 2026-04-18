@@ -44,6 +44,7 @@ interface UserProfile {
   full_name: string;
   selected_plan: string | null;
   created_at: string;
+  last_sign_in_at?: string | null;
   is_admin?: boolean;
   is_suspended?: boolean;
 }
@@ -450,7 +451,29 @@ const DashboardAdmin = () => {
       .eq("role", "suspended");
     const suspendedIds = new Set((suspendedRoles || []).map(r => r.user_id));
 
-    setUsers((profiles || []).map(p => ({ ...p, is_admin: adminIds.has(p.id), is_suspended: suspendedIds.has(p.id) })));
+    let lastSignIns: Record<string, string | null> = {};
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        const r = await fetch("/api/whale/admin/last-sign-ins", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const j = await r.json();
+          lastSignIns = j.lastSignIns || {};
+        }
+      }
+    } catch {
+      // Non-fatal — column will just show "—"
+    }
+
+    setUsers((profiles || []).map(p => ({
+      ...p,
+      is_admin: adminIds.has(p.id),
+      is_suspended: suspendedIds.has(p.id),
+      last_sign_in_at: lastSignIns[p.id] ?? null,
+    })));
 
     const chatRes = await supabase.from("chat_messages").select("id", { count: "exact", head: true });
     if (chatRes.count !== null) setChatCount(chatRes.count);
@@ -1235,6 +1258,7 @@ const DashboardAdmin = () => {
                           <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Plan</th>
                           <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Role</th>
                           <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Joined</th>
+                          <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Last Login</th>
                           <th className="text-right px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
@@ -1320,6 +1344,11 @@ const DashboardAdmin = () => {
                                 </div>
                               </td>
                               <td className="px-5 py-3.5 text-xs text-muted-foreground">{formatDate(u.created_at)}</td>
+                              <td className="px-5 py-3.5 text-xs text-muted-foreground">
+                                {u.last_sign_in_at
+                                  ? new Date(u.last_sign_in_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+                                  : <span className="text-muted-foreground/50">—</span>}
+                              </td>
                               <td className="px-5 py-3.5 text-right">
                                 {!isSelf && (
                                   <div className="flex items-center justify-end gap-1.5">
