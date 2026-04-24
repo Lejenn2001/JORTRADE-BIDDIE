@@ -1339,7 +1339,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
                 )}
               </button>
             )}
-            {onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","partial_hit","missed","near_miss","expired","win","loss"].includes(String(signal.outcome || "")) && (
+            {onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","expired"].includes(String(signal.outcome || "")) && (
               <button
                 onClick={() => onReviewTrade(signal)}
                 className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all"

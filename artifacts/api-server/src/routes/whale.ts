@@ -5282,7 +5282,12 @@ function shouldAutoCloseStop(optionType: string, underlying: number | null, stop
 async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ closed: boolean; row?: any; lastFill: { price: number | null; source: string | null }; exitReason?: string; fill?: { price: number; source: string } }> {
   const expiryStr = String(t.expiry).slice(0, 10);
   const expired = isContractExpired(expiryStr);
-  const underlying = q.underlying;
+  // Underlying price source for target/stop checks: prefer the canonical realtime
+  // priceMonitor (same source the rest of the signal system uses for triggers),
+  // and fall back to the option-snapshot's underlying only when realtime is
+  // unavailable. This keeps paper-trade triggers consistent with live signal triggers.
+  const rt = priceMonitor.getPrice(t.ticker);
+  const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : q.underlying;
   const target = t.signal_target != null ? Number(t.signal_target) : null;
   const stop = t.signal_invalidation != null ? Number(t.signal_invalidation) : null;
   const lastFill = pickLastQuoteFill(q);
@@ -5342,6 +5347,19 @@ router.post("/whale/paper/quote", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
     const q = await fetchOptionQuote(String(ticker).toUpperCase(), String(expiry), ot, strikeNum);
     if (!q) return res.status(503).json({ error: "Quote unavailable. The contract may be illiquid or markets are closed — try again later." });
+    // Strict no-silent-fallback: require at least one usable price level (bid/ask/mid/last > 0).
+    // We refuse to surface a "quote" that has no actionable price — a paper trade against
+    // an empty book would mislead the user.
+    const hasUsable =
+      (q.bid != null && q.bid > 0) ||
+      (q.ask != null && q.ask > 0) ||
+      (q.mid != null && q.mid > 0) ||
+      (q.last != null && q.last > 0);
+    if (!hasUsable) {
+      return res.status(503).json({
+        error: "No live quote available for this contract right now. Bid/ask/mid/last are all empty — the contract may be illiquid or the market is closed.",
+      });
+    }
     const fill = pickEntryFill(q);
     res.json({
       bid: q.bid,
