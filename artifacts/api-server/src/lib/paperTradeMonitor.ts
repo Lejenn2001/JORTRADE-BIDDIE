@@ -43,12 +43,7 @@ async function processOpenTrades(): Promise<void> {
       const expiryStr = String(t.expiry).slice(0, 10);
       const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
       if (!q) {
-        // No live option snapshot available. We must NOT silently skip — the
-        // auto-close guarantee for expired contracts has to hold even when
-        // Polygon's chain is missing/illiquid. If the contract is expired,
-        // force-close at 0 (terminal step of the bid→mid→last→0 chain — see
-        // closeExpiredAtZero comment in whale.ts). For non-expired contracts
-        // with no quote, just touch last_checked_at.
+        // No quote: if expired, force-close at 0; else touch last_checked_at.
         if (isContractExpired(expiryStr)) {
           const r = await closeExpiredAtZero(t);
           if (r.closed) {

@@ -5486,9 +5486,7 @@ router.get("/whale/paper/trades", async (req, res) => {
   }
 });
 
-// Foreground batch refresh — recomputes quotes for ALL of the caller's open
-// trades and returns the full updated list. The dashboard polls this every 30s
-// while visible so marks/P&L stay fresh between background-monitor cycles.
+// Foreground batch refresh: recompute quotes for caller's open trades, return updated list.
 router.post("/whale/paper/trades/refresh-all", async (req, res) => {
   try {
     const userId = await verifyBearerUser(req);
@@ -5607,14 +5605,7 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// Force-close an expired contract at 0 when no live option quote is available.
-// Per spec, the exit chain is bid → mid → last → 0 (and "0 only for expired OTM").
-// In the no-quote case we can't resolve bid/mid/last for the option, so we apply
-// the chain's terminal "0" — this is conservative for the buyer but strictly
-// spec-compliant. The exit_fill_source is "expired_otm" since "no quote on an
-// expired contract" effectively means there's no remaining bid (i.e. worthless).
-// We capture the underlying (when priceMonitor has it) only as exit_underlying
-// metadata, never as the exit price.
+// Close expired-no-quote at 0 (terminal step of bid→mid→last→0 exit chain).
 async function closeExpiredAtZero(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null }> {
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
