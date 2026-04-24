@@ -260,7 +260,7 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             disabled={submitting || loading || !quote?.suggestedEntry}
             className="flex-[2] py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-violet-500 to-blue-500 text-white shadow-lg shadow-violet-500/30 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {submitting ? "Opening…" : entry != null ? `Open Paper Trade @ ${fmtMoney(entry)}` : "Waiting for quote…"}
+            {submitting ? "Submitting…" : entry != null ? `Paper Submit @ ${fmtMoney(entry)}` : "Waiting for quote…"}
           </button>
         </div>
       </div>

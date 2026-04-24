@@ -300,7 +300,7 @@ export default function DashboardPaperTrades() {
                               {refreshingId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
                             </button>
                             <button onClick={() => closeOne(t.id)} disabled={closingId === t.id} className="px-2 py-1 rounded text-[11px] font-bold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-50">
-                              {closingId === t.id ? "Closing…" : "Close at bid"}
+                              {closingId === t.id ? "Closing…" : "Force close"}
                             </button>
                           </>
                         )}
