@@ -122,7 +122,7 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 text-violet-400" />
             <div>
-              <h3 className="text-sm font-bold text-foreground">Review Trade · Paper</h3>
+              <h3 className="text-sm font-bold text-foreground">Review Trade</h3>
               <p className="text-[10px] text-muted-foreground">Simulated · No real money</p>
             </div>
           </div>

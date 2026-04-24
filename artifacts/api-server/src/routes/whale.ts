@@ -5544,8 +5544,25 @@ async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
     const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
     if (!row || !row.rows.length) { res.status(404).json({ error: "Paper trade not found" }); return; }
     const t = row.rows[0];
-    const q = await fetchOptionQuote(t.ticker, String(t.expiry).slice(0, 10), t.option_type, Number(t.strike));
-    if (!q) { res.status(503).json({ error: "Quote unavailable" }); return; }
+    const expiryStr = String(t.expiry).slice(0, 10);
+    const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
+    if (!q) {
+      // Parity with monitor: expired no-quote auto-closes via intrinsic/0.
+      if (t.status === "open" && isContractExpired(expiryStr)) {
+        const r = await closeExpiredNoQuote(t);
+        const fresh = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1`, [id]);
+        res.json({
+          trade: fresh?.rows?.[0] ?? t,
+          quote: null,
+          closed: r.closed,
+          autoClosedReason: r.closed ? "closed_expired" : null,
+          lastFill: { price: r.exitPrice, source: r.source },
+        });
+        return;
+      }
+      res.status(503).json({ error: "Quote unavailable" });
+      return;
+    }
     if (t.status !== "open") {
       res.json({ trade: t, quote: q, closed: false });
       return;
