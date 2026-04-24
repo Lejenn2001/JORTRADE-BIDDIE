@@ -1,6 +1,4 @@
-import { __paperTradeInternals } from "../routes/whale";
-
-const { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery } = __paperTradeInternals;
+import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery } from "./paperTradeService";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
