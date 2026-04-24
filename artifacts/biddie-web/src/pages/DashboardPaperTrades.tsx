@@ -22,6 +22,9 @@ interface PaperTrade {
   entry_delta: string | null;
   signal_target: string | null;
   signal_invalidation: string | null;
+  signal_entry: string | null;
+  signal_grade: string | null;
+  signal_confidence: string | null;
   opened_at: string;
   status: "open" | "closed";
   exit_price: string | null;
@@ -32,6 +35,7 @@ interface PaperTrade {
   realized_pl: string | null;
   realized_pl_pct: string | null;
   last_quote_price: string | null;
+  last_quote_source: string | null;
   last_quote_underlying: string | null;
   last_checked_at: string | null;
 }
@@ -46,12 +50,29 @@ const fmtTime = (iso: string | null) => {
 };
 const exitReasonLabel = (r: string | null) => {
   if (!r) return "—";
-  if (r === "manual") return "Manual close";
+  if (r === "manual") return "Closed manually";
   if (r === "target_hit") return "🎯 Target hit";
-  if (r === "invalidated") return "🛑 Invalidation";
+  if (r === "stop_hit") return "🛑 Stop hit";
+  if (r === "invalidated") return "🛑 Stop hit"; // legacy
   if (r === "expired") return "⏰ Expired";
-  if (r.endsWith("_pending_quote")) return `${r.replace("_pending_quote", "")} (waiting)`;
+  if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
+};
+const exitReasonStyle = (r: string | null) => {
+  if (r === "target_hit") return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+  if (r === "stop_hit" || r === "invalidated") return "bg-red-500/15 text-red-300 border border-red-500/30";
+  if (r === "expired") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
+  if (r === "manual") return "bg-muted/40 text-muted-foreground border border-border/40";
+  return "bg-muted/30 text-muted-foreground";
+};
+const sourceLabel = (s: string | null | undefined) => {
+  if (!s) return "—";
+  if (s === "ask") return "ask";
+  if (s === "bid") return "bid";
+  if (s === "mid") return "mid";
+  if (s === "last") return "last";
+  if (s === "expired_otm") return "0 (OTM expired)";
+  return s;
 };
 
 export default function DashboardPaperTrades() {
@@ -231,7 +252,10 @@ export default function DashboardPaperTrades() {
                         {t.status === "open" ? (
                           <span className="text-[10px] uppercase font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-1.5 py-0.5 rounded">OPEN</span>
                         ) : (
-                          <span className="text-[10px] uppercase font-bold text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">{exitReasonLabel(t.exit_reason)}</span>
+                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${exitReasonStyle(t.exit_reason)}`}>{exitReasonLabel(t.exit_reason)}</span>
+                        )}
+                        {t.signal_grade && (
+                          <span className="text-[10px] uppercase font-bold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded">{t.signal_grade}</span>
                         )}
                       </div>
                       <div className="flex gap-1">
@@ -253,22 +277,29 @@ export default function DashboardPaperTrades() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
-                      <div><span className="text-muted-foreground">Entry: </span><span className="font-mono text-foreground">{fmtMoney(entry)} <span className="text-muted-foreground">({t.entry_fill_source})</span></span></div>
+                      <div><span className="text-muted-foreground">Entry: </span><span className="font-mono text-foreground">{fmtMoney(entry)} <span className="text-muted-foreground">(at {sourceLabel(t.entry_fill_source)})</span></span></div>
                       {t.status === "open" ? (
-                        <div><span className="text-muted-foreground">Last: </span><span className="font-mono text-foreground">{fmtMoney(last)}</span></div>
+                        <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-foreground">{fmtMoney(last)} <span className="text-muted-foreground">(at {sourceLabel(t.last_quote_source)})</span></span></div>
                       ) : (
-                        <div><span className="text-muted-foreground">Exit: </span><span className="font-mono text-foreground">{fmtMoney(t.exit_price)} <span className="text-muted-foreground">({t.exit_fill_source})</span></span></div>
+                        <div><span className="text-muted-foreground">Exit: </span><span className="font-mono text-foreground">{fmtMoney(t.exit_price)} <span className="text-muted-foreground">(at {sourceLabel(t.exit_fill_source)})</span></span></div>
                       )}
                       <div className={`font-mono font-bold ${plToShow != null && plToShow >= 0 ? "text-emerald-400" : plToShow != null ? "text-red-400" : "text-muted-foreground"}`}>
                         P/L: {fmtMoney(plToShow)} {plPctToShow != null && <span className="text-[10px]">({fmtPct(plPctToShow)})</span>}
                       </div>
                       <div className="text-muted-foreground">Opened {fmtTime(t.opened_at)}</div>
-                      {target != null && <div className="text-muted-foreground">Target: <span className="font-mono text-foreground">{fmtMoney(target)}</span></div>}
-                      {inval != null && <div className="text-muted-foreground">Invalidation: <span className="font-mono text-foreground">{fmtMoney(inval)}</span></div>}
+                      {t.signal_entry != null && <div className="text-muted-foreground">Plan entry: <span className="font-mono text-foreground">{fmtMoney(t.signal_entry)}</span></div>}
+                      {target != null && <div className="text-muted-foreground">🎯 Target: <span className="font-mono text-emerald-300">{fmtMoney(target)}</span></div>}
+                      {inval != null && <div className="text-muted-foreground">🛑 Stop: <span className="font-mono text-red-300">{fmtMoney(inval)}</span></div>}
                       {t.status === "open" && t.last_quote_underlying && <div className="text-muted-foreground">Underlying: <span className="font-mono text-foreground">{fmtMoney(t.last_quote_underlying)}</span></div>}
                       {t.last_checked_at && t.status === "open" && <div className="text-muted-foreground">Updated {fmtTime(t.last_checked_at)}</div>}
                       {t.closed_at && <div className="text-muted-foreground">Closed {fmtTime(t.closed_at)}</div>}
                     </div>
+                    {(t.signal_grade || t.signal_confidence) && (
+                      <div className="mt-2 pt-2 border-t border-border/30 text-[10px] text-muted-foreground flex gap-3 flex-wrap">
+                        {t.signal_grade && <span>Grade: <span className="text-foreground font-medium">{t.signal_grade}</span></span>}
+                        {t.signal_confidence && <span>Confidence: <span className="text-foreground font-medium">{t.signal_confidence}</span></span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

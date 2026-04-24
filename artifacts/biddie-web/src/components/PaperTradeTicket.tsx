@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, ShieldOff, Crosshair } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -9,8 +9,11 @@ export interface PaperTradeSignalInput {
   optionType: "call" | "put";
   strike: number;
   expiry: string;
+  signalEntry?: number | null;
   signalTarget?: number | null;
   signalInvalidation?: number | null;
+  signalGrade?: string | null;
+  signalConfidence?: string | null;
 }
 
 interface QuoteData {
@@ -91,8 +94,11 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           strike: signal.strike,
           expiry: signal.expiry,
           contracts,
+          signalEntry: signal.signalEntry ?? null,
           signalTarget: signal.signalTarget ?? null,
           signalInvalidation: signal.signalInvalidation ?? null,
+          signalGrade: signal.signalGrade ?? null,
+          signalConfidence: signal.signalConfidence ?? null,
         }),
       });
       const data = await res.json();
@@ -110,11 +116,12 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
   const entry = quote?.suggestedEntry?.price ?? null;
   const cost = entry != null ? entry * contracts * 100 : null;
   const isCall = signal.optionType === "call";
+  const hasPlan = signal.signalEntry != null || signal.signalTarget != null || signal.signalInvalidation != null || signal.signalGrade != null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-card border border-border/60 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 bg-gradient-to-r from-violet-500/10 to-blue-500/10">
+      <div className="w-full max-w-md rounded-2xl bg-card border border-border/60 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 bg-gradient-to-r from-violet-500/10 to-blue-500/10 shrink-0">
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 text-violet-400" />
             <div>
@@ -127,7 +134,7 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           </button>
         </div>
 
-        <div className="px-5 py-3 bg-amber-500/10 border-b border-amber-500/20">
+        <div className="px-5 py-3 bg-amber-500/10 border-b border-amber-500/20 shrink-0">
           <div className="flex gap-2 items-start">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
             <p className="text-[11px] leading-snug text-amber-200/90">
@@ -136,17 +143,47 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           </div>
         </div>
 
-        <div className="px-5 py-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="px-5 py-4 space-y-3 overflow-y-auto">
+          <div className="flex items-center justify-between flex-wrap gap-1">
             <div className="flex items-center gap-2">
               {isCall ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-red-400" />}
               <span className="text-base font-bold text-foreground">{signal.ticker}</span>
               <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${isCall ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
                 {signal.optionType.toUpperCase()} ${signal.strike}
               </span>
+              {signal.signalGrade && (
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  {signal.signalGrade}
+                </span>
+              )}
             </div>
             <span className="text-[11px] text-muted-foreground">Exp {signal.expiry}</span>
           </div>
+
+          {hasPlan && (
+            <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1.5">
+              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Plan from this signal</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Crosshair className="h-3 w-3" />Entry trigger</div>
+                  <div className="text-xs font-mono font-bold text-foreground">{fmtMoney(signal.signalEntry)}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[10px] text-emerald-400"><Target className="h-3 w-3" />Target</div>
+                  <div className="text-xs font-mono font-bold text-emerald-300">{fmtMoney(signal.signalTarget)}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[10px] text-red-400"><ShieldOff className="h-3 w-3" />Stop</div>
+                  <div className="text-xs font-mono font-bold text-red-300">{fmtMoney(signal.signalInvalidation)}</div>
+                </div>
+              </div>
+              {signal.signalConfidence && (
+                <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/30 mt-1">
+                  Confidence: <span className="text-foreground font-medium">{signal.signalConfidence}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {loading && !quote && (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
@@ -163,22 +200,26 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
 
           {quote && (
             <>
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-1.5 text-center">
                 <div className="rounded-lg bg-red-500/5 border border-red-500/20 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Bid</div>
-                  <div className="text-sm font-mono font-bold text-red-300">{fmtMoney(quote.quote.bid)}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase">Bid</div>
+                  <div className="text-xs font-mono font-bold text-red-300">{fmtMoney(quote.quote.bid)}</div>
                 </div>
                 <div className="rounded-lg bg-muted/30 border border-border/40 p-2">
-                  <div className="text-[10px] text-muted-foreground uppercase">Mid</div>
-                  <div className="text-sm font-mono font-bold text-foreground">{fmtMoney(quote.quote.mid)}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase">Mid</div>
+                  <div className="text-xs font-mono font-bold text-foreground">{fmtMoney(quote.quote.mid)}</div>
                 </div>
                 <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/30 p-2 ring-1 ring-emerald-500/20">
-                  <div className="text-[10px] text-emerald-400 uppercase">Ask · Fill</div>
-                  <div className="text-sm font-mono font-bold text-emerald-300">{fmtMoney(quote.quote.ask)}</div>
+                  <div className="text-[9px] text-emerald-400 uppercase">Ask · Fill</div>
+                  <div className="text-xs font-mono font-bold text-emerald-300">{fmtMoney(quote.quote.ask)}</div>
+                </div>
+                <div className="rounded-lg bg-muted/30 border border-border/40 p-2">
+                  <div className="text-[9px] text-muted-foreground uppercase">Last</div>
+                  <div className="text-xs font-mono font-bold text-foreground">{fmtMoney(quote.quote.last)}</div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
                 <span>Underlying: <span className="font-mono text-foreground">{fmtMoney(quote.quote.underlying)}</span></span>
                 {quote.quote.iv != null && <span>IV: <span className="font-mono text-foreground">{quote.quote.iv}%</span></span>}
                 {quote.quote.delta != null && <span>Δ: <span className="font-mono text-foreground">{quote.quote.delta}</span></span>}
@@ -212,7 +253,7 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-border/40 bg-card flex gap-2">
+        <div className="px-5 py-3 border-t border-border/40 bg-card flex gap-2 shrink-0">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg text-xs font-bold text-muted-foreground bg-muted/30 hover:bg-muted/50">Cancel</button>
           <button
             onClick={submit}

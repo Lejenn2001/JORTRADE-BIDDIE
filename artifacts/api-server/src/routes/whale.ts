@@ -187,6 +187,12 @@ const SEED_ADMIN_IDS = [
     );
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_user_status ON paper_trades(user_id, status)`, []);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_open ON paper_trades(status) WHERE status = 'open'`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS last_quote_source TEXT`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_entry NUMERIC`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_grade TEXT`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_confidence TEXT`, []);
+    // Normalize legacy "invalidated" exit_reason → canonical "stop_hit"
+    await dbQuery(`UPDATE paper_trades SET exit_reason = 'stop_hit' WHERE exit_reason = 'invalidated'`, []).catch(() => null);
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement + paper_trades tables ready`);
 
     const dupeCheck = await dbQuery(`
@@ -5253,6 +5259,72 @@ function isItmAtPrice(optionType: "call" | "put", strike: number, underlying: nu
   return optionType === "call" ? underlying > strike : underlying < strike;
 }
 
+function pickLastQuoteFill(q: OptionQuoteResult): { price: number | null; source: string | null } {
+  if (q.bid != null && q.bid > 0) return { price: q.bid, source: "bid" };
+  if (q.mid != null && q.mid > 0) return { price: q.mid, source: "mid" };
+  if (q.last != null && q.last > 0) return { price: q.last, source: "last" };
+  return { price: null, source: null };
+}
+
+function shouldAutoCloseTarget(optionType: string, underlying: number | null, target: number | null): boolean {
+  if (target == null || underlying == null) return false;
+  return optionType === "call" ? underlying >= target : underlying <= target;
+}
+function shouldAutoCloseStop(optionType: string, underlying: number | null, stop: number | null): boolean {
+  if (stop == null || underlying == null) return false;
+  return optionType === "call" ? underlying <= stop : underlying >= stop;
+}
+
+// Shared close-evaluation: given a paper trade row + a fresh quote, decide if it should auto-close
+// (target_hit | stop_hit | expired). If yes, perform the close UPDATE atomically and return the
+// updated row. Otherwise return { closed: false, lastFill }. Used by manual refresh AND monitor.
+async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ closed: boolean; row?: any; lastFill: { price: number | null; source: string | null }; exitReason?: string; fill?: { price: number; source: string } }> {
+  const expiryStr = String(t.expiry).slice(0, 10);
+  const expired = isContractExpired(expiryStr);
+  const underlying = q.underlying;
+  const target = t.signal_target != null ? Number(t.signal_target) : null;
+  const stop = t.signal_invalidation != null ? Number(t.signal_invalidation) : null;
+  const lastFill = pickLastQuoteFill(q);
+
+  let exitReason: string | null = null;
+  if (expired) exitReason = "expired";
+  else if (shouldAutoCloseTarget(t.option_type, underlying, target)) exitReason = "target_hit";
+  else if (shouldAutoCloseStop(t.option_type, underlying, stop)) exitReason = "stop_hit";
+
+  if (!exitReason) {
+    await dbQuery(
+      `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW() WHERE id = $4 AND status = 'open'`,
+      [lastFill.price, lastFill.source, underlying, t.id]
+    ).catch(() => null);
+    return { closed: false, lastFill };
+  }
+
+  const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
+  const fill = pickExitFill(q, expired, itm);
+  if (!fill) {
+    await dbQuery(
+      `UPDATE paper_trades SET exit_reason = $1, last_quote_price = $2, last_quote_source = $3, last_quote_underlying = $4, last_checked_at = NOW() WHERE id = $5 AND status = 'open'`,
+      [`${exitReason}_pending_quote`, lastFill.price, lastFill.source, underlying, t.id]
+    ).catch(() => null);
+    return { closed: false, lastFill, exitReason };
+  }
+
+  const entry = Number(t.entry_price);
+  const contracts = Number(t.contracts);
+  const realizedPl = (fill.price - entry) * contracts * 100;
+  const realizedPlPct = entry > 0 ? ((fill.price - entry) / entry) * 100 : 0;
+  const upd = await dbQuery(
+    `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
+      exit_underlying = $3, exit_reason = $4, closed_at = NOW(),
+      realized_pl = $5, realized_pl_pct = $6,
+      last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW()
+     WHERE id = $7 AND status = 'open' RETURNING *`,
+    [fill.price, fill.source, underlying, exitReason, realizedPl, realizedPlPct, t.id]
+  ).catch(() => null);
+  if (!upd || !upd.rowCount) return { closed: false, lastFill, exitReason, fill };
+  return { closed: true, row: upd.rows[0], lastFill, exitReason, fill };
+}
+
 // POST /whale/paper/quote — preview a quote (no DB writes) before creating a paper trade
 router.post("/whale/paper/quote", async (req, res) => {
   try {
@@ -5286,7 +5358,7 @@ router.post("/whale/paper/trades", async (req, res) => {
   try {
     const userId = await verifyBearerUser(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const { signalId, ticker, optionType, strike, expiry, contracts, signalTarget, signalInvalidation } = req.body || {};
+    const { signalId, ticker, optionType, strike, expiry, contracts, signalTarget, signalInvalidation, signalEntry, signalGrade, signalConfidence } = req.body || {};
     if (!signalId || !ticker || !optionType || !strike || !expiry) {
       return res.status(400).json({ error: "signalId, ticker, optionType, strike, expiry required" });
     }
@@ -5303,20 +5375,26 @@ router.post("/whale/paper/trades", async (req, res) => {
     if (!q) return res.status(503).json({ error: "Quote unavailable. Could not get a live price for this contract." });
     const fill = pickEntryFill(q);
     if (!fill) return res.status(409).json({ error: "No tradeable price available (no ask, mid, or last). Try again when markets are open." });
+    const lastFill = pickLastQuoteFill(q);
 
     const sigTarget = signalTarget != null && Number.isFinite(Number(signalTarget)) ? Number(signalTarget) : null;
     const sigInval = signalInvalidation != null && Number.isFinite(Number(signalInvalidation)) ? Number(signalInvalidation) : null;
+    const sigEntry = signalEntry != null && Number.isFinite(Number(signalEntry)) ? Number(signalEntry) : null;
+    const sigGrade = signalGrade != null ? String(signalGrade).slice(0, 16) : null;
+    const sigConf = signalConfidence != null ? String(signalConfidence).slice(0, 16) : null;
 
     const inserted = await dbQuery(
       `INSERT INTO paper_trades
         (user_id, signal_id, ticker, option_type, strike, expiry, contract_symbol, contracts,
          entry_price, entry_fill_source, entry_underlying, entry_iv, entry_delta,
-         signal_target, signal_invalidation, last_quote_price, last_quote_underlying, last_checked_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+         signal_target, signal_invalidation, signal_entry, signal_grade, signal_confidence,
+         last_quote_price, last_quote_source, last_quote_underlying, last_checked_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW())
        RETURNING *`,
       [userId, String(signalId), tickerUp, ot, strikeNum, String(expiry), q.contractSymbol, contractsNum,
        fill.price, fill.source, q.underlying, q.iv, q.delta,
-       sigTarget, sigInval, fill.price, q.underlying]
+       sigTarget, sigInval, sigEntry, sigGrade, sigConf,
+       lastFill.price ?? fill.price, lastFill.source ?? fill.source, q.underlying]
     );
     if (!inserted || !inserted.rows.length) return res.status(500).json({ error: "Failed to save paper trade" });
     res.json({ success: true, trade: inserted.rows[0], quote: q });
@@ -5350,28 +5428,41 @@ router.get("/whale/paper/trades", async (req, res) => {
   }
 });
 
-// POST /whale/paper/trades/:id/refresh — refresh the live quote and store snapshot
-router.post("/whale/paper/trades/:id/refresh", async (req, res) => {
+// Shared refresh handler — re-fetches quote AND runs the auto-close evaluation,
+// so calling refresh on an open trade may close it if the underlying has crossed
+// target/stop or the contract has expired. Available as both POST and GET.
+async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
   try {
     const userId = await verifyBearerUser(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const id = req.params.id;
     const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
-    if (!row || !row.rows.length) return res.status(404).json({ error: "Paper trade not found" });
+    if (!row || !row.rows.length) { res.status(404).json({ error: "Paper trade not found" }); return; }
     const t = row.rows[0];
     const q = await fetchOptionQuote(t.ticker, String(t.expiry).slice(0, 10), t.option_type, Number(t.strike));
-    if (!q) return res.status(503).json({ error: "Quote unavailable" });
-    const lastPrice = q.bid != null && q.bid > 0 ? q.bid : q.mid != null && q.mid > 0 ? q.mid : q.last;
-    await dbQuery(
-      `UPDATE paper_trades SET last_quote_price = $1, last_quote_underlying = $2, last_checked_at = NOW() WHERE id = $3`,
-      [lastPrice, q.underlying, id]
-    );
-    res.json({ trade: { ...t, last_quote_price: lastPrice, last_quote_underlying: q.underlying }, quote: q });
+    if (!q) { res.status(503).json({ error: "Quote unavailable" }); return; }
+    if (t.status !== "open") {
+      res.json({ trade: t, quote: q, closed: false });
+      return;
+    }
+    const result = await evaluateAndMaybeClose(t, q);
+    // Re-read the row so the response reflects the latest state.
+    const fresh = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1`, [id]);
+    res.json({
+      trade: fresh?.rows?.[0] ?? t,
+      quote: q,
+      closed: result.closed,
+      autoClosedReason: result.closed ? result.exitReason : null,
+      lastFill: result.lastFill,
+    });
   } catch (e: any) {
     console.error("[paper-trade] refresh error:", e.message);
     res.status(500).json({ error: e.message });
   }
-});
+}
+
+router.post("/whale/paper/trades/:id/refresh", paperTradeRefreshHandler);
+router.get("/whale/paper/trades/:id/refresh", paperTradeRefreshHandler);
 
 // POST /whale/paper/trades/:id/close — exit at bid (or fallback). Manual close.
 router.post("/whale/paper/trades/:id/close", async (req, res) => {
@@ -5424,7 +5515,7 @@ router.delete("/whale/paper/trades/:id", async (req, res) => {
 });
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, dbQuery };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, dbQuery };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;
