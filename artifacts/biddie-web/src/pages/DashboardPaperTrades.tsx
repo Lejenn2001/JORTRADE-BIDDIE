@@ -4,7 +4,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X, Trash2 } from "lucide-react";
+import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
 
 interface PaperTrade {
   id: string;
@@ -53,14 +53,14 @@ const exitReasonLabel = (r: string | null) => {
   if (r === "closed_manual" || r === "manual") return "Closed manually";
   if (r === "target_hit") return "🎯 Target hit";
   if (r === "stop_hit" || r === "invalidated") return "🛑 Stop hit";
-  if (r === "expired") return "⏰ Expired";
+  if (r === "closed_expired" || r === "expired") return "⏰ Expired";
   if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
 };
 const exitReasonStyle = (r: string | null) => {
   if (r === "target_hit") return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
   if (r === "stop_hit" || r === "invalidated") return "bg-red-500/15 text-red-300 border border-red-500/30";
-  if (r === "expired") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
+  if (r === "closed_expired" || r === "expired") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
   if (r === "closed_manual" || r === "manual") return "bg-muted/40 text-muted-foreground border border-border/40";
   return "bg-muted/30 text-muted-foreground";
 };
@@ -180,17 +180,6 @@ export default function DashboardPaperTrades() {
     }
   }
 
-  async function deleteOne(id: string) {
-    if (!confirm("Permanently delete this paper trade from your history?")) return;
-    try {
-      const headers = await authHeader();
-      await fetch(`/api/whale/paper/trades/${id}`, { method: "DELETE", headers });
-      load();
-    } catch (e: any) {
-      toast({ title: "Delete failed", description: e?.message, variant: "destructive" });
-    }
-  }
-
   const stats = useMemo(() => {
     const closed = trades.filter((t) => t.status === "closed");
     const open = trades.filter((t) => t.status === "open");
@@ -304,11 +293,6 @@ export default function DashboardPaperTrades() {
                               {closingId === t.id ? "Closing…" : "Close at bid"}
                             </button>
                           </>
-                        )}
-                        {t.status !== "open" && (
-                          <button onClick={() => deleteOne(t.id)} className="p-1.5 rounded text-muted-foreground hover:text-red-300 hover:bg-red-500/10" title="Delete from history">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
                         )}
                       </div>
                     </div>

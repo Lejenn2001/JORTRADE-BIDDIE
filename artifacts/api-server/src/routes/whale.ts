@@ -201,9 +201,10 @@ const SEED_ADMIN_IDS = [
     ]) {
       await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS ${col} NUMERIC`, []);
     }
-    // Normalize legacy exit_reason values → canonical enum {target_hit, stop_hit, expired, closed_manual}
+    // Normalize legacy exit_reason values → canonical enum {target_hit, stop_hit, closed_expired, closed_manual}
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'stop_hit' WHERE exit_reason = 'invalidated'`, []).catch(() => null);
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'closed_manual' WHERE exit_reason = 'manual'`, []).catch(() => null);
+    await dbQuery(`UPDATE paper_trades SET exit_reason = 'closed_expired' WHERE exit_reason = 'expired'`, []).catch(() => null);
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement + paper_trades tables ready`);
 
     const dupeCheck = await dbQuery(`
@@ -5303,7 +5304,7 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
   const lastFill = pickLastQuoteFill(q);
 
   let exitReason: string | null = null;
-  if (expired) exitReason = "expired";
+  if (expired) exitReason = "closed_expired";
   else if (shouldAutoCloseTarget(t.option_type, underlying, target)) exitReason = "target_hit";
   else if (shouldAutoCloseStop(t.option_type, underlying, stop)) exitReason = "stop_hit";
 
@@ -5560,22 +5561,43 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// DELETE /whale/paper/trades/:id — soft-delete by removing from history
-router.delete("/whale/paper/trades/:id", async (req, res) => {
-  try {
-    const userId = await verifyBearerUser(req);
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const id = req.params.id;
-    await dbQuery(`DELETE FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
-    res.json({ success: true });
-  } catch (e: any) {
-    console.error("[paper-trade] delete error:", e.message);
-    res.status(500).json({ error: e.message });
+// Force-close an expired contract at intrinsic value when no live option quote
+// is available. Required so the monitor's auto-close guarantee holds even when
+// Polygon snapshots are missing/illiquid for an expired contract:
+//   intrinsic = max(0, underlying - strike) for calls
+//   intrinsic = max(0, strike - underlying) for puts
+// If the underlying is also unavailable, we conservatively close at 0 (worst-case
+// for the buyer of the option) — better to mark a closed expired loss than to
+// silently leave the trade open forever.
+async function closeExpiredAtIntrinsic(t: any): Promise<{ closed: boolean; row?: any; intrinsic: number; underlying: number | null }> {
+  const rt = priceMonitor.getPrice(t.ticker);
+  const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
+  const strike = Number(t.strike);
+  let intrinsic = 0;
+  if (underlying != null) {
+    intrinsic = t.option_type === "call"
+      ? Math.max(0, underlying - strike)
+      : Math.max(0, strike - underlying);
   }
-});
+  const entry = Number(t.entry_price);
+  const contracts = Number(t.contracts);
+  const realizedPl = (intrinsic - entry) * contracts * 100;
+  const realizedPlPct = entry > 0 ? ((intrinsic - entry) / entry) * 100 : 0;
+  const upd = await dbQuery(
+    `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = 'expired_intrinsic',
+      exit_underlying = $2, exit_reason = 'closed_expired', closed_at = NOW(),
+      realized_pl = $3, realized_pl_pct = $4,
+      last_quote_price = $1, last_quote_source = 'expired_intrinsic', last_quote_underlying = $2,
+      last_checked_at = NOW()
+     WHERE id = $5 AND status = 'open' RETURNING *`,
+    [intrinsic, underlying, realizedPl, realizedPlPct, t.id]
+  ).catch(() => null);
+  if (!upd || !upd.rowCount) return { closed: false, intrinsic, underlying };
+  return { closed: true, row: upd.rows[0], intrinsic, underlying };
+}
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, dbQuery };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredAtIntrinsic, dbQuery };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;
