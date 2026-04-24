@@ -1,6 +1,6 @@
 import { __paperTradeInternals } from "../routes/whale";
 
-const { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredAtZero, isContractExpired, dbQuery } = __paperTradeInternals;
+const { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery } = __paperTradeInternals;
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -43,12 +43,14 @@ async function processOpenTrades(): Promise<void> {
       const expiryStr = String(t.expiry).slice(0, 10);
       const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
       if (!q) {
-        // No quote: if expired, force-close at 0; else touch last_checked_at.
+        // No quote: if expired, close at 0 only when OTM; otherwise just touch last_checked_at.
         if (isContractExpired(expiryStr)) {
-          const r = await closeExpiredAtZero(t);
+          const r = await closeExpiredNoQuote(t);
           if (r.closed) {
             closed++;
-            console.log(`[paper-trade-monitor] auto-closed (no quote, expired) ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: closed_expired @ 0 (underlying=${r.underlying ?? "n/a"})`);
+            console.log(`[paper-trade-monitor] auto-closed (no quote, expired OTM) ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: closed_expired @ 0 (underlying=${r.underlying ?? "n/a"})`);
+          } else if (r.reason === "itm_kept_open") {
+            console.log(`[paper-trade-monitor] expired ITM with no quote, kept open: ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr} (underlying=${r.underlying})`);
           }
         } else {
           await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);

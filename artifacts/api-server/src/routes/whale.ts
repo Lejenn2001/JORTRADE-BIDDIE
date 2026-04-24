@@ -5501,7 +5501,7 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
         const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
         if (!q) {
           if (isContractExpired(expiryStr)) {
-            const r = await closeExpiredAtZero(t);
+            const r = await closeExpiredNoQuote(t);
             if (r.closed) closed++;
           } else {
             await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);
@@ -5605,10 +5605,18 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// Close expired-no-quote at 0 (terminal step of bid→mid→last→0 exit chain).
-async function closeExpiredAtZero(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null }> {
+// Expired contract with no live quote: close at 0 only if OTM (terminal step
+// of the bid→mid→last→0 chain — spec says "0 only for expired OTM"). For ITM
+// or unknown underlying, leave the trade open with last_checked_at touched
+// rather than risk zeroing a contract with intrinsic value.
+async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null; reason: "otm" | "itm_kept_open" | "unknown_kept_open" }> {
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
+  const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
+  if (itm !== false) {
+    await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW(), last_quote_underlying = $1 WHERE id = $2 AND status = 'open'`, [underlying, t.id]).catch(() => null);
+    return { closed: false, underlying, reason: itm === true ? "itm_kept_open" : "unknown_kept_open" };
+  }
   const entry = Number(t.entry_price);
   const contracts = Number(t.contracts);
   const realizedPl = (0 - entry) * contracts * 100;
@@ -5622,12 +5630,12 @@ async function closeExpiredAtZero(t: any): Promise<{ closed: boolean; row?: any;
      WHERE id = $4 AND status = 'open' RETURNING *`,
     [underlying, realizedPl, realizedPlPct, t.id]
   ).catch(() => null);
-  if (!upd || !upd.rowCount) return { closed: false, underlying };
-  return { closed: true, row: upd.rows[0], underlying };
+  if (!upd || !upd.rowCount) return { closed: false, underlying, reason: "otm" };
+  return { closed: true, row: upd.rows[0], underlying, reason: "otm" };
 }
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredAtZero, dbQuery };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;
