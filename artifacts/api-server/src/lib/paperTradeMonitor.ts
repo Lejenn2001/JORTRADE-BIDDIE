@@ -25,7 +25,16 @@ async function processOpenTrades(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const open = await dbQuery(`SELECT * FROM paper_trades WHERE status = 'open' ORDER BY opened_at ASC LIMIT 200`, []);
+    // Order by least-recently-checked first (NULLS FIRST = never checked) so that
+    // when total open trades exceed the per-cycle cap, every trade still gets
+    // evaluated within a few cycles via round-robin rather than starving newer
+    // (or higher-id) trades indefinitely. The cap protects API rate limits and
+    // cycle duration; raise it if/when concurrent batch fetching is added.
+    const PER_CYCLE_CAP = 500;
+    const open = await dbQuery(
+      `SELECT * FROM paper_trades WHERE status = 'open' ORDER BY last_checked_at ASC NULLS FIRST, opened_at ASC LIMIT $1`,
+      [PER_CYCLE_CAP]
+    );
     if (!open || !open.rows.length) return;
     let checked = 0;
     let closed = 0;

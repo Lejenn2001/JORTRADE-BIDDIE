@@ -5516,8 +5516,8 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
       `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
         exit_underlying = $3, exit_reason = $4, closed_at = NOW(),
         realized_pl = $5, realized_pl_pct = $6,
-        last_quote_price = $1, last_quote_underlying = $3, last_checked_at = NOW()
-       WHERE id = $7 RETURNING *`,
+        last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW()
+       WHERE id = $7 AND status = 'open' RETURNING *`,
       [fill.price, fill.source, q.underlying, "closed_manual", realizedPl, realizedPlPct, id]
     );
     res.json({ trade: updated?.rows?.[0], realizedPl, realizedPlPct, fill, quote: q });
