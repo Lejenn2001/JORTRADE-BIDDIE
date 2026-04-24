@@ -5600,30 +5600,33 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// Expired no-quote: close at 0 only when OTM; ITM or unknown underlying stays open.
-async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null; reason: "otm" | "itm_kept_open" | "unknown_kept_open" }> {
+// Expired no-quote: ALWAYS close. OTM or unknown→0 ('expired_otm'); ITM→intrinsic ('expired_intrinsic').
+async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null; exitPrice: number; source: string }> {
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
   const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
-  if (itm !== false) {
-    await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW(), last_quote_underlying = $1 WHERE id = $2 AND status = 'open'`, [underlying, t.id]).catch(() => null);
-    return { closed: false, underlying, reason: itm === true ? "itm_kept_open" : "unknown_kept_open" };
+  const strike = Number(t.strike);
+  let exitPrice = 0;
+  let source = "expired_otm";
+  if (itm === true && underlying != null) {
+    exitPrice = t.option_type === "call" ? Math.max(0, underlying - strike) : Math.max(0, strike - underlying);
+    source = "expired_intrinsic";
   }
   const entry = Number(t.entry_price);
   const contracts = Number(t.contracts);
-  const realizedPl = (0 - entry) * contracts * 100;
-  const realizedPlPct = entry > 0 ? ((0 - entry) / entry) * 100 : 0;
+  const realizedPl = (exitPrice - entry) * contracts * 100;
+  const realizedPlPct = entry > 0 ? ((exitPrice - entry) / entry) * 100 : 0;
   const upd = await dbQuery(
-    `UPDATE paper_trades SET status = 'closed', exit_price = 0, exit_fill_source = 'expired_otm',
-      exit_underlying = $1, exit_reason = 'closed_expired', closed_at = NOW(),
-      realized_pl = $2, realized_pl_pct = $3,
-      last_quote_price = 0, last_quote_source = 'expired_otm', last_quote_underlying = $1,
+    `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
+      exit_underlying = $3, exit_reason = 'closed_expired', closed_at = NOW(),
+      realized_pl = $4, realized_pl_pct = $5,
+      last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
       last_checked_at = NOW()
-     WHERE id = $4 AND status = 'open' RETURNING *`,
-    [underlying, realizedPl, realizedPlPct, t.id]
+     WHERE id = $6 AND status = 'open' RETURNING *`,
+    [exitPrice, source, underlying, realizedPl, realizedPlPct, t.id]
   ).catch(() => null);
-  if (!upd || !upd.rowCount) return { closed: false, underlying, reason: "otm" };
-  return { closed: true, row: upd.rows[0], underlying, reason: "otm" };
+  if (!upd || !upd.rowCount) return { closed: false, underlying, exitPrice, source };
+  return { closed: true, row: upd.rows[0], underlying, exitPrice, source };
 }
 
 // Internal helpers re-exported for the background monitor
