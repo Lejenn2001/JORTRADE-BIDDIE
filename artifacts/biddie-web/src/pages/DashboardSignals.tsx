@@ -1348,7 +1348,7 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
                   title="Open a simulated paper trade on this exact contract — no real money"
                 >
                   <FlaskConical className="h-3.5 w-3.5" />
-                  <span>Review Trade · Paper</span>
+                  <span>Review Trade</span>
                 </button>
               )}
             </div>
