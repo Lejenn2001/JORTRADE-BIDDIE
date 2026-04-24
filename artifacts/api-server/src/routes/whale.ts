@@ -5258,11 +5258,18 @@ function pickExitFill(q: OptionQuoteResult, isExpired: boolean, isItm: boolean |
 }
 
 function isContractExpired(expiry: string): boolean {
-  // Expired if NY-time date is past expiry date end-of-day (4pm ET = simplified to date comparison)
+  // Expired after 4pm ET on the expiry date. DST-safe via Intl.DateTimeFormat.
   try {
-    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const exp = new Date(expiry + "T16:00:00-05:00");
-    return today.getTime() > exp.getTime();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", hour12: false,
+    }).formatToParts(new Date()).reduce<Record<string, string>>((acc, p) => { if (p.type !== "literal") acc[p.type] = p.value; return acc; }, {});
+    const nyDate = `${parts.year}-${parts.month}-${parts.day}`;
+    const nyHour = parseInt(parts.hour, 10);
+    if (nyDate > expiry) return true;
+    if (nyDate === expiry && nyHour >= 16) return true;
+    return false;
   } catch { return false; }
 }
 
