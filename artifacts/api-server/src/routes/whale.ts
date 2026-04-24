@@ -5294,16 +5294,11 @@ function shouldAutoCloseStop(optionType: string, underlying: number | null, stop
   return optionType === "call" ? underlying <= stop : underlying >= stop;
 }
 
-// Shared close-evaluation: given a paper trade row + a fresh quote, decide if it should auto-close
-// (target_hit | stop_hit | expired). If yes, perform the close UPDATE atomically and return the
-// updated row. Otherwise return { closed: false, lastFill }. Used by manual refresh AND monitor.
+// Auto-close eval (target/stop/expired). Returns updated row or { closed: false, lastFill }.
 async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ closed: boolean; row?: any; lastFill: { price: number | null; source: string | null }; exitReason?: string; fill?: { price: number; source: string } }> {
   const expiryStr = String(t.expiry).slice(0, 10);
   const expired = isContractExpired(expiryStr);
-  // Underlying price source for target/stop checks: prefer the canonical realtime
-  // priceMonitor (same source the rest of the signal system uses for triggers),
-  // and fall back to the option-snapshot's underlying only when realtime is
-  // unavailable. This keeps paper-trade triggers consistent with live signal triggers.
+  // Use realtime priceMonitor underlying (matches live signal triggers); fall back to snapshot.
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : q.underlying;
   const target = t.signal_target != null ? Number(t.signal_target) : null;
@@ -5372,9 +5367,7 @@ router.post("/whale/paper/quote", async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
     const q = await fetchOptionQuote(String(ticker).toUpperCase(), String(expiry), ot, strikeNum);
     if (!q) return res.status(503).json({ error: "Quote unavailable. The contract may be illiquid or markets are closed — try again later." });
-    // Strict no-silent-fallback: require at least one usable price level (bid/ask/mid/last > 0).
-    // We refuse to surface a "quote" that has no actionable price — a paper trade against
-    // an empty book would mislead the user.
+    // Require at least one usable price level — refuse to surface an empty-book quote.
     const hasUsable =
       (q.bid != null && q.bid > 0) ||
       (q.ask != null && q.ask > 0) ||
@@ -5454,10 +5447,7 @@ router.post("/whale/paper/trades", async (req, res) => {
        fill.price, fill.source, q.underlying, q.iv, q.delta,
        sigTarget, sigInval, sigEntry, sigGrade, sigConf,
        q.bid, q.ask, q.mid, q.last,
-       // Current value MUST follow the conservative bid→mid→last chain only.
-       // Never fall back to the entry fill (which may be ask) — that would inflate
-       // unrealized P/L by treating the buy-side ask as a sellable mark.
-       // Null is correct when no bid/mid/last is available; UI surfaces this as "—".
+       // Current value uses bid→mid→last only; null when none available (UI shows "—").
        lastFill.price, lastFill.source, q.underlying,
        q.bid, q.ask, q.mid, q.last]
     );
@@ -5537,9 +5527,7 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
   }
 });
 
-// Shared refresh handler — re-fetches quote AND runs the auto-close evaluation,
-// so calling refresh on an open trade may close it if the underlying has crossed
-// target/stop or the contract has expired. Available as both POST and GET.
+// Refresh: re-fetch quote + run auto-close eval (may close on target/stop/expired).
 async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
   try {
     const userId = await verifyBearerUser(req);
@@ -5612,10 +5600,7 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// Expired contract with no live quote: close at 0 only if OTM (terminal step
-// of the bid→mid→last→0 chain — spec says "0 only for expired OTM"). For ITM
-// or unknown underlying, leave the trade open with last_checked_at touched
-// rather than risk zeroing a contract with intrinsic value.
+// Expired no-quote: close at 0 only when OTM; ITM or unknown underlying stays open.
 async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null; reason: "otm" | "itm_kept_open" | "unknown_kept_open" }> {
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
