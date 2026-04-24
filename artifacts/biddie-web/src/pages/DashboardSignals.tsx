@@ -1311,51 +1311,45 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
           )}
         </div>
 
-        {(() => {
-          const showReview = !!(onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")));
-          const showTake = !!onTakeTrade;
-          if (!showTake && !showReview) return null;
-          return (
-          <div className={`pt-2 mt-2 border-t border-white/5 grid ${showTake && showReview ? "grid-cols-2" : "grid-cols-1"} gap-1.5`}>
-            {showTake && (
-              <button
-                onClick={() => onTakeTrade(signal)}
-                disabled={isTaking}
-                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-all ${
-                  isTaken
-                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
-                    : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-                } disabled:opacity-50`}
-                title="Log this trade in your real journal (manual entry)"
-              >
-                {isTaking ? (
-                  <span className="animate-pulse">...</span>
-                ) : isTaken ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" />
-                    <span>Trade Taken</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>I Took This Trade</span>
-                  </>
-                )}
-              </button>
-            )}
-            {showReview && (
-              <button
-                onClick={() => onReviewTrade!(signal)}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all"
-                title="Open a simulated paper trade on this exact contract — no real money"
-              >
-                <FlaskConical className="h-3.5 w-3.5" />
-                <span>Review Trade · Paper</span>
-              </button>
-            )}
+        {onTakeTrade && (
+          <div className="pt-2 mt-2 border-t border-white/5">
+            <button
+              onClick={() => onTakeTrade(signal)}
+              disabled={isTaking}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                isTaken
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
+                  : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+              } disabled:opacity-50`}
+            >
+              {isTaking ? (
+                <span className="animate-pulse">...</span>
+              ) : isTaken ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Trade Taken</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>I Took This Trade</span>
+                </>
+              )}
+            </button>
           </div>
-          );
-        })()}
+        )}
+        {onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")) && (
+          <div className={onTakeTrade ? "mt-1.5" : "pt-2 mt-2 border-t border-white/5"}>
+            <button
+              onClick={() => onReviewTrade(signal)}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all"
+              title="Open a simulated paper trade on this exact contract — no real money"
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              <span>Review Trade · Paper</span>
+            </button>
+          </div>
+        )}
         {isAdmin && userId && (
           <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} signalMeta={{ ticker: signal.ticker, strike: signal.strike, option_type: signal.putCall, expiry: signal.expiry, entry_trigger: signal.entry, target: signal.target, invalidation: signal.invalidation, category: signal.category, detected_at: signal.createdAt }} />
         )}

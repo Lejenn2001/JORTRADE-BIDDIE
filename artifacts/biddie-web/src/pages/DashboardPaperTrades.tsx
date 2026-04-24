@@ -89,12 +89,20 @@ export default function DashboardPaperTrades() {
     return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
   }
 
-  async function load() {
+  // load() supports two modes:
+  //  - withRefresh=false (default): plain GET, returns stored rows. Used for
+  //    initial mount, filter changes, and post-action reloads.
+  //  - withRefresh=true: POST refresh-all, which recomputes quotes for every
+  //    open trade server-side BEFORE returning the list. Used by the 30s
+  //    foreground poll so visible marks/P&L stay fresh between background-
+  //    monitor cycles (60s market hours / 5min off-hours).
+  async function load(withRefresh = false) {
     if (!user) return;
     setLoading(true);
     try {
       const headers = await authHeader();
-      const res = await fetch(`/api/whale/paper/trades?status=${filter}`, { headers });
+      const url = `/api/whale/paper/trades${withRefresh ? "/refresh-all" : ""}?status=${filter}`;
+      const res = await fetch(url, { method: withRefresh ? "POST" : "GET", headers });
       const data = await res.json();
       if (res.ok) setTrades(data.trades || []);
     } catch (e: any) {
@@ -111,7 +119,9 @@ export default function DashboardPaperTrades() {
       if (t) return;
       t = setInterval(() => {
         if (typeof document === "undefined" || document.visibilityState === "visible") {
-          load();
+          // Foreground 30s tick: recompute quotes server-side so visible
+          // marks/P&L stay fresh between background-monitor cycles.
+          load(true);
         }
       }, 30_000);
     };
@@ -120,7 +130,7 @@ export default function DashboardPaperTrades() {
     };
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        load(); // immediate refresh on return-to-tab
+        load(true); // immediate server-side refresh on return-to-tab
         start();
       } else {
         stop();

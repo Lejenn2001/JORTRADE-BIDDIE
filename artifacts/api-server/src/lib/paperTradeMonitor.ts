@@ -1,6 +1,6 @@
 import { __paperTradeInternals } from "../routes/whale";
 
-const { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredAtIntrinsic, isContractExpired, dbQuery } = __paperTradeInternals;
+const { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredAtZero, isContractExpired, dbQuery } = __paperTradeInternals;
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -46,13 +46,14 @@ async function processOpenTrades(): Promise<void> {
         // No live option snapshot available. We must NOT silently skip — the
         // auto-close guarantee for expired contracts has to hold even when
         // Polygon's chain is missing/illiquid. If the contract is expired,
-        // force-close at intrinsic (using the underlying via priceMonitor).
-        // For non-expired contracts with no quote, just touch last_checked_at.
+        // force-close at 0 (terminal step of the bid→mid→last→0 chain — see
+        // closeExpiredAtZero comment in whale.ts). For non-expired contracts
+        // with no quote, just touch last_checked_at.
         if (isContractExpired(expiryStr)) {
-          const r = await closeExpiredAtIntrinsic(t);
+          const r = await closeExpiredAtZero(t);
           if (r.closed) {
             closed++;
-            console.log(`[paper-trade-monitor] auto-closed (no quote, expired) ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: closed_expired @ ${r.intrinsic.toFixed(2)} intrinsic (underlying=${r.underlying ?? "n/a"})`);
+            console.log(`[paper-trade-monitor] auto-closed (no quote, expired) ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: closed_expired @ 0 (underlying=${r.underlying ?? "n/a"})`);
           }
         } else {
           await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);

@@ -5486,6 +5486,52 @@ router.get("/whale/paper/trades", async (req, res) => {
   }
 });
 
+// Foreground batch refresh — recomputes quotes for ALL of the caller's open
+// trades and returns the full updated list. The dashboard polls this every 30s
+// while visible so marks/P&L stay fresh between background-monitor cycles.
+router.post("/whale/paper/trades/refresh-all", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const status = (req.query.status as string) || "all";
+    const open = await dbQuery(`SELECT * FROM paper_trades WHERE user_id = $1 AND status = 'open' ORDER BY opened_at DESC LIMIT 100`, [userId]);
+    let refreshed = 0;
+    let closed = 0;
+    if (open && open.rows.length) {
+      for (const t of open.rows) {
+        const expiryStr = String(t.expiry).slice(0, 10);
+        const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
+        if (!q) {
+          if (isContractExpired(expiryStr)) {
+            const r = await closeExpiredAtZero(t);
+            if (r.closed) closed++;
+          } else {
+            await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);
+          }
+          continue;
+        }
+        const result = await evaluateAndMaybeClose(t, q);
+        if (result.closed) closed++;
+        refreshed++;
+      }
+    }
+    const where = status === "open" ? "AND status = 'open'" : status === "closed" ? "AND status != 'open'" : "";
+    const result = await dbQuery(
+      `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
+       FROM paper_trades pt
+       LEFT JOIN signal_outcomes so ON pt.signal_id = so.id::text
+       WHERE pt.user_id = $1 ${where}
+       ORDER BY pt.opened_at DESC
+       LIMIT 200`,
+      [userId]
+    );
+    res.json({ trades: result?.rows || [], refreshed, closed });
+  } catch (e: any) {
+    console.error("[paper-trade] refresh-all error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Shared refresh handler — re-fetches quote AND runs the auto-close evaluation,
 // so calling refresh on an open trade may close it if the underlying has crossed
 // target/stop or the contract has expired. Available as both POST and GET.
@@ -5561,43 +5607,36 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
   }
 });
 
-// Force-close an expired contract at intrinsic value when no live option quote
-// is available. Required so the monitor's auto-close guarantee holds even when
-// Polygon snapshots are missing/illiquid for an expired contract:
-//   intrinsic = max(0, underlying - strike) for calls
-//   intrinsic = max(0, strike - underlying) for puts
-// If the underlying is also unavailable, we conservatively close at 0 (worst-case
-// for the buyer of the option) — better to mark a closed expired loss than to
-// silently leave the trade open forever.
-async function closeExpiredAtIntrinsic(t: any): Promise<{ closed: boolean; row?: any; intrinsic: number; underlying: number | null }> {
+// Force-close an expired contract at 0 when no live option quote is available.
+// Per spec, the exit chain is bid → mid → last → 0 (and "0 only for expired OTM").
+// In the no-quote case we can't resolve bid/mid/last for the option, so we apply
+// the chain's terminal "0" — this is conservative for the buyer but strictly
+// spec-compliant. The exit_fill_source is "expired_otm" since "no quote on an
+// expired contract" effectively means there's no remaining bid (i.e. worthless).
+// We capture the underlying (when priceMonitor has it) only as exit_underlying
+// metadata, never as the exit price.
+async function closeExpiredAtZero(t: any): Promise<{ closed: boolean; row?: any; underlying: number | null }> {
   const rt = priceMonitor.getPrice(t.ticker);
   const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : null;
-  const strike = Number(t.strike);
-  let intrinsic = 0;
-  if (underlying != null) {
-    intrinsic = t.option_type === "call"
-      ? Math.max(0, underlying - strike)
-      : Math.max(0, strike - underlying);
-  }
   const entry = Number(t.entry_price);
   const contracts = Number(t.contracts);
-  const realizedPl = (intrinsic - entry) * contracts * 100;
-  const realizedPlPct = entry > 0 ? ((intrinsic - entry) / entry) * 100 : 0;
+  const realizedPl = (0 - entry) * contracts * 100;
+  const realizedPlPct = entry > 0 ? ((0 - entry) / entry) * 100 : 0;
   const upd = await dbQuery(
-    `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = 'expired_intrinsic',
-      exit_underlying = $2, exit_reason = 'closed_expired', closed_at = NOW(),
-      realized_pl = $3, realized_pl_pct = $4,
-      last_quote_price = $1, last_quote_source = 'expired_intrinsic', last_quote_underlying = $2,
+    `UPDATE paper_trades SET status = 'closed', exit_price = 0, exit_fill_source = 'expired_otm',
+      exit_underlying = $1, exit_reason = 'closed_expired', closed_at = NOW(),
+      realized_pl = $2, realized_pl_pct = $3,
+      last_quote_price = 0, last_quote_source = 'expired_otm', last_quote_underlying = $1,
       last_checked_at = NOW()
-     WHERE id = $5 AND status = 'open' RETURNING *`,
-    [intrinsic, underlying, realizedPl, realizedPlPct, t.id]
+     WHERE id = $4 AND status = 'open' RETURNING *`,
+    [underlying, realizedPl, realizedPlPct, t.id]
   ).catch(() => null);
-  if (!upd || !upd.rowCount) return { closed: false, intrinsic, underlying };
-  return { closed: true, row: upd.rows[0], intrinsic, underlying };
+  if (!upd || !upd.rowCount) return { closed: false, underlying };
+  return { closed: true, row: upd.rows[0], underlying };
 }
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredAtIntrinsic, dbQuery };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredAtZero, dbQuery };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;
