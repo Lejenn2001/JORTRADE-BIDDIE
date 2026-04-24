@@ -5323,11 +5323,19 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
   const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
   const fill = pickExitFill(q, expired, itm);
   if (!fill) {
+    if (expired) {
+      // Expired with no usable fill levels: force close via intrinsic/0 (never leave expired open).
+      const r = await closeExpiredNoQuote(t);
+      if (r.closed) {
+        return { closed: true, row: r.row, lastFill, exitReason: "closed_expired", fill: { price: r.exitPrice, source: r.source } };
+      }
+      return { closed: false, lastFill, exitReason: "closed_expired" };
+    }
     await dbQuery(
-      `UPDATE paper_trades SET exit_reason = $1, last_quote_price = $2, last_quote_source = $3, last_quote_underlying = $4,
-        last_quote_bid = $5, last_quote_ask = $6, last_quote_mid = $7, last_quote_last = $8,
-        last_checked_at = NOW() WHERE id = $9 AND status = 'open'`,
-      [`${exitReason}_pending_quote`, lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
+      `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+        last_quote_bid = $4, last_quote_ask = $5, last_quote_mid = $6, last_quote_last = $7,
+        last_checked_at = NOW() WHERE id = $8 AND status = 'open'`,
+      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
     ).catch(() => null);
     return { closed: false, lastFill, exitReason };
   }
