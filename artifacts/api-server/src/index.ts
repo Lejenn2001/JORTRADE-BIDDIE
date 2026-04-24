@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startPaperTradeMonitor } from "./lib/paperTradeMonitor";
 
 const rawPort = process.env["PORT"];
 
@@ -32,4 +33,6 @@ app.listen(port, (err) => {
       logger.warn("Cache pre-warm failed (non-critical)");
     }
   }, 1000);
+
+  startPaperTradeMonitor();
 });

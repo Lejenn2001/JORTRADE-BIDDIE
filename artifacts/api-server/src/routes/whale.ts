@@ -151,7 +151,43 @@ const SEED_ADMIN_IDS = [
     );
     await dbQuery(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS reinforcement_count INTEGER DEFAULT 1`, []);
     await dbQuery(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ`, []);
-    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement columns ready`);
+    await dbQuery(
+      `CREATE TABLE IF NOT EXISTS paper_trades (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id TEXT NOT NULL,
+        signal_id TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        option_type TEXT NOT NULL,
+        strike NUMERIC NOT NULL,
+        expiry DATE NOT NULL,
+        contract_symbol TEXT NOT NULL,
+        contracts INTEGER NOT NULL DEFAULT 1,
+        entry_price NUMERIC NOT NULL,
+        entry_fill_source TEXT NOT NULL,
+        entry_underlying NUMERIC,
+        entry_iv NUMERIC,
+        entry_delta NUMERIC,
+        target_price NUMERIC,
+        stop_price NUMERIC,
+        signal_target NUMERIC,
+        signal_invalidation NUMERIC,
+        opened_at TIMESTAMPTZ DEFAULT NOW(),
+        status TEXT NOT NULL DEFAULT 'open',
+        exit_price NUMERIC,
+        exit_fill_source TEXT,
+        exit_underlying NUMERIC,
+        exit_reason TEXT,
+        closed_at TIMESTAMPTZ,
+        realized_pl NUMERIC,
+        realized_pl_pct NUMERIC,
+        last_quote_price NUMERIC,
+        last_quote_underlying NUMERIC,
+        last_checked_at TIMESTAMPTZ
+      )`
+    );
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_user_status ON paper_trades(user_id, status)`, []);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_open ON paper_trades(status) WHERE status = 'open'`, []);
+    console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement + paper_trades tables ready`);
 
     const dupeCheck = await dbQuery(`
       SELECT ticker, COALESCE(strike, 0) as strike, COALESCE(option_type, '') as opt_type,
@@ -5110,6 +5146,285 @@ router.get("/whale/trades", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Paper-Trade Tracker ──────────────────────────────────────────────────────
+// Simulated trades. Conservative: enter at ask, exit at bid. NEVER touches a broker.
+
+async function verifyBearerUser(req: any): Promise<string | null> {
+  const auth = req.headers.authorization || req.headers.Authorization;
+  if (!auth || typeof auth !== "string" || !auth.startsWith("Bearer ")) return null;
+  const token = auth.slice(7).trim();
+  if (!token || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) return null;
+  try {
+    const resp = await axios.get(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${token}` },
+      timeout: 5000,
+    });
+    const id = resp.data?.id;
+    return typeof id === "string" && id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildOptionContractSymbol(ticker: string, expiry: string, optionType: "call" | "put", strike: number): { contractSymbol: string; parentTicker: string } {
+  const isSpxWeekly = ticker === "SPXW";
+  const parentTicker = isSpxWeekly ? "SPX" : ticker;
+  const contractTicker = isSpxWeekly ? "SPXW" : ticker;
+  const strikeInt = Math.round(strike * 1000);
+  const strikeStr = strikeInt.toString().padStart(8, "0");
+  const expDigits = expiry.replace(/-/g, "").slice(2); // YYMMDD
+  const cp = optionType === "call" ? "C" : "P";
+  return { contractSymbol: `O:${contractTicker}${expDigits}${cp}${strikeStr}`, parentTicker };
+}
+
+interface OptionQuoteResult {
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+  last: number | null;
+  underlying: number | null;
+  iv: number | null;
+  delta: number | null;
+  fetchedAt: number;
+  contractSymbol: string;
+  expiry: string;
+}
+
+async function fetchOptionQuote(ticker: string, expiry: string, optionType: "call" | "put", strike: number): Promise<OptionQuoteResult | null> {
+  const polygonKey = process.env["POLYGON_API_KEY"];
+  if (!polygonKey) return null;
+  const { contractSymbol, parentTicker } = buildOptionContractSymbol(ticker, expiry, optionType, strike);
+  const url = `https://api.polygon.io/v3/snapshot/options/${parentTicker}/${contractSymbol}?apiKey=${polygonKey}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const r = json?.results;
+    if (!r) return null;
+    const bid = r.last_quote?.bid ?? null;
+    const ask = r.last_quote?.ask ?? null;
+    const midRaw = r.last_quote?.midpoint ?? (bid != null && ask != null ? (bid + ask) / 2 : null);
+    const last = r.day?.close ?? r.last_trade?.price ?? null;
+    return {
+      bid: bid != null ? Number(bid) : null,
+      ask: ask != null ? Number(ask) : null,
+      mid: midRaw != null ? Number(midRaw) : null,
+      last: last != null ? Number(last) : null,
+      underlying: r.underlying_asset?.price != null ? Number(r.underlying_asset.price) : null,
+      iv: r.implied_volatility != null ? Math.round(r.implied_volatility * 10000) / 100 : null,
+      delta: r.greeks?.delta != null ? Math.round(r.greeks.delta * 1000) / 1000 : null,
+      fetchedAt: Date.now(),
+      contractSymbol,
+      expiry,
+    };
+  } catch (e: any) {
+    console.warn(`[paper-trade] Quote fetch failed ${contractSymbol}: ${e?.message}`);
+    return null;
+  }
+}
+
+function pickEntryFill(q: OptionQuoteResult): { price: number; source: string } | null {
+  if (q.ask != null && q.ask > 0) return { price: q.ask, source: "ask" };
+  if (q.mid != null && q.mid > 0) return { price: q.mid, source: "mid" };
+  if (q.last != null && q.last > 0) return { price: q.last, source: "last" };
+  return null;
+}
+
+function pickExitFill(q: OptionQuoteResult, isExpired: boolean, isItm: boolean | null): { price: number; source: string } | null {
+  if (q.bid != null && q.bid > 0) return { price: q.bid, source: "bid" };
+  if (q.mid != null && q.mid > 0) return { price: q.mid, source: "mid" };
+  if (q.last != null && q.last > 0) return { price: q.last, source: "last" };
+  if (isExpired && isItm === false) return { price: 0, source: "expired_otm" };
+  return null;
+}
+
+function isContractExpired(expiry: string): boolean {
+  // Expired if NY-time date is past expiry date end-of-day (4pm ET = simplified to date comparison)
+  try {
+    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const exp = new Date(expiry + "T16:00:00-05:00");
+    return today.getTime() > exp.getTime();
+  } catch { return false; }
+}
+
+function isItmAtPrice(optionType: "call" | "put", strike: number, underlying: number | null): boolean | null {
+  if (underlying == null) return null;
+  return optionType === "call" ? underlying > strike : underlying < strike;
+}
+
+// POST /whale/paper/quote — preview a quote (no DB writes) before creating a paper trade
+router.post("/whale/paper/quote", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const { ticker, optionType, strike, expiry } = req.body || {};
+    if (!ticker || !optionType || !strike || !expiry) {
+      return res.status(400).json({ error: "ticker, optionType, strike, expiry required" });
+    }
+    const ot = optionType === "call" ? "call" : optionType === "put" ? "put" : null;
+    if (!ot) return res.status(400).json({ error: "optionType must be call or put" });
+    const strikeNum = Number(strike);
+    if (!Number.isFinite(strikeNum) || strikeNum <= 0) return res.status(400).json({ error: "invalid strike" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
+    const q = await fetchOptionQuote(String(ticker).toUpperCase(), String(expiry), ot, strikeNum);
+    if (!q) return res.status(503).json({ error: "Quote unavailable. The contract may be illiquid or markets are closed — try again later." });
+    const fill = pickEntryFill(q);
+    res.json({
+      quote: q,
+      suggestedEntry: fill,
+      note: "Paper trades enter at the ask. If no ask is available, we fall back to mid, then last.",
+    });
+  } catch (e: any) {
+    console.error("[paper-trade] /quote error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /whale/paper/trades — open a paper trade (server re-fetches quote, fills at ask)
+router.post("/whale/paper/trades", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const { signalId, ticker, optionType, strike, expiry, contracts, signalTarget, signalInvalidation } = req.body || {};
+    if (!signalId || !ticker || !optionType || !strike || !expiry) {
+      return res.status(400).json({ error: "signalId, ticker, optionType, strike, expiry required" });
+    }
+    const ot = optionType === "call" ? "call" : optionType === "put" ? "put" : null;
+    if (!ot) return res.status(400).json({ error: "optionType must be call or put" });
+    const strikeNum = Number(strike);
+    const contractsNum = Math.max(1, Math.min(10, Math.floor(Number(contracts) || 1)));
+    if (!Number.isFinite(strikeNum) || strikeNum <= 0) return res.status(400).json({ error: "invalid strike" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
+    if (isContractExpired(String(expiry))) return res.status(400).json({ error: "Contract is already expired" });
+
+    const tickerUp = String(ticker).toUpperCase();
+    const q = await fetchOptionQuote(tickerUp, String(expiry), ot, strikeNum);
+    if (!q) return res.status(503).json({ error: "Quote unavailable. Could not get a live price for this contract." });
+    const fill = pickEntryFill(q);
+    if (!fill) return res.status(409).json({ error: "No tradeable price available (no ask, mid, or last). Try again when markets are open." });
+
+    const sigTarget = signalTarget != null && Number.isFinite(Number(signalTarget)) ? Number(signalTarget) : null;
+    const sigInval = signalInvalidation != null && Number.isFinite(Number(signalInvalidation)) ? Number(signalInvalidation) : null;
+
+    const inserted = await dbQuery(
+      `INSERT INTO paper_trades
+        (user_id, signal_id, ticker, option_type, strike, expiry, contract_symbol, contracts,
+         entry_price, entry_fill_source, entry_underlying, entry_iv, entry_delta,
+         signal_target, signal_invalidation, last_quote_price, last_quote_underlying, last_checked_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+       RETURNING *`,
+      [userId, String(signalId), tickerUp, ot, strikeNum, String(expiry), q.contractSymbol, contractsNum,
+       fill.price, fill.source, q.underlying, q.iv, q.delta,
+       sigTarget, sigInval, fill.price, q.underlying]
+    );
+    if (!inserted || !inserted.rows.length) return res.status(500).json({ error: "Failed to save paper trade" });
+    res.json({ success: true, trade: inserted.rows[0], quote: q });
+  } catch (e: any) {
+    console.error("[paper-trade] POST error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /whale/paper/trades?status=open|closed|all
+router.get("/whale/paper/trades", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const status = (req.query.status as string) || "all";
+    const where = status === "open" ? "AND status = 'open'" : status === "closed" ? "AND status != 'open'" : "";
+    const result = await dbQuery(
+      `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
+       FROM paper_trades pt
+       LEFT JOIN signal_outcomes so ON pt.signal_id = so.id::text
+       WHERE pt.user_id = $1 ${where}
+       ORDER BY pt.opened_at DESC
+       LIMIT 200`,
+      [userId]
+    );
+    if (!result) return res.json({ trades: [] });
+    res.json({ trades: result.rows });
+  } catch (e: any) {
+    console.error("[paper-trade] GET error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /whale/paper/trades/:id/refresh — refresh the live quote and store snapshot
+router.post("/whale/paper/trades/:id/refresh", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const id = req.params.id;
+    const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
+    if (!row || !row.rows.length) return res.status(404).json({ error: "Paper trade not found" });
+    const t = row.rows[0];
+    const q = await fetchOptionQuote(t.ticker, String(t.expiry).slice(0, 10), t.option_type, Number(t.strike));
+    if (!q) return res.status(503).json({ error: "Quote unavailable" });
+    const lastPrice = q.bid != null && q.bid > 0 ? q.bid : q.mid != null && q.mid > 0 ? q.mid : q.last;
+    await dbQuery(
+      `UPDATE paper_trades SET last_quote_price = $1, last_quote_underlying = $2, last_checked_at = NOW() WHERE id = $3`,
+      [lastPrice, q.underlying, id]
+    );
+    res.json({ trade: { ...t, last_quote_price: lastPrice, last_quote_underlying: q.underlying }, quote: q });
+  } catch (e: any) {
+    console.error("[paper-trade] refresh error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /whale/paper/trades/:id/close — exit at bid (or fallback). Manual close.
+router.post("/whale/paper/trades/:id/close", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const id = req.params.id;
+    const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
+    if (!row || !row.rows.length) return res.status(404).json({ error: "Paper trade not found" });
+    const t = row.rows[0];
+    if (t.status !== "open") return res.status(409).json({ error: "Trade is already closed" });
+    const expiryStr = String(t.expiry).slice(0, 10);
+    const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
+    if (!q) return res.status(503).json({ error: "Quote unavailable — try again in a few seconds" });
+    const expired = isContractExpired(expiryStr);
+    const itm = isItmAtPrice(t.option_type, Number(t.strike), q.underlying);
+    const fill = pickExitFill(q, expired, itm);
+    if (!fill) return res.status(409).json({ error: "No tradeable price available — try again later" });
+    const entry = Number(t.entry_price);
+    const contracts = Number(t.contracts);
+    const realizedPl = (fill.price - entry) * contracts * 100;
+    const realizedPlPct = entry > 0 ? ((fill.price - entry) / entry) * 100 : 0;
+    const updated = await dbQuery(
+      `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
+        exit_underlying = $3, exit_reason = $4, closed_at = NOW(),
+        realized_pl = $5, realized_pl_pct = $6,
+        last_quote_price = $1, last_quote_underlying = $3, last_checked_at = NOW()
+       WHERE id = $7 RETURNING *`,
+      [fill.price, fill.source, q.underlying, "manual", realizedPl, realizedPlPct, id]
+    );
+    res.json({ trade: updated?.rows?.[0], realizedPl, realizedPlPct, fill, quote: q });
+  } catch (e: any) {
+    console.error("[paper-trade] close error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /whale/paper/trades/:id — soft-delete by removing from history
+router.delete("/whale/paper/trades/:id", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const id = req.params.id;
+    await dbQuery(`DELETE FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("[paper-trade] delete error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Internal helpers re-exported for the background monitor
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, dbQuery };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;

@@ -13,6 +13,8 @@ import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
 import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription } from "@/lib/simplifyDescription";
+import PaperTradeTicket, { type PaperTradeSignalInput } from "@/components/PaperTradeTicket";
+import { FlaskConical } from "lucide-react";
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
@@ -189,6 +191,7 @@ const DashboardSignals = () => {
   const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
   const [takingId, setTakingId] = useState<string | null>(null);
   const [alertSignal, setAlertSignal] = useState<MarketSignal | null>(null);
+  const [paperTradeSignal, setPaperTradeSignal] = useState<PaperTradeSignalInput | null>(null);
   const [alertPrice, setAlertPrice] = useState("");
   const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
   const [alertSaving, setAlertSaving] = useState(false);
@@ -660,7 +663,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalTarget: s.targetZone ? parseFloat(String(s.targetZone).replace(/[$,]/g, "")) : (s.target ? parseFloat(String(s.target).replace(/[$,]/g, "")) : null), signalInvalidation: s.invalidation ? parseFloat(String(s.invalidation).replace(/[$,]/g, "")) : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -694,7 +697,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalTarget: s.targetZone ? parseFloat(String(s.targetZone).replace(/[$,]/g, "")) : (s.target ? parseFloat(String(s.target).replace(/[$,]/g, "")) : null), signalInvalidation: s.invalidation ? parseFloat(String(s.invalidation).replace(/[$,]/g, "")) : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -728,7 +731,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalTarget: s.targetZone ? parseFloat(String(s.targetZone).replace(/[$,]/g, "")) : (s.target ? parseFloat(String(s.target).replace(/[$,]/g, "")) : null), signalInvalidation: s.invalidation ? parseFloat(String(s.invalidation).replace(/[$,]/g, "")) : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -829,6 +832,16 @@ const DashboardSignals = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {paperTradeSignal && (
+          <PaperTradeTicket
+            signal={paperTradeSignal}
+            onClose={() => setPaperTradeSignal(null)}
+            onOpened={() => {
+              toast({ title: "📒 Logged in Paper Trades", description: "View and manage it from the Paper Trades page." });
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -928,7 +941,7 @@ function AdminReviewPanel({ signalId, userId, onReviewChange, signalMeta }: { si
   );
 }
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
+function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; onReviewTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -1298,31 +1311,44 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, getPrice, onSetAle
           )}
         </div>
 
-        {onTakeTrade && (
-          <div className="pt-2 mt-2 border-t border-white/5">
-            <button
-              onClick={() => onTakeTrade(signal)}
-              disabled={isTaking}
-              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                isTaken
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
-                  : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-              } disabled:opacity-50`}
-            >
-              {isTaking ? (
-                <span className="animate-pulse">...</span>
-              ) : isTaken ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  <span>Trade Taken</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>I Took This Trade</span>
-                </>
-              )}
-            </button>
+        {(onTakeTrade || onReviewTrade) && (
+          <div className="pt-2 mt-2 border-t border-white/5 grid grid-cols-2 gap-1.5">
+            {onTakeTrade && (
+              <button
+                onClick={() => onTakeTrade(signal)}
+                disabled={isTaking}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold transition-all ${
+                  isTaken
+                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
+                    : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                } disabled:opacity-50`}
+                title="Log this trade in your real journal (manual entry)"
+              >
+                {isTaking ? (
+                  <span className="animate-pulse">...</span>
+                ) : isTaken ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Trade Taken</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>I Took This Trade</span>
+                  </>
+                )}
+              </button>
+            )}
+            {onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.category !== "spread" && (
+              <button
+                onClick={() => onReviewTrade(signal)}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all"
+                title="Open a simulated paper trade on this exact contract — no real money"
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                <span>Review Trade · Paper</span>
+              </button>
+            )}
           </div>
         )}
         {isAdmin && userId && (

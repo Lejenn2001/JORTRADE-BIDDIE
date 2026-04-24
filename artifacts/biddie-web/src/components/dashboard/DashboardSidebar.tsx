@@ -16,6 +16,7 @@ import {
   Shield,
   Crosshair,
   Megaphone,
+  FlaskConical,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jortradeLogo from "@/assets/jortrade-logo.png";
@@ -24,6 +25,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: Users, label: "Jortrade Chat", path: "/dashboard/community" },
   { icon: Activity, label: "Decision Engine", path: "/dashboard/signals" },
+  { icon: FlaskConical, label: "Paper Trades", path: "/dashboard/paper-trades" },
   { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
   { icon: BarChart3, label: "Market View", path: "/dashboard/market" },
   { icon: PieChart, label: "Analytics", path: "/dashboard/analytics" },
