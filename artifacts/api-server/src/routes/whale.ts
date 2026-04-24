@@ -191,8 +191,9 @@ const SEED_ADMIN_IDS = [
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_entry NUMERIC`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_grade TEXT`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_confidence TEXT`, []);
-    // Normalize legacy "invalidated" exit_reason → canonical "stop_hit"
+    // Normalize legacy exit_reason values → canonical enum {target_hit, stop_hit, expired, closed_manual}
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'stop_hit' WHERE exit_reason = 'invalidated'`, []).catch(() => null);
+    await dbQuery(`UPDATE paper_trades SET exit_reason = 'closed_manual' WHERE exit_reason = 'manual'`, []).catch(() => null);
     console.log(`[admin-seed] Ensured ${SEED_ADMIN_IDS.length} admin(s) in user_roles, reinforcement + paper_trades tables ready`);
 
     const dupeCheck = await dbQuery(`
@@ -5343,7 +5344,15 @@ router.post("/whale/paper/quote", async (req, res) => {
     if (!q) return res.status(503).json({ error: "Quote unavailable. The contract may be illiquid or markets are closed — try again later." });
     const fill = pickEntryFill(q);
     res.json({
-      quote: q,
+      bid: q.bid,
+      ask: q.ask,
+      mid: q.mid,
+      last: q.last,
+      underlying_price: q.underlying,
+      asOf: new Date(q.fetchedAt).toISOString(),
+      iv: q.iv,
+      delta: q.delta,
+      contractSymbol: q.contractSymbol,
       suggestedEntry: fill,
       note: "Paper trades enter at the ask. If no ask is available, we fall back to mid, then last.",
     });
@@ -5491,7 +5500,7 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
         realized_pl = $5, realized_pl_pct = $6,
         last_quote_price = $1, last_quote_underlying = $3, last_checked_at = NOW()
        WHERE id = $7 RETURNING *`,
-      [fill.price, fill.source, q.underlying, "manual", realizedPl, realizedPlPct, id]
+      [fill.price, fill.source, q.underlying, "closed_manual", realizedPl, realizedPlPct, id]
     );
     res.json({ trade: updated?.rows?.[0], realizedPl, realizedPlPct, fill, quote: q });
   } catch (e: any) {

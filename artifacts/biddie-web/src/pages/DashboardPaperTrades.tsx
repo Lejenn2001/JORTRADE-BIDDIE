@@ -50,10 +50,9 @@ const fmtTime = (iso: string | null) => {
 };
 const exitReasonLabel = (r: string | null) => {
   if (!r) return "—";
-  if (r === "manual") return "Closed manually";
+  if (r === "closed_manual" || r === "manual") return "Closed manually";
   if (r === "target_hit") return "🎯 Target hit";
-  if (r === "stop_hit") return "🛑 Stop hit";
-  if (r === "invalidated") return "🛑 Stop hit"; // legacy
+  if (r === "stop_hit" || r === "invalidated") return "🛑 Stop hit";
   if (r === "expired") return "⏰ Expired";
   if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
@@ -62,7 +61,7 @@ const exitReasonStyle = (r: string | null) => {
   if (r === "target_hit") return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
   if (r === "stop_hit" || r === "invalidated") return "bg-red-500/15 text-red-300 border border-red-500/30";
   if (r === "expired") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
-  if (r === "manual") return "bg-muted/40 text-muted-foreground border border-border/40";
+  if (r === "closed_manual" || r === "manual") return "bg-muted/40 text-muted-foreground border border-border/40";
   return "bg-muted/30 text-muted-foreground";
 };
 const sourceLabel = (s: string | null | undefined) => {
@@ -107,8 +106,38 @@ export default function DashboardPaperTrades() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
+    let t: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (t) return;
+      t = setInterval(() => {
+        if (typeof document === "undefined" || document.visibilityState === "visible") {
+          load();
+        }
+      }, 30_000);
+    };
+    const stop = () => {
+      if (t) { clearInterval(t); t = null; }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        load(); // immediate refresh on return-to-tab
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      start();
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVis);
+    }
+    return () => {
+      stop();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVis);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, filter]);
 

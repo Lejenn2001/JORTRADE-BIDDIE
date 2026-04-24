@@ -16,19 +16,16 @@ export interface PaperTradeSignalInput {
   signalConfidence?: string | null;
 }
 
-interface QuoteData {
+interface QuoteResponse {
   bid: number | null;
   ask: number | null;
   mid: number | null;
   last: number | null;
-  underlying: number | null;
+  underlying_price: number | null;
+  asOf: string;
   iv: number | null;
   delta: number | null;
   contractSymbol: string;
-}
-
-interface QuoteResponse {
-  quote: QuoteData;
   suggestedEntry: { price: number; source: string } | null;
 }
 
@@ -200,29 +197,32 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
 
           {quote && (
             <>
-              <div className="grid grid-cols-4 gap-1.5 text-center">
-                <div className="rounded-lg bg-red-500/5 border border-red-500/20 p-2">
-                  <div className="text-[9px] text-muted-foreground uppercase">Bid</div>
-                  <div className="text-xs font-mono font-bold text-red-300">{fmtMoney(quote.quote.bid)}</div>
-                </div>
-                <div className="rounded-lg bg-muted/30 border border-border/40 p-2">
-                  <div className="text-[9px] text-muted-foreground uppercase">Mid</div>
-                  <div className="text-xs font-mono font-bold text-foreground">{fmtMoney(quote.quote.mid)}</div>
-                </div>
-                <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/30 p-2 ring-1 ring-emerald-500/20">
-                  <div className="text-[9px] text-emerald-400 uppercase">Ask · Fill</div>
-                  <div className="text-xs font-mono font-bold text-emerald-300">{fmtMoney(quote.quote.ask)}</div>
-                </div>
-                <div className="rounded-lg bg-muted/30 border border-border/40 p-2">
-                  <div className="text-[9px] text-muted-foreground uppercase">Last</div>
-                  <div className="text-xs font-mono font-bold text-foreground">{fmtMoney(quote.quote.last)}</div>
-                </div>
-              </div>
+              {(() => {
+                const fillSrc = quote.suggestedEntry?.source ?? "ask";
+                const tile = (label: string, value: number | null, isFill: boolean, neutralColor: string) => (
+                  <div className={`rounded-lg p-2 ${isFill
+                    ? "bg-emerald-500/10 border border-emerald-500/40 ring-1 ring-emerald-500/30"
+                    : `bg-muted/30 border border-border/40`}`}>
+                    <div className={`text-[9px] uppercase ${isFill ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      {label}{isFill ? " · Fill" : ""}
+                    </div>
+                    <div className={`text-xs font-mono font-bold ${isFill ? "text-emerald-300" : neutralColor}`}>{fmtMoney(value)}</div>
+                  </div>
+                );
+                return (
+                  <div className="grid grid-cols-4 gap-1.5 text-center">
+                    {tile("Bid", quote.bid, fillSrc === "bid", "text-red-300")}
+                    {tile("Mid", quote.mid, fillSrc === "mid", "text-foreground")}
+                    {tile("Ask", quote.ask, fillSrc === "ask", "text-foreground")}
+                    {tile("Last", quote.last, fillSrc === "last", "text-foreground")}
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
-                <span>Underlying: <span className="font-mono text-foreground">{fmtMoney(quote.quote.underlying)}</span></span>
-                {quote.quote.iv != null && <span>IV: <span className="font-mono text-foreground">{quote.quote.iv}%</span></span>}
-                {quote.quote.delta != null && <span>Δ: <span className="font-mono text-foreground">{quote.quote.delta}</span></span>}
+                <span>Underlying: <span className="font-mono text-foreground">{fmtMoney(quote.underlying_price)}</span></span>
+                {quote.iv != null && <span>IV: <span className="font-mono text-foreground">{quote.iv}%</span></span>}
+                {quote.delta != null && <span>Δ: <span className="font-mono text-foreground">{quote.delta}</span></span>}
               </div>
 
               <div className="space-y-2 pt-2 border-t border-border/30">
