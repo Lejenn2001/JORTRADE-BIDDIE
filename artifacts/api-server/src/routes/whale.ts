@@ -5406,6 +5406,140 @@ router.post("/whale/paper/quote", async (req, res) => {
   }
 });
 
+// POST /whale/paper/alternatives — recommended contract + 1-3 budget alternatives (same expiry, same type, neighbor strikes)
+router.post("/whale/paper/alternatives", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const { ticker, optionType, strike, expiry } = req.body || {};
+    if (!ticker || !optionType || !strike || !expiry) {
+      return res.status(400).json({ error: "ticker, optionType, strike, expiry required" });
+    }
+    const ot: "call" | "put" | null = optionType === "call" ? "call" : optionType === "put" ? "put" : null;
+    if (!ot) return res.status(400).json({ error: "optionType must be call or put" });
+    const recStrike = Number(strike);
+    if (!Number.isFinite(recStrike) || recStrike <= 0) return res.status(400).json({ error: "invalid strike" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
+
+    const polygonKey = process.env["POLYGON_API_KEY"];
+    if (!polygonKey) return res.status(503).json({ error: "Quotes unavailable" });
+    const tickerUp = String(ticker).toUpperCase();
+    const parentTicker = tickerUp === "SPXW" ? "SPX" : tickerUp;
+
+    // Bound the chain query to a ±20% strike window so the single 250-item page reliably contains
+    // neighbor strikes even on dense chains (e.g., SPY weekly), avoiding the need for pagination.
+    const strikeLo = Math.max(0.01, recStrike * 0.8);
+    const strikeHi = recStrike * 1.2;
+    const chainUrl = `https://api.polygon.io/v3/snapshot/options/${parentTicker}?expiration_date=${expiry}&contract_type=${ot}&strike_price.gte=${strikeLo}&strike_price.lte=${strikeHi}&limit=250&apiKey=${polygonKey}`;
+    let chainItems: any[] = [];
+    try {
+      const r = await fetch(chainUrl, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const j: any = await r.json();
+        chainItems = Array.isArray(j?.results) ? j.results : [];
+      }
+    } catch (e: any) {
+      console.warn(`[paper-trade] chain fetch failed ${parentTicker} ${expiry} ${ot}: ${e?.message}`);
+    }
+
+    // Build a strike-indexed view; compute entry fill (ask→mid→last) per item.
+    type ChainEntry = { strike: number; bid: number | null; ask: number | null; mid: number | null; last: number | null; entry: number | null; entrySource: string | null; underlying: number | null; iv: number | null; delta: number | null; contractSymbol: string };
+    const entries: ChainEntry[] = chainItems
+      .map((it: any) => {
+        const s = Number(it?.details?.strike_price);
+        if (!Number.isFinite(s)) return null;
+        const bid = it?.last_quote?.bid != null ? Number(it.last_quote.bid) : null;
+        const ask = it?.last_quote?.ask != null ? Number(it.last_quote.ask) : null;
+        const mid = it?.last_quote?.midpoint != null ? Number(it.last_quote.midpoint) : (bid != null && ask != null ? (bid + ask) / 2 : null);
+        const last = it?.day?.close ?? it?.last_trade?.price ?? null;
+        let entry: number | null = null, entrySource: string | null = null;
+        if (ask != null && ask > 0) { entry = ask; entrySource = "ask"; }
+        else if (mid != null && mid > 0) { entry = mid; entrySource = "mid"; }
+        else if (last != null && last > 0) { entry = Number(last); entrySource = "last"; }
+        return {
+          strike: s,
+          bid, ask, mid, last: last != null ? Number(last) : null,
+          entry, entrySource,
+          underlying: it?.underlying_asset?.price != null ? Number(it.underlying_asset.price) : null,
+          iv: it?.implied_volatility != null ? Math.round(it.implied_volatility * 10000) / 100 : null,
+          delta: it?.greeks?.delta != null ? Math.round(it.greeks.delta * 1000) / 1000 : null,
+          contractSymbol: String(it?.details?.ticker || ""),
+        } as ChainEntry;
+      })
+      .filter((x: ChainEntry | null): x is ChainEntry => x !== null)
+      .sort((a, b) => a.strike - b.strike);
+
+    // Always re-fetch the recommended directly to ensure it's present even if chain is empty.
+    const recQuote = await fetchOptionQuote(tickerUp, String(expiry), ot, recStrike);
+    let recommended: ChainEntry | null = null;
+    if (recQuote) {
+      const fill = pickEntryFill(recQuote);
+      recommended = {
+        strike: recStrike,
+        bid: recQuote.bid, ask: recQuote.ask, mid: recQuote.mid, last: recQuote.last,
+        entry: fill?.price ?? null, entrySource: fill?.source ?? null,
+        underlying: recQuote.underlying, iv: recQuote.iv, delta: recQuote.delta,
+        contractSymbol: recQuote.contractSymbol,
+      };
+    } else {
+      const inChain = entries.find((e) => Math.abs(e.strike - recStrike) < 1e-6);
+      recommended = inChain ?? null;
+    }
+    if (!recommended) return res.status(503).json({ error: "Quote unavailable for the recommended contract." });
+
+    // Pick alternative strike candidates: prefer cheaper (more OTM), then one safer (more ITM).
+    // Calls: more OTM = higher strike. Puts: more OTM = lower strike.
+    const recIdx = entries.findIndex((e) => Math.abs(e.strike - recStrike) < 1e-6);
+    const candidates: ChainEntry[] = [];
+    if (recIdx >= 0) {
+      const liquid = (e: ChainEntry) => e.entry != null && e.entry > 0;
+      const pickFromDir = (dir: 1 | -1, max: number): ChainEntry[] => {
+        const out: ChainEntry[] = [];
+        for (let step = 1; step <= 6 && out.length < max; step++) {
+          const idx = recIdx + dir * step;
+          if (idx < 0 || idx >= entries.length) break;
+          const e = entries[idx];
+          if (liquid(e)) out.push(e);
+        }
+        return out;
+      };
+      const otmDir: 1 | -1 = ot === "call" ? 1 : -1;
+      const itmDir: 1 | -1 = ot === "call" ? -1 : 1;
+      candidates.push(...pickFromDir(otmDir, 2)); // up to 2 cheaper (more OTM)
+      candidates.push(...pickFromDir(itmDir, 1)); // up to 1 safer (more ITM)
+    }
+
+    // Label each candidate by cost ratio vs recommended entry; cap to 3 alternatives total.
+    type Alt = ChainEntry & { label: string; expiry: string; optionType: "call" | "put"; ticker: string; costPer1: number | null; isRecommended: boolean };
+    const recEntry = recommended.entry;
+    const labelFor = (entry: number | null, strike: number): string => {
+      if (recEntry == null || entry == null) return "Alternative";
+      const ratio = entry / recEntry;
+      const moreOtm = ot === "call" ? strike > recStrike : strike < recStrike;
+      if (ratio >= 1.2) return "Safer · Higher Cost";
+      if (ratio <= 0.5) return "Budget Alternative";
+      if (moreOtm && ratio < 0.95) return "Lower Cost · Higher Risk";
+      return "Alternative";
+    };
+    const toAlt = (e: ChainEntry, isRecommended: boolean): Alt => ({
+      ...e,
+      label: isRecommended ? "Recommended Contract" : labelFor(e.entry, e.strike),
+      expiry: String(expiry),
+      optionType: ot,
+      ticker: tickerUp,
+      costPer1: e.entry != null ? Math.round(e.entry * 100 * 100) / 100 : null,
+      isRecommended,
+    });
+    const altsLimited = candidates.slice(0, 3);
+    const out: Alt[] = [toAlt(recommended, true), ...altsLimited.map((c) => toAlt(c, false))];
+
+    res.json({ contracts: out, asOf: new Date().toISOString() });
+  } catch (e: any) {
+    console.error("[paper-trade] /alternatives error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /whale/paper/trades — open a paper trade (server re-fetches quote, fills at ask)
 router.post("/whale/paper/trades", async (req, res) => {
   try {

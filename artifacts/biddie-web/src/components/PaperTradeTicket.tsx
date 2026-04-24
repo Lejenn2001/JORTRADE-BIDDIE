@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, ShieldOff, Crosshair } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, ShieldOff, Crosshair, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,27 +16,61 @@ export interface PaperTradeSignalInput {
   signalConfidence?: string | null;
 }
 
-interface QuoteResponse {
+interface ContractOption {
+  ticker: string;
+  optionType: "call" | "put";
+  strike: number;
+  expiry: string;
+  contractSymbol: string;
   bid: number | null;
   ask: number | null;
   mid: number | null;
   last: number | null;
-  underlying_price: number | null;
-  asOf: string;
+  entry: number | null;
+  entrySource: string | null;
+  underlying: number | null;
   iv: number | null;
   delta: number | null;
-  contractSymbol: string;
-  suggestedEntry: { price: number; source: string } | null;
+  costPer1: number | null;
+  label: string;
+  isRecommended: boolean;
+}
+
+interface AlternativesResponse {
+  contracts: ContractOption[];
+  asOf: string;
 }
 
 const fmtMoney = (v: number | null | undefined) => v == null ? "—" : `$${Number(v).toFixed(2)}`;
+const fmtCost = (v: number | null | undefined) => v == null ? "—" : `$${Number(v).toFixed(2)}`;
+
+function formatExpiryShort(expiry: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiry);
+  if (!m) return expiry;
+  return `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+}
+
+function contractName(c: ContractOption): string {
+  const cp = c.optionType === "call" ? "C" : "P";
+  const strike = Number.isInteger(c.strike) ? `${c.strike}` : c.strike.toFixed(2);
+  return `${c.ticker} ${strike}${cp} ${formatExpiryShort(c.expiry)}`;
+}
+
+function labelTone(label: string): { bg: string; text: string; border: string } {
+  if (label === "Recommended Contract") return { bg: "bg-violet-500/15", text: "text-violet-300", border: "border-violet-500/40" };
+  if (label === "Budget Alternative") return { bg: "bg-emerald-500/15", text: "text-emerald-300", border: "border-emerald-500/30" };
+  if (label === "Lower Cost · Higher Risk") return { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30" };
+  if (label === "Safer · Higher Cost") return { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-500/30" };
+  return { bg: "bg-muted/40", text: "text-muted-foreground", border: "border-border/40" };
+}
 
 export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal: PaperTradeSignalInput; onClose: () => void; onOpened?: () => void }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  const [data, setData] = useState<AlternativesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contracts, setContracts] = useState(1);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function authHeader(): Promise<HeadersInit> {
@@ -45,36 +79,52 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
     return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
   }
 
-  async function loadQuote() {
+  async function loadAlternatives() {
     setLoading(true);
     setError(null);
     try {
       const headers = await authHeader();
-      const res = await fetch("/api/whale/paper/quote", {
+      const res = await fetch("/api/whale/paper/alternatives", {
         method: "POST",
         headers,
         body: JSON.stringify({ ticker: signal.ticker, optionType: signal.optionType, strike: signal.strike, expiry: signal.expiry }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to fetch quote");
-      setQuote(data);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to fetch contracts");
+      const ar = json as AlternativesResponse;
+      setData(ar);
+      // Default selection: recommended on first load; otherwise keep prior selection if still present.
+      setSelectedSymbol((prev) => {
+        if (prev && ar.contracts.some((c) => c.contractSymbol === prev)) return prev;
+        const rec = ar.contracts.find((c) => c.isRecommended);
+        return rec?.contractSymbol ?? ar.contracts[0]?.contractSymbol ?? null;
+      });
     } catch (e: any) {
-      setError(e?.message || "Failed to fetch quote");
-      setQuote(null);
+      setError(e?.message || "Failed to fetch contracts");
+      setData(null);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadQuote();
-    const t = setInterval(loadQuote, 15_000);
+    loadAlternatives();
+    const t = setInterval(loadAlternatives, 15_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signal.signalId, signal.ticker, signal.strike, signal.expiry, signal.optionType]);
 
+  const selected = useMemo<ContractOption | null>(() => {
+    if (!data || !selectedSymbol) return null;
+    return data.contracts.find((c) => c.contractSymbol === selectedSymbol) ?? null;
+  }, [data, selectedSymbol]);
+
+  const totalCost = selected?.entry != null ? selected.entry * contracts * 100 : null;
+  const isCall = signal.optionType === "call";
+  const hasPlan = signal.signalEntry != null || signal.signalTarget != null || signal.signalInvalidation != null || signal.signalGrade != null;
+
   async function submit() {
-    if (!quote?.suggestedEntry) {
+    if (!selected || selected.entry == null) {
       toast({ title: "No tradeable price", description: "Wait for a live quote and try again.", variant: "destructive" });
       return;
     }
@@ -86,10 +136,10 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
         headers,
         body: JSON.stringify({
           signalId: signal.signalId,
-          ticker: signal.ticker,
-          optionType: signal.optionType,
-          strike: signal.strike,
-          expiry: signal.expiry,
+          ticker: selected.ticker,
+          optionType: selected.optionType,
+          strike: selected.strike,
+          expiry: selected.expiry,
           contracts,
           signalEntry: signal.signalEntry ?? null,
           signalTarget: signal.signalTarget ?? null,
@@ -98,9 +148,9 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           signalConfidence: signal.signalConfidence ?? null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to open paper trade");
-      toast({ title: "Paper trade opened", description: `${signal.ticker} ${signal.optionType.toUpperCase()} $${signal.strike} @ ${fmtMoney(data.trade.entry_price)} (${data.trade.entry_fill_source})` });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to open paper trade");
+      toast({ title: "Paper trade opened", description: `${selected.ticker} ${selected.optionType.toUpperCase()} $${selected.strike} @ ${fmtMoney(json.trade.entry_price)} (${json.trade.entry_fill_source})` });
       onOpened?.();
       onClose();
     } catch (e: any) {
@@ -109,11 +159,6 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
       setSubmitting(false);
     }
   }
-
-  const entry = quote?.suggestedEntry?.price ?? null;
-  const cost = entry != null ? entry * contracts * 100 : null;
-  const isCall = signal.optionType === "call";
-  const hasPlan = signal.signalEntry != null || signal.signalTarget != null || signal.signalInvalidation != null || signal.signalGrade != null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
@@ -182,48 +227,93 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             </div>
           )}
 
-          {loading && !quote && (
+          {loading && !data && (
             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Fetching live quote…
+              <Loader2 className="h-4 w-4 animate-spin" /> Fetching contracts…
             </div>
           )}
 
           {error && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-300">
               {error}
-              <button onClick={loadQuote} className="ml-2 underline">Retry</button>
+              <button onClick={loadAlternatives} className="ml-2 underline">Retry</button>
             </div>
           )}
 
-          {quote && (
-            <>
-              {(() => {
-                const fillSrc = quote.suggestedEntry?.source ?? "ask";
-                const tile = (label: string, value: number | null, isFill: boolean, neutralColor: string) => (
-                  <div className={`rounded-lg p-2 ${isFill
-                    ? "bg-emerald-500/10 border border-emerald-500/40 ring-1 ring-emerald-500/30"
-                    : `bg-muted/30 border border-border/40`}`}>
-                    <div className={`text-[9px] uppercase ${isFill ? "text-emerald-400" : "text-muted-foreground"}`}>
-                      {label}{isFill ? " · Fill" : ""}
-                    </div>
-                    <div className={`text-xs font-mono font-bold ${isFill ? "text-emerald-300" : neutralColor}`}>{fmtMoney(value)}</div>
-                  </div>
-                );
-                return (
-                  <div className="grid grid-cols-4 gap-1.5 text-center">
-                    {tile("Bid", quote.bid, fillSrc === "bid", "text-red-300")}
-                    {tile("Mid", quote.mid, fillSrc === "mid", "text-foreground")}
-                    {tile("Ask", quote.ask, fillSrc === "ask", "text-foreground")}
-                    {tile("Last", quote.last, fillSrc === "last", "text-foreground")}
-                  </div>
-                );
-              })()}
-
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
-                <span>Underlying: <span className="font-mono text-foreground">{fmtMoney(quote.underlying_price)}</span></span>
-                {quote.iv != null && <span>IV: <span className="font-mono text-foreground">{quote.iv}%</span></span>}
-                {quote.delta != null && <span>Δ: <span className="font-mono text-foreground">{quote.delta}</span></span>}
+          {data && data.contracts.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Choose a contract</div>
+                {data.contracts.length > 1 && (
+                  <div className="text-[10px] text-muted-foreground">{data.contracts.length - 1} alternative{data.contracts.length > 2 ? "s" : ""}</div>
+                )}
               </div>
+              {data.contracts.map((c) => {
+                const isSel = selectedSymbol === c.contractSymbol;
+                const tone = labelTone(c.label);
+                const fillSrc = c.entrySource ?? "ask";
+                return (
+                  <button
+                    key={c.contractSymbol}
+                    type="button"
+                    onClick={() => setSelectedSymbol(c.contractSymbol)}
+                    className={`w-full text-left rounded-lg border p-3 transition-all ${isSel
+                      ? "bg-violet-500/10 border-violet-500/50 ring-2 ring-violet-500/30"
+                      : "bg-muted/20 border-border/40 hover:bg-muted/30 hover:border-border/60"}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSel ? "border-violet-400 bg-violet-500" : "border-border"}`}>
+                          {isSel && <CheckCircle2 className="h-3 w-3 text-white" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-mono font-bold text-foreground truncate">{contractName(c)}</div>
+                          <div className={`inline-block mt-0.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${tone.bg} ${tone.text} ${tone.border}`}>
+                            {c.label}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[9px] text-muted-foreground uppercase">Cost / 1</div>
+                        <div className="text-xs font-mono font-bold text-foreground">{fmtCost(c.costPer1)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-center">
+                      {[
+                        { k: "bid", v: c.bid, color: "text-red-300" },
+                        { k: "mid", v: c.mid, color: "text-foreground" },
+                        { k: "ask", v: c.ask, color: "text-foreground" },
+                        { k: "last", v: c.last, color: "text-foreground" },
+                      ].map((t) => {
+                        const isFill = fillSrc === t.k;
+                        return (
+                          <div key={t.k} className={`rounded p-1 ${isFill ? "bg-emerald-500/15 border border-emerald-500/40" : "bg-muted/20 border border-border/30"}`}>
+                            <div className={`text-[8px] uppercase ${isFill ? "text-emerald-400" : "text-muted-foreground"}`}>
+                              {t.k}{isFill ? "·fill" : ""}
+                            </div>
+                            <div className={`text-[10px] font-mono font-bold ${isFill ? "text-emerald-300" : t.color}`}>{fmtMoney(t.v)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/30">
+                      <span>Entry @ <span className="font-mono text-foreground">{fmtMoney(c.entry)}</span> ({c.entrySource ?? "—"})</span>
+                      {c.delta != null && <span>Δ <span className="font-mono text-foreground">{c.delta}</span></span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {selected && (
+            <>
+              {selected.underlying != null && (
+                <div className="text-[11px] text-muted-foreground flex items-center gap-3 flex-wrap">
+                  <span>Underlying: <span className="font-mono text-foreground">{fmtMoney(selected.underlying)}</span></span>
+                  {selected.iv != null && <span>IV: <span className="font-mono text-foreground">{selected.iv}%</span></span>}
+                </div>
+              )}
 
               <div className="space-y-2 pt-2 border-t border-border/30">
                 <label className="text-[11px] text-muted-foreground uppercase">Contracts (1 = 100 shares)</label>
@@ -237,16 +327,16 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
 
               <div className="rounded-lg bg-violet-500/5 border border-violet-500/20 p-3 space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Entry fill source</span>
-                  <span className="font-mono text-foreground">{quote.suggestedEntry?.source ?? "—"}</span>
+                  <span className="text-muted-foreground">Selected</span>
+                  <span className="font-mono text-foreground truncate ml-2">{contractName(selected)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Entry price / contract</span>
-                  <span className="font-mono font-bold text-foreground">{fmtMoney(entry)}</span>
+                  <span className="text-muted-foreground">Entry / contract ({selected.entrySource ?? "—"})</span>
+                  <span className="font-mono font-bold text-foreground">{fmtMoney(selected.entry)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm pt-1 border-t border-violet-500/20">
                   <span className="text-muted-foreground">Total cost (paper)</span>
-                  <span className="font-mono font-bold text-violet-300">{fmtMoney(cost)}</span>
+                  <span className="font-mono font-bold text-violet-300">{fmtMoney(totalCost)}</span>
                 </div>
               </div>
             </>
@@ -257,10 +347,10 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           <button onClick={onClose} className="flex-1 py-2 rounded-lg text-xs font-bold text-muted-foreground bg-muted/30 hover:bg-muted/50">Cancel</button>
           <button
             onClick={submit}
-            disabled={submitting || loading || !quote?.suggestedEntry}
+            disabled={submitting || loading || !selected || selected.entry == null}
             className="flex-[2] py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-violet-500 to-blue-500 text-white shadow-lg shadow-violet-500/30 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting…" : entry != null ? `Paper Submit @ ${fmtMoney(entry)}` : "Waiting for quote…"}
+            {submitting ? "Submitting…" : selected?.entry != null ? `Paper Submit @ ${fmtMoney(selected.entry)}` : "Waiting for quote…"}
           </button>
         </div>
       </div>
