@@ -5446,7 +5446,11 @@ router.post("/whale/paper/trades", async (req, res) => {
        fill.price, fill.source, q.underlying, q.iv, q.delta,
        sigTarget, sigInval, sigEntry, sigGrade, sigConf,
        q.bid, q.ask, q.mid, q.last,
-       lastFill.price ?? fill.price, lastFill.source ?? fill.source, q.underlying,
+       // Current value MUST follow the conservative bid→mid→last chain only.
+       // Never fall back to the entry fill (which may be ask) — that would inflate
+       // unrealized P/L by treating the buy-side ask as a sellable mark.
+       // Null is correct when no bid/mid/last is available; UI surfaces this as "—".
+       lastFill.price, lastFill.source, q.underlying,
        q.bid, q.ask, q.mid, q.last]
     );
     if (!inserted || !inserted.rows.length) return res.status(500).json({ error: "Failed to save paper trade" });
