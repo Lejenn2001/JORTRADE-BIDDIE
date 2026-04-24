@@ -191,6 +191,16 @@ const SEED_ADMIN_IDS = [
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_entry NUMERIC`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_grade TEXT`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_confidence TEXT`, []);
+    // Full quote-level snapshots (bid/ask/mid/last) for entry, last-seen, and exit.
+    // Stored alongside the chosen fill price so the original book context is preserved
+    // for forensics, reporting, and future analytics (e.g. "what slippage vs mid?").
+    for (const col of [
+      "entry_bid", "entry_ask", "entry_mid", "entry_last",
+      "last_quote_bid", "last_quote_ask", "last_quote_mid", "last_quote_last",
+      "exit_bid", "exit_ask", "exit_mid", "exit_last",
+    ]) {
+      await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS ${col} NUMERIC`, []);
+    }
     // Normalize legacy exit_reason values → canonical enum {target_hit, stop_hit, expired, closed_manual}
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'stop_hit' WHERE exit_reason = 'invalidated'`, []).catch(() => null);
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'closed_manual' WHERE exit_reason = 'manual'`, []).catch(() => null);
@@ -5299,8 +5309,10 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
 
   if (!exitReason) {
     await dbQuery(
-      `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW() WHERE id = $4 AND status = 'open'`,
-      [lastFill.price, lastFill.source, underlying, t.id]
+      `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+        last_quote_bid = $4, last_quote_ask = $5, last_quote_mid = $6, last_quote_last = $7,
+        last_checked_at = NOW() WHERE id = $8 AND status = 'open'`,
+      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
     ).catch(() => null);
     return { closed: false, lastFill };
   }
@@ -5309,8 +5321,10 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
   const fill = pickExitFill(q, expired, itm);
   if (!fill) {
     await dbQuery(
-      `UPDATE paper_trades SET exit_reason = $1, last_quote_price = $2, last_quote_source = $3, last_quote_underlying = $4, last_checked_at = NOW() WHERE id = $5 AND status = 'open'`,
-      [`${exitReason}_pending_quote`, lastFill.price, lastFill.source, underlying, t.id]
+      `UPDATE paper_trades SET exit_reason = $1, last_quote_price = $2, last_quote_source = $3, last_quote_underlying = $4,
+        last_quote_bid = $5, last_quote_ask = $6, last_quote_mid = $7, last_quote_last = $8,
+        last_checked_at = NOW() WHERE id = $9 AND status = 'open'`,
+      [`${exitReason}_pending_quote`, lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
     ).catch(() => null);
     return { closed: false, lastFill, exitReason };
   }
@@ -5323,9 +5337,12 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
     `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
       exit_underlying = $3, exit_reason = $4, closed_at = NOW(),
       realized_pl = $5, realized_pl_pct = $6,
-      last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW()
+      exit_bid = $8, exit_ask = $9, exit_mid = $10, exit_last = $11,
+      last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+      last_quote_bid = $8, last_quote_ask = $9, last_quote_mid = $10, last_quote_last = $11,
+      last_checked_at = NOW()
      WHERE id = $7 AND status = 'open' RETURNING *`,
-    [fill.price, fill.source, underlying, exitReason, realizedPl, realizedPlPct, t.id]
+    [fill.price, fill.source, underlying, exitReason, realizedPl, realizedPlPct, t.id, q.bid, q.ask, q.mid, q.last]
   ).catch(() => null);
   if (!upd || !upd.rowCount) return { closed: false, lastFill, exitReason, fill };
   return { closed: true, row: upd.rows[0], lastFill, exitReason, fill };
@@ -5415,13 +5432,22 @@ router.post("/whale/paper/trades", async (req, res) => {
         (user_id, signal_id, ticker, option_type, strike, expiry, contract_symbol, contracts,
          entry_price, entry_fill_source, entry_underlying, entry_iv, entry_delta,
          signal_target, signal_invalidation, signal_entry, signal_grade, signal_confidence,
-         last_quote_price, last_quote_source, last_quote_underlying, last_checked_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW())
+         entry_bid, entry_ask, entry_mid, entry_last,
+         last_quote_price, last_quote_source, last_quote_underlying,
+         last_quote_bid, last_quote_ask, last_quote_mid, last_quote_last,
+         last_checked_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+               $19,$20,$21,$22,
+               $23,$24,$25,
+               $26,$27,$28,$29,
+               NOW())
        RETURNING *`,
       [userId, String(signalId), tickerUp, ot, strikeNum, String(expiry), q.contractSymbol, contractsNum,
        fill.price, fill.source, q.underlying, q.iv, q.delta,
        sigTarget, sigInval, sigEntry, sigGrade, sigConf,
-       lastFill.price ?? fill.price, lastFill.source ?? fill.source, q.underlying]
+       q.bid, q.ask, q.mid, q.last,
+       lastFill.price ?? fill.price, lastFill.source ?? fill.source, q.underlying,
+       q.bid, q.ask, q.mid, q.last]
     );
     if (!inserted || !inserted.rows.length) return res.status(500).json({ error: "Failed to save paper trade" });
     res.json({ success: true, trade: inserted.rows[0], quote: q });
@@ -5516,9 +5542,12 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
       `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
         exit_underlying = $3, exit_reason = $4, closed_at = NOW(),
         realized_pl = $5, realized_pl_pct = $6,
-        last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3, last_checked_at = NOW()
+        exit_bid = $8, exit_ask = $9, exit_mid = $10, exit_last = $11,
+        last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+        last_quote_bid = $8, last_quote_ask = $9, last_quote_mid = $10, last_quote_last = $11,
+        last_checked_at = NOW()
        WHERE id = $7 AND status = 'open' RETURNING *`,
-      [fill.price, fill.source, q.underlying, "closed_manual", realizedPl, realizedPlPct, id]
+      [fill.price, fill.source, q.underlying, "closed_manual", realizedPl, realizedPlPct, id, q.bid, q.ask, q.mid, q.last]
     );
     res.json({ trade: updated?.rows?.[0], realizedPl, realizedPlPct, fill, quote: q });
   } catch (e: any) {

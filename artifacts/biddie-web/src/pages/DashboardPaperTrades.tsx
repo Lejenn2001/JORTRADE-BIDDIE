@@ -148,7 +148,14 @@ export default function DashboardPaperTrades() {
       const res = await fetch(`/api/whale/paper/trades/${id}/refresh`, { method: "POST", headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error);
-      setTrades((prev) => prev.map((t) => t.id === id ? { ...t, last_quote_price: data.trade.last_quote_price, last_quote_underlying: data.trade.last_quote_underlying, last_checked_at: new Date().toISOString() } : t));
+      // Replace with the full server-returned trade so that auto-close side effects
+      // (status, exit_*, realized_pl, closed_at, exit_reason) flow into the UI on the
+      // same tick — otherwise a refresh that triggers an auto-close would leave the
+      // row visually "open" until the next polling cycle or page reload.
+      if (data?.trade) {
+        const fresh = data.trade;
+        setTrades((prev) => prev.map((t) => t.id === id ? { ...t, ...fresh } : t));
+      }
     } catch (e: any) {
       toast({ title: "Refresh failed", description: e?.message, variant: "destructive" });
     } finally {

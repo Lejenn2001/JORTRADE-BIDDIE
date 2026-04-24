@@ -1311,9 +1311,13 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
           )}
         </div>
 
-        {(onTakeTrade || onReviewTrade) && (
-          <div className="pt-2 mt-2 border-t border-white/5 grid grid-cols-2 gap-1.5">
-            {onTakeTrade && (
+        {(() => {
+          const showReview = !!(onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")));
+          const showTake = !!onTakeTrade;
+          if (!showTake && !showReview) return null;
+          return (
+          <div className={`pt-2 mt-2 border-t border-white/5 grid ${showTake && showReview ? "grid-cols-2" : "grid-cols-1"} gap-1.5`}>
+            {showTake && (
               <button
                 onClick={() => onTakeTrade(signal)}
                 disabled={isTaking}
@@ -1339,9 +1343,9 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
                 )}
               </button>
             )}
-            {onReviewTrade && signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")) && (
+            {showReview && (
               <button
-                onClick={() => onReviewTrade(signal)}
+                onClick={() => onReviewTrade!(signal)}
                 className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all"
                 title="Open a simulated paper trade on this exact contract — no real money"
               >
@@ -1350,7 +1354,8 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
               </button>
             )}
           </div>
-        )}
+          );
+        })()}
         {isAdmin && userId && (
           <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} signalMeta={{ ticker: signal.ticker, strike: signal.strike, option_type: signal.putCall, expiry: signal.expiry, entry_trigger: signal.entry, target: signal.target, invalidation: signal.invalidation, category: signal.category, detected_at: signal.createdAt }} />
         )}
