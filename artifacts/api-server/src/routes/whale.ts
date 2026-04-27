@@ -5278,6 +5278,22 @@ function isItmAtPrice(optionType: "call" | "put", strike: number, underlying: nu
   return optionType === "call" ? underlying > strike : underlying < strike;
 }
 
+function normalizeExpiryToYMD(input: unknown): string | null {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const isoHead = raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoHead) && (raw.length === 10 || raw[10] === "T" || raw[10] === " ")) return isoHead;
+  const usMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  if (usMatch) {
+    const mm = usMatch[1].padStart(2, "0");
+    const dd = usMatch[2].padStart(2, "0");
+    return `${usMatch[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
 function pickLastQuoteFill(q: OptionQuoteResult): { price: number | null; source: string | null } {
   if (q.bid != null && q.bid > 0) return { price: q.bid, source: "bid" };
   if (q.mid != null && q.mid > 0) return { price: q.mid, source: "mid" };
@@ -5411,15 +5427,19 @@ router.post("/whale/paper/alternatives", async (req, res) => {
   try {
     const userId = await verifyBearerUser(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const { ticker, optionType, strike, expiry } = req.body || {};
-    if (!ticker || !optionType || !strike || !expiry) {
+    const { ticker, optionType, strike, expiry: rawExpiry } = req.body || {};
+    if (!ticker || !optionType || !strike || !rawExpiry) {
       return res.status(400).json({ error: "ticker, optionType, strike, expiry required" });
     }
     const ot: "call" | "put" | null = optionType === "call" ? "call" : optionType === "put" ? "put" : null;
     if (!ot) return res.status(400).json({ error: "optionType must be call or put" });
     const recStrike = Number(strike);
     if (!Number.isFinite(recStrike) || recStrike <= 0) return res.status(400).json({ error: "invalid strike" });
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
+    const expiry = normalizeExpiryToYMD(rawExpiry);
+    if (!expiry) {
+      console.warn(`[paper-trade] alternatives: unparseable expiry from ${userId}: ${JSON.stringify(rawExpiry)}`);
+      return res.status(400).json({ error: "expiry must be YYYY-MM-DD or ISO/MM-DD-YYYY" });
+    }
 
     const polygonKey = process.env["POLYGON_API_KEY"];
     if (!polygonKey) return res.status(503).json({ error: "Quotes unavailable" });
