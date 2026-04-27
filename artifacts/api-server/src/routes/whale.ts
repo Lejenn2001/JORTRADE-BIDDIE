@@ -5291,6 +5291,15 @@ function normalizeExpiryToYMD(input: unknown): string | null {
     const dd = usMatch[2].padStart(2, "0");
     return `${usMatch[3]}-${mm}-${dd}`;
   }
+  const monthMap: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+  const monthMatch = /^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/.exec(raw);
+  if (monthMatch) {
+    const mm = monthMap[monthMatch[1].slice(0, 3).toLowerCase()];
+    if (mm) {
+      const dd = monthMatch[2].padStart(2, "0");
+      return `${monthMatch[3]}-${mm}-${dd}`;
+    }
+  }
   return null;
 }
 
