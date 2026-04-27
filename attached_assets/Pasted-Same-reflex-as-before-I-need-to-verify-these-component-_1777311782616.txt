@@ -1,0 +1,51 @@
+Same reflex as before — I need to verify these component names actually exist in the codebase before assuming a build-sync issue. The "Contract Slate" episode taught me to check first.
+
+I have to stop you again with the same finding pattern as the "Contract Slate" episode. I'd rather be honest than fabricate a fix.
+
+Hard facts
+1. ExecutionVerdict / ExecutionVerdictChip does not exist in this codebase.
+Zero matches across the entire repo for any variation: ExecutionVerdict, executionVerdict, execution_verdict, Execution Verdict. Same for the literal labels — there is no "Tradeable", "Watch", or "Skip" chip component. The only tradeable references in the app are descriptive tooltip text for hit/miss labels (e.g. "Partial hit — 50-74% of target, tradeable" in SignalFeedPanel.tsx) — that is not a verdict chip.
+
+So this is not a feature that's "in dev but not in production". It is not in dev either. It's not anywhere.
+
+2. Dev and production are at the exact same commit.
+Git log:
+
+bd69f5b (HEAD -> master)  Published your App      ← what's running in prod
+b6f4e96                   Add ability to accept more date formats...   ← my fix
+1a794e8                   Published your App      ← previous deploy
+HEAD is the published commit. There is no version drift. There is no stale-cache problem to clear.
+
+3. The contract options ARE in the latest build, gated by a condition.
+PaperTradeTicket.tsx (the contract picker) is rendered when the user clicks "Review Trade". The button itself is conditional — DashboardSignals.tsx:1315:
+
+const showReview = !!(onReviewTrade && signal.strike && signal.expiry &&
+  signal.putCall && signal.entryTrigger && signal.invalidation &&
+  signal.category !== "spread" &&
+  !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"]
+    .includes(String(signal.outcome || "")));
+So Review Trade only shows on signals that have all of: strike, expiry, putCall, entryTrigger, invalidation, AND are not a spread, AND have no terminal outcome yet. Once you click it, the modal opens and renders the contract picker (Recommended / Budget Alternative / etc.) — that is the same UI in dev and prod. The contract loading itself was the 400 issue we just fixed across two deploys.
+
+What I think happened
+Same pattern as "Contract Slate": you're describing a feature with a name that doesn't match any code in this project. Possibilities:
+
+(a) You're recalling a feature spec or screenshot from a different context (another conversation, a design mock, another project) that was never actually built here.
+
+(b) "Execution Verdict (Tradeable / Watch / Skip)" is a feature you'd like me to build — i.e. a new task, not a regression.
+
+(c) You're describing something that exists in the app under a different name, and I can find it if you point me at where you see it (a screenshot, the page name, the section).
+
+What I am NOT going to do without your sign-off
+I will not invent an ExecutionVerdictChip component and pretend it was missing — that would be building a new feature while calling it a fix.
+I will not "rebuild" or "force-republish" because the deploy is already current; doing so wouldn't change anything.
+I will not change any logic.
+How you can unblock me
+Pick one and I'll act:
+
+"It's a new feature — please plan it as a task." I'll switch tracks and write up a task spec for an Execution Verdict chip with the exact rules you want for Tradeable / Watch / Skip (what counts as each, where it appears, what data feeds it).
+
+"Here's where I'm seeing it" — a screenshot, the URL/path, the page name, or even the surrounding text. If it exists somewhere I haven't searched (canvas mockup, an old branch, a different artifact), that'll surface it.
+
+"I was thinking of something else — let me clarify." Tell me what you actually want surfaced on the signal card and I'll find or build it.
+
+Production is in a stable, working state right now: the contract picker should load on any signal where Review Trade is visible (the 400 cause is fixed for the formats we've seen so far). If you click Review Trade in prod and the modal still doesn't load contracts, that's a separate issue I can investigate — but it would need a fresh production log capture, not a rebuild.
