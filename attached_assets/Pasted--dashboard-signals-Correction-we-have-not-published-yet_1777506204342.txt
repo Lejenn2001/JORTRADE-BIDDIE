@@ -1,0 +1,63 @@
+/dashboard/signals
+
+Correction: we have not published yet, so this is still dev only.
+
+Before I publish or judge the behavior, please confirm the dev environment is using live market data correctly.
+
+Specifically confirm:
+
+currentPrice is available in devtarget_distance, move_progress, and risk_reward are calculating correctlyWatch-only is not being caused by missing inputs or stale dev datamarket-hours/timezone logic is correct in devDo not change thresholds yet.This is validation only before publishing.
+
+1 hour agoI am now seeing multiple Tradeable signals in dev.
+
+Before I publish, please confirm production readiness:
+
+Execution Verdict is working after the slate wiring fixTradeable / Watch / Skip are displaying correctlyContract Slate still worksReview Trade opens with the selected contractPaper Trade submit still worksReplay Audit still worksAdmin diagnostics still worksno signal generation, scoring, Biddie, alerts, hit/miss logic, or live monitors were changedIf all checks pass, I will publish.
+
+1 hour agopublish
+
+1 hour agoThis is a publish blocker.
+
+The parsing issue for entry_trigger, target, and invalidation must be fixed before anything goes live.
+
+Right now:
+
+target_distancemove_progressrisk_rewardare all returning PASS due to NaN values, which means these gates are not functioning.
+
+This affects 100% of signals and makes the evaluator incomplete.
+
+Please proceed with the fix using a shared parser (regex-based extraction of numeric values from the text fields), consistent with the existing parseTargetPrice logic already in the codebase.
+
+Requirements:
+
+Apply parsing to entry_trigger, target, and invalidation in the execution evaluatorEnsure values are valid numbers before calculationsIf parsing fails, treat as missing input (do not silently pass)After fixing:
+
+re-run validation on live signalsre-run the backtestconfirm that target_distance, move_progress, and risk_reward produce real values (not NaN)confirm verdict distribution changes appropriatelyDo not change thresholds or evaluator logic.This is a data parsing fix only.
+
+1 hour agoBefore I publish, please run one final pre-publish validation.
+
+Please confirm:
+
+Execution Evaluatortarget_distance is calculating real valuesmove_progress is calculating real valuesrisk_reward is calculating real valuesno NaN values are appearingTradeable / Watch / Skip verdicts are using valid parsed inputsLive signal sanity checkReview 10–15 current signals and summarize:how many are Tradeablehow many are Watchhow many are Skiptop reasons for each verdictwhether the verdicts appear reasonableContract SlateConfirm:Recommended contract loadsalternatives load when availableselected contract passes into Review Trade correctlyReplay AuditConfirm:audit still openscompute audit still worksno regression to paper tradesSafety confirmationConfirm nothing changed in:signal generationscoringhit/miss/partial_hit logicBiddiechatalertslive monitorsIf all of this passes, tell me clearly:“Safe to publish” or “Do not publish yet,” with the reason.
+
+24 minutes agoI’m not fully confident yet, even though the technical validation passed.
+
+Before I publish, please confirm one thing clearly:
+
+If I publish now, are these changes only advisory/display changes for the Execution Verdict and Contract Slate?
+
+Please confirm publishing will NOT:
+
+block users from seeing signalsremove signalschange signal generationchange Biddiechange alertschange hit/miss outcomesauto-trade anythingprevent me from still using Review Trade manuallyIf this is only advisory and reversible, I may publish and observe behavior live.
+
+2 minutes agoDB safety rules acknowledged in full per the reminder: ZERO schema changes (signal_outcomes.id stays uuid, paper_trades.id stays uuid), NO new tables/columns, NO ALTER TABLE, NO migrations, db --force not applicable.
+
+Verifying each claim against the actual code before answering.
+
+Verified each item against the actual code. Here is the plain-language answer.
+
+Yes — these are advisory/display changes only.The fix changes how three numeric values (target price, entry trigger, invalidation price) are pulled out of the descriptive text fields like "Strike at $207.50" so the math behind the Execution Verdict chip works on real numbers instead of NaN. That's it.
+
+What publishing will NOT do — confirmed by reading the code:Concern	Result	WhyBlock users from seeing signals	✗ Cannot happen	The signal feed endpoint never filters by verdict. Signals always render regardless of Tradeable / Watch / Skip.Remove signals	✗ Cannot happen	The fix is read-only — it only reads from signal_outcomes and writes the eval result into the same row's execution_eval_json cache field. No DELETE on signals anywhere.Change signal generation	✗ Cannot happen	Signal generation lives in separate files, all unchanged today.Change Biddie	✗ Cannot happen	Biddie scoring code unchanged today.Change alerts	✗ Cannot happen	The alerts file hasn't been touched since March.Change hit/miss outcomes	✗ Cannot happen	Paper trade monitor and breakout files unchanged today (Apr 24 / Apr 7 mtimes).Auto-trade anything	✗ Cannot happen	There is no auto-trader in this product. Every paper trade requires you to click Review Trade and submit. The verdict chip is decorative — no code path triggers a trade based on a verdict.Prevent manual Review Trade	✗ Cannot happen	The Review Trade button has zero references to verdict in the front-end. You can open Review Trade on any signal regardless of whether the chip says Tradeable, Watch, or Skip. The submit endpoint is unchanged.What publishing WILL do (advisory, fully reversible):The Execution Verdict chip on each signal card will now show real numbers instead of "R/R NaN:1, NaN% to target."Signals that previously showed bogus "Tradeable" because the math collapsed to NaN will now correctly show Watch or Skip when their R/R, move-progress, or target-distance numbers actually warrant it.The Contract Slate, Review Trade flow, paper trades, alerts, Biddie, chat, and live monitors all behave exactly as before.Reversibility:If anything looks wrong after publishing, you can roll back the published version — the change is one helper function plus three call-site swaps in one file. Nothing structural, no schema changes, no data deletion.
+
+Safe to publish and observe live.
