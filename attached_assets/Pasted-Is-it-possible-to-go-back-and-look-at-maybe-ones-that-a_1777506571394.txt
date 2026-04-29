@@ -1,0 +1,47 @@
+Is it possible to go back and look at maybe ones that are resolved to see if they would have been a watch or a trade, etc?>Here's the full Watch-only analysis. The slate fix worked as intended (12/18 now have contract_quality=pass, 18/18 have inputsAvailable.slate=true), so all remaining Watch verdicts have legitimate, explainable reasons.
+
+1. Top Watch-only drivers (18 signals total)
+#	Reason	Count	%	Root cause
+1	Market closed (weekend)	11	61%	Today is Saturday 4/25/26 — time_of_day=warn on every signal
+2	No Recommended contract — only alternatives qualified	6	33%	Slate built successfully, but the signal's exact strike/expiry combo isn't a tradeable contract in the chain; only Conservative / Aggressive / Longer-Duration variants qualified
+3	Bid/ask spread 13.0% — wide	1	6%	SOXL call $128 has wider spread than the liquidity warn threshold
+2. Gate-warning frequency (across 18 signals × 8 gates)
+Gate	Pass	Warn	Skip	Notes
+time_of_day	0	18	0	100% warn — pure weekend artifact
+contract_quality	12	6	0	The slate fix is working — 12 have a Recommended; 6 only have alternates
+liquidity	11	1	6	The 6 skips correlate exactly with the 6 "no Recommended" signals (it has no contract to spread-check)
+dte	18	0	0	All 4–6 DTE — well within range
+historical_performance	18	0	0	All 60–66% win-rate over 100+ similar setups
+move_progress	18	0	0	(display shows NaN% — separate cosmetic issue, gate still passes)
+risk_reward	18	0	0	(also displays NaN:1 — same cosmetic issue)
+target_distance	18	0	0	(also displays NaN%)
+Five gates always pass. The only real friction comes from time_of_day, contract_quality, and the dependent liquidity skip.
+
+3. Signals closest to Tradeable
+Seven signals have 7 pass + 1 warn (only time_of_day) — pure weekend block:
+
+Ticker	Side	Strike	Expiry	Quality
+ASTS	put	70	May 1	strong
+GOOG	call	345	May 1	moderate
+MSFT	call	440	May 1	moderate
+MU	call	505	May 1	moderate
+NVDA	put	200	May 1	moderate
+QQQ	put	670	Apr 30	moderate
+SPY	call	713	May 1	moderate
+Every other gate passes. The instant the market opens Monday these flip from Watch → Tradeable with no other change required.
+
+4. What would need to change for each tier
+The 7 "weekend-only" signals → nothing. Wait until the bell Monday. The clock fixes them.
+The 6 "no Recommended contract" signals (AMD 330, AMD 340, INTC 85, MSTR 150, SMH 495, SMH 500) → either:
+the live chain happens to include a contract at the signal's exact strike/expiry on Monday (often happens once OI builds), or
+a logic decision: should the evaluator promote a qualified alternative (Conservative/Aggressive/LongerDuration) to "Recommended" when no exact-match Recommended exists? That's a behavior question, not a threshold question.
+SOXL call $128 → spread needs to tighten below the warn threshold during normal hours, or accept the wider fill.
+5. Is the evaluator too conservative?
+No — it is behaving correctly. Three pieces of evidence:
+
+Skip is gone entirely. Before the wiring fix it was 12 Skip / 6 Watch / 0 Tradeable. After the fix it is 0 Skip / 18 Watch / 0 Tradeable. The Skip cliff was real and was the wiring bug. There are no spurious Skips left.
+Every Watch reason is grounded in real market conditions — the market is literally closed, the chain literally lacks a recommended-tier contract for those 6 signals, and SOXL literally has a wide spread. None of the warns are theoretical.
+Five gates pass on every signal, so the evaluator is not over-gating. It is not piling on warns from DTE, historical edge, target distance, move progress, or risk/reward — those are all clean.
+Recommendation (no action this phase): Re-run this same analysis on Monday between 10:00 and 11:30 ET with the market open. Expectation: the 7 "weekend-only" signals should produce the first Tradeable verdicts. If they don't — for example if time_of_day=pass flips them but a different gate (likely move_progress once real intraday data is available) starts warning — that's the next signal that thresholds may need a look. For now, no threshold or logic change is warranted.
+
+One small cosmetic note worth tracking separately: target_distance, move_progress, and risk_reward are showing NaN% / NaN:1 in the gate detail strings even though they pass. The gate decision is correct, but the displayed metric is missing — likely an off-hours currentPrice issue. Pure display, not evaluator behavior.
