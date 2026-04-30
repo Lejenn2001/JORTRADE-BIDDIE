@@ -10,24 +10,13 @@ import ReactMarkdown from "react-markdown";
 import biddieRobot from "@/assets/biddie-robot.png";
 import { Link } from "react-router-dom";
 import PaperTradeTicket, { type PaperTradeSignalInput } from "@/components/PaperTradeTicket";
-import { extractContractsFromText, formatChatContract, type ChatContract } from "@/lib/extractContracts";
-
-function chatContractKey(c: ChatContract): string {
-  return `${c.ticker}|${c.strike}|${c.optionType}|${c.expiry}`;
-}
-
-function buildPaperTradeFromChat(c: ChatContract): PaperTradeSignalInput {
-  // Chat trades carry no signal plan and no execution verdict.
-  // The "chat-" signalId prefix prevents collision with real signal IDs.
-  return {
-    signalId: `chat-${chatContractKey(c)}`,
-    ticker: c.ticker,
-    optionType: c.optionType,
-    strike: c.strike,
-    expiry: c.expiry,
-    source: "chat",
-  };
-}
+import {
+  extractContractsFromText,
+  formatChatContract,
+  chatContractKey,
+  buildPaperTradeFromChat,
+  type ChatContract,
+} from "@/lib/extractContracts";
 
 interface Message {
   id: string;

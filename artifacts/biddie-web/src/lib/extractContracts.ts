@@ -106,3 +106,26 @@ export function formatChatContract(c: ChatContract): string {
   const date = m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}` : c.expiry;
   return `${c.ticker} ${strike}${cp} ${date}`;
 }
+
+// Stable key for a chat contract (used for dedup, monitor set membership,
+// and the synthetic chat-* signalId we send to /paper/trades).
+export function chatContractKey(c: ChatContract): string {
+  return `${c.ticker}|${c.strike}|${c.optionType}|${c.expiry}`;
+}
+
+// Build the input expected by the PaperTradeTicket modal for a chat-derived
+// contract. NOTE: type-only import keeps this file free of runtime cycles.
+import type { PaperTradeSignalInput } from "@/components/PaperTradeTicket";
+
+export function buildPaperTradeFromChat(c: ChatContract): PaperTradeSignalInput {
+  // Chat trades carry no signal plan and no execution verdict.
+  // The "chat-" signalId prefix prevents collision with real signal IDs.
+  return {
+    signalId: `chat-${chatContractKey(c)}`,
+    ticker: c.ticker,
+    optionType: c.optionType,
+    strike: c.strike,
+    expiry: c.expiry,
+    source: "chat",
+  };
+}

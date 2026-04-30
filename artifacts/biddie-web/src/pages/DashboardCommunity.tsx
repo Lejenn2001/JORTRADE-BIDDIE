@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Trash2, Bot, Lock, ArrowUpRight, Smile, CheckSquare, X } from "lucide-react";
+import { Send, Trash2, Bot, Lock, ArrowUpRight, Smile, CheckSquare, X, ShoppingCart, Eye, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
 import biddieRobot from "@/assets/biddie-robot.png";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -12,6 +12,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import PaperTradeTicket, { type PaperTradeSignalInput } from "@/components/PaperTradeTicket";
+import {
+  extractContractsFromText,
+  formatChatContract,
+  chatContractKey,
+  buildPaperTradeFromChat,
+  type ChatContract,
+} from "@/lib/extractContracts";
 
 interface ChatMessage {
   id: string;
@@ -46,6 +54,59 @@ const DashboardCommunity = () => {
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ─── Chat-trade action bar wiring ────────────────────────────────────────
+  // When Biddie posts a message containing an option contract like
+  // "GOOGL 330C 5/1", we render an inline [Buy Paper] [Monitor] [Review]
+  // row beneath that message. Buy/Review open the existing PaperTradeTicket
+  // in chat mode (source: "chat") so the modal shows the "Unverified" banner
+  // and skips the signal plan card. The execution evaluator is NEVER called
+  // from this path. Monitor persists to localStorage only.
+  const userIdForMonitor = session?.user?.id || "anon";
+  const monitorStorageKey = `biddie-chat-monitor-${userIdForMonitor}`;
+  const [paperTradeSignal, setPaperTradeSignal] = useState<PaperTradeSignalInput | null>(null);
+  const [monitoredKeys, setMonitoredKeys] = useState<Set<string>>(new Set());
+
+  // Rehydrate when the user identity becomes known (session loads async).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(monitorStorageKey);
+      if (raw) {
+        const arr = JSON.parse(raw) as Array<{ ticker: string; strike: number; optionType: string; expiry: string }>;
+        setMonitoredKeys(new Set(arr.map((x) => `${x.ticker}|${x.strike}|${x.optionType}|${x.expiry}`)));
+      } else {
+        setMonitoredKeys(new Set());
+      }
+    } catch {
+      setMonitoredKeys(new Set());
+    }
+  }, [monitorStorageKey]);
+
+  function handleBuyOrReview(c: ChatContract) {
+    setPaperTradeSignal(buildPaperTradeFromChat(c));
+  }
+
+  function handleMonitor(c: ChatContract) {
+    const key = chatContractKey(c);
+    setMonitoredKeys((prev) => {
+      if (prev.has(key)) {
+        toast({ title: "Already monitoring", description: formatChatContract(c) });
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(key);
+      try {
+        const arr = Array.from(next).map((k) => {
+          const [ticker, strikeS, optionType, expiry] = k.split("|");
+          return { ticker, strike: Number(strikeS), optionType, expiry, addedAt: new Date().toISOString() };
+        });
+        localStorage.setItem(monitorStorageKey, JSON.stringify(arr));
+      } catch {}
+      toast({ title: "Added to Monitor", description: formatChatContract(c) });
+      return next;
+    });
+  }
+  // ──────────────────────────────────────────────────────────────────────────
   const lastTypingBroadcast = useRef<number>(0);
   const ackBlockRef = useRef<boolean>(false);
 
@@ -564,9 +625,68 @@ const DashboardCommunity = () => {
                         </p>
                       )}
                       {isBiddie ? (
-                        <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-1 [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs [&_strong]:text-primary [&_h1]:text-primary [&_h2]:text-primary [&_h1]:font-bold [&_h2]:font-semibold [&_h1]:mb-1 [&_h2]:mb-0.5 [&_ul]:pl-3 [&_ol]:pl-3 [&_li]:mb-0">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        </div>
+                        <>
+                          <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-xs [&_p]:leading-relaxed [&_p]:mb-1 [&_li]:text-xs [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs [&_strong]:text-primary [&_h1]:text-primary [&_h2]:text-primary [&_h1]:font-bold [&_h2]:font-semibold [&_h1]:mb-1 [&_h2]:mb-0.5 [&_ul]:pl-3 [&_ol]:pl-3 [&_li]:mb-0">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                          {(() => {
+                            // Anchor the parser to the message's created_at so a
+                            // bare expiry like "5/1" never silently rolls forward
+                            // to next year on later renders.
+                            const anchor = msg.created_at ? new Date(msg.created_at) : new Date();
+                            const chatContracts = extractContractsFromText(msg.content, anchor);
+                            if (chatContracts.length === 0) return null;
+                            return (
+                              <div className="mt-2 border-t border-amber-500/20 pt-2 space-y-1.5">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/90">
+                                  Chat Idea — Not Execution Approved
+                                </div>
+                                {chatContracts.map((c) => {
+                                  const key = chatContractKey(c);
+                                  const isMonitored = monitoredKeys.has(key);
+                                  return (
+                                    <div
+                                      key={key}
+                                      className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/30 border border-border/40 px-2 py-1.5"
+                                    >
+                                      <span className="text-[11px] font-mono font-bold text-foreground mr-auto">
+                                        {formatChatContract(c)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleBuyOrReview(c)}
+                                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
+                                        title="Open the paper trade modal pre-filled with this contract"
+                                      >
+                                        <ShoppingCart className="h-3 w-3" /> Buy Paper
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleMonitor(c)}
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                                          isMonitored
+                                            ? "bg-blue-500/25 text-blue-200 border-blue-500/50"
+                                            : "bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25"
+                                        }`}
+                                        title="Track this chat idea locally"
+                                      >
+                                        <Eye className="h-3 w-3" /> {isMonitored ? "Monitoring" : "Monitor"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleBuyOrReview(c)}
+                                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30 hover:bg-violet-500/25 transition-colors"
+                                        title="Open the contract picker — choose a different strike or the budget option"
+                                      >
+                                        <ListChecks className="h-3 w-3" /> Review
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </>
                       ) : (
                         <p className="text-xs text-foreground break-words leading-relaxed">{msg.content}</p>
                       )}
@@ -753,6 +873,13 @@ const DashboardCommunity = () => {
         </main>
         )}
       </div>
+
+      {paperTradeSignal && (
+        <PaperTradeTicket
+          signal={paperTradeSignal}
+          onClose={() => setPaperTradeSignal(null)}
+        />
+      )}
     </div>
   );
 };
