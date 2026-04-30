@@ -75,7 +75,7 @@ export function evaluateSignal(signal: any): ExecutionVerdict {
     extractPrice(signal.priceAtSignal ?? signal.price_at_signal) ??
     extractPrice(signal.entryTrigger ?? signal.entry_trigger);
   const target = extractPrice(
-    signal.targetZone ?? signal.target_zone ?? signal.targetNear ?? signal.target_near ?? signal.target,
+    signal.target ?? signal.targetNear ?? signal.target_near ?? signal.targetZone ?? signal.target_zone,
   );
   const invalidation = extractPrice(signal.invalidation);
 
