@@ -1342,9 +1342,12 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
           const isExecTicker = EXECUTION_UNIVERSE.has(String(signal.ticker || "").toUpperCase());
           const hasContractFields = !!(signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")));
           const showBuy = ev.verdict === "tradeable" && isExecTicker && !!onReviewTrade && hasContractFields;
-          const showReview = !showBuy && ev.verdict !== "skip" && !!onReviewTrade && hasContractFields;
+          const showReview = !!onReviewTrade && hasContractFields;
           const showSkipNotice = ev.verdict === "skip";
           const showTaken = !!onTakeTrade && ev.verdict !== "skip";
+          const buttonCount = (showBuy ? 1 : 0) + (showReview ? 1 : 0) + (showTaken ? 1 : 0);
+          const gridClass = buttonCount === 3 ? "grid grid-cols-3 gap-2" : buttonCount === 2 ? "grid grid-cols-2 gap-2" : "";
+          const widthClass = buttonCount > 1 ? "" : "w-full ";
 
           if (!showBuy && !showReview && !showTaken && !showSkipNotice) return null;
 
@@ -1361,11 +1364,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
               )}
 
               {(showBuy || showReview || showTaken) && (
-                <div className={`${(showBuy || showReview) && showTaken ? "grid grid-cols-2 gap-2" : ""}`}>
+                <div className={gridClass}>
                   {showBuy && (
                     <button
                       onClick={() => onReviewTrade!(signal)}
-                      className={`${showTaken ? "" : "w-full "}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 hover:text-emerald-200 transition-all shadow-[0_0_10px_-2px_rgba(16,185,129,0.4)]`}
+                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 hover:text-emerald-200 transition-all shadow-[0_0_10px_-2px_rgba(16,185,129,0.4)]`}
                       title={`Tradeable in execution universe (${signal.ticker.toUpperCase()}) — opens a paper trade ticket. No real broker connection.`}
                     >
                       <Zap className="h-3.5 w-3.5" />
@@ -1375,22 +1378,26 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
                   {showReview && (
                     <button
                       onClick={() => onReviewTrade!(signal)}
-                      className={`${showTaken ? "" : "w-full "}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all`}
-                      title={ev.verdict === "watch"
-                        ? `Watch — ${ev.reason}. Review/monitor only; no Buy until verdict is Tradeable.`
-                        : !isExecTicker && ev.verdict === "tradeable"
-                          ? `Tradeable, but ${signal.ticker} is outside the execution universe (SPY/QQQ/IWM/SPX/SPXW). Review Trade only.`
-                          : "Open a simulated paper trade on this exact contract — no real money"}
+                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all`}
+                      title={ev.verdict === "skip"
+                        ? `Skipped — ${ev.reason}. Buy is blocked; monitor only to test the filter.`
+                        : ev.verdict === "watch"
+                          ? `Watch — ${ev.reason}. Monitor only; no Buy until verdict is Tradeable.`
+                          : !isExecTicker && ev.verdict === "tradeable"
+                            ? `Tradeable, but ${signal.ticker} is outside the execution universe (SPY/QQQ/IWM/SPX/SPXW). Monitor only.`
+                            : ev.verdict === "tradeable"
+                              ? "Open a simulated paper trade alongside Buy to track this contract."
+                              : "Open a simulated paper trade on this exact contract — no real money"}
                     >
                       <FlaskConical className="h-3.5 w-3.5" />
-                      <span>{ev.verdict === "watch" ? "Monitor" : "Review Trade"}</span>
+                      <span>{ev.verdict === "not_evaluated" ? "Review Trade" : "Monitor"}</span>
                     </button>
                   )}
                   {showTaken && (
                     <button
                       onClick={() => onTakeTrade!(signal)}
                       disabled={isTaking}
-                      className={`${(showBuy || showReview) ? "" : "w-full "}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
                         isTaken
                           ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
                           : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
