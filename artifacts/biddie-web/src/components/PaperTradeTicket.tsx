@@ -70,6 +70,42 @@ function isBudgetLabel(label: string): boolean {
   return label === "Budget Option (≤ $300)" || label === "Lowest Cost Available (Above Budget)";
 }
 
+function helperTextFor(label: string): string | null {
+  if (label === "Recommended Contract") return "Highest-probability / higher cost";
+  if (label === "Budget Option (≤ $300)") return "Lower cost, higher risk";
+  if (label === "Lowest Cost Available (Above Budget)") return "Cheapest available — above $300";
+  if (label === "Lower Cost · Higher Risk") return "Cheaper than recommended, but more aggressive";
+  return null;
+}
+
+// Lower Cost is hidden when its entry price is within ~30% of the Budget Option,
+// since it would just duplicate the same trade thesis at a similar cost.
+function meaningfullyDifferentFromBudget(other: ContractOption, budget: ContractOption | null): boolean {
+  if (!budget) return true;
+  if (other.contractSymbol === budget.contractSymbol) return false;
+  const oe = other.entry ?? 0;
+  const be = budget.entry ?? 0;
+  if (oe <= 0 || be <= 0) return true;
+  const ratio = Math.abs(oe - be) / Math.max(oe, be);
+  return ratio >= 0.30;
+}
+
+// Display only contracts that serve a clear purpose:
+//   1. Recommended (always)
+//   2. Budget Option (always — fallback "Lowest Cost Available (Above Budget)")
+//   3. Lower Cost · Higher Risk (only if meaningfully different from Budget)
+// All other backend-emitted labels (Safer · Higher Cost, Budget Alternative, Alternative)
+// are hidden to reduce noise. Backend logic is unchanged.
+function computeVisibleContracts(contracts: ContractOption[]): ContractOption[] {
+  const budget = contracts.find((c) => isBudgetLabel(c.label)) ?? null;
+  return contracts.filter((c) => {
+    if (c.isRecommended) return true;
+    if (isBudgetLabel(c.label)) return true;
+    if (c.label === "Lower Cost · Higher Risk") return meaningfullyDifferentFromBudget(c, budget);
+    return false;
+  });
+}
+
 export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal: PaperTradeSignalInput; onClose: () => void; onOpened?: () => void }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -99,11 +135,13 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
       if (!res.ok) throw new Error(json?.error || "Failed to fetch contracts");
       const ar = json as AlternativesResponse;
       setData(ar);
-      // Default selection: recommended on first load; otherwise keep prior selection if still present.
+      // Default selection: recommended on first load; otherwise keep prior selection if still
+      // visible after filtering. If the user's prior pick is now hidden, fall back to recommended.
+      const visible = computeVisibleContracts(ar.contracts);
       setSelectedSymbol((prev) => {
-        if (prev && ar.contracts.some((c) => c.contractSymbol === prev)) return prev;
-        const rec = ar.contracts.find((c) => c.isRecommended);
-        return rec?.contractSymbol ?? ar.contracts[0]?.contractSymbol ?? null;
+        if (prev && visible.some((c) => c.contractSymbol === prev)) return prev;
+        const rec = visible.find((c) => c.isRecommended);
+        return rec?.contractSymbol ?? visible[0]?.contractSymbol ?? null;
       });
     } catch (e: any) {
       setError(e?.message || "Failed to fetch contracts");
@@ -119,6 +157,11 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signal.signalId, signal.ticker, signal.strike, signal.expiry, signal.optionType]);
+
+  const visibleContracts = useMemo<ContractOption[]>(() => {
+    if (!data) return [];
+    return computeVisibleContracts(data.contracts);
+  }, [data]);
 
   const selected = useMemo<ContractOption | null>(() => {
     if (!data || !selectedSymbol) return null;
@@ -246,18 +289,14 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             </div>
           )}
 
-          {data && data.contracts.length > 0 && (
+          {data && visibleContracts.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Choose a contract</div>
-                {data.contracts.length > 1 && (
-                  <div className="text-[10px] text-muted-foreground">{data.contracts.length - 1} alternative{data.contracts.length > 2 ? "s" : ""}</div>
-                )}
-              </div>
-              {data.contracts.map((c) => {
+              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Choose a contract</div>
+              {visibleContracts.map((c) => {
                 const isSel = selectedSymbol === c.contractSymbol;
                 const tone = labelTone(c.label);
                 const fillSrc = c.entrySource ?? "ask";
+                const helper = helperTextFor(c.label);
                 return (
                   <button
                     key={c.contractSymbol}
@@ -278,17 +317,15 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
                             <span className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${tone.bg} ${tone.text} ${tone.border}`}>
                               {c.label}
                             </span>
-                            {isBudgetLabel(c.label) && (
-                              <span className="text-[9px] italic text-amber-300/80" title="A lower-priced contract is cheaper to buy but is typically further out-of-the-money, so the underlying must move further or faster for it to pay off. Higher chance of expiring worthless than the recommended contract.">
-                                Lower cost, higher risk
-                              </span>
-                            )}
                             {c.expiry !== signal.expiry && (
-                              <span className="text-[9px] italic text-blue-300/80" title="Same direction but a slightly later expiration. Costs less per contract because more time to expiration is included; pays off if the underlying makes the move within the extended window.">
+                              <span className="text-[9px] italic text-blue-300/80" title="Same direction but a slightly later expiration. Pays off if the underlying makes the move within the extended window.">
                                 Different expiry: {formatExpiryShort(c.expiry)}
                               </span>
                             )}
                           </div>
+                          {helper && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{helper}</div>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
