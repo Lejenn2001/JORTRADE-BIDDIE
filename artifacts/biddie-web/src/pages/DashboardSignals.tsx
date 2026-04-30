@@ -1137,14 +1137,15 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
           skip: { wrap: "bg-red-500/10 border-red-500/20", label: "text-red-400", pill: "bg-red-500/20 text-red-300" },
           not_evaluated: { wrap: "bg-zinc-500/10 border-zinc-500/20", label: "text-zinc-400", pill: "bg-zinc-500/20 text-zinc-300" },
         };
-        const labelText: Record<string, string> = { tradeable: "TRADEABLE", watch: "WATCH", skip: "SKIP", not_evaluated: "NOT EVALUATED" };
+        const labelText: Record<string, string> = { tradeable: "READY TO ENTER", watch: "WATCH / WAIT", skip: "NOT READY", not_evaluated: "NOT EVALUATED" };
         const s = styles[ev.verdict] || styles.not_evaluated;
         return (
-          <div className={`px-3 sm:px-4 py-1.5 border-b flex items-center gap-2 ${s.wrap}`} title={`Execution verdict: ${labelText[ev.verdict]} — ${ev.reason}`}>
+          <div className={`px-3 sm:px-4 py-1.5 border-b flex items-center gap-2 ${s.wrap}`} title={`Execution: ${labelText[ev.verdict]} — ${ev.reason}`}>
             <Gauge className={`h-3 w-3 ${s.label}`} />
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Execution:</span>
             <span className={`text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded ${s.pill}`}>{labelText[ev.verdict]}</span>
             {isExecTicker && (
-              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300" title="Part of the execution universe (SPY, QQQ, IWM, SPX, SPXW). Buy actions are enabled here only when the verdict is TRADEABLE.">EXEC</span>
+              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300" title="Part of the execution universe (SPY, QQQ, IWM, SPX, SPXW). Buy actions are enabled here only when execution is READY TO ENTER.">EXEC</span>
             )}
             <span className="text-[10px] text-muted-foreground truncate">· {ev.reason}</span>
           </div>
@@ -1317,7 +1318,8 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0" title="Signal strength reflects the quality of the underlying setup. It does not by itself approve the trade — see the Execution row above the card for entry approval.">Signal Strength:</span>
           {signal.tags.filter((tag) => {
             const upper = tag.toUpperCase();
             if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
@@ -1378,15 +1380,22 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
 
           return (
             <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
-              {showSkipNotice && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20" title={`Execution layer is skipping this signal: ${ev.reason}`}>
-                  <XCircle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-bold text-red-300 uppercase tracking-wider">Skipped by execution layer</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">{ev.reason}</div>
+              {showSkipNotice && (() => {
+                const isPoorRR = /risk\/?reward|R:R/i.test(ev.reason || "");
+                const friendly = isPoorRR
+                  ? "Risk/reward not favorable at current price."
+                  : "Signal may still be valid, but execution conditions are not favorable right now.";
+                return (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20" title={`Not Ready — ${ev.reason}`}>
+                    <XCircle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-bold text-red-300 uppercase tracking-wider">Not Ready · Buy disabled</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{friendly}</div>
+                      <div className="text-[10px] text-muted-foreground/70 mt-0.5 italic truncate">Detail: {ev.reason}</div>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {(showBuy || showReview || showTaken) && (
                 <div className={gridClass}>
@@ -1405,11 +1414,11 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
                       onClick={() => onReviewTrade!(signal)}
                       className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all`}
                       title={ev.verdict === "skip"
-                        ? `Skipped — ${ev.reason}. Buy is blocked; monitor only to test the filter.`
+                        ? `Not Ready — ${ev.reason}. Buy is disabled; monitor to test whether the filter would have worked.`
                         : ev.verdict === "watch"
-                          ? `Watch — ${ev.reason}. Monitor only; no Buy until verdict is Tradeable.`
+                          ? `Watch / Wait — ${ev.reason}. Monitor only; no Buy until execution is Ready to Enter.`
                           : !isExecTicker && ev.verdict === "tradeable"
-                            ? `Tradeable, but ${signal.ticker} is outside the execution universe (SPY/QQQ/IWM/SPX/SPXW). Monitor only.`
+                            ? `Ready to Enter, but ${signal.ticker} is outside the execution universe (SPY/QQQ/IWM/SPX/SPXW). Monitor only.`
                             : ev.verdict === "tradeable"
                               ? "Open a simulated paper trade alongside Buy to track this contract."
                               : "Open a simulated paper trade on this exact contract — no real money"}
