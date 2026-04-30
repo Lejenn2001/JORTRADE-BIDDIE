@@ -90,20 +90,54 @@ function meaningfullyDifferentFromBudget(other: ContractOption, budget: Contract
   return ratio >= 0.30;
 }
 
-// Display only contracts that serve a clear purpose:
-//   1. Recommended (always)
-//   2. Budget Option (always — fallback "Lowest Cost Available (Above Budget)")
-//   3. Lower Cost · Higher Risk (only if meaningfully different from Budget)
-// All other backend-emitted labels (Safer · Higher Cost, Budget Alternative, Alternative)
-// are hidden to reduce noise. Backend logic is unchanged.
+// Build the visible list explicitly so it ALWAYS contains at most 3 rows in this order:
+//   1. Recommended Contract                                 (always, if present)
+//   2. Budget Option (≤ $300)                               (always, if present)
+//      — or its fallback label "Lowest Cost Available (Above Budget)"
+//   3. Lower Cost · Higher Risk                             (at most ONE, only if meaningfully different)
+//
+// The backend can emit multiple rows with the same "Lower Cost · Higher Risk" label
+// (the candidates loop picks up to 2 OTM contracts that can both fall in that band),
+// plus rows labeled "Safer · Higher Cost", "Budget Alternative", and "Alternative".
+// All of those are excluded from display to keep the choice list short and clear.
+// Backend logic is NOT modified — this is purely a UI cap.
 function computeVisibleContracts(contracts: ContractOption[]): ContractOption[] {
+  const recommended = contracts.find((c) => c.isRecommended) ?? null;
   const budget = contracts.find((c) => isBudgetLabel(c.label)) ?? null;
-  return contracts.filter((c) => {
-    if (c.isRecommended) return true;
-    if (isBudgetLabel(c.label)) return true;
-    if (c.label === "Lower Cost · Higher Risk") return meaningfullyDifferentFromBudget(c, budget);
-    return false;
-  });
+
+  // Among ALL "Lower Cost · Higher Risk" rows from the backend, keep only ones that:
+  //  - aren't a duplicate of Recommended or Budget by contractSymbol
+  //  - differ from Budget Option by ≥ 30% on entry price (meaningfully different thesis)
+  // Then pick exactly ONE — the cheapest — so users see a single clear "more aggressive" option.
+  const lowerCostCandidates = contracts.filter((c) =>
+    c.label === "Lower Cost · Higher Risk"
+    && (!recommended || c.contractSymbol !== recommended.contractSymbol)
+    && (!budget || c.contractSymbol !== budget.contractSymbol)
+    && meaningfullyDifferentFromBudget(c, budget)
+  );
+  let lowerCostPick: ContractOption | null = null;
+  if (lowerCostCandidates.length > 0) {
+    const sorted = [...lowerCostCandidates].sort(
+      (a, b) => (a.entry ?? Number.POSITIVE_INFINITY) - (b.entry ?? Number.POSITIVE_INFINITY),
+    );
+    lowerCostPick = sorted[0];
+  }
+
+  const out: ContractOption[] = [];
+  if (recommended) out.push(recommended);
+  if (budget && (!recommended || budget.contractSymbol !== recommended.contractSymbol)) {
+    out.push(budget);
+  }
+  if (
+    lowerCostPick
+    && (!recommended || lowerCostPick.contractSymbol !== recommended.contractSymbol)
+    && (!budget || lowerCostPick.contractSymbol !== budget.contractSymbol)
+  ) {
+    out.push(lowerCostPick);
+  }
+
+  // Defensive hard cap: under no circumstances render more than 3 rows.
+  return out.slice(0, 3);
 }
 
 export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal: PaperTradeSignalInput; onClose: () => void; onOpened?: () => void }) {
