@@ -153,6 +153,20 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Buy Now (default) = fill at the live ask immediately.
+  // Queue at Signal Entry = create a pending_entry row that auto-fills when
+  //   the underlying touches the signal's published entry price. Only offered
+  //   for verified signals (NOT chat trades) that include a signal.signalEntry.
+  // Mode is signal-only by design — chat trades never see the toggle.
+  const canQueueAtEntry =
+    signal.source !== "chat" && signal.signalEntry != null && Number.isFinite(Number(signal.signalEntry));
+  const [mode, setMode] = useState<"buy_now" | "queue_at_entry">("buy_now");
+  // Defensive: if the signal has no entry price (or props change), force back
+  // to buy_now so we never submit a queue request without a trigger.
+  useEffect(() => {
+    if (!canQueueAtEntry && mode !== "buy_now") setMode("buy_now");
+  }, [canQueueAtEntry, mode]);
+
   async function authHeader(): Promise<HeadersInit> {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -216,13 +230,47 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
   );
 
   async function submit() {
-    if (!selected || selected.entry == null) {
+    // Buy Now requires a live ask; Queue does not (we will fill later when the
+    // trigger condition is met).
+    if (mode === "buy_now" && (!selected || selected.entry == null)) {
       toast({ title: "No tradeable price", description: "Wait for a live quote and try again.", variant: "destructive" });
+      return;
+    }
+    if (!selected) {
+      toast({ title: "Select a contract", description: "Pick a contract first.", variant: "destructive" });
       return;
     }
     setSubmitting(true);
     try {
       const headers = await authHeader();
+
+      // Build the queue-mode extras only when the toggle is on AND the signal
+      // has a usable entry price. Direction follows the option side: a CALL
+      // breakout fills when underlying ≥ entry, a PUT breakdown fills when
+      // underlying ≤ entry. This matches signalEvaluator's intent.
+      const triggerExtras = (() => {
+        if (mode !== "queue_at_entry" || !canQueueAtEntry) return null;
+        const triggerPx = Number(signal.signalEntry);
+        const direction: "at_or_above" | "at_or_below" =
+          selected.optionType === "call" ? "at_or_above" : "at_or_below";
+        // Default expiration: end of US trading day (4 PM ET) today, or +6h
+        // from now if past 4 PM ET. Backend will further clamp to option expiry.
+        const now = new Date();
+        const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const eod = new Date(etNow);
+        eod.setHours(16, 0, 0, 0);
+        const eodMsET = eod.getTime();
+        const driftMs = now.getTime() - etNow.getTime();
+        const eodWallClockMs = eodMsET + driftMs;
+        const expiresMs = eodWallClockMs > now.getTime() ? eodWallClockMs : now.getTime() + 6 * 60 * 60 * 1000;
+        return {
+          mode: "pending_entry" as const,
+          entryTriggerPrice: triggerPx,
+          entryTriggerDirection: direction,
+          pendingExpiresAt: new Date(expiresMs).toISOString(),
+        };
+      })();
+
       const res = await fetch("/api/whale/paper/trades", {
         method: "POST",
         headers,
@@ -238,11 +286,37 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           signalInvalidation: signal.signalInvalidation ?? null,
           signalGrade: signal.signalGrade ?? null,
           signalConfidence: signal.signalConfidence ?? null,
+          ...(triggerExtras ?? {}),
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed to open paper trade");
-      toast({ title: "Paper trade opened", description: `${selected.ticker} ${selected.optionType.toUpperCase()} $${selected.strike} @ ${fmtMoney(json.trade.entry_price)} (${json.trade.entry_fill_source})` });
+      if (!res.ok) {
+        // Surface the per-user cap as a clear, actionable toast rather than a
+        // generic failure. Backend returns 409 {code:"TRADE_CAP_REACHED",cap,current}.
+        if (res.status === 409 && json?.code === "TRADE_CAP_REACHED") {
+          const cap = json.cap ?? "?";
+          const cur = json.current ?? "?";
+          toast({
+            title: "Trade cap reached",
+            description: `You have ${cur}/${cap} active paper positions (open + pending). Cancel a pending entry or close an open trade to free a slot.`,
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(json?.error || "Failed to open paper trade");
+      }
+      if (mode === "queue_at_entry") {
+        const dirLabel = selected.optionType === "call" ? "≥" : "≤";
+        toast({
+          title: "Pending entry queued",
+          description: `${selected.ticker} ${selected.optionType.toUpperCase()} $${selected.strike} — will fill when underlying ${dirLabel} $${Number(signal.signalEntry).toFixed(2)}.`,
+        });
+      } else {
+        toast({
+          title: "Paper trade opened",
+          description: `${selected.ticker} ${selected.optionType.toUpperCase()} $${selected.strike} @ ${fmtMoney(json.trade.entry_price)} (${json.trade.entry_fill_source})`,
+        });
+      }
       onOpened?.();
       onClose();
     } catch (e: any) {
@@ -307,6 +381,48 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             </div>
             <span className="text-[11px] text-muted-foreground">Exp {signal.expiry}</span>
           </div>
+
+          {/* Buy Now vs. Queue at Signal Entry — only offered for verified
+              signals with a published entry price. Chat trades never see this
+              toggle (canQueueAtEntry guards both visibility and submit behavior). */}
+          {canQueueAtEntry && (
+            <div className="rounded-lg bg-muted/20 border border-border/40 p-2.5">
+              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1.5">Entry mode</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMode("buy_now")}
+                  className={`text-left p-2 rounded-lg border transition-colors ${
+                    mode === "buy_now"
+                      ? "bg-violet-500/15 border-violet-500/50 text-foreground"
+                      : "bg-card/50 border-border/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wide">Buy Now</div>
+                  <div className="text-[10px] mt-0.5 leading-snug opacity-90">Fill at the live ask immediately.</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("queue_at_entry")}
+                  className={`text-left p-2 rounded-lg border transition-colors ${
+                    mode === "queue_at_entry"
+                      ? "bg-sky-500/15 border-sky-500/50 text-foreground"
+                      : "bg-card/50 border-border/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wide">Queue at Entry</div>
+                  <div className="text-[10px] mt-0.5 leading-snug opacity-90">
+                    Wait until underlying {selected?.optionType === "put" ? "≤" : "≥"} <span className="font-mono">${Number(signal.signalEntry).toFixed(2)}</span>, then auto-fill.
+                  </div>
+                </button>
+              </div>
+              {mode === "queue_at_entry" && (
+                <div className="mt-2 text-[10px] leading-snug text-sky-200/80">
+                  Counts against your active-position cap while pending. Auto-cancels at end of trading day if not triggered. You can cancel anytime from Paper Trades.
+                </div>
+              )}
+            </div>
+          )}
 
           {hasPlan && (
             <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1.5">
@@ -476,10 +592,26 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           <button onClick={onClose} className="flex-1 py-2 rounded-lg text-xs font-bold text-muted-foreground bg-muted/30 hover:bg-muted/50">Cancel</button>
           <button
             onClick={submit}
-            disabled={submitting || loading || !selected || selected.entry == null}
-            className="flex-[2] py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-violet-500 to-blue-500 text-white shadow-lg shadow-violet-500/30 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={
+              submitting ||
+              loading ||
+              !selected ||
+              // Buy Now requires a live ask; Queue mode does not.
+              (mode === "buy_now" && selected?.entry == null)
+            }
+            className={`flex-[2] py-2 rounded-lg text-xs font-bold text-white shadow-lg hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+              mode === "queue_at_entry"
+                ? "bg-gradient-to-r from-sky-500 to-blue-500 shadow-sky-500/30"
+                : "bg-gradient-to-r from-violet-500 to-blue-500 shadow-violet-500/30"
+            }`}
           >
-            {submitting ? "Submitting…" : selected?.entry != null ? `Paper Submit @ ${fmtMoney(selected.entry)}` : "Waiting for quote…"}
+            {submitting
+              ? mode === "queue_at_entry" ? "Queueing…" : "Submitting…"
+              : mode === "queue_at_entry"
+                ? `Queue @ $${Number(signal.signalEntry).toFixed(2)}`
+                : selected?.entry != null
+                  ? `Paper Submit @ ${fmtMoney(selected.entry)}`
+                  : "Waiting for quote…"}
           </button>
         </div>
       </div>

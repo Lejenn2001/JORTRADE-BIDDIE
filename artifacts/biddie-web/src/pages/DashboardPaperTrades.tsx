@@ -4,7 +4,9 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X } from "lucide-react";
+import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X, Clock, ChevronUp, ChevronDown } from "lucide-react";
+
+type PaperTradeStatus = "open" | "closed" | "pending_entry" | "cancelled";
 
 interface PaperTrade {
   id: string;
@@ -15,8 +17,8 @@ interface PaperTrade {
   expiry: string;
   contract_symbol: string;
   contracts: number;
-  entry_price: string;
-  entry_fill_source: string;
+  entry_price: string | null;
+  entry_fill_source: string | null;
   entry_underlying: string | null;
   entry_iv: string | null;
   entry_delta: string | null;
@@ -25,8 +27,9 @@ interface PaperTrade {
   signal_entry: string | null;
   signal_grade: string | null;
   signal_confidence: string | null;
-  opened_at: string;
-  status: "open" | "closed";
+  created_at: string | null;
+  opened_at: string | null;
+  status: PaperTradeStatus;
   exit_price: string | null;
   exit_fill_source: string | null;
   exit_underlying: string | null;
@@ -38,7 +41,31 @@ interface PaperTrade {
   last_quote_source: string | null;
   last_quote_underlying: string | null;
   last_checked_at: string | null;
+  source: string | null;
+  // Phase 1 / Commit 1 — pending_entry fields
+  entry_trigger_price: string | null;
+  entry_trigger_direction: "at_or_above" | "at_or_below" | null;
+  pending_expires_at: string | null;
+  pending_cancel_reason: string | null;
 }
+
+interface AutomationSettings {
+  paused: boolean;
+  pausedReason: string | null;
+  maxOpenPending: number;
+  userOpenPending: number;
+  capRemaining: number;
+  isAdmin: boolean;
+}
+
+type FilterKey = "all" | "pending" | "open" | "closed" | "cancelled";
+const FILTER_LABELS: Record<FilterKey, string> = {
+  all: "All",
+  pending: "Pending Entry",
+  open: "Open",
+  closed: "Closed",
+  cancelled: "Cancelled",
+};
 
 // QuoteState — derived purely from existing columns. No schema change.
 //
@@ -112,7 +139,7 @@ const fmtTime = (iso: string | null) => {
     return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
   } catch { return "—"; }
 };
-const exitReasonLabel = (r: string | null) => {
+const exitReasonLabel = (r: string | null): string => {
   if (!r) return "—";
   if (r === "closed_manual" || r === "manual") return "Closed manually";
   if (r === "target_hit") return "🎯 Target hit";
@@ -137,20 +164,65 @@ const sourceLabel = (s: string | null | undefined) => {
   if (s === "expired_otm") return "0 (OTM expired)";
   return s;
 };
+const cancelReasonLabel = (r: string | null) => {
+  if (!r) return "Cancelled";
+  if (r === "user_cancelled") return "Cancelled by you";
+  if (r === "expired_unfilled") return "Expired (unfilled)";
+  if (r === "contract_expired") return "Contract expired";
+  return r;
+};
+const triggerDirectionLabel = (d: string | null) => {
+  if (d === "at_or_above") return "at or above";
+  if (d === "at_or_below") return "at or below";
+  return d ?? "—";
+};
+function formatRelativeUntil(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (!Number.isFinite(ms)) return "—";
+  if (ms <= 0) return "expiring now";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `in ${s}s`;
+  if (s < 3600) return `in ${Math.floor(s / 60)}m`;
+  if (s < 86400) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return m > 0 ? `in ${h}h ${m}m` : `in ${h}h`;
+  }
+  return `in ${Math.floor(s / 86400)}d`;
+}
 
 export default function DashboardPaperTrades() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"open" | "closed" | "all">("open");
+  const [filter, setFilter] = useState<FilterKey>("open");
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [automation, setAutomation] = useState<AutomationSettings | null>(null);
 
   async function authHeader(): Promise<HeadersInit> {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  }
+
+  // Read-only fetch of the kill-switch + cap settings. Drives the
+  // ON / PAUSED badge at the top of the page. No write controls in
+  // this commit — admins still manage state via the dev script.
+  async function loadAutomationSettings() {
+    if (!user) return;
+    try {
+      const headers = await authHeader();
+      const res = await fetch("/api/whale/paper/automation-settings", { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAutomation(data);
+    } catch {
+      // silent — badge is purely informational; never block trades view
+    }
   }
 
   // load() supports two modes:
@@ -178,6 +250,7 @@ export default function DashboardPaperTrades() {
 
   useEffect(() => {
     load();
+    loadAutomationSettings();
     let t: ReturnType<typeof setInterval> | null = null;
     const start = () => {
       if (t) return;
@@ -186,6 +259,7 @@ export default function DashboardPaperTrades() {
           // Foreground 30s tick: recompute quotes server-side so visible
           // marks/P&L stay fresh between background-monitor cycles.
           load(true);
+          loadAutomationSettings();
         }
       }, 30_000);
     };
@@ -269,9 +343,27 @@ export default function DashboardPaperTrades() {
     }
   }
 
+  async function cancelPending(id: string) {
+    if (!confirm("Cancel this pending entry? It will not fill.")) return;
+    setCancellingId(id);
+    try {
+      const headers = await authHeader();
+      const res = await fetch(`/api/whale/paper/trades/${id}/cancel`, { method: "POST", headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Cancel failed");
+      toast({ title: "Cancelled", description: "Pending entry will not fill." });
+      load();
+    } catch (e: any) {
+      toast({ title: "Cancel failed", description: e?.message, variant: "destructive" });
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   const stats = useMemo(() => {
     const closed = trades.filter((t) => t.status === "closed");
     const open = trades.filter((t) => t.status === "open");
+    const pending = trades.filter((t) => t.status === "pending_entry");
     const wins = closed.filter((t) => Number(t.realized_pl ?? 0) > 0).length;
     const losses = closed.filter((t) => Number(t.realized_pl ?? 0) < 0).length;
     const totalPl = closed.reduce((s, t) => s + Number(t.realized_pl ?? 0), 0);
@@ -294,7 +386,7 @@ export default function DashboardPaperTrades() {
       openUnrealized += (last - entry) * Number(t.contracts) * 100;
     }
     const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
-    return { openCount: open.length, closedCount: closed.length, wins, losses, totalPl, openUnrealized, winRate, unavailableCount };
+    return { openCount: open.length, closedCount: closed.length, pendingCount: pending.length, wins, losses, totalPl, openUnrealized, winRate, unavailableCount };
   }, [trades]);
 
   return (
@@ -303,10 +395,27 @@ export default function DashboardPaperTrades() {
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
         <main className="flex-1 p-4 sm:p-6 max-w-6xl mx-auto w-full">
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
             <FlaskConical className="h-5 w-5 text-violet-400" />
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Paper Trades</h1>
             <span className="text-[10px] uppercase tracking-wider text-violet-300 bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 rounded">Simulated</span>
+            {automation && (
+              <span
+                className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded inline-flex items-center gap-1.5 border ${
+                  automation.paused
+                    ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
+                    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                }`}
+                title={
+                  automation.paused
+                    ? `Automation is paused${automation.pausedReason ? `: ${automation.pausedReason}` : ""}. New pending entries will not fire until an admin resumes.`
+                    : `Automation is ON. Pending entries will fire when their trigger condition is met. Cap: ${automation.userOpenPending}/${automation.maxOpenPending} active.`
+                }
+              >
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${automation.paused ? "bg-amber-400" : "bg-emerald-400 animate-pulse"}`} />
+                Automation: {automation.paused ? "PAUSED" : "ON"}
+              </span>
+            )}
           </div>
 
           <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 mb-4 flex gap-2">
@@ -322,6 +431,11 @@ export default function DashboardPaperTrades() {
               <div className="text-lg font-bold text-foreground">{stats.openCount}</div>
               <div className="text-[10px] text-muted-foreground">
                 unrealized {fmtMoney(stats.openUnrealized)}
+                {stats.pendingCount > 0 && (
+                  <span className="block text-sky-300/80">
+                    + {stats.pendingCount} pending {stats.pendingCount === 1 ? "entry" : "entries"}
+                  </span>
+                )}
                 {stats.unavailableCount > 0 && (
                   <span className="block text-amber-300/80">
                     ({stats.unavailableCount} excluded — quote unavailable)
@@ -344,10 +458,21 @@ export default function DashboardPaperTrades() {
             </div>
           </div>
 
-          <div className="flex gap-1 mb-3">
-            {(["open", "closed", "all"] as const).map((f) => (
-              <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? "bg-primary/15 text-primary border border-primary/30" : "bg-muted/30 text-muted-foreground border border-transparent hover:text-foreground"}`}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+          <div className="flex gap-1 mb-3 flex-wrap">
+            {(Object.keys(FILTER_LABELS) as FilterKey[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filter === f
+                    ? "bg-primary/15 text-primary border border-primary/30"
+                    : "bg-muted/30 text-muted-foreground border border-transparent hover:text-foreground"
+                }`}
+              >
+                {FILTER_LABELS[f]}
+                {f === "pending" && stats.pendingCount > 0 && (
+                  <span className="ml-1.5 text-[10px] px-1 rounded bg-sky-500/20 text-sky-300">{stats.pendingCount}</span>
+                )}
               </button>
             ))}
           </div>
@@ -363,6 +488,114 @@ export default function DashboardPaperTrades() {
             <div className="space-y-2">
               {trades.map((t) => {
                 const isCall = t.option_type === "call";
+
+                // ── Pending entry rows ────────────────────────────────────
+                // Pending trades have no entry_price yet (NULL until trigger fires)
+                // and no quote/P&L to show. Display the trigger condition, queued
+                // time, expiration countdown, and a Cancel button. The Buy Now /
+                // Queue toggle on PaperTradeTicket creates these rows.
+                if (t.status === "pending_entry") {
+                  const trig = t.entry_trigger_price != null ? Number(t.entry_trigger_price) : null;
+                  return (
+                    <div key={t.id} className="rounded-xl border p-3 bg-sky-500/5 border-sky-500/30">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isCall ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-red-400" />}
+                          <span className="text-base font-bold text-foreground">{t.ticker}</span>
+                          <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${isCall ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{t.option_type.toUpperCase()} ${Number(t.strike)}</span>
+                          <span className="text-[10px] text-muted-foreground">{String(t.expiry).slice(0, 10)}</span>
+                          <span className="text-[10px] text-muted-foreground">× {t.contracts}</span>
+                          <span className="text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded inline-flex items-center gap-1 bg-sky-500/15 text-sky-300 border-sky-500/30">
+                            <Clock className="h-3 w-3" />
+                            PENDING ENTRY
+                          </span>
+                          {t.signal_grade && (
+                            <span className="text-[10px] uppercase font-bold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded">{t.signal_grade}</span>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => cancelPending(t.id)}
+                            disabled={cancellingId === t.id}
+                            className="px-2 py-1 rounded text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 disabled:opacity-50"
+                            title="Cancel this pending entry — it will not fill"
+                          >
+                            {cancellingId === t.id ? "Cancelling…" : "Cancel"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Trigger</div>
+                          <div className="text-foreground font-medium">
+                            {isCall ? <ChevronUp className="inline h-3 w-3 text-emerald-400" /> : <ChevronDown className="inline h-3 w-3 text-red-400" />}
+                            {" "}
+                            Underlying {triggerDirectionLabel(t.entry_trigger_direction)}{" "}
+                            <span className="font-mono text-sky-200">{trig != null ? `$${trig.toFixed(2)}` : "—"}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Queued</div>
+                          <div className="text-foreground">{t.created_at ? new Date(t.created_at).toLocaleString() : "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Expires</div>
+                          <div className="text-foreground">{formatRelativeUntil(t.pending_expires_at)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Source</div>
+                          <div className="text-foreground capitalize">{t.source ?? "signal"}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-[11px] text-sky-200/80 leading-snug">
+                        Waiting for the underlying to reach the trigger. When it does, we'll fill at the live ask and this becomes an open trade. If it doesn't trigger before expiration, it auto-cancels.
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── Cancelled rows ───────────────────────────────────────
+                // Cancelled trades never filled. Show why they were cancelled
+                // (user, expired unfilled, contract expired) — no P/L exists.
+                if (t.status === "cancelled") {
+                  const trig = t.entry_trigger_price != null ? Number(t.entry_trigger_price) : null;
+                  return (
+                    <div key={t.id} className="rounded-xl border p-3 bg-muted/20 border-border/40 opacity-90">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isCall ? <TrendingUp className="h-4 w-4 text-emerald-400/60" /> : <TrendingDown className="h-4 w-4 text-red-400/60" />}
+                          <span className="text-base font-bold text-foreground/80">{t.ticker}</span>
+                          <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${isCall ? "bg-emerald-500/10 text-emerald-300/70" : "bg-red-500/10 text-red-300/70"}`}>{t.option_type.toUpperCase()} ${Number(t.strike)}</span>
+                          <span className="text-[10px] text-muted-foreground">{String(t.expiry).slice(0, 10)}</span>
+                          <span className="text-[10px] text-muted-foreground">× {t.contracts}</span>
+                          <span className="text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border-border/40">
+                            {cancelReasonLabel(t.pending_cancel_reason)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Was watching</div>
+                          <div className="text-foreground/80">
+                            {triggerDirectionLabel(t.entry_trigger_direction)}{" "}
+                            <span className="font-mono">{trig != null ? `$${trig.toFixed(2)}` : "—"}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Queued</div>
+                          <div className="text-foreground/80">{t.created_at ? new Date(t.created_at).toLocaleString() : "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground uppercase text-[9px]">Source</div>
+                          <div className="text-foreground/80 capitalize">{t.source ?? "signal"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const entry = Number(t.entry_price);
                 const last = t.last_quote_price != null ? Number(t.last_quote_price) : null;
                 const realized = t.realized_pl != null ? Number(t.realized_pl) : null;

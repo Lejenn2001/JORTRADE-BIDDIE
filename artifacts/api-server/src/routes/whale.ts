@@ -6259,14 +6259,22 @@ router.get("/whale/paper/trades", async (req, res) => {
     // Phase 1 (pending_entry): "closed" view explicitly = status='closed'
     // (NOT "anything not open"), so pending_entry/cancelled rows don't bleed
     // into the existing dashboard. "pending" exposes the new state for clients
-    // that want it. "all" still includes every status.
-    const where = status === "open"
-      ? "AND status = 'open'"
-      : status === "closed"
-        ? "AND status = 'closed'"
-        : status === "pending"
-          ? "AND status = 'pending_entry'"
-          : "";
+    // that want it. "cancelled" exposes user-cancelled / expired-unfilled
+    // pending rows so they're auditable instead of disappearing. "all" still
+    // includes every status.
+    // Map the public filter token to the actual DB enum value, then bind it
+    // as a parameter (architect-required: never inline status into SQL even
+    // though branch values are hard-coded — keeps the safety invariant
+    // "no SQL string concatenated from variables" intact across the file).
+    const statusFilter: string | null =
+      status === "open" ? "open"
+      : status === "closed" ? "closed"
+      : status === "pending" ? "pending_entry"
+      : status === "cancelled" ? "cancelled"
+      : null;
+    const where = statusFilter ? "AND pt.status = $2" : "";
+    const params: any[] = [userId];
+    if (statusFilter) params.push(statusFilter);
     const result = await dbQuery(
       `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
        FROM paper_trades pt
@@ -6274,7 +6282,7 @@ router.get("/whale/paper/trades", async (req, res) => {
        WHERE pt.user_id = $1 ${where}
        ORDER BY COALESCE(pt.created_at, pt.opened_at) DESC
        LIMIT 200`,
-      [userId]
+      params
     );
     if (!result) return res.json({ trades: [] });
     res.json({ trades: result.rows });
@@ -6314,13 +6322,16 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
     // Phase 1 (pending_entry): mirror GET /whale/paper/trades filter semantics
     // exactly so the 30s foreground poll never bleeds pending/cancelled rows
     // into the existing dashboard's open or closed views.
-    const where = status === "open"
-      ? "AND status = 'open'"
-      : status === "closed"
-        ? "AND status = 'closed'"
-        : status === "pending"
-          ? "AND status = 'pending_entry'"
-          : "";
+    // Same parameterized status mapping as GET /whale/paper/trades.
+    const statusFilter: string | null =
+      status === "open" ? "open"
+      : status === "closed" ? "closed"
+      : status === "pending" ? "pending_entry"
+      : status === "cancelled" ? "cancelled"
+      : null;
+    const where = statusFilter ? "AND pt.status = $2" : "";
+    const params: any[] = [userId];
+    if (statusFilter) params.push(statusFilter);
     const result = await dbQuery(
       `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
        FROM paper_trades pt
@@ -6328,7 +6339,7 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
        WHERE pt.user_id = $1 ${where}
        ORDER BY COALESCE(pt.created_at, pt.opened_at) DESC
        LIMIT 200`,
-      [userId]
+      params
     );
     res.json({ trades: result?.rows || [], refreshed, closed });
   } catch (e: any) {
