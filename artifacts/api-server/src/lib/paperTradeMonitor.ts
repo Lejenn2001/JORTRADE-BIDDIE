@@ -1,4 +1,4 @@
-import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery } from "./paperTradeService";
+import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso } from "./paperTradeService";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -38,7 +38,12 @@ async function processOpenTrades(): Promise<void> {
     let closed = 0;
     for (const t of open.rows) {
       checked++;
-      const expiryStr = String(t.expiry).slice(0, 10);
+      // Normalize expiry from DB (pg returns DATE columns as Date objects).
+      // String(date).slice(0,10) yields "Fri May 01" (no year), which the JS Date
+      // parser then defaults to year 2001 — silently producing OPRA symbols like
+      // O:NVDA010501C00205000 that 404 on Polygon. normalizeExpiryToIso handles
+      // Date | ISO-string | other defensively to a canonical YYYY-MM-DD.
+      const expiryStr = normalizeExpiryToIso(t.expiry);
       const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
       if (!q) {
         // No quote: expired contracts always close (intrinsic for ITM, 0 otherwise); else touch last_checked_at.

@@ -5188,13 +5188,58 @@ async function verifyBearerUser(req: any): Promise<string | null> {
   }
 }
 
-function buildOptionContractSymbol(ticker: string, expiry: string, optionType: "call" | "put", strike: number): { contractSymbol: string; parentTicker: string } {
+// Normalize an expiry value to a canonical YYYY-MM-DD string.
+//
+// Defensive against the historical bug where PostgreSQL DATE columns are
+// returned by node-postgres as JavaScript Date objects, and `String(date)`
+// produces "Fri May 01 2026 00:00:00 GMT-0700 (PDT)" instead of an ISO date.
+// `String(date).slice(0, 10)` then yields "Fri May 01", which silently broke
+// every downstream OPRA-symbol build (Polygon returned 404 with bodies like
+// "Options contract not found" for symbols such as "O:NVDAi May 01C00205000").
+//
+// Inputs accepted:
+//   - Date object (most common from pg)
+//   - "YYYY-MM-DD" string
+//   - "YYYY-MM-DDTHH:MM:SS..." ISO string
+//   - "Fri May 01 2026 ..." Date.toString() (recovered defensively)
+function normalizeExpiryToIso(expiry: unknown): string {
+  if (expiry instanceof Date) {
+    if (Number.isNaN(expiry.getTime())) {
+      throw new Error(`buildOptionContractSymbol: invalid Date expiry`);
+    }
+    // Use UTC accessors — DATE columns from pg are anchored to midnight in
+    // the server's local TZ; UTC accessors avoid an off-by-one when the
+    // server is east of UTC. (For dates from "YYYY-MM-DD" the pg parser
+    // uses local midnight; we accept the small risk that very-east TZs in
+    // dev shells could shift by one day, which is not a concern in our
+    // UTC-anchored Replit deployment but is documented for awareness.)
+    const y = expiry.getUTCFullYear();
+    const m = String(expiry.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(expiry.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(expiry ?? "");
+  // Already ISO-prefixed → trust the leading 10 chars.
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Fall back to Date parser for anything else (e.g. accidental Date.toString()).
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`buildOptionContractSymbol: cannot parse expiry "${s}"`);
+  }
+  const y = parsed.getUTCFullYear();
+  const m = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(parsed.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function buildOptionContractSymbol(ticker: string, expiry: string | Date, optionType: "call" | "put", strike: number): { contractSymbol: string; parentTicker: string } {
   const isSpxWeekly = ticker === "SPXW";
   const parentTicker = isSpxWeekly ? "SPX" : ticker;
   const contractTicker = isSpxWeekly ? "SPXW" : ticker;
   const strikeInt = Math.round(strike * 1000);
   const strikeStr = strikeInt.toString().padStart(8, "0");
-  const expDigits = expiry.replace(/-/g, "").slice(2); // YYMMDD
+  const isoDate = normalizeExpiryToIso(expiry);
+  const expDigits = isoDate.replace(/-/g, "").slice(2); // YYMMDD
   const cp = optionType === "call" ? "C" : "P";
   return { contractSymbol: `O:${contractTicker}${expDigits}${cp}${strikeStr}`, parentTicker };
 }
@@ -5212,18 +5257,40 @@ interface OptionQuoteResult {
   expiry: string;
 }
 
-async function fetchOptionQuote(ticker: string, expiry: string, optionType: "call" | "put", strike: number): Promise<OptionQuoteResult | null> {
+async function fetchOptionQuote(ticker: string, expiry: string | Date, optionType: "call" | "put", strike: number): Promise<OptionQuoteResult | null> {
   const polygonKey = process.env["POLYGON_API_KEY"];
-  if (!polygonKey) return null;
+  if (!polygonKey) {
+    console.warn(`[paper-trade] fetchOptionQuote: POLYGON_API_KEY missing for ${ticker} ${String(expiry)} ${optionType} ${strike}`);
+    return null;
+  }
   const { contractSymbol, parentTicker } = buildOptionContractSymbol(ticker, expiry, optionType, strike);
   const url = `https://api.polygon.io/v3/snapshot/options/${parentTicker}/${contractSymbol}?apiKey=${polygonKey}`;
+  // Mask the key in logs — only show the last 4 characters of the URL path (without the apiKey query param).
+  const safeUrl = `https://api.polygon.io/v3/snapshot/options/${parentTicker}/${contractSymbol}`;
   // Single inner attempt — caller may retry once on AbortError below.
   async function attempt(): Promise<OptionQuoteResult | null> {
+    const t0 = Date.now();
     const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
-    if (!res.ok) return null;
-    const json: any = await res.json();
+    const elapsed = Date.now() - t0;
+    if (!res.ok) {
+      let body = "";
+      try { body = (await res.text()).slice(0, 300); } catch { body = "<unreadable>"; }
+      console.warn(`[paper-trade] Polygon ${res.status} ${res.statusText} for ${contractSymbol} (${elapsed}ms) url=${safeUrl} body=${body}`);
+      return null;
+    }
+    let json: any;
+    try {
+      json = await res.json();
+    } catch (parseErr: any) {
+      console.warn(`[paper-trade] Polygon JSON parse failed for ${contractSymbol} (${elapsed}ms): ${parseErr?.message}`);
+      return null;
+    }
     const r = json?.results;
-    if (!r) return null;
+    if (!r) {
+      const snippet = JSON.stringify(json ?? {}).slice(0, 300);
+      console.warn(`[paper-trade] Polygon empty results for ${contractSymbol} (${elapsed}ms) status=${json?.status} reqId=${json?.request_id} body=${snippet}`);
+      return null;
+    }
     const bid = r.last_quote?.bid ?? null;
     const ask = r.last_quote?.ask ?? null;
     const midRaw = r.last_quote?.midpoint ?? (bid != null && ask != null ? (bid + ask) / 2 : null);
@@ -5238,7 +5305,7 @@ async function fetchOptionQuote(ticker: string, expiry: string, optionType: "cal
       delta: r.greeks?.delta != null ? Math.round(r.greeks.delta * 1000) / 1000 : null,
       fetchedAt: Date.now(),
       contractSymbol,
-      expiry,
+      expiry: normalizeExpiryToIso(expiry),
     };
   }
   try {
@@ -5341,7 +5408,7 @@ function shouldAutoCloseStop(optionType: string, underlying: number | null, stop
 
 // Auto-close eval (target/stop/expired). Returns updated row or { closed: false, lastFill }.
 async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ closed: boolean; row?: any; lastFill: { price: number | null; source: string | null }; exitReason?: string; fill?: { price: number; source: string } }> {
-  const expiryStr = String(t.expiry).slice(0, 10);
+  const expiryStr = normalizeExpiryToIso(t.expiry);
   const expired = isContractExpired(expiryStr);
   // Use realtime priceMonitor underlying (matches live signal triggers); fall back to snapshot.
   const rt = priceMonitor.getPrice(t.ticker);
@@ -5826,7 +5893,7 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
     let closed = 0;
     if (open && open.rows.length) {
       for (const t of open.rows) {
-        const expiryStr = String(t.expiry).slice(0, 10);
+        const expiryStr = normalizeExpiryToIso(t.expiry);
         const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
         if (!q) {
           if (isContractExpired(expiryStr)) {
@@ -5868,7 +5935,7 @@ async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
     const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
     if (!row || !row.rows.length) { res.status(404).json({ error: "Paper trade not found" }); return; }
     const t = row.rows[0];
-    const expiryStr = String(t.expiry).slice(0, 10);
+    const expiryStr = normalizeExpiryToIso(t.expiry);
     const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
     if (!q) {
       // Parity with monitor: expired no-quote auto-closes via intrinsic/0.
@@ -5920,7 +5987,7 @@ router.post("/whale/paper/trades/:id/close", async (req, res) => {
     if (!row || !row.rows.length) return res.status(404).json({ error: "Paper trade not found" });
     const t = row.rows[0];
     if (t.status !== "open") return res.status(409).json({ error: "Trade is already closed" });
-    const expiryStr = String(t.expiry).slice(0, 10);
+    const expiryStr = normalizeExpiryToIso(t.expiry);
     const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
     if (!q) return res.status(503).json({ error: "Quote unavailable — try again in a few seconds" });
     const expired = isContractExpired(expiryStr);
@@ -5979,7 +6046,7 @@ async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any
 }
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;

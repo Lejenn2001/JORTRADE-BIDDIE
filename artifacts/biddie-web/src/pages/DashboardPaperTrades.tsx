@@ -40,6 +40,70 @@ interface PaperTrade {
   last_checked_at: string | null;
 }
 
+// QuoteState — derived purely from existing columns. No schema change.
+//
+// Definitions:
+//   LIVE        → background monitor has successfully refreshed at least once
+//                 (last_quote_underlying differs from entry_underlying), and the
+//                 last attempt was within the freshness window.
+//   STALE       → monitor previously succeeded but hasn't refreshed recently.
+//                 We display the last known quote, clearly labeled.
+//   UNAVAILABLE → monitor has NEVER successfully fetched a quote since this
+//                 trade was opened (last_quote_underlying === entry_underlying
+//                 and the trade is older than the warmup window). The displayed
+//                 last_quote_* values are just trade-open snapshots, NOT live
+//                 marks, so we suppress P/L to avoid pretending it's real.
+//   PENDING     → trade was just opened (< warmup window). The first monitor
+//                 cycle hasn't happened yet — this is normal, not a failure.
+type QuoteState = "live" | "stale" | "unavailable" | "pending";
+
+const QUOTE_FRESH_SECONDS = 120;     // monitor cycle is 60s; allow 2x for tolerance
+const QUOTE_WARMUP_SECONDS = 180;    // give the monitor 3 minutes before flagging UNAVAILABLE
+
+function deriveQuoteState(t: PaperTrade): { state: QuoteState; ageOfQuoteSec: number | null; ageSinceCheckSec: number | null } {
+  if (t.status !== "open") {
+    return { state: "live", ageOfQuoteSec: null, ageSinceCheckSec: null };
+  }
+  const now = Date.now();
+  const openedMs = t.opened_at ? new Date(t.opened_at).getTime() : now;
+  const checkedMs = t.last_checked_at ? new Date(t.last_checked_at).getTime() : null;
+  const tradeAgeSec = Math.max(0, (now - openedMs) / 1000);
+  const ageSinceCheckSec = checkedMs != null ? Math.max(0, (now - checkedMs) / 1000) : null;
+
+  // Has the monitor produced an update DIFFERENT from the entry snapshot?
+  // entry_underlying is captured exactly once at trade open; last_quote_underlying
+  // is overwritten on every successful Polygon fetch. If they're still identical
+  // many minutes after opening, the monitor has never produced a live mark.
+  const entryU = t.entry_underlying != null ? Number(t.entry_underlying) : null;
+  const lastU = t.last_quote_underlying != null ? Number(t.last_quote_underlying) : null;
+  const hasFreshQuote = entryU != null && lastU != null && Number.isFinite(entryU) && Number.isFinite(lastU) && Math.abs(entryU - lastU) > 0.0001;
+
+  if (!hasFreshQuote) {
+    if (tradeAgeSec < QUOTE_WARMUP_SECONDS) {
+      return { state: "pending", ageOfQuoteSec: null, ageSinceCheckSec };
+    }
+    return { state: "unavailable", ageOfQuoteSec: null, ageSinceCheckSec };
+  }
+  // We have a real refreshed quote. Treat ageSinceCheck as ageOfQuote — when the
+  // monitor writes a fresh mark it also bumps last_checked_at, so they're equal
+  // for "good" rows.
+  const fresh = ageSinceCheckSec != null && ageSinceCheckSec <= QUOTE_FRESH_SECONDS;
+  return {
+    state: fresh ? "live" : "stale",
+    ageOfQuoteSec: ageSinceCheckSec,
+    ageSinceCheckSec,
+  };
+}
+
+function formatAge(seconds: number | null): string {
+  if (seconds == null) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+}
+
 const fmtMoney = (v: string | number | null | undefined) => v == null || v === "" ? "—" : `$${Number(v).toFixed(2)}`;
 const fmtPct = (v: string | number | null | undefined) => v == null || v === "" ? "—" : `${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(1)}%`;
 const fmtTime = (iso: string | null) => {
@@ -211,14 +275,26 @@ export default function DashboardPaperTrades() {
     const wins = closed.filter((t) => Number(t.realized_pl ?? 0) > 0).length;
     const losses = closed.filter((t) => Number(t.realized_pl ?? 0) < 0).length;
     const totalPl = closed.reduce((s, t) => s + Number(t.realized_pl ?? 0), 0);
-    const openUnrealized = open.reduce((s, t) => {
+    // Only sum unrealized P/L for trades whose quote is genuinely LIVE or STALE
+    // (i.e., the monitor has produced at least one fresh mark). Trades whose
+    // quote is UNAVAILABLE or PENDING contribute 0 — using their entry-snapshot
+    // values would falsely report "0 unrealized" as if the position were exactly
+    // flat. We also count how many trades are excluded so the UI can disclose it.
+    let openUnrealized = 0;
+    let unavailableCount = 0;
+    for (const t of open) {
+      const { state } = deriveQuoteState(t);
+      if (state === "unavailable" || state === "pending") {
+        unavailableCount++;
+        continue;
+      }
       const last = t.last_quote_price != null ? Number(t.last_quote_price) : null;
       const entry = Number(t.entry_price);
-      if (last == null) return s;
-      return s + (last - entry) * Number(t.contracts) * 100;
-    }, 0);
+      if (last == null) { unavailableCount++; continue; }
+      openUnrealized += (last - entry) * Number(t.contracts) * 100;
+    }
     const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
-    return { openCount: open.length, closedCount: closed.length, wins, losses, totalPl, openUnrealized, winRate };
+    return { openCount: open.length, closedCount: closed.length, wins, losses, totalPl, openUnrealized, winRate, unavailableCount };
   }, [trades]);
 
   return (
@@ -244,7 +320,14 @@ export default function DashboardPaperTrades() {
             <div className="rounded-lg bg-card border border-border/40 p-3">
               <div className="text-[10px] uppercase text-muted-foreground">Open</div>
               <div className="text-lg font-bold text-foreground">{stats.openCount}</div>
-              <div className="text-[10px] text-muted-foreground">unrealized {fmtMoney(stats.openUnrealized)}</div>
+              <div className="text-[10px] text-muted-foreground">
+                unrealized {fmtMoney(stats.openUnrealized)}
+                {stats.unavailableCount > 0 && (
+                  <span className="block text-amber-300/80">
+                    ({stats.unavailableCount} excluded — quote unavailable)
+                  </span>
+                )}
+              </div>
             </div>
             <div className="rounded-lg bg-card border border-border/40 p-3">
               <div className="text-[10px] uppercase text-muted-foreground">Closed</div>
@@ -282,16 +365,33 @@ export default function DashboardPaperTrades() {
                 const isCall = t.option_type === "call";
                 const entry = Number(t.entry_price);
                 const last = t.last_quote_price != null ? Number(t.last_quote_price) : null;
-                const unrealized = last != null && t.status === "open" ? (last - entry) * Number(t.contracts) * 100 : null;
-                const unrealizedPct = last != null && t.status === "open" && entry > 0 ? ((last - entry) / entry) * 100 : null;
                 const realized = t.realized_pl != null ? Number(t.realized_pl) : null;
                 const realizedPct = t.realized_pl_pct != null ? Number(t.realized_pl_pct) : null;
-                const plToShow = t.status === "open" ? unrealized : realized;
-                const plPctToShow = t.status === "open" ? unrealizedPct : realizedPct;
                 const target = t.signal_target != null ? Number(t.signal_target) : null;
                 const inval = t.signal_invalidation != null ? Number(t.signal_invalidation) : null;
+
+                // Quote freshness — derived from existing columns. When the quote is
+                // UNAVAILABLE or PENDING we MUST NOT show P/L based on the entry-snapshot
+                // value, because that would falsely report 0 unrealized as if the position
+                // were exactly flat.
+                const { state: quoteState, ageSinceCheckSec } = deriveQuoteState(t);
+                const quoteIsUsable = t.status === "closed" || quoteState === "live" || quoteState === "stale";
+
+                const unrealized = quoteIsUsable && last != null && t.status === "open" ? (last - entry) * Number(t.contracts) * 100 : null;
+                const unrealizedPct = quoteIsUsable && last != null && t.status === "open" && entry > 0 ? ((last - entry) / entry) * 100 : null;
+                const plToShow = t.status === "open" ? unrealized : realized;
+                const plPctToShow = t.status === "open" ? unrealizedPct : realizedPct;
+
+                // State badge — visible on every OPEN row.
+                const stateBadge = t.status !== "open" ? null : (() => {
+                  if (quoteState === "live") return { label: "LIVE", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400" };
+                  if (quoteState === "stale") return { label: "STALE", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", dot: "bg-amber-400" };
+                  if (quoteState === "pending") return { label: "PENDING QUOTE", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", dot: "bg-sky-400" };
+                  return { label: "QUOTE UNAVAILABLE", cls: "bg-red-500/15 text-red-300 border-red-500/30", dot: "bg-red-400" };
+                })();
+
                 return (
-                  <div key={t.id} className={`rounded-xl border p-3 ${t.status === "open" ? "bg-card border-border/50" : (realized ?? 0) >= 0 ? "bg-emerald-500/5 border-emerald-500/30" : "bg-red-500/5 border-red-500/30"}`}>
+                  <div key={t.id} className={`rounded-xl border p-3 ${t.status === "open" ? (quoteState === "unavailable" ? "bg-red-500/5 border-red-500/30" : "bg-card border-border/50") : (realized ?? 0) >= 0 ? "bg-emerald-500/5 border-emerald-500/30" : "bg-red-500/5 border-red-500/30"}`}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isCall ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-red-400" />}
@@ -303,6 +403,12 @@ export default function DashboardPaperTrades() {
                           <span className="text-[10px] uppercase font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-1.5 py-0.5 rounded">OPEN</span>
                         ) : (
                           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${exitReasonStyle(t.exit_reason)}`}>{exitReasonLabel(t.exit_reason)}</span>
+                        )}
+                        {stateBadge && (
+                          <span className={`text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${stateBadge.cls}`}>
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${stateBadge.dot}`} />
+                            {stateBadge.label}
+                          </span>
                         )}
                         {t.signal_grade && (
                           <span className="text-[10px] uppercase font-bold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded">{t.signal_grade}</span>
@@ -321,22 +427,52 @@ export default function DashboardPaperTrades() {
                         )}
                       </div>
                     </div>
+
+                    {/* When the monitor has never produced a live quote, be explicit
+                        about what the user is looking at. Do NOT pretend P/L is real. */}
+                    {t.status === "open" && quoteState === "unavailable" && (
+                      <div className="mb-2 rounded-lg bg-red-500/10 border border-red-500/30 p-2 text-[11px] text-red-200/90 leading-snug">
+                        <strong>Live quote not available.</strong> The background monitor has not been able to refresh this contract since the trade was opened. P/L is hidden because we will not show a number we can't verify. Underlying shown below is the snapshot at trade open, not a live price.
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
                       <div><span className="text-muted-foreground">Entry: </span><span className="font-mono text-foreground">{fmtMoney(entry)} <span className="text-muted-foreground">(at {sourceLabel(t.entry_fill_source)})</span></span></div>
                       {t.status === "open" ? (
-                        <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-foreground">{fmtMoney(last)} <span className="text-muted-foreground">(at {sourceLabel(t.last_quote_source)})</span></span></div>
+                        quoteIsUsable ? (
+                          <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-foreground">{fmtMoney(last)} <span className="text-muted-foreground">(at {sourceLabel(t.last_quote_source)})</span></span></div>
+                        ) : (
+                          <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-muted-foreground">—</span></div>
+                        )
                       ) : (
                         <div><span className="text-muted-foreground">Exit: </span><span className="font-mono text-foreground">{fmtMoney(t.exit_price)} <span className="text-muted-foreground">(at {sourceLabel(t.exit_fill_source)})</span></span></div>
                       )}
                       <div className={`font-mono font-bold ${plToShow != null && plToShow >= 0 ? "text-emerald-400" : plToShow != null ? "text-red-400" : "text-muted-foreground"}`}>
-                        P/L: {fmtMoney(plToShow)} {plPctToShow != null && <span className="text-[10px]">({fmtPct(plPctToShow)})</span>}
+                        P/L: {plToShow != null ? fmtMoney(plToShow) : "—"} {plPctToShow != null && <span className="text-[10px]">({fmtPct(plPctToShow)})</span>}
                       </div>
                       <div className="text-muted-foreground">Opened {fmtTime(t.opened_at)}</div>
                       {t.signal_entry != null && <div className="text-muted-foreground">Plan entry: <span className="font-mono text-foreground">{fmtMoney(t.signal_entry)}</span></div>}
                       {target != null && <div className="text-muted-foreground">🎯 Target: <span className="font-mono text-emerald-300">{fmtMoney(target)}</span></div>}
                       {inval != null && <div className="text-muted-foreground">🛑 Stop: <span className="font-mono text-red-300">{fmtMoney(inval)}</span></div>}
-                      {t.status === "open" && t.last_quote_underlying && <div className="text-muted-foreground">Underlying: <span className="font-mono text-foreground">{fmtMoney(t.last_quote_underlying)}</span></div>}
-                      {t.last_checked_at && t.status === "open" && <div className="text-muted-foreground">Updated {fmtTime(t.last_checked_at)}</div>}
+                      {t.status === "open" && t.last_quote_underlying && (
+                        <div className="text-muted-foreground">
+                          Underlying: <span className="font-mono text-foreground">{fmtMoney(t.last_quote_underlying)}</span>
+                          {quoteState === "unavailable" && <span className="text-amber-300/80"> (entry snapshot)</span>}
+                        </div>
+                      )}
+                      {t.status === "open" && (
+                        <div className={
+                          quoteState === "live" ? "text-muted-foreground"
+                          : quoteState === "stale" ? "text-amber-300"
+                          : quoteState === "unavailable" ? "text-red-300"
+                          : "text-sky-300"
+                        }>
+                          {quoteState === "live" && <>Last quote {formatAge(ageSinceCheckSec)}</>}
+                          {quoteState === "stale" && <>Last quote {formatAge(ageSinceCheckSec)}</>}
+                          {quoteState === "unavailable" && <>No live quote since open · last attempted {formatAge(ageSinceCheckSec)}</>}
+                          {quoteState === "pending" && <>Waiting for first quote…</>}
+                        </div>
+                      )}
                       {t.closed_at && <div className="text-muted-foreground">Closed {fmtTime(t.closed_at)}</div>}
                     </div>
                     {(t.signal_grade || t.signal_confidence) && (
