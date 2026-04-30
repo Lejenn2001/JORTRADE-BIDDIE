@@ -5217,7 +5217,8 @@ async function fetchOptionQuote(ticker: string, expiry: string, optionType: "cal
   if (!polygonKey) return null;
   const { contractSymbol, parentTicker } = buildOptionContractSymbol(ticker, expiry, optionType, strike);
   const url = `https://api.polygon.io/v3/snapshot/options/${parentTicker}/${contractSymbol}?apiKey=${polygonKey}`;
-  try {
+  // Single inner attempt — caller may retry once on AbortError below.
+  async function attempt(): Promise<OptionQuoteResult | null> {
     const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
     if (!res.ok) return null;
     const json: any = await res.json();
@@ -5239,9 +5240,25 @@ async function fetchOptionQuote(ticker: string, expiry: string, optionType: "cal
       contractSymbol,
       expiry,
     };
+  }
+  try {
+    return await attempt();
   } catch (e: any) {
-    console.warn(`[paper-trade] Quote fetch failed ${contractSymbol}: ${e?.message}`);
-    return null;
+    // Retry exactly once on timeout/abort. Anything else (network refused,
+    // DNS, JSON parse) bubbles to the outer catch and returns null.
+    const isAbort = e?.name === "AbortError" || e?.name === "TimeoutError" || /aborted|timeout/i.test(String(e?.message ?? ""));
+    if (!isAbort) {
+      console.warn(`[paper-trade] Quote fetch failed ${contractSymbol}: ${e?.message}`);
+      return null;
+    }
+    try {
+      const r = await attempt();
+      if (r) console.warn(`[paper-trade] Quote fetch recovered on retry ${contractSymbol}`);
+      return r;
+    } catch (e2: any) {
+      console.warn(`[paper-trade] Quote fetch failed ${contractSymbol} (after 1 retry): ${e2?.message}`);
+      return null;
+    }
   }
 }
 

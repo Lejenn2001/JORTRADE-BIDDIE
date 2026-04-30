@@ -157,7 +157,22 @@ export default function DashboardPaperTrades() {
       const headers = await authHeader();
       const res = await fetch(`/api/whale/paper/trades/${id}/refresh`, { method: "POST", headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error);
+      if (!res.ok) {
+        // 503 "Quote unavailable" is a transient upstream timeout (Polygon) — the
+        // background paper-trade-monitor (every 60s) and tab polling (30s) will
+        // catch the next cycle. Show a soft, non-destructive toast so a single
+        // failed manual click doesn't look like the page is broken. The trade row
+        // itself is unchanged on the server when this happens.
+        const errMsg = String(data?.error ?? "");
+        if (res.status === 503 && /quote unavailable/i.test(errMsg)) {
+          toast({
+            title: "Quote temporarily unavailable",
+            description: "Retrying in background.",
+          });
+          return;
+        }
+        throw new Error(data?.error);
+      }
       // Replace with the full server-returned trade so that auto-close side effects
       // (status, exit_*, realized_pl, closed_at, exit_reason) flow into the UI on the
       // same tick — otherwise a refresh that triggers an auto-close would leave the
