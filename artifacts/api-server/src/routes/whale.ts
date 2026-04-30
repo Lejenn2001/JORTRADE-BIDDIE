@@ -3384,7 +3384,9 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
               target, invalidation, entry_trigger, reason, direction,
               max_favorable_price, mfe_percent, max_adverse_price,
               entry_price_reached, invalidation_breached, pct_past_invalidation,
-              time_at_target, entry_price, key_level, sr_level
+              time_at_target, entry_price, key_level, sr_level,
+              conviction_score, reinforcement_count, last_reinforced_at, is_biddie_pick,
+              target_near, signal_source, suggested_trade, tags
        FROM signal_outcomes WHERE id = $1`,
       [id]
     );

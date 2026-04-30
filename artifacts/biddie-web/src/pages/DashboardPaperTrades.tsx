@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
@@ -193,6 +193,280 @@ const triggerDirectionLabel = (d: string | null) => {
   if (d === "at_or_below") return "at or below";
   return d ?? "—";
 };
+// ─── "View Original Signal" panel ───────────────────────────────────────
+//
+// UI-only feature. Renders an expandable section under each trade row showing
+// the full context that produced the trade. Pulls from two sources:
+//
+//   1. Fields already on the PaperTrade row (no fetch): selected contract,
+//      signal_entry/target/invalidation, signal_grade/confidence, created_at,
+//      opened_at, entry_trigger_*, etc.
+//
+//   2. The existing public read endpoint GET /whale/signals/detail/:signal_id
+//      for fields that live on signal_outcomes only: detected_at (= original
+//      signal time), reason, conviction_score, reinforcement_count,
+//      is_biddie_pick, signal_type/direction/category, target_near, etc.
+//
+// Source inference (no `source` column exists on paper_trades):
+//   - 200 OK from /signals/detail → "Verified Signal"
+//   - 404 → "Unverified" (no row in signal_outcomes — usually a Biddie chat
+//             trade since POST /whale/chat is stateless, but could also be a
+//             signal whose history record was removed; we hedge in copy)
+//   - network error → "Unknown"
+//
+// Things that are explicitly NOT stored anywhere and therefore always render
+// as "Not available" (no API change can produce them):
+//   - Original Biddie chat message + timestamp (POST /whale/chat is stateless,
+//     it does not persist 1-on-1 chat history).
+//   - Execution verdict at the moment the trade was placed (executionEvaluator
+//     produces a verdict on signals but the result is not snapshotted onto
+//     paper_trades at insert time).
+
+interface OriginalSignalDetail {
+  id: string;
+  ticker?: string | null;
+  signal_type?: string | null;
+  option_type?: string | null;
+  strike?: string | number | null;
+  expiry?: string | null;
+  confidence?: string | number | null;
+  conviction_score?: string | number | null;
+  outcome?: string | null;
+  detected_at?: string | null;
+  created_at?: string | null;
+  category?: string | null;
+  direction?: string | null;
+  reason?: string | null;
+  entry_trigger?: string | null;
+  target?: string | null;
+  target_near?: string | null;
+  invalidation?: string | null;
+  reinforcement_count?: string | number | null;
+  last_reinforced_at?: string | null;
+  is_biddie_pick?: boolean | null;
+  signal_source?: string | null;
+  suggested_trade?: string | null;
+  tags?: string[] | null;
+  price_at_signal?: string | number | null;
+}
+
+type DetailFetchState =
+  | { status: "loading" }
+  | { status: "loaded"; data: OriginalSignalDetail }
+  | { status: "not_found" }
+  | { status: "error"; message: string };
+
+function fmtDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.round(totalSec / 60);
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h < 24) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH > 0 ? `${d}d ${remH}h` : `${d}d`;
+}
+
+// "Original contract" vs "Selected contract" comparison. For verified-signal
+// trades these are usually the same. For chat trades the "original" side
+// will be missing from the detail fetch.
+function contractLabel(opt: string | null | undefined, strike: string | number | null | undefined, expiry: string | null | undefined): string {
+  if (!opt && strike == null && !expiry) return "Not available";
+  const o = (opt || "").toUpperCase() || "?";
+  const s = strike != null && strike !== "" ? `$${Number(strike)}` : "—";
+  const e = expiry ? String(expiry).slice(0, 10) : "—";
+  return `${o} ${s} exp ${e}`;
+}
+
+function naOr(v: string | number | null | undefined, fmt?: (n: number) => string): string {
+  if (v == null || v === "") return "Not available";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return fmt ? fmt(n) : String(v);
+}
+
+function inferSourceLabel(t: PaperTrade, fetchState: DetailFetchState | undefined): { label: string; cls: string; title?: string } {
+  // Trust the fetch result first — that's the authoritative signal-vs-not check.
+  if (fetchState?.status === "loaded") {
+    return {
+      label: "Verified Signal",
+      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+      title: "A matching signal was found in the signal history for this trade.",
+    };
+  }
+  if (fetchState?.status === "not_found") {
+    // We don't know it's *definitively* a chat trade — it could also be a
+    // signal whose history row was deleted, archived, or never recorded.
+    // Hedge the label rather than assert the origin.
+    return {
+      label: "Unverified",
+      cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+      title: "No matching signal was found in the signal history. Most often this means the trade originated from a Biddie chat (which is stateless), but it could also be a signal whose history record was removed.",
+    };
+  }
+  // Before we've fetched, fall back to a heuristic on local data.
+  const planFieldsPresent = (t.signal_entry != null) || (t.signal_target != null) || (t.signal_invalidation != null);
+  if (!planFieldsPresent) {
+    return {
+      label: "Unverified",
+      cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+      title: "No plan (entry/target/stop) is stored for this trade — likely from a Biddie chat. Click to confirm against the signal history.",
+    };
+  }
+  return {
+    label: "Signal (probably verified)",
+    cls: "bg-sky-500/15 text-sky-300 border-sky-500/30",
+    title: "Plan fields are present locally; click to confirm a matching record exists in the signal history.",
+  };
+}
+
+function OriginalSignalPanel({ t, fetchState }: { t: PaperTrade; fetchState: DetailFetchState | undefined }) {
+  const detail = fetchState?.status === "loaded" ? fetchState.data : null;
+  const source = inferSourceLabel(t, fetchState);
+
+  const signalTimeIso = detail?.detected_at || detail?.created_at || null;
+  const signalTimeMs = signalTimeIso ? new Date(signalTimeIso).getTime() : null;
+  const queuedMs = t.created_at ? new Date(t.created_at).getTime() : null;
+  const openedMs = t.opened_at ? new Date(t.opened_at).getTime() : null;
+  const refMs = openedMs ?? queuedMs;
+  const delayMs = signalTimeMs != null && refMs != null ? refMs - signalTimeMs : null;
+
+  // Selected contract (always available — these are required columns on paper_trades)
+  const selectedContract = contractLabel(t.option_type, t.strike, t.expiry);
+
+  // Original contract from the signal_outcomes row, if loaded.
+  const originalContract = detail
+    ? contractLabel(detail.option_type, detail.strike, detail.expiry)
+    : (fetchState?.status === "loading" ? "Loading…" : "Not available");
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/40 bg-muted/10 -mx-3 -mb-3 px-3 pb-3 rounded-b-xl">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Original Signal</span>
+          <span title={source.title} className={`text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded ${source.cls}`}>{source.label}</span>
+          {detail?.is_biddie_pick && (
+            <span className="text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30">Biddie Pick</span>
+          )}
+        </div>
+      </div>
+
+      {fetchState?.status === "loading" && (
+        <div className="text-[11px] text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Loading original signal…</div>
+      )}
+      {fetchState?.status === "error" && (
+        <div className="text-[11px] text-red-300">Could not load original signal: {fetchState.message}</div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+        {/* Timing */}
+        <div className="space-y-0.5">
+          <div className="text-muted-foreground uppercase text-[9px]">Timing</div>
+          <div><span className="text-muted-foreground">Signal published: </span><span className="text-foreground">{signalTimeIso ? new Date(signalTimeIso).toLocaleString() : "Not available"}</span></div>
+          <div><span className="text-muted-foreground">Trade queued: </span><span className="text-foreground">{t.created_at ? new Date(t.created_at).toLocaleString() : "Not available"}</span></div>
+          <div><span className="text-muted-foreground">Trade opened: </span><span className="text-foreground">{t.opened_at ? new Date(t.opened_at).toLocaleString() : (t.status === "pending_entry" ? "Awaiting trigger" : t.status === "cancelled" ? "Never (cancelled)" : "Not available")}</span></div>
+          <div><span className="text-muted-foreground">Delay signal → trade: </span><span className="text-foreground">{delayMs != null ? fmtDurationMs(delayMs) : "Not available"}</span></div>
+        </div>
+
+        {/* Contracts */}
+        <div className="space-y-0.5">
+          <div className="text-muted-foreground uppercase text-[9px]">Contract</div>
+          <div><span className="text-muted-foreground">Ticker: </span><span className="text-foreground font-medium">{t.ticker}</span></div>
+          <div><span className="text-muted-foreground">Original contract: </span><span className="font-mono text-foreground">{originalContract}</span></div>
+          <div><span className="text-muted-foreground">Selected contract: </span><span className="font-mono text-foreground">{selectedContract}</span></div>
+          {detail?.signal_type && (
+            <div><span className="text-muted-foreground">Signal type: </span><span className="text-foreground capitalize">{detail.signal_type}{detail.direction ? ` · ${detail.direction}` : ""}</span></div>
+          )}
+        </div>
+
+        {/* Plan: entry / target / stop */}
+        <div className="space-y-0.5">
+          <div className="text-muted-foreground uppercase text-[9px]">Plan</div>
+          <div>
+            <span className="text-muted-foreground">Entry: </span>
+            <span className="font-mono text-foreground">
+              {t.signal_entry != null ? fmtMoney(t.signal_entry)
+                : detail?.entry_trigger ? detail.entry_trigger
+                : "Not available"}
+            </span>
+            {t.entry_price != null && (
+              <span className="text-muted-foreground"> · filled at <span className="font-mono text-foreground">{fmtMoney(t.entry_price)}</span></span>
+            )}
+          </div>
+          <div>
+            <span className="text-muted-foreground">🎯 Target: </span>
+            <span className="font-mono text-emerald-300">
+              {t.signal_target != null ? fmtMoney(t.signal_target)
+                : detail?.target ? detail.target
+                : "Not available"}
+            </span>
+            {detail?.target_near && detail.target_near !== detail.target && (
+              <span className="text-muted-foreground"> · near <span className="text-foreground">{detail.target_near}</span></span>
+            )}
+          </div>
+          <div>
+            <span className="text-muted-foreground">🛑 Stop / invalidation: </span>
+            <span className="font-mono text-red-300">
+              {t.signal_invalidation != null ? fmtMoney(t.signal_invalidation)
+                : detail?.invalidation ? detail.invalidation
+                : "Not available"}
+            </span>
+          </div>
+          {detail?.price_at_signal != null && (
+            <div><span className="text-muted-foreground">Underlying at signal: </span><span className="font-mono text-foreground">{fmtMoney(detail.price_at_signal)}</span></div>
+          )}
+        </div>
+
+        {/* Conviction & reinforcement */}
+        <div className="space-y-0.5">
+          <div className="text-muted-foreground uppercase text-[9px]">Conviction</div>
+          <div><span className="text-muted-foreground">Confidence: </span><span className="text-foreground font-medium">{t.signal_confidence ?? naOr(detail?.confidence)}</span></div>
+          <div><span className="text-muted-foreground">Grade: </span><span className="text-foreground font-medium">{t.signal_grade ?? "Not available"}</span></div>
+          <div><span className="text-muted-foreground">Conviction score: </span><span className="text-foreground font-medium">{naOr(detail?.conviction_score)}</span></div>
+          <div>
+            <span className="text-muted-foreground">Reinforcement count: </span>
+            <span className="text-foreground font-medium">{naOr(detail?.reinforcement_count)}</span>
+            {detail?.last_reinforced_at && (
+              <span className="text-muted-foreground"> · last reinforced {new Date(detail.last_reinforced_at).toLocaleString()}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Execution verdict — explicitly not stored */}
+        <div className="space-y-0.5 sm:col-span-2">
+          <div className="text-muted-foreground uppercase text-[9px]">Execution verdict at time of trade</div>
+          <div className="text-muted-foreground italic">Not available — execution verdict is not snapshotted onto the paper trade at insert time. Current signal outcome: <span className="text-foreground not-italic">{detail?.outcome ?? "Not available"}</span></div>
+        </div>
+
+        {/* Reason / explanation from the signal */}
+        {detail?.reason && (
+          <div className="space-y-0.5 sm:col-span-2">
+            <div className="text-muted-foreground uppercase text-[9px]">Reason / thesis</div>
+            <div className="text-foreground/90 leading-snug whitespace-pre-wrap">{detail.reason}</div>
+          </div>
+        )}
+        {detail?.suggested_trade && (
+          <div className="space-y-0.5 sm:col-span-2">
+            <div className="text-muted-foreground uppercase text-[9px]">Suggested trade (from signal)</div>
+            <div className="text-foreground/90 leading-snug whitespace-pre-wrap">{detail.suggested_trade}</div>
+          </div>
+        )}
+
+        {/* Chat message — explicitly not stored for Biddie 1-on-1 */}
+        {fetchState?.status === "not_found" && (
+          <div className="space-y-0.5 sm:col-span-2">
+            <div className="text-muted-foreground uppercase text-[9px]">Original chat message</div>
+            <div className="text-muted-foreground italic">Not available — Biddie chat history is not stored on the server (POST /whale/chat is stateless).</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function formatRelativeUntil(iso: string | null): string {
   if (!iso) return "—";
   const ms = new Date(iso).getTime() - Date.now();
@@ -219,6 +493,16 @@ export default function DashboardPaperTrades() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [automation, setAutomation] = useState<AutomationSettings | null>(null);
+
+  // "View Original Signal" panel state. Only one row's panel is expanded at
+  // a time. Detail fetches are cached by signal_id so re-opening is instant.
+  // `signalDetailsInFlight` is a ref (not state) because we need an
+  // up-to-the-microtask check for "is a request currently in flight" to
+  // prevent duplicate fetches across rapid toggles — reading from state would
+  // see a stale value due to React's render batching.
+  const [expandedSignalRow, setExpandedSignalRow] = useState<string | null>(null);
+  const [signalDetails, setSignalDetails] = useState<Record<string, DetailFetchState>>({});
+  const signalDetailsInFlight = useRef<Set<string>>(new Set());
 
   async function authHeader(): Promise<HeadersInit> {
     const { data } = await supabase.auth.getSession();
@@ -377,6 +661,56 @@ export default function DashboardPaperTrades() {
     }
   }
 
+  // Toggle the "Original Signal" panel. Lazy-fetches the detail on first
+  // expand and caches per signal_id. Auth is not required by
+  // /whale/signals/detail/:id (it's a public read endpoint).
+  //
+  // Caching/retry policy:
+  //   - "loaded" / "not_found" → cached forever (cheap re-open).
+  //   - "error"                → NOT cached; the next expand retries, so a
+  //                              transient 5xx/network blip doesn't become
+  //                              permanently sticky.
+  //   - in-flight              → deduped via `signalDetailsInFlight` (a ref,
+  //                              so rapid double-clicks see an up-to-date
+  //                              value rather than React's batched state).
+  async function toggleSignalPanel(t: PaperTrade) {
+    const newId = expandedSignalRow === t.id ? null : t.id;
+    setExpandedSignalRow(newId);
+    if (newId == null) return;
+
+    const cacheKey = t.signal_id;
+    if (!cacheKey) return; // nothing to fetch
+
+    const existing = signalDetails[cacheKey];
+    // Honor positive cache (success or definitive 404) — but allow retry on prior error.
+    if (existing && (existing.status === "loaded" || existing.status === "not_found")) return;
+    // Dedupe concurrent requests for the same signal across rapid toggles.
+    if (signalDetailsInFlight.current.has(cacheKey)) return;
+    signalDetailsInFlight.current.add(cacheKey);
+
+    setSignalDetails((prev) => ({ ...prev, [cacheKey]: { status: "loading" } }));
+    try {
+      const res = await fetch(`/api/whale/signals/detail/${encodeURIComponent(cacheKey)}`);
+      if (res.status === 404) {
+        setSignalDetails((prev) => ({ ...prev, [cacheKey]: { status: "not_found" } }));
+        return;
+      }
+      if (!res.ok) {
+        setSignalDetails((prev) => ({ ...prev, [cacheKey]: { status: "error", message: `HTTP ${res.status}` } }));
+        return;
+      }
+      const data = await res.json();
+      // The endpoint returns { signal: {...}, priceHistory, ... }. We only
+      // care about `signal` for the panel.
+      const sig = data?.signal ?? data;
+      setSignalDetails((prev) => ({ ...prev, [cacheKey]: { status: "loaded", data: sig } }));
+    } catch (e: any) {
+      setSignalDetails((prev) => ({ ...prev, [cacheKey]: { status: "error", message: e?.message ?? "Network error" } }));
+    } finally {
+      signalDetailsInFlight.current.delete(cacheKey);
+    }
+  }
+
   const stats = useMemo(() => {
     const closed = trades.filter((t) => t.status === "closed");
     const open = trades.filter((t) => t.status === "open");
@@ -532,6 +866,14 @@ export default function DashboardPaperTrades() {
                         </div>
                         <div className="flex gap-1">
                           <button
+                            onClick={() => toggleSignalPanel(t)}
+                            className="px-2 py-1 rounded text-[11px] font-bold bg-muted/40 text-foreground/80 border border-border/50 hover:bg-muted/60 inline-flex items-center gap-1"
+                            title="Show the original signal that produced this trade"
+                          >
+                            {expandedSignalRow === t.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            View Original Signal
+                          </button>
+                          <button
                             onClick={() => cancelPending(t.id)}
                             disabled={cancellingId === t.id}
                             className="px-2 py-1 rounded text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 disabled:opacity-50"
@@ -569,6 +911,9 @@ export default function DashboardPaperTrades() {
                       <div className="mt-2 text-[11px] text-sky-200/80 leading-snug">
                         Waiting for the underlying to reach the trigger. When it does, we'll fill at the live ask and this becomes an open trade. If it doesn't trigger before expiration, it auto-cancels.
                       </div>
+                      {expandedSignalRow === t.id && (
+                        <OriginalSignalPanel t={t} fetchState={t.signal_id ? signalDetails[t.signal_id] : undefined} />
+                      )}
                     </div>
                   );
                 }
@@ -591,6 +936,16 @@ export default function DashboardPaperTrades() {
                             {cancelReasonLabel(t.pending_cancel_reason)}
                           </span>
                         </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => toggleSignalPanel(t)}
+                            className="px-2 py-1 rounded text-[11px] font-bold bg-muted/40 text-foreground/70 border border-border/40 hover:bg-muted/60 inline-flex items-center gap-1"
+                            title="Show the original signal that produced this trade"
+                          >
+                            {expandedSignalRow === t.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            View Original Signal
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                         <div>
@@ -609,6 +964,9 @@ export default function DashboardPaperTrades() {
                           <div className="text-foreground/80 capitalize">{t.source ?? "signal"}</div>
                         </div>
                       </div>
+                      {expandedSignalRow === t.id && (
+                        <OriginalSignalPanel t={t} fetchState={t.signal_id ? signalDetails[t.signal_id] : undefined} />
+                      )}
                     </div>
                   );
                 }
@@ -686,6 +1044,14 @@ export default function DashboardPaperTrades() {
                         )}
                       </div>
                       <div className="flex gap-1">
+                        <button
+                          onClick={() => toggleSignalPanel(t)}
+                          className="px-2 py-1 rounded text-[11px] font-bold bg-muted/40 text-foreground/80 border border-border/50 hover:bg-muted/60 inline-flex items-center gap-1"
+                          title="Show the original signal that produced this trade"
+                        >
+                          {expandedSignalRow === t.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          View Original Signal
+                        </button>
                         {t.status === "open" && (
                           <>
                             <button onClick={() => refreshOne(t.id)} disabled={refreshingId === t.id} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-50" title="Refresh quote">
@@ -751,6 +1117,9 @@ export default function DashboardPaperTrades() {
                         {t.signal_grade && <span>Grade: <span className="text-foreground font-medium">{t.signal_grade}</span></span>}
                         {t.signal_confidence && <span>Confidence: <span className="text-foreground font-medium">{t.signal_confidence}</span></span>}
                       </div>
+                    )}
+                    {expandedSignalRow === t.id && (
+                      <OriginalSignalPanel t={t} fetchState={t.signal_id ? signalDetails[t.signal_id] : undefined} />
                     )}
                   </div>
                 );
