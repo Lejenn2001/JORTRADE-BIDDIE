@@ -1100,6 +1100,25 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
         </div>
       </div>
 
+      {(() => {
+        const ev = signal.executionVerdict || { verdict: "not_evaluated" as const, reason: "Execution engine not rebuilt yet" };
+        const styles: Record<string, { wrap: string; label: string; pill: string }> = {
+          tradeable: { wrap: "bg-emerald-500/10 border-emerald-500/20", label: "text-emerald-400", pill: "bg-emerald-500/20 text-emerald-300" },
+          watch: { wrap: "bg-amber-500/10 border-amber-500/20", label: "text-amber-400", pill: "bg-amber-500/20 text-amber-300" },
+          skip: { wrap: "bg-red-500/10 border-red-500/20", label: "text-red-400", pill: "bg-red-500/20 text-red-300" },
+          not_evaluated: { wrap: "bg-zinc-500/10 border-zinc-500/20", label: "text-zinc-400", pill: "bg-zinc-500/20 text-zinc-300" },
+        };
+        const labelText: Record<string, string> = { tradeable: "TRADEABLE", watch: "WATCH", skip: "SKIP", not_evaluated: "NOT EVALUATED" };
+        const s = styles[ev.verdict] || styles.not_evaluated;
+        return (
+          <div className={`px-3 sm:px-4 py-1.5 border-b flex items-center gap-2 ${s.wrap}`} title={`Execution verdict: ${labelText[ev.verdict]} — ${ev.reason}`}>
+            <Gauge className={`h-3 w-3 ${s.label}`} />
+            <span className={`text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded ${s.pill}`}>{labelText[ev.verdict]}</span>
+            <span className="text-[10px] text-muted-foreground truncate">· {ev.reason}</span>
+          </div>
+        );
+      })()}
+
       <div className="px-3 sm:px-4 py-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

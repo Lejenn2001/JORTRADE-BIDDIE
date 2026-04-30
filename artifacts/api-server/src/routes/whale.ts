@@ -3,6 +3,7 @@ import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
 import { priceMonitor, type PriceData } from "../lib/priceMonitor";
+import { attachExecutionVerdicts } from "../lib/executionEvaluator";
 
 const router = Router();
 
@@ -3124,29 +3125,31 @@ Respond ONLY with a JSON array. No markdown, no explanation.`;
 }
 
 router.get("/whale/signals", async (_req, res) => {
+  const respond = (data: any) => res.json(attachExecutionVerdicts(data));
+
   if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) {
-    return res.json(signalsCache.data);
+    return respond(signalsCache.data);
   }
 
   if (signalsPipelineRunning) {
     if (signalsCache) {
-      return res.json(signalsCache.data);
+      return respond(signalsCache.data);
     }
-    return res.json({ signals: [], count: 0, timestamp: getNowEastern(), loading: true });
+    return respond({ signals: [], count: 0, timestamp: getNowEastern(), loading: true });
   }
 
   if (signalsCache) {
-    res.json(signalsCache.data);
+    respond(signalsCache.data);
     runSignalsPipeline().catch(e => console.error("[signals] background refresh failed:", e));
     return;
   }
 
   try {
     const data = await runSignalsPipeline();
-    res.json(data || { signals: [], count: 0, timestamp: getNowEastern() });
+    respond(data || { signals: [], count: 0, timestamp: getNowEastern() });
   } catch (err: any) {
     console.error("[signals] pipeline error:", err);
-    res.json({ signals: [], count: 0, timestamp: getNowEastern() });
+    respond({ signals: [], count: 0, timestamp: getNowEastern() });
   }
 });
 

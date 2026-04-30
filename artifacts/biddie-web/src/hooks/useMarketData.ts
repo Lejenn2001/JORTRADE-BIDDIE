@@ -71,6 +71,10 @@ export interface MarketSignal {
   resolvedAt?: string | null;
   reinforcementCount?: number;
   lastReinforcedAt?: string | null;
+  executionVerdict?: {
+    verdict: "tradeable" | "watch" | "skip" | "not_evaluated";
+    reason: string;
+  };
 }
 
 export interface TickerData {
