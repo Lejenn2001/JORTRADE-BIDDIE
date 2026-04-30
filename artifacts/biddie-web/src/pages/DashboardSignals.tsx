@@ -178,6 +178,31 @@ function formatTimestamp(isoStr: string): string {
   return `${month}/${day}/${year} ${time}`;
 }
 
+function extractFirstPrice(text: unknown): number | null {
+  if (text == null) return null;
+  if (typeof text === "number") return Number.isFinite(text) ? text : null;
+  const s = String(text);
+  const m = s.match(/\$\s*(\d+(?:\.\d+)?)/) || s.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function buildPaperTradeInput(s: MarketSignal): PaperTradeSignalInput {
+  return {
+    signalId: s.id,
+    ticker: s.ticker,
+    optionType: s.putCall === "put" ? "put" : "call",
+    strike: extractFirstPrice(s.strike) ?? 0,
+    expiry: String(s.expiry || ""),
+    signalEntry: s.priceAtSignal ?? extractFirstPrice(s.entryTrigger),
+    signalTarget: extractFirstPrice(s.targetZone) ?? extractFirstPrice(s.targetNear),
+    signalInvalidation: extractFirstPrice(s.invalidation),
+    signalGrade: s.convictionScore != null ? `Score ${s.convictionScore}` : (s.convictionLabel || null),
+    signalConfidence: s.confidence != null ? `${s.confidence}/10${s.convictionLabel ? ` · ${s.convictionLabel}` : ""}` : null,
+  };
+}
+
 const DashboardSignals = () => {
   const { signals: liveSignals, loading: liveLoading } = useMarketData();
   const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
@@ -664,7 +689,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalEntry: s.entryTrigger ? (parseFloat(String(s.entryTrigger).replace(/[$,]/g, "")) || null) : null, signalTarget: s.targetZone ? (parseFloat(String(s.targetZone).replace(/[$,]/g, "")) || null) : null, signalInvalidation: s.invalidation ? (parseFloat(String(s.invalidation).replace(/[$,]/g, "")) || null) : null, signalGrade: s.convictionScore != null ? `Score ${s.convictionScore}` : (s.convictionLabel || null), signalConfidence: s.confidence != null ? `${s.confidence}/10${s.convictionLabel ? ` · ${s.convictionLabel}` : ""}` : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -698,7 +723,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalEntry: s.entryTrigger ? (parseFloat(String(s.entryTrigger).replace(/[$,]/g, "")) || null) : null, signalTarget: s.targetZone ? (parseFloat(String(s.targetZone).replace(/[$,]/g, "")) || null) : null, signalInvalidation: s.invalidation ? (parseFloat(String(s.invalidation).replace(/[$,]/g, "")) || null) : null, signalGrade: s.convictionScore != null ? `Score ${s.convictionScore}` : (s.convictionLabel || null), signalConfidence: s.confidence != null ? `${s.confidence}/10${s.convictionLabel ? ` · ${s.convictionLabel}` : ""}` : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -732,7 +757,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal({ signalId: s.id, ticker: s.ticker, optionType: (s.putCall === "put" ? "put" : "call"), strike: parseFloat(String(s.strike || "").replace(/[$,]/g, "")) || 0, expiry: String(s.expiry || ""), signalEntry: s.entryTrigger ? (parseFloat(String(s.entryTrigger).replace(/[$,]/g, "")) || null) : null, signalTarget: s.targetZone ? (parseFloat(String(s.targetZone).replace(/[$,]/g, "")) || null) : null, signalInvalidation: s.invalidation ? (parseFloat(String(s.invalidation).replace(/[$,]/g, "")) || null) : null, signalGrade: s.convictionScore != null ? `Score ${s.convictionScore}` : (s.convictionLabel || null), signalConfidence: s.confidence != null ? `${s.confidence}/10${s.convictionLabel ? ` · ${s.convictionLabel}` : ""}` : null })} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
