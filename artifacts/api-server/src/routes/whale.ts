@@ -188,6 +188,22 @@ const SEED_ADMIN_IDS = [
     );
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_user_status ON paper_trades(user_id, status)`, []);
     await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_open ON paper_trades(status) WHERE status = 'open'`, []);
+    // Paper Automation Engine — Commit 1 (pending_entry state).
+    // Adds the columns and index needed for the monitor's pending-entry sweep.
+    // Constraint relaxations are required because pending rows have no fill yet;
+    // existing 'open'/'closed' rows continue to satisfy the data invariant.
+    await dbQuery(`ALTER TABLE paper_trades ALTER COLUMN entry_price DROP NOT NULL`, []).catch(() => null);
+    await dbQuery(`ALTER TABLE paper_trades ALTER COLUMN entry_fill_source DROP NOT NULL`, []).catch(() => null);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS entry_trigger_price NUMERIC`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS entry_trigger_direction TEXT`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS pending_expires_at TIMESTAMPTZ`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS pending_cancel_reason TEXT`, []);
+    // created_at = ticket creation time (always set on INSERT). opened_at now
+    // semantically means "filled time" — set on entry promotion (or at INSERT
+    // for legacy market-mode rows). Backfill: existing rows have created_at
+    // NULL; sorts use COALESCE(created_at, opened_at).
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`, []);
+    await dbQuery(`CREATE INDEX IF NOT EXISTS idx_paper_trades_pending ON paper_trades(status) WHERE status = 'pending_entry'`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS last_quote_source TEXT`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_entry NUMERIC`, []);
     await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS signal_grade TEXT`, []);
@@ -5471,6 +5487,131 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
   return { closed: true, row: upd.rows[0], lastFill, exitReason, fill };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Paper Automation Engine — Commit 1: pending_entry evaluation.
+//
+// A pending_entry row is a paper trade that has been queued but not yet filled.
+// The monitor calls evaluatePendingEntry() once per cycle for each such row.
+//
+// Outcomes:
+//   1) Pending window expired (pending_expires_at < NOW())  → status='cancelled'
+//      with pending_cancel_reason='expired_unfilled'.
+//   2) Underlying contract already expired                   → status='cancelled'
+//      with pending_cancel_reason='contract_expired'.
+//   3) Underlying crosses the trigger:
+//        direction='at_or_below' → fires when underlying <= entry_trigger_price
+//        direction='at_or_above' → fires when underlying >= entry_trigger_price
+//      The row is atomically promoted to status='open' with entry_price set
+//      from the live ask (pickEntryFill, same path as market-mode entries),
+//      opened_at=NOW(), entry_underlying = trigger-time underlying.
+//   4) None of the above → just refresh last_quote_* snapshot + last_checked_at.
+//
+// Uses priceMonitor.getPrice() for the underlying when available so that the
+// trigger fires off the same realtime tick that drives signal evaluation.
+// Falls back to q.underlying (Polygon snapshot) when realtime is unavailable.
+// ─────────────────────────────────────────────────────────────────────────────
+async function evaluatePendingEntry(t: any, q: OptionQuoteResult): Promise<{
+  triggered: boolean;
+  cancelled?: boolean;
+  cancelReason?: string;
+  row?: any;
+  underlying?: number | null;
+  fill?: { price: number; source: string };
+}> {
+  const expiryStr = normalizeExpiryToIso(t.expiry);
+
+  // Pre-flight: contract itself expired → cancel (never let a pending_entry
+  // sit on an expired contract; would never fill).
+  if (isContractExpired(expiryStr)) {
+    await dbQuery(
+      `UPDATE paper_trades SET status = 'cancelled', pending_cancel_reason = 'contract_expired',
+        closed_at = NOW(), last_checked_at = NOW()
+       WHERE id = $1 AND status = 'pending_entry'`,
+      [t.id]
+    ).catch(() => null);
+    return { triggered: false, cancelled: true, cancelReason: "contract_expired" };
+  }
+
+  // Pre-flight: pending window expired → cancel.
+  if (t.pending_expires_at != null) {
+    const expiresMs = new Date(t.pending_expires_at).getTime();
+    if (Number.isFinite(expiresMs) && expiresMs < Date.now()) {
+      await dbQuery(
+        `UPDATE paper_trades SET status = 'cancelled', pending_cancel_reason = 'expired_unfilled',
+          closed_at = NOW(), last_checked_at = NOW()
+         WHERE id = $1 AND status = 'pending_entry'`,
+        [t.id]
+      ).catch(() => null);
+      return { triggered: false, cancelled: true, cancelReason: "expired_unfilled" };
+    }
+  }
+
+  // Underlying — prefer realtime priceMonitor (matches live signal triggers).
+  const rt = priceMonitor.getPrice(t.ticker);
+  const underlying = (rt?.price != null && Number.isFinite(rt.price)) ? rt.price : q.underlying;
+  if (underlying == null || !Number.isFinite(underlying)) {
+    await dbQuery(
+      `UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1 AND status = 'pending_entry'`,
+      [t.id]
+    ).catch(() => null);
+    return { triggered: false, underlying: null };
+  }
+
+  // Trigger evaluation.
+  const trigger = Number(t.entry_trigger_price);
+  const direction = String(t.entry_trigger_direction || "");
+  let triggered = false;
+  if (Number.isFinite(trigger) && trigger > 0) {
+    if (direction === "at_or_below" && underlying <= trigger) triggered = true;
+    if (direction === "at_or_above" && underlying >= trigger) triggered = true;
+  }
+
+  if (!triggered) {
+    // Not triggered: refresh quote snapshot so dashboard can show current state.
+    const lastFill = pickLastQuoteFill(q);
+    await dbQuery(
+      `UPDATE paper_trades SET
+        last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+        last_quote_bid = $4, last_quote_ask = $5, last_quote_mid = $6, last_quote_last = $7,
+        last_checked_at = NOW()
+       WHERE id = $8 AND status = 'pending_entry'`,
+      [lastFill.price, lastFill.source, q.underlying, q.bid, q.ask, q.mid, q.last, t.id]
+    ).catch(() => null);
+    return { triggered: false, underlying };
+  }
+
+  // Triggered → promote to open at live ask (same fill rule as market-mode entries).
+  const fill = pickEntryFill(q);
+  if (!fill) {
+    // No tradeable price right now — leave pending, retry next cycle.
+    await dbQuery(
+      `UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1 AND status = 'pending_entry'`,
+      [t.id]
+    ).catch(() => null);
+    return { triggered: false, underlying };
+  }
+
+  // Atomic promotion: only updates if row is still pending_entry (prevents
+  // double-fill in the unlikely case of overlapping cycles).
+  const upd = await dbQuery(
+    `UPDATE paper_trades SET
+      status = 'open',
+      entry_price = $1, entry_fill_source = $2, entry_underlying = $3,
+      entry_iv = $4, entry_delta = $5,
+      entry_bid = $6, entry_ask = $7, entry_mid = $8, entry_last = $9,
+      last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+      last_quote_bid = $6, last_quote_ask = $7, last_quote_mid = $8, last_quote_last = $9,
+      opened_at = NOW(), last_checked_at = NOW()
+     WHERE id = $10 AND status = 'pending_entry'
+     RETURNING *`,
+    [fill.price, fill.source, underlying, q.iv, q.delta, q.bid, q.ask, q.mid, q.last, t.id]
+  );
+  if (!upd || !upd.rowCount) {
+    return { triggered: false, underlying };
+  }
+  return { triggered: true, row: upd.rows[0], underlying, fill };
+}
+
 // POST /whale/paper/quote — preview a quote (no DB writes) before creating a paper trade
 router.post("/whale/paper/quote", async (req, res) => {
   try {
@@ -5802,7 +5943,11 @@ router.post("/whale/paper/trades", async (req, res) => {
   try {
     const userId = await verifyBearerUser(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const { signalId, ticker, optionType, strike, expiry, contracts, signalTarget, signalInvalidation, signalEntry, signalGrade, signalConfidence } = req.body || {};
+    const {
+      signalId, ticker, optionType, strike, expiry, contracts,
+      signalTarget, signalInvalidation, signalEntry, signalGrade, signalConfidence,
+      mode, entryTriggerPrice, entryTriggerDirection, pendingExpiresAt,
+    } = req.body || {};
     if (!signalId || !ticker || !optionType || !strike || !expiry) {
       return res.status(400).json({ error: "signalId, ticker, optionType, strike, expiry required" });
     }
@@ -5815,17 +5960,71 @@ router.post("/whale/paper/trades", async (req, res) => {
     if (isContractExpired(String(expiry))) return res.status(400).json({ error: "Contract is already expired" });
 
     const tickerUp = String(ticker).toUpperCase();
-    const q = await fetchOptionQuote(tickerUp, String(expiry), ot, strikeNum);
-    if (!q) return res.status(503).json({ error: "Quote unavailable. Could not get a live price for this contract." });
-    const fill = pickEntryFill(q);
-    if (!fill) return res.status(409).json({ error: "No tradeable price available (no ask, mid, or last). Try again when markets are open." });
-    const lastFill = pickLastQuoteFill(q);
 
     const sigTarget = signalTarget != null && Number.isFinite(Number(signalTarget)) ? Number(signalTarget) : null;
     const sigInval = signalInvalidation != null && Number.isFinite(Number(signalInvalidation)) ? Number(signalInvalidation) : null;
     const sigEntry = signalEntry != null && Number.isFinite(Number(signalEntry)) ? Number(signalEntry) : null;
     const sigGrade = signalGrade != null ? String(signalGrade).slice(0, 16) : null;
     const sigConf = signalConfidence != null ? String(signalConfidence).slice(0, 16) : null;
+
+    // ── Pending-entry mode (Paper Automation Engine, Commit 1) ──
+    // Queues a trade that fires when underlying crosses entry_trigger_price.
+    // No live quote is fetched at queue time; the monitor will fill at live
+    // ask once the trigger fires. Backend-only for now — frontend defaults
+    // to market mode (omit `mode`) and behaves exactly as before.
+    const tradeMode = mode === "pending_entry" ? "pending_entry" : "market";
+    if (tradeMode === "pending_entry") {
+      const trigPrice = Number(entryTriggerPrice);
+      const trigDir = String(entryTriggerDirection || "");
+      if (!Number.isFinite(trigPrice) || trigPrice <= 0) {
+        return res.status(400).json({ error: "entryTriggerPrice required and > 0 for pending_entry mode" });
+      }
+      if (trigDir !== "at_or_below" && trigDir !== "at_or_above") {
+        return res.status(400).json({ error: "entryTriggerDirection must be 'at_or_below' or 'at_or_above'" });
+      }
+      // Default pending window: end of contract expiry day (~4pm ET ≈ 20:00 UTC).
+      // Caller may override with an explicit ISO timestamp.
+      let expiresIso: string;
+      if (pendingExpiresAt) {
+        const t = new Date(String(pendingExpiresAt)).getTime();
+        if (!Number.isFinite(t) || t <= Date.now()) {
+          return res.status(400).json({ error: "pendingExpiresAt must be a future ISO timestamp" });
+        }
+        expiresIso = new Date(t).toISOString();
+      } else {
+        expiresIso = new Date(`${String(expiry)}T20:00:00Z`).toISOString();
+      }
+
+      const { contractSymbol } = buildOptionContractSymbol(tickerUp, String(expiry), ot, strikeNum);
+
+      const inserted = await dbQuery(
+        `INSERT INTO paper_trades
+          (user_id, signal_id, ticker, option_type, strike, expiry, contract_symbol, contracts,
+           entry_price, entry_fill_source,
+           signal_target, signal_invalidation, signal_entry, signal_grade, signal_confidence,
+           status, entry_trigger_price, entry_trigger_direction, pending_expires_at,
+           opened_at, created_at, last_checked_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
+                 NULL, NULL,
+                 $9,$10,$11,$12,$13,
+                 'pending_entry', $14, $15, $16,
+                 NULL, NOW(), NOW())
+         RETURNING *`,
+        [userId, String(signalId), tickerUp, ot, strikeNum, String(expiry), contractSymbol, contractsNum,
+         sigTarget, sigInval, sigEntry, sigGrade, sigConf,
+         trigPrice, trigDir, expiresIso]
+      );
+      if (!inserted || !inserted.rows.length) return res.status(500).json({ error: "Failed to save pending paper trade" });
+      console.log(`[paper-trade] queued pending_entry user=${userId.slice(0, 8)} ${tickerUp} ${ot} $${strikeNum} ${expiry} trigger=${trigDir}@${trigPrice} expires=${expiresIso}`);
+      return res.json({ success: true, trade: inserted.rows[0], mode: "pending_entry" });
+    }
+
+    // ── Market mode (existing behavior, unchanged) ──
+    const q = await fetchOptionQuote(tickerUp, String(expiry), ot, strikeNum);
+    if (!q) return res.status(503).json({ error: "Quote unavailable. Could not get a live price for this contract." });
+    const fill = pickEntryFill(q);
+    if (!fill) return res.status(409).json({ error: "No tradeable price available (no ask, mid, or last). Try again when markets are open." });
+    const lastFill = pickLastQuoteFill(q);
 
     const inserted = await dbQuery(
       `INSERT INTO paper_trades
@@ -5835,12 +6034,12 @@ router.post("/whale/paper/trades", async (req, res) => {
          entry_bid, entry_ask, entry_mid, entry_last,
          last_quote_price, last_quote_source, last_quote_underlying,
          last_quote_bid, last_quote_ask, last_quote_mid, last_quote_last,
-         last_checked_at)
+         created_at, last_checked_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
                $19,$20,$21,$22,
                $23,$24,$25,
                $26,$27,$28,$29,
-               NOW())
+               NOW(), NOW())
        RETURNING *`,
       [userId, String(signalId), tickerUp, ot, strikeNum, String(expiry), q.contractSymbol, contractsNum,
        fill.price, fill.source, q.underlying, q.iv, q.delta,
@@ -5864,13 +6063,23 @@ router.get("/whale/paper/trades", async (req, res) => {
     const userId = await verifyBearerUser(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const status = (req.query.status as string) || "all";
-    const where = status === "open" ? "AND status = 'open'" : status === "closed" ? "AND status != 'open'" : "";
+    // Phase 1 (pending_entry): "closed" view explicitly = status='closed'
+    // (NOT "anything not open"), so pending_entry/cancelled rows don't bleed
+    // into the existing dashboard. "pending" exposes the new state for clients
+    // that want it. "all" still includes every status.
+    const where = status === "open"
+      ? "AND status = 'open'"
+      : status === "closed"
+        ? "AND status = 'closed'"
+        : status === "pending"
+          ? "AND status = 'pending_entry'"
+          : "";
     const result = await dbQuery(
       `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
        FROM paper_trades pt
        LEFT JOIN signal_outcomes so ON pt.signal_id = so.id::text
        WHERE pt.user_id = $1 ${where}
-       ORDER BY pt.opened_at DESC
+       ORDER BY COALESCE(pt.created_at, pt.opened_at) DESC
        LIMIT 200`,
       [userId]
     );
@@ -5909,13 +6118,22 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
         refreshed++;
       }
     }
-    const where = status === "open" ? "AND status = 'open'" : status === "closed" ? "AND status != 'open'" : "";
+    // Phase 1 (pending_entry): mirror GET /whale/paper/trades filter semantics
+    // exactly so the 30s foreground poll never bleeds pending/cancelled rows
+    // into the existing dashboard's open or closed views.
+    const where = status === "open"
+      ? "AND status = 'open'"
+      : status === "closed"
+        ? "AND status = 'closed'"
+        : status === "pending"
+          ? "AND status = 'pending_entry'"
+          : "";
     const result = await dbQuery(
       `SELECT pt.*, so.outcome AS signal_outcome, so.signal_type, so.is_biddie_pick
        FROM paper_trades pt
        LEFT JOIN signal_outcomes so ON pt.signal_id = so.id::text
        WHERE pt.user_id = $1 ${where}
-       ORDER BY pt.opened_at DESC
+       ORDER BY COALESCE(pt.created_at, pt.opened_at) DESC
        LIMIT 200`,
       [userId]
     );
@@ -5976,6 +6194,36 @@ async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
 
 router.post("/whale/paper/trades/:id/refresh", paperTradeRefreshHandler);
 router.get("/whale/paper/trades/:id/refresh", paperTradeRefreshHandler);
+
+// POST /whale/paper/trades/:id/cancel — cancel a queued pending_entry trade.
+// Only valid while the row is still 'pending_entry'; once promoted to 'open'
+// the caller must use /close instead. Sets pending_cancel_reason='user_cancelled'.
+router.post("/whale/paper/trades/:id/cancel", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const id = req.params.id;
+    const row = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND user_id = $2`, [id, userId]);
+    if (!row || !row.rows.length) return res.status(404).json({ error: "Paper trade not found" });
+    const t = row.rows[0];
+    if (t.status !== "pending_entry") {
+      return res.status(409).json({ error: `Cannot cancel: trade status is '${t.status}' (only pending_entry trades can be cancelled)` });
+    }
+    const upd = await dbQuery(
+      `UPDATE paper_trades SET status = 'cancelled', pending_cancel_reason = 'user_cancelled',
+        closed_at = NOW(), last_checked_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND status = 'pending_entry'
+       RETURNING *`,
+      [id, userId]
+    );
+    if (!upd || !upd.rowCount) return res.status(409).json({ error: "Trade is no longer pending_entry" });
+    console.log(`[paper-trade] cancelled pending_entry user=${userId.slice(0, 8)} ${t.ticker} ${t.option_type} $${t.strike} ${normalizeExpiryToIso(t.expiry)}`);
+    res.json({ success: true, trade: upd.rows[0] });
+  } catch (e: any) {
+    console.error("[paper-trade] cancel error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // POST /whale/paper/trades/:id/close — exit at bid (or fallback). Manual close.
 router.post("/whale/paper/trades/:id/close", async (req, res) => {
@@ -6046,7 +6294,7 @@ async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any
 }
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso, evaluatePendingEntry };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;

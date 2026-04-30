@@ -8,3 +8,4 @@ export const evaluateAndMaybeClose = __paperTradeInternals.evaluateAndMaybeClose
 export const closeExpiredNoQuote = __paperTradeInternals.closeExpiredNoQuote;
 export const dbQuery = __paperTradeInternals.dbQuery;
 export const normalizeExpiryToIso = __paperTradeInternals.normalizeExpiryToIso;
+export const evaluatePendingEntry = __paperTradeInternals.evaluatePendingEntry;

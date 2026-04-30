@@ -1,4 +1,4 @@
-import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso } from "./paperTradeService";
+import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry } from "./paperTradeService";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -72,11 +72,73 @@ async function processOpenTrades(): Promise<void> {
   }
 }
 
+// Paper Automation Engine — Commit 1: pending_entry sweep.
+// Runs after the open-trades sweep on every monitor cycle. For each row in
+// status='pending_entry', delegates to evaluatePendingEntry() which either
+// (a) cancels expired/contract-expired pendings without a quote, (b) refreshes
+// the quote snapshot when the trigger hasn't fired, or (c) atomically promotes
+// the row to status='open' at live ask when the trigger has fired.
+//
+// Cap protects API rate limits (same shape as open-trades cap). NULLS FIRST
+// ordering guarantees newly-queued pendings get checked promptly.
+async function processPendingEntries(): Promise<void> {
+  try {
+    const PER_CYCLE_CAP = 200;
+    const pending = await dbQuery(
+      `SELECT * FROM paper_trades WHERE status = 'pending_entry' ORDER BY last_checked_at ASC NULLS FIRST, created_at ASC LIMIT $1`,
+      [PER_CYCLE_CAP]
+    );
+    if (!pending || !pending.rows.length) return;
+    let checked = 0;
+    let triggered = 0;
+    let cancelled = 0;
+    for (const t of pending.rows) {
+      checked++;
+      const expiryStr = normalizeExpiryToIso(t.expiry);
+      // Pre-flight: if the contract or pending window has expired, cancel
+      // without paying a Polygon quote call. evaluatePendingEntry() also
+      // handles these (defense in depth) but doing it here avoids the fetch.
+      const contractExpired = isContractExpired(expiryStr);
+      const pendingExpired = t.pending_expires_at != null && new Date(t.pending_expires_at).getTime() < Date.now();
+      if (contractExpired || pendingExpired) {
+        const reason = contractExpired ? "contract_expired" : "expired_unfilled";
+        await dbQuery(
+          `UPDATE paper_trades SET status = 'cancelled', pending_cancel_reason = $2,
+            closed_at = NOW(), last_checked_at = NOW()
+           WHERE id = $1 AND status = 'pending_entry'`,
+          [t.id, reason]
+        ).catch(() => null);
+        cancelled++;
+        console.log(`[paper-trade-monitor] pending cancelled ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: ${reason}`);
+        continue;
+      }
+      const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
+      if (!q) {
+        await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1 AND status = 'pending_entry'`, [t.id]).catch(() => null);
+        continue;
+      }
+      const r = await evaluatePendingEntry(t, q);
+      if (r.cancelled) {
+        cancelled++;
+        console.log(`[paper-trade-monitor] pending cancelled ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: ${r.cancelReason}`);
+      } else if (r.triggered && r.row && r.fill) {
+        triggered++;
+        const u = r.underlying != null ? r.underlying.toFixed(2) : "n/a";
+        console.log(`[paper-trade-monitor] pending → open ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: trigger=${t.entry_trigger_direction}@${Number(t.entry_trigger_price).toFixed(2)} underlying=${u} fill=${r.fill.price.toFixed(2)} (${r.fill.source})`);
+      }
+    }
+    if (checked > 0) console.log(`[paper-trade-monitor] pending cycle: checked=${checked} triggered=${triggered} cancelled=${cancelled}`);
+  } catch (e: any) {
+    console.error("[paper-trade-monitor] pending cycle error:", e?.message);
+  }
+}
+
 function scheduleNext(): void {
   if (timer) clearTimeout(timer);
   const delay = isMarketHoursET() ? MARKET_HOURS_INTERVAL_MS : OFF_HOURS_INTERVAL_MS;
   timer = setTimeout(async () => {
     await processOpenTrades();
+    await processPendingEntries();
     scheduleNext();
   }, delay);
 }
@@ -84,9 +146,10 @@ function scheduleNext(): void {
 export function startPaperTradeMonitor(): void {
   if (started) return;
   started = true;
-  console.log("[paper-trade-monitor] starting (60s market hours / 5min off-hours)");
+  console.log("[paper-trade-monitor] starting (60s market hours / 5min off-hours, processes open + pending_entry)");
   setTimeout(async () => {
     await processOpenTrades();
+    await processPendingEntries();
     scheduleNext();
   }, 5_000);
 }
