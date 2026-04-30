@@ -5565,6 +5565,76 @@ router.post("/whale/paper/alternatives", async (req, res) => {
     const altsLimited = candidates.slice(0, 3);
     const out: Alt[] = [toAlt(recommended, true), ...altsLimited.map((c) => toAlt(c, false))];
 
+    // ─── Affordable Option ──────────────────────────────────────────────────────
+    // Add one more contract targeting under $300 premium (entry ≤ $3.00), with
+    // reasonable delta (|Δ| 0.20–0.40), decent liquidity (bid+ask present), and
+    // not-too-wide spread (≤ 30% of mid). If nothing fits, fall back to the
+    // lowest-cost viable contract on the chain and label "Lowest Cost Available".
+    // Same expiry & same direction are already enforced by the chain query above.
+    const decentSpread = (e: ChainEntry): boolean => {
+      if (e.bid == null || e.ask == null || e.bid <= 0 || e.ask <= 0) return false;
+      const mid = (e.bid + e.ask) / 2;
+      if (mid <= 0) return false;
+      return (e.ask - e.bid) / mid <= 0.30;
+    };
+    const goodDelta = (e: ChainEntry): boolean => {
+      if (e.delta == null) return false;
+      const d = Math.abs(e.delta);
+      return d >= 0.20 && d <= 0.40;
+    };
+    const viable = (e: ChainEntry): boolean => e.entry != null && e.entry > 0 && e.bid != null && e.ask != null && e.bid > 0;
+
+    let affordable: ChainEntry | null = null;
+    let affordableLabel = "Affordable Option";
+
+    const ideal = entries.filter((e) => viable(e) && e.entry! <= 3.00 && goodDelta(e) && decentSpread(e));
+    if (ideal.length > 0) {
+      // Prefer delta nearest 0.30, then lower entry cost.
+      ideal.sort((a, b) => {
+        const da = Math.abs(Math.abs(a.delta!) - 0.30);
+        const db = Math.abs(Math.abs(b.delta!) - 0.30);
+        if (Math.abs(da - db) > 0.01) return da - db;
+        return a.entry! - b.entry!;
+      });
+      affordable = ideal[0];
+    } else {
+      // Looser pass: under $3.00 with at least bid+ask, no delta/spread filter.
+      const looser = entries.filter((e) => viable(e) && e.entry! <= 3.00);
+      if (looser.length > 0) {
+        looser.sort((a, b) => a.entry! - b.entry!);
+        affordable = looser[0];
+      } else {
+        // Final fallback: cheapest viable contract regardless of $3 cap.
+        const anyViable = entries.filter(viable);
+        if (anyViable.length > 0) {
+          anyViable.sort((a, b) => a.entry! - b.entry!);
+          affordable = anyViable[0];
+          affordableLabel = "Lowest Cost Available";
+        }
+      }
+    }
+
+    // Insert affordable as the 2nd row (right after Recommended), unless it
+    // duplicates the recommended contract itself. If it duplicates an existing
+    // alternative row, remove that duplicate so we don't show the same contract twice.
+    if (affordable && affordable.contractSymbol !== recommended.contractSymbol) {
+      const affAlt: Alt = {
+        ...affordable,
+        label: affordableLabel,
+        expiry: String(expiry),
+        optionType: ot,
+        ticker: tickerUp,
+        costPer1: affordable.entry != null ? Math.round(affordable.entry * 100 * 100) / 100 : null,
+        isRecommended: false,
+      };
+      // Drop any pre-existing alt with the same contractSymbol.
+      for (let i = out.length - 1; i >= 1; i--) {
+        if (out[i].contractSymbol === affAlt.contractSymbol) out.splice(i, 1);
+      }
+      out.splice(1, 0, affAlt);
+      console.log(`[paper-trade] affordable pick ${tickerUp} ${expiry} ${ot} strike=${affordable.strike} entry=${affordable.entry} delta=${affordable.delta} label="${affordableLabel}"`);
+    }
+
     res.json({ contracts: out, asOf: new Date().toISOString() });
   } catch (e: any) {
     console.error("[paper-trade] /alternatives error:", e.message);
