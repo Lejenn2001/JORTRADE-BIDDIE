@@ -13,6 +13,10 @@
 //   "SPY $626 puts expiring 3/31"                   — $ + word side + filler
 //   "GS 🔥 Vol/OI of 214 on these 837.5 calls expiring 4/2"   — ticker far from strike
 //   "**SPY 626P 3/31**"                             — markdown bold
+//   "SPY 711C expiring TODAY"                       — relative expiry → message date
+//   "SPY 711C TODAY"                                — relative expiry, no filler
+//   "QQQ $500 calls 0DTE"                           — 0DTE shorthand
+//   "AAPL 200P same day"                            — "same day" shorthand
 //
 // Algorithm: locate each "strike+side+date" pattern, then attribute it to the
 // nearest preceding non-denied ticker in the same line. This avoids accidental
@@ -65,6 +69,8 @@ const SIDE_PAT = "([CcPp](?:alls?|uts?)?)";       // C, P, c, p, Call, Calls, Pu
 const STRIKE_PAT = "\\$?(\\d{1,5}(?:\\.\\d{1,2})?)"; // optional $ prefix, supports decimals
 const DATE_PAT = "(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?";
 const FILLER_PAT = "(?:\\s+(?:exp(?:ir(?:ing|es))?|for|expires?))?"; // "exp", "expiring", "expires", "for"
+// Relative expiry phrases that mean "the message's own date" — TODAY / today / 0DTE / 0 DTE / zero DTE / same day / same-day.
+const RELATIVE_EXPIRY_PAT = "(today|0\\s*dte|zero\\s*dte|same[\\s-]?day)";
 
 // Pass A: STRIKE+SIDE [filler]? DATE — e.g. "330C 5/1", "$330 Calls exp 5/1"
 const RE_STRIKE_FIRST = new RegExp(
@@ -75,6 +81,12 @@ const RE_STRIKE_FIRST = new RegExp(
 const RE_DATE_FIRST = new RegExp(
   "(?<![\\w])" + DATE_PAT + "\\s+" + STRIKE_PAT + "\\s*" + SIDE_PAT + "\\b",
   "g"
+);
+// Pass C: STRIKE+SIDE [filler]? RELATIVE — e.g. "711C expiring TODAY", "$86 calls 0DTE",
+// "200P same day". Resolves expiry to the message's own date (the `now` arg).
+const RE_RELATIVE_EXPIRY = new RegExp(
+  "(?<![\\w])" + STRIKE_PAT + "\\s*" + SIDE_PAT + "\\b" + FILLER_PAT + "\\s+" + RELATIVE_EXPIRY_PAT + "\\b",
+  "gi"
 );
 
 // Find nearest non-denied ticker that PRECEDES `pos` in the same line, looking
@@ -133,21 +145,17 @@ export function extractContractsFromText(text: string, now: Date = new Date()): 
   const claimedRanges: Array<[number, number]> = [];
   if (!text || typeof text !== "string") return out;
 
-  function tryClaim(
+  function claim(
     spanStart: number,
     spanEnd: number,
     ticker: string,
     strikeStr: string,
     sideStr: string,
-    monthStr: string,
-    dayStr: string,
-    yearStrRaw: string | undefined,
+    expiry: string,
     raw: string,
   ): void {
     const strike = Number(strikeStr);
     if (!Number.isFinite(strike) || strike <= 0) return;
-    const expiry = resolveExpiry(monthStr, dayStr, yearStrRaw, now);
-    if (!expiry) return;
     const optionType: "call" | "put" = sideStr.charAt(0).toLowerCase() === "c" ? "call" : "put";
     const key = `${ticker}|${strike}|${optionType}|${expiry}`;
     if (seenKeys.has(key)) return;
@@ -157,14 +165,22 @@ export function extractContractsFromText(text: string, now: Date = new Date()): 
     out.push({ raw, ticker, strike, optionType, expiry });
   }
 
+  // Today's date (UTC) anchored to `now` — used for relative-expiry phrases
+  // like "TODAY" / "0DTE" / "same day". We use UTC for consistency with
+  // resolveExpiry; call sites pass the message's createdAt as `now` so this
+  // resolves to the day the Biddie message was posted, not the render time.
+  const todayExpiry = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
   RE_STRIKE_FIRST.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = RE_STRIKE_FIRST.exec(text)) !== null) {
     const [, strikeStr, sideStr, monthStr, dayStr, yearStrRaw] = m;
     const t = findNearestTicker(text, m.index);
     if (!t) continue;
+    const expiry = resolveExpiry(monthStr, dayStr, yearStrRaw, now);
+    if (!expiry) continue;
     const spanEnd = m.index + m[0].length;
-    tryClaim(t.index, spanEnd, t.ticker, strikeStr, sideStr, monthStr, dayStr, yearStrRaw, text.slice(t.index, spanEnd));
+    claim(t.index, spanEnd, t.ticker, strikeStr, sideStr, expiry, text.slice(t.index, spanEnd));
   }
 
   RE_DATE_FIRST.lastIndex = 0;
@@ -172,8 +188,19 @@ export function extractContractsFromText(text: string, now: Date = new Date()): 
     const [, monthStr, dayStr, yearStrRaw, strikeStr, sideStr] = m;
     const t = findNearestTicker(text, m.index);
     if (!t) continue;
+    const expiry = resolveExpiry(monthStr, dayStr, yearStrRaw, now);
+    if (!expiry) continue;
     const spanEnd = m.index + m[0].length;
-    tryClaim(t.index, spanEnd, t.ticker, strikeStr, sideStr, monthStr, dayStr, yearStrRaw, text.slice(t.index, spanEnd));
+    claim(t.index, spanEnd, t.ticker, strikeStr, sideStr, expiry, text.slice(t.index, spanEnd));
+  }
+
+  RE_RELATIVE_EXPIRY.lastIndex = 0;
+  while ((m = RE_RELATIVE_EXPIRY.exec(text)) !== null) {
+    const [, strikeStr, sideStr] = m;
+    const t = findNearestTicker(text, m.index);
+    if (!t) continue;
+    const spanEnd = m.index + m[0].length;
+    claim(t.index, spanEnd, t.ticker, strikeStr, sideStr, todayExpiry, text.slice(t.index, spanEnd));
   }
 
   return out;
