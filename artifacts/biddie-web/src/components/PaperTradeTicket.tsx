@@ -58,16 +58,16 @@ function contractName(c: ContractOption): string {
 
 function labelTone(label: string): { bg: string; text: string; border: string } {
   if (label === "Recommended Contract") return { bg: "bg-violet-500/15", text: "text-violet-300", border: "border-violet-500/40" };
-  if (label === "Affordable Option") return { bg: "bg-teal-500/15", text: "text-teal-300", border: "border-teal-500/40" };
-  if (label === "Lowest Cost Available") return { bg: "bg-teal-500/10", text: "text-teal-300", border: "border-teal-500/30" };
+  if (label === "Budget Option (≤ $300)") return { bg: "bg-teal-500/15", text: "text-teal-300", border: "border-teal-500/40" };
+  if (label === "Lowest Cost Available (Above Budget)") return { bg: "bg-teal-500/10", text: "text-teal-300", border: "border-teal-500/30" };
   if (label === "Budget Alternative") return { bg: "bg-emerald-500/15", text: "text-emerald-300", border: "border-emerald-500/30" };
   if (label === "Lower Cost · Higher Risk") return { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30" };
   if (label === "Safer · Higher Cost") return { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-500/30" };
   return { bg: "bg-muted/40", text: "text-muted-foreground", border: "border-border/40" };
 }
 
-function isAffordableLabel(label: string): boolean {
-  return label === "Affordable Option" || label === "Lowest Cost Available";
+function isBudgetLabel(label: string): boolean {
+  return label === "Budget Option (≤ $300)" || label === "Lowest Cost Available (Above Budget)";
 }
 
 export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal: PaperTradeSignalInput; onClose: () => void; onOpened?: () => void }) {
@@ -278,9 +278,14 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
                             <span className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${tone.bg} ${tone.text} ${tone.border}`}>
                               {c.label}
                             </span>
-                            {isAffordableLabel(c.label) && (
+                            {isBudgetLabel(c.label) && (
                               <span className="text-[9px] italic text-amber-300/80" title="A lower-priced contract is cheaper to buy but is typically further out-of-the-money, so the underlying must move further or faster for it to pay off. Higher chance of expiring worthless than the recommended contract.">
                                 Lower cost, higher risk
+                              </span>
+                            )}
+                            {c.expiry !== signal.expiry && (
+                              <span className="text-[9px] italic text-blue-300/80" title="Same direction but a slightly later expiration. Costs less per contract because more time to expiration is included; pays off if the underlying makes the move within the extended window.">
+                                Different expiry: {formatExpiryShort(c.expiry)}
                               </span>
                             )}
                           </div>

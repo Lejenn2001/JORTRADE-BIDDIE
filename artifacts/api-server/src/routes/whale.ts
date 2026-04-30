@@ -5565,74 +5565,145 @@ router.post("/whale/paper/alternatives", async (req, res) => {
     const altsLimited = candidates.slice(0, 3);
     const out: Alt[] = [toAlt(recommended, true), ...altsLimited.map((c) => toAlt(c, false))];
 
-    // ─── Affordable Option ──────────────────────────────────────────────────────
-    // Add one more contract targeting under $300 premium (entry ≤ $3.00), with
-    // reasonable delta (|Δ| 0.20–0.40), decent liquidity (bid+ask present), and
-    // not-too-wide spread (≤ 30% of mid). If nothing fits, fall back to the
-    // lowest-cost viable contract on the chain and label "Lowest Cost Available".
-    // Same expiry & same direction are already enforced by the chain query above.
-    const decentSpread = (e: ChainEntry): boolean => {
-      if (e.bid == null || e.ask == null || e.bid <= 0 || e.ask <= 0) return false;
+    // ─── Budget Option (≤ $300) ─────────────────────────────────────────────────
+    // Pick one accessible contract for smaller accounts:
+    //   1. Ask ≤ $3.00 (≤ $300 premium) when available
+    //   2. Same direction (already enforced by chain query)
+    //   3. Same expiration preferred — if none qualify, extend DTE up to +14 days
+    //   4. Among under-$3 candidates: choose HIGHEST |delta| (most ATM, most responsive)
+    //      with a hard cap on extreme spreads (≤ 50% of mid) for liquidity sanity
+    //   5. If nothing under $3 anywhere, pick cheapest viable & label "Lowest Cost Available (Above Budget)"
+    const viable = (e: ChainEntry): boolean => e.entry != null && e.entry > 0 && e.bid != null && e.ask != null && e.bid > 0;
+    const reasonableSpread = (e: ChainEntry): boolean => {
+      if (e.bid == null || e.ask == null) return false;
       const mid = (e.bid + e.ask) / 2;
       if (mid <= 0) return false;
-      return (e.ask - e.bid) / mid <= 0.30;
+      return (e.ask - e.bid) / mid <= 0.50;
     };
-    const goodDelta = (e: ChainEntry): boolean => {
-      if (e.delta == null) return false;
-      const d = Math.abs(e.delta);
-      return d >= 0.20 && d <= 0.40;
-    };
-    const viable = (e: ChainEntry): boolean => e.entry != null && e.entry > 0 && e.bid != null && e.ask != null && e.bid > 0;
-
-    let affordable: ChainEntry | null = null;
-    let affordableLabel = "Affordable Option";
-
-    const ideal = entries.filter((e) => viable(e) && e.entry! <= 3.00 && goodDelta(e) && decentSpread(e));
-    if (ideal.length > 0) {
-      // Prefer delta nearest 0.30, then lower entry cost.
-      ideal.sort((a, b) => {
-        const da = Math.abs(Math.abs(a.delta!) - 0.30);
-        const db = Math.abs(Math.abs(b.delta!) - 0.30);
-        if (Math.abs(da - db) > 0.01) return da - db;
-        return a.entry! - b.entry!;
+    const pickHighestDeltaUnderBudget = (es: ChainEntry[]): ChainEntry | null => {
+      const pool = es.filter((e) => viable(e) && e.entry! <= 3.00 && reasonableSpread(e));
+      if (pool.length === 0) return null;
+      pool.sort((a, b) => {
+        const da = a.delta != null ? Math.abs(a.delta) : -1;
+        const db = b.delta != null ? Math.abs(b.delta) : -1;
+        if (Math.abs(da - db) > 0.005) return db - da;          // higher |delta| first
+        const sa = (a.ask! - a.bid!) / Math.max(0.01, (a.ask! + a.bid!) / 2);
+        const sb = (b.ask! - b.bid!) / Math.max(0.01, (b.ask! + b.bid!) / 2);
+        if (Math.abs(sa - sb) > 0.05) return sa - sb;            // tiebreak: tighter spread
+        return a.entry! - b.entry!;                              // tiebreak: lower cost
       });
-      affordable = ideal[0];
-    } else {
-      // Looser pass: under $3.00 with at least bid+ask, no delta/spread filter.
+      return pool[0];
+    };
+
+    let budget: ChainEntry | null = null;
+    let budgetExpiry = String(expiry);
+    let budgetLabel = "Budget Option (≤ $300)";
+
+    // Phase 1: same expiry, under $3 with sane spread
+    budget = pickHighestDeltaUnderBudget(entries);
+
+    // Phase 2: looser same-expiry — under $3 with bid+ask, ignoring spread filter
+    if (!budget) {
       const looser = entries.filter((e) => viable(e) && e.entry! <= 3.00);
       if (looser.length > 0) {
-        looser.sort((a, b) => a.entry! - b.entry!);
-        affordable = looser[0];
-      } else {
-        // Final fallback: cheapest viable contract regardless of $3 cap.
-        const anyViable = entries.filter(viable);
-        if (anyViable.length > 0) {
-          anyViable.sort((a, b) => a.entry! - b.entry!);
-          affordable = anyViable[0];
-          affordableLabel = "Lowest Cost Available";
+        looser.sort((a, b) => {
+          const da = a.delta != null ? Math.abs(a.delta) : -1;
+          const db = b.delta != null ? Math.abs(b.delta) : -1;
+          if (Math.abs(da - db) > 0.005) return db - da;
+          return a.entry! - b.entry!;
+        });
+        budget = looser[0];
+      }
+    }
+
+    // Phase 3: DTE extension — scan next available expirations within +14 days
+    if (!budget) {
+      const expiryDate = new Date(`${expiry}T00:00:00Z`);
+      if (!Number.isNaN(expiryDate.getTime())) {
+        const lo = new Date(expiryDate); lo.setUTCDate(lo.getUTCDate() + 1);
+        const hi = new Date(expiryDate); hi.setUTCDate(hi.getUTCDate() + 14);
+        const loStr = lo.toISOString().slice(0, 10);
+        const hiStr = hi.toISOString().slice(0, 10);
+        const extUrl = `https://api.polygon.io/v3/snapshot/options/${parentTicker}?expiration_date.gte=${loStr}&expiration_date.lte=${hiStr}&contract_type=${ot}&strike_price.gte=${strikeLo}&strike_price.lte=${strikeHi}&limit=250&apiKey=${polygonKey}`;
+        let extItems: any[] = [];
+        try {
+          const r = await fetch(extUrl, { signal: AbortSignal.timeout(8000) });
+          if (r.ok) {
+            const j: any = await r.json();
+            extItems = Array.isArray(j?.results) ? j.results : [];
+          }
+        } catch (e: any) {
+          console.warn(`[paper-trade] DTE-ext chain fetch failed ${parentTicker} ${ot}: ${e?.message}`);
+        }
+        type ExtEntry = ChainEntry & { ext_expiry: string };
+        const extEntries: ExtEntry[] = extItems
+          .map((it: any): ExtEntry | null => {
+            const s = Number(it?.details?.strike_price);
+            const ed = String(it?.details?.expiration_date || "");
+            if (!Number.isFinite(s) || !ed) return null;
+            const bid = it?.last_quote?.bid != null ? Number(it.last_quote.bid) : null;
+            const ask = it?.last_quote?.ask != null ? Number(it.last_quote.ask) : null;
+            const mid = it?.last_quote?.midpoint != null ? Number(it.last_quote.midpoint) : (bid != null && ask != null ? (bid + ask) / 2 : null);
+            const last = it?.day?.close ?? it?.last_trade?.price ?? null;
+            let entry: number | null = null, entrySource: string | null = null;
+            if (ask != null && ask > 0) { entry = ask; entrySource = "ask"; }
+            else if (mid != null && mid > 0) { entry = mid; entrySource = "mid"; }
+            else if (last != null && last > 0) { entry = Number(last); entrySource = "last"; }
+            return {
+              strike: s, bid, ask, mid, last: last != null ? Number(last) : null,
+              entry, entrySource,
+              underlying: it?.underlying_asset?.price != null ? Number(it.underlying_asset.price) : null,
+              iv: it?.implied_volatility != null ? Math.round(it.implied_volatility * 10000) / 100 : null,
+              delta: it?.greeks?.delta != null ? Math.round(it.greeks.delta * 1000) / 1000 : null,
+              contractSymbol: String(it?.details?.ticker || ""),
+              ext_expiry: ed,
+            };
+          })
+          .filter((x: ExtEntry | null): x is ExtEntry => x !== null);
+        // Prefer nearest expiration first, then highest |delta| under $3, then lowest entry
+        const extPool = extEntries.filter((e) => viable(e) && e.entry! <= 3.00 && reasonableSpread(e));
+        if (extPool.length > 0) {
+          extPool.sort((a, b) => {
+            if (a.ext_expiry !== b.ext_expiry) return a.ext_expiry < b.ext_expiry ? -1 : 1;
+            const da = a.delta != null ? Math.abs(a.delta) : -1;
+            const db = b.delta != null ? Math.abs(b.delta) : -1;
+            if (Math.abs(da - db) > 0.005) return db - da;
+            return a.entry! - b.entry!;
+          });
+          const pick = extPool[0];
+          budget = pick;
+          budgetExpiry = pick.ext_expiry;
         }
       }
     }
 
-    // Insert affordable as the 2nd row (right after Recommended), unless it
-    // duplicates the recommended contract itself. If it duplicates an existing
-    // alternative row, remove that duplicate so we don't show the same contract twice.
-    if (affordable && affordable.contractSymbol !== recommended.contractSymbol) {
-      const affAlt: Alt = {
-        ...affordable,
-        label: affordableLabel,
-        expiry: String(expiry),
+    // Phase 4: final fallback — cheapest viable on same expiry, label flips to "Above Budget"
+    if (!budget) {
+      const anyViable = entries.filter(viable);
+      if (anyViable.length > 0) {
+        anyViable.sort((a, b) => a.entry! - b.entry!);
+        budget = anyViable[0];
+        budgetLabel = "Lowest Cost Available (Above Budget)";
+      }
+    }
+
+    // Insert as the 2nd row (right after Recommended), unless it duplicates the
+    // recommended contract. If it duplicates an existing alt row, remove that duplicate.
+    if (budget && budget.contractSymbol !== recommended.contractSymbol) {
+      const budgetAlt: Alt = {
+        ...budget,
+        label: budgetLabel,
+        expiry: budgetExpiry,
         optionType: ot,
         ticker: tickerUp,
-        costPer1: affordable.entry != null ? Math.round(affordable.entry * 100 * 100) / 100 : null,
+        costPer1: budget.entry != null ? Math.round(budget.entry * 100 * 100) / 100 : null,
         isRecommended: false,
       };
-      // Drop any pre-existing alt with the same contractSymbol.
       for (let i = out.length - 1; i >= 1; i--) {
-        if (out[i].contractSymbol === affAlt.contractSymbol) out.splice(i, 1);
+        if (out[i].contractSymbol === budgetAlt.contractSymbol) out.splice(i, 1);
       }
-      out.splice(1, 0, affAlt);
-      console.log(`[paper-trade] affordable pick ${tickerUp} ${expiry} ${ot} strike=${affordable.strike} entry=${affordable.entry} delta=${affordable.delta} label="${affordableLabel}"`);
+      out.splice(1, 0, budgetAlt);
+      console.log(`[paper-trade] budget pick ${tickerUp} ${budgetExpiry} ${ot} strike=${budget.strike} entry=${budget.entry} delta=${budget.delta} label="${budgetLabel}"`);
     }
 
     res.json({ contracts: out, asOf: new Date().toISOString() });
