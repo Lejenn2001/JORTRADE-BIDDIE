@@ -544,7 +544,17 @@ export default function DashboardPaperTrades() {
     setLoading(true);
     try {
       const headers = await authHeader();
-      const url = `/api/whale/paper/trades${withRefresh ? "/refresh-all" : ""}?status=${filter}`;
+      // Always fetch the full trade set (server-side LIMIT 200) so the stats
+      // cards (Realized P/L, Closed count, Wins/Losses, Win Rate) stay correct
+      // regardless of which tab is active. The visible row list is filtered
+      // client-side via `filteredTrades` below. Previously the URL passed
+      // `?status=${filter}`, which meant that when the user clicked Force
+      // Close while on the Open tab, the post-close refetch returned only
+      // status='open' rows — excluding the freshly closed trade — so
+      // `stats.totalPl` (sum of `realized_pl` over `status==='closed'`) was
+      // always $0.00. Same root cause produced 0/0 W/L and 0% Win Rate any
+      // time the active filter wasn't "all".
+      const url = `/api/whale/paper/trades${withRefresh ? "/refresh-all" : ""}?status=all`;
       const res = await fetch(url, { method: withRefresh ? "POST" : "GET", headers });
       const data = await res.json();
       if (res.ok) setTrades(data.trades || []);
@@ -593,8 +603,14 @@ export default function DashboardPaperTrades() {
         document.removeEventListener("visibilitychange", onVis);
       }
     };
+    // load() no longer depends on `filter` (the URL is always
+    // ?status=all and the visible row list is filtered client-side
+    // via `filteredTrades`), so we deliberately omit `filter` from
+    // the deps array — including it would cause the polling
+    // interval and visibility listener to tear down + re-setup
+    // (and trigger an extra load) on every tab change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, filter]);
+  }, [user]);
 
   async function refreshOne(id: string) {
     setRefreshingId(id);
@@ -746,6 +762,15 @@ export default function DashboardPaperTrades() {
     return { openCount: open.length, closedCount: closed.length, pendingCount: pending.length, wins, losses, totalPl, openUnrealized, winRate, unavailableCount };
   }, [trades]);
 
+  // Client-side filter for the visible row list. The full trade set is always
+  // loaded (see `load()` above) so the stats cards above this list stay
+  // correct; this memo just narrows what's rendered to the active tab.
+  const filteredTrades = useMemo(() => {
+    if (filter === "all") return trades;
+    if (filter === "pending") return trades.filter((t) => t.status === "pending_entry");
+    return trades.filter((t) => t.status === filter);
+  }, [trades, filter]);
+
   return (
     <div className="min-h-screen flex bg-background">
       <DashboardSidebar />
@@ -859,16 +884,20 @@ export default function DashboardPaperTrades() {
             ))}
           </div>
 
-          {loading && trades.length === 0 ? (
+          {loading && filteredTrades.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-          ) : trades.length === 0 ? (
+          ) : filteredTrades.length === 0 ? (
             <div className="rounded-xl border border-border/40 bg-card p-8 text-center">
               <FlaskConical className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No paper trades yet. Open one from any signal card using the <strong className="text-foreground">Review Trade</strong> button.</p>
+              <p className="text-sm text-muted-foreground">
+                {trades.length === 0
+                  ? <>No paper trades yet. Open one from any signal card using the <strong className="text-foreground">Review Trade</strong> button.</>
+                  : <>No {FILTER_LABELS[filter].toLowerCase()} trades.</>}
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {trades.map((t) => {
+              {filteredTrades.map((t) => {
                 const isCall = t.option_type === "call";
 
                 // ── Pending entry rows ────────────────────────────────────
