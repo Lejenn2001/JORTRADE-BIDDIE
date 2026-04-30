@@ -1,0 +1,72 @@
+New priority order:
+
+Finish/confirm current Paper Trade + Replay work
+Next build: Review Trade button inside Biddie/JORTRADE chat messages
+After that: Futures tab concept/design for MNQ only
+
+Do NOT start the Futures tab yet.
+
+Next approved discussion item is Biddie chat → Review Trade.
+
+Before implementing anything, please provide a detailed design only.
+
+Goal:
+When Biddie posts a message in the JORTRADE community chat that clearly contains an option play, users should be able to click “Review Trade” directly from that chat message and paper-track the play.
+
+Requirements:
+
+Detect clear option contracts in Biddie chat messages
+Examples:
+AAPL 270C 4/24
+SPY 675P 4/26
+TSLA 345C 5/1
+Show a “Review Trade” button only when a valid option contract is detected
+Open the existing PaperTradeTicket flow
+Use the exact contract from the Biddie message as “Biddie’s Exact Callout”
+Also show alternatives if available:
+same ticker
+same call/put direction
+same expiration if possible
+nearby strikes
+User chooses which contract to paper submit
+Save into the existing paper_trades system
+Clearly label chat-origin paper trades if needed
+
+If target/stop are present in Biddie’s message:
+
+use them
+
+If target/stop are missing:
+
+show “Not provided”
+allow paper tracking by contract value only
+do not invent target or stop values
+
+Scope protection:
+Do NOT touch:
+
+signal generation
+signal scoring
+signal cards
+existing Paper Trade Tracker logic unless needed to open the existing ticket
+Biddie message generation
+JORTRADE chat posting behavior
+Dashboard Biddie AI chat
+auth/login
+admin tools
+live alerts
+deployment settings
+
+Please tell me:
+
+Exactly which files would change
+How you will detect option contracts in Biddie messages
+How you will prevent false positives
+How the Review Trade button will render in the chat message
+How the existing PaperTradeTicket will receive chat-based contract data
+How alternatives will be generated
+What happens when target/stop are missing
+How this will be tested
+What will NOT be touched
+
+Do not implement until I approve the design.
