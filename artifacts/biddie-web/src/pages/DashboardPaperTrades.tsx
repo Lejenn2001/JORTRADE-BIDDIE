@@ -47,6 +47,12 @@ interface PaperTrade {
   entry_trigger_direction: "at_or_above" | "at_or_below" | null;
   pending_expires_at: string | null;
   pending_cancel_reason: string | null;
+  // Phase 1 / Commit 4 — Exit Strategy Layer fields
+  // trailing_active flips false→true once option P&L first crosses +20%.
+  // highest_price_after_activation is the peak option fill price observed
+  // since trailing_active flipped on (only ever bumped upward).
+  trailing_active?: boolean | null;
+  highest_price_after_activation?: string | null;
 }
 
 interface AutomationSettings {
@@ -145,6 +151,10 @@ const exitReasonLabel = (r: string | null): string => {
   if (r === "target_hit") return "🎯 Target hit";
   if (r === "stop_hit" || r === "invalidated") return "🛑 Stop hit";
   if (r === "closed_expired" || r === "expired") return "⏰ Expired";
+  // Phase 1 / Commit 4 — Exit Strategy Layer reasons
+  if (r === "profit_target") return "💰 Profit target";
+  if (r === "hard_stop") return "🚨 Hard stop";
+  if (r === "trailing_stop") return "🛡️ Trailing stop";
   if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
 };
@@ -153,6 +163,13 @@ const exitReasonStyle = (r: string | null) => {
   if (r === "stop_hit" || r === "invalidated") return "bg-red-500/15 text-red-300 border border-red-500/30";
   if (r === "closed_expired" || r === "expired") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
   if (r === "closed_manual" || r === "manual") return "bg-muted/40 text-muted-foreground border border-border/40";
+  // Phase 1 / Commit 4 — Exit Strategy Layer styling
+  // profit_target = strong green (clean win); hard_stop = strong red (capital
+  // preservation hit); trailing_stop = amber (protective lock-in, neither
+  // pure win nor pure loss — always positive realized P/L by construction).
+  if (r === "profit_target") return "bg-emerald-500/20 text-emerald-200 border border-emerald-400/40";
+  if (r === "hard_stop") return "bg-red-500/20 text-red-200 border border-red-400/40";
+  if (r === "trailing_stop") return "bg-amber-500/20 text-amber-200 border border-amber-400/40";
   return "bg-muted/30 text-muted-foreground";
 };
 const sourceLabel = (s: string | null | undefined) => {
@@ -637,6 +654,27 @@ export default function DashboardPaperTrades() {
                         ) : (
                           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${exitReasonStyle(t.exit_reason)}`}>{exitReasonLabel(t.exit_reason)}</span>
                         )}
+                        {/* Phase 1 / Commit 4 — Trailing Armed badge.
+                            Visible on OPEN rows whose option P/L has crossed
+                            +20% at least once. Stays visible (latched) even if
+                            price pulls back, until the trade closes. Peak shown
+                            so the trader sees how close we are to the trailing
+                            stop trigger (peak × 0.90). */}
+                        {t.status === "open" && t.trailing_active && (
+                          <span
+                            className="text-[10px] uppercase font-bold text-amber-200 bg-amber-500/15 border border-amber-400/40 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
+                            title={
+                              t.highest_price_after_activation != null
+                                ? `Trailing stop armed. Peak option price $${Number(t.highest_price_after_activation).toFixed(2)}. Will close if price drops 10% from peak (≤ $${(Number(t.highest_price_after_activation) * 0.9).toFixed(2)}).`
+                                : "Trailing stop armed. Will close if price drops 10% from peak."
+                            }
+                          >
+                            🛡️ Trailing armed
+                            {t.highest_price_after_activation != null && (
+                              <span className="font-mono normal-case">@ ${Number(t.highest_price_after_activation).toFixed(2)}</span>
+                            )}
+                          </span>
+                        )}
                         {stateBadge && (
                           <span className={`text-[10px] uppercase font-bold border px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${stateBadge.cls}`}>
                             <span className={`inline-block w-1.5 h-1.5 rounded-full ${stateBadge.dot}`} />
@@ -720,8 +758,9 @@ export default function DashboardPaperTrades() {
             </div>
           )}
 
-          <p className="text-[10px] text-muted-foreground mt-4 text-center">
-            Quotes refresh every 30s on this page. Open trades are also auto-monitored on the server (every 60s during market hours, every 5 min off-hours) and auto-close when the underlying hits the signal's target or invalidation, or when the contract expires.
+          <p className="text-[10px] text-muted-foreground mt-4 text-center max-w-3xl mx-auto leading-relaxed">
+            Quotes refresh every 30s on this page. Open trades are also auto-monitored on the server (every 60s during market hours, every 5 min off-hours).
+            Auto-close rules, in priority order: contract expired · option P/L ≤ −25% (hard stop) · option P/L ≥ +40% (profit target) · trailing stop (arms at +20%, closes if price drops 10% from peak) · underlying invalidation · underlying target.
           </p>
         </main>
       </div>

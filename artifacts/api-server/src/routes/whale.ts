@@ -218,6 +218,15 @@ const SEED_ADMIN_IDS = [
     ]) {
       await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS ${col} NUMERIC`, []);
     }
+    // Paper Automation Engine — Commit 4 (Exit Strategy Layer).
+    // trailing_active is a latched flag: false→true once the trade first crosses
+    // the trailing activation threshold (+20% option P&L). It never resets.
+    // highest_price_after_activation tracks the peak option fill price observed
+    // since trailing_active flipped on. It is only ever bumped upward — survives
+    // missed quotes, never decreases. Both columns are NULL/false on legacy rows
+    // and are populated lazily by the monitor on the next tick after this seed.
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS trailing_active BOOLEAN DEFAULT FALSE`, []);
+    await dbQuery(`ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS highest_price_after_activation NUMERIC`, []);
     // Normalize legacy exit_reason values → canonical enum {target_hit, stop_hit, closed_expired, closed_manual}
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'stop_hit' WHERE exit_reason = 'invalidated'`, []).catch(() => null);
     await dbQuery(`UPDATE paper_trades SET exit_reason = 'closed_manual' WHERE exit_reason = 'manual'`, []).catch(() => null);
@@ -5345,6 +5354,19 @@ async function fetchOptionQuote(ticker: string, expiry: string | Date, optionTyp
   }
 }
 
+// Paper Automation Engine — Commit 4 (Exit Strategy Layer) thresholds.
+// All four are option-P&L percentages computed off the SAME price source as
+// the actual exit fill (pickExitFill: bid → mid → last). Keeping the threshold
+// price source aligned with the fill source guarantees that when we say
+// "close at +40%", the realized P&L written to the DB will read +40% (or very
+// near it — same price). Mixing mid for the threshold and bid for the fill
+// would create systematic disagreement between the trigger reason and the
+// realized number. Hard-coded at file scope (not per-trade) per Phase 1 spec.
+const HARD_STOP_PCT = -25;          // close if option P&L ≤ -25%
+const PROFIT_TARGET_PCT = 40;       // close if option P&L ≥ +40%
+const TRAILING_ACTIVATION_PCT = 20; // arm trailing once option P&L ≥ +20%
+const TRAILING_DRAWDOWN_PCT = 10;   // close if option price ≤ peak × (1 − 10%)
+
 function pickEntryFill(q: OptionQuoteResult): { price: number; source: string } | null {
   if (q.ask != null && q.ask > 0) return { price: q.ask, source: "ask" };
   if (q.mid != null && q.mid > 0) return { price: q.mid, source: "mid" };
@@ -5422,7 +5444,35 @@ function shouldAutoCloseStop(optionType: string, underlying: number | null, stop
   return optionType === "call" ? underlying <= stop : underlying >= stop;
 }
 
-// Auto-close eval (target/stop/expired). Returns updated row or { closed: false, lastFill }.
+// Auto-close eval. Phase 1 / Commit 4 — Exit Strategy Layer.
+//
+// Per-tick decision tree, in strict priority order. The first true branch
+// wins. The new option-P&L rules (hard_stop, profit_target, trailing_stop)
+// fire BEFORE the legacy underlying rules (stop_hit, target_hit) so the
+// exit strategy actually protects capital instead of letting a trade go
+// green → red.
+//
+//   1. closed_expired   — contract past 4pm ET on expiry day
+//   2. hard_stop        — option P&L ≤ HARD_STOP_PCT          (NEW)
+//   3. profit_target    — option P&L ≥ PROFIT_TARGET_PCT      (NEW)
+//   4. trailing_stop    — armed AND fill ≤ peak × (1 − draw)  (NEW)
+//   5. stop_hit         — underlying crossed signal_invalidation
+//   6. target_hit       — underlying crossed signal_target
+//
+// Trailing state is updated EVERY tick that has a usable fill, BEFORE the
+// exit decision, so:
+//   • activation (option P&L crossing +20%) latches trailing_active=true
+//     and seeds the peak with the current fill (drawdown = 0% on the same
+//     tick → no premature trigger).
+//   • peak is monotone non-decreasing — bumped only when fill > peak.
+//   • a missed quote (no fill) leaves both fields untouched, so the peak
+//     persists across gaps.
+//
+// When there is NO fill (Polygon returned no bid/mid/last and the contract
+// isn't expired), option-P&L exits cannot be evaluated; we fall through to
+// the legacy underlying-only checks. This preserves Commit 0 behavior for
+// quote-starved contracts and never lets an option-P&L threshold fire on
+// stale data.
 async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ closed: boolean; row?: any; lastFill: { price: number | null; source: string | null }; exitReason?: string; fill?: { price: number; source: string } }> {
   const expiryStr = normalizeExpiryToIso(t.expiry);
   const expired = isContractExpired(expiryStr);
@@ -5432,24 +5482,73 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
   const target = t.signal_target != null ? Number(t.signal_target) : null;
   const stop = t.signal_invalidation != null ? Number(t.signal_invalidation) : null;
   const lastFill = pickLastQuoteFill(q);
+  const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
+  const fill = pickExitFill(q, expired, itm);
 
+  const entry = Number(t.entry_price);
+  const contracts = Number(t.contracts);
+
+  // ── Trailing-state evolution (latched, monotone, tick-local) ────────────
+  // Read current state from the row, then advance it only when we have a
+  // usable fill. Computed BEFORE the exit decision so the trailing_stop
+  // check below sees this tick's freshly-bumped peak.
+  let trailingActive = !!t.trailing_active;
+  let trailingPeak = t.highest_price_after_activation != null && Number.isFinite(Number(t.highest_price_after_activation))
+    ? Number(t.highest_price_after_activation)
+    : null;
+  if (fill && entry > 0) {
+    const pnlPctTick = ((fill.price - entry) / entry) * 100;
+    if (!trailingActive && pnlPctTick >= TRAILING_ACTIVATION_PCT) {
+      // First crossing of activation threshold — latch on, seed peak.
+      trailingActive = true;
+      trailingPeak = fill.price;
+    }
+    if (trailingActive && (trailingPeak == null || fill.price > trailingPeak)) {
+      // Bump peak only on new highs. Never lower.
+      trailingPeak = fill.price;
+    }
+  }
+
+  // ── Exit decision in strict priority order ──────────────────────────────
   let exitReason: string | null = null;
-  if (expired) exitReason = "closed_expired";
-  else if (shouldAutoCloseTarget(t.option_type, underlying, target)) exitReason = "target_hit";
-  else if (shouldAutoCloseStop(t.option_type, underlying, stop)) exitReason = "stop_hit";
+  if (expired) {
+    exitReason = "closed_expired";
+  } else if (fill && entry > 0) {
+    const pnlPct = ((fill.price - entry) / entry) * 100;
+    if (pnlPct <= HARD_STOP_PCT) exitReason = "hard_stop";
+    else if (pnlPct >= PROFIT_TARGET_PCT) exitReason = "profit_target";
+    else if (
+      trailingActive &&
+      trailingPeak != null && trailingPeak > 0 &&
+      fill.price <= trailingPeak * (1 - TRAILING_DRAWDOWN_PCT / 100)
+    ) exitReason = "trailing_stop";
+    else if (shouldAutoCloseStop(t.option_type, underlying, stop)) exitReason = "stop_hit";
+    else if (shouldAutoCloseTarget(t.option_type, underlying, target)) exitReason = "target_hit";
+  } else {
+    // No usable option fill → can't evaluate option-P&L thresholds. Fall
+    // through to legacy underlying-only exits so quote-starved contracts
+    // still respect signal target/invalidation.
+    if (shouldAutoCloseStop(t.option_type, underlying, stop)) exitReason = "stop_hit";
+    else if (shouldAutoCloseTarget(t.option_type, underlying, target)) exitReason = "target_hit";
+  }
 
+  // ── No exit → refresh quote snapshot + persist trailing state ───────────
   if (!exitReason) {
     await dbQuery(
       `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
         last_quote_bid = $4, last_quote_ask = $5, last_quote_mid = $6, last_quote_last = $7,
-        last_checked_at = NOW() WHERE id = $8 AND status = 'open'`,
-      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
+        trailing_active = $8, highest_price_after_activation = $9,
+        last_checked_at = NOW() WHERE id = $10 AND status = 'open'`,
+      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, trailingActive, trailingPeak, t.id]
     ).catch(() => null);
     return { closed: false, lastFill };
   }
 
-  const itm = isItmAtPrice(t.option_type, Number(t.strike), underlying);
-  const fill = pickExitFill(q, expired, itm);
+  // ── Exit decided but no usable fill ─────────────────────────────────────
+  // Only reachable on the legacy underlying-only branch above OR when
+  // expired. For non-expired no-fill we cannot compute realized P&L, so
+  // we just persist freshness + return the exitReason without closing.
+  // (Commit 0 behavior; preserved verbatim.)
   if (!fill) {
     if (expired) {
       // Expired with no usable fill levels: force close via intrinsic/0 (never leave expired open).
@@ -5462,14 +5561,16 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
     await dbQuery(
       `UPDATE paper_trades SET last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
         last_quote_bid = $4, last_quote_ask = $5, last_quote_mid = $6, last_quote_last = $7,
-        last_checked_at = NOW() WHERE id = $8 AND status = 'open'`,
-      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, t.id]
+        trailing_active = $8, highest_price_after_activation = $9,
+        last_checked_at = NOW() WHERE id = $10 AND status = 'open'`,
+      [lastFill.price, lastFill.source, underlying, q.bid, q.ask, q.mid, q.last, trailingActive, trailingPeak, t.id]
     ).catch(() => null);
     return { closed: false, lastFill, exitReason };
   }
 
-  const entry = Number(t.entry_price);
-  const contracts = Number(t.contracts);
+  // ── Close: write exit fill, P&L, exit_reason + final trailing snapshot ──
+  // Final $12/$13 carry the up-to-date trailing state so post-mortem queries
+  // can see the peak and whether trailing was ever armed on this trade.
   const realizedPl = (fill.price - entry) * contracts * 100;
   const realizedPlPct = entry > 0 ? ((fill.price - entry) / entry) * 100 : 0;
   const upd = await dbQuery(
@@ -5479,9 +5580,10 @@ async function evaluateAndMaybeClose(t: any, q: OptionQuoteResult): Promise<{ cl
       exit_bid = $8, exit_ask = $9, exit_mid = $10, exit_last = $11,
       last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
       last_quote_bid = $8, last_quote_ask = $9, last_quote_mid = $10, last_quote_last = $11,
+      trailing_active = $12, highest_price_after_activation = $13,
       last_checked_at = NOW()
      WHERE id = $7 AND status = 'open' RETURNING *`,
-    [fill.price, fill.source, underlying, exitReason, realizedPl, realizedPlPct, t.id, q.bid, q.ask, q.mid, q.last]
+    [fill.price, fill.source, underlying, exitReason, realizedPl, realizedPlPct, t.id, q.bid, q.ask, q.mid, q.last, trailingActive, trailingPeak]
   ).catch(() => null);
   if (!upd || !upd.rowCount) return { closed: false, lastFill, exitReason, fill };
   return { closed: true, row: upd.rows[0], lastFill, exitReason, fill };
