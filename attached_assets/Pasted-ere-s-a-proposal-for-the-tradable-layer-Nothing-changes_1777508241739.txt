@@ -1,0 +1,57 @@
+ere's a proposal for the tradable layer. Nothing changes in signal generation/scoring/outcomes — this is a parallel system that consumes signals and adds tradability metadata, contract picks, entry/exit rules, and a tradability label. Implementation waits for your approval.
+
+Architecture (one-line summary)A new module tradablePlan runs immediately after a signal is generated (and on-demand for replay/backtest). It reads the signal but never writes back to it. Its output lives in two new tables — signal_tradable_plan and tradable_executions — joined into the Paper Trades UI by signal_id. Live signal flow, alerts, Biddie, and scoring are untouched.
+
+signals  →  [READ-ONLY] signal_outcomes (existing, untouched)↓tradablePlan (new, additive)↓signal_tradable_plan  ──→  Paper Trades UI shows↓                    "Tradable: A / B / C / Skip"tradable_executions ←────  Replay imports + future livepaper trades use this plan
+
+Contract selection improvementsNew module: contractPicker.ts. Pulls Polygon options chain snapshot at signal time (replay) or live (going forward), then ranks contracts.
+
+Filters (configurable per signal grade):
+
+Filter	Default for A-grade	Default for B-grade	SourceDelta range	0.40–0.55 (calls), −0.40 to −0.55 (puts)	0.30–0.45	Polygon /v3/snapshot/options/{ticker}/{contract} → greeks.deltaDTE (days to expiry)	7–21 DTE	3–14 DTE	computedBid-ask spread	spread ≤ 5% of mid OR ≤ $0.10, whichever larger	≤ 8% of mid OR ≤ $0.15	NBBO at signal timeOpen interest	≥ 500 contracts	≥ 200	snapshotVolume (today)	≥ 100	≥ 50	snapshotIV percentile	warn if > 80th pct (IV-crush risk)	warn if > 90th pct	derive from 30-day IV historySelection logic:
+
+Filter chain to contracts matching DTE window and direction.Score each surviving contract: score = 0.4 * delta_fit + 0.3 * liquidity_score + 0.2 * spread_score + 0.1 * iv_score.Pick top 3, label them Primary / Backup / Stretch.If zero contracts pass filters → label signal "Untradable — no liquid contracts" and skip it from replay/paper trade picker entirely.What this fixes from yesterday's data: STX put $550 had a $20.30/$17.00 quote = 16% spread. Under the proposed 5–8% spread filter, that contract would have been auto-rejected and either replaced with a more liquid strike (e.g. $560 or $570 ATM) or flagged as untradable.
+
+Optional entry confirmation rulesNew module: entryConfirmation.ts. Each rule is a pluggable check that takes (signal, currentBar, recentBars[]) and returns { confirmed: bool, reason }. The signal is never blocked from generating — confirmation is a trade entry gate, not a signal gate.
+
+Rules to offer:
+
+Rule	Logic	Best forImmediate fill (default)	Fill at signal time, no wait	Current behavior (kept as default)Breakout confirmation	Wait for next 1-min close beyond signal's pivot/level; enter on that close	Trend-continuation signalsRetest entry	Wait for price to return within X bps of the breakout level then turn back; enter on the turn (max wait: N minutes, else skip)	Higher-quality entries with tighter stopMomentum trigger	Require 2 of 3: (a) RSI(5) crossing 50 in signal direction, (b) volume on signal bar ≥ 1.5× 20-bar avg, (c) VWAP slope in signal direction	Filters out chop/false breakoutsTime window	Skip entries in first 15 min and last 30 min of session unless signal grade = A	Avoid open volatility & power hour fakeoutsWhere rules attach: Per-signal-type config (e.g. "whale signals → momentum trigger required, algorithm signals → breakout confirmation"). Stored in a new tradable_rules table, editable from an admin panel.
+
+Replay use: the simulator can apply each rule retroactively against the same 1-min bars it already walks. We can show a comparison: "With breakout confirmation: 6/8 signals would have entered, P&L = −$X. Without: 8/8, P&L = −$Y." This becomes a backtest tool for tuning rules.
+
+Time-based exit rulesNew module: exitRules.ts. Layered on top of the existing target/stop logic — first one to fire wins.
+
+Rules to offer:
+
+Rule	Default	RationaleMax hold time	90 min for ≤ 7 DTE; 4 hours for 8–21 DTE; full session for > 21 DTE	Theta accelerates near expiry; sitting in a non-moving 0DTE bleeds moneyTheta-aware exit	Exit at 14:30 ET if option is < 5% from breakeven, when DTE ≤ 1	Avoid end-of-day theta cliff on 0/1DTETrailing stop on profit	Once unrealized > +25%, trail at 50% of peak gain	Locks in winners that fadeNo-progress exit	Exit if 30 min elapsed and price has not moved ≥ 25% toward target	"Dead trade" cutterIV crush exit	Exit if implied vol drops ≥ 20% from entry IV (only if option is OTM and not in profit)	Catches the "right direction, wrong vega" loss patternThese run in addition to existing target/stop — never replace them. In the Paper Trades UI the exit_reason becomes a richer enum: target_hit, stop_hit, max_hold_hit, no_progress_exit, theta_exit, iv_crush_exit, closed_eod.
+
+"Tradable vs directional only" classifierThis is the most important piece — most of yesterday's losses come from signals that were directionally accurate but mechanically untradable.
+
+New field: tradability: "A" | "B" | "C" | "skip" written to signal_tradable_plan.tradability_grade.
+
+Computation (independent of signal grade):
+
+tradability_score (0–100) =0.30 * contract_quality      // best available contract's spread + liquidity + delta fit
+
+0.25 * setup_quality         // signal type + market context (trend day vs chop)
+
+0.20 * timing_quality        // time-of-day, distance to next event/earnings
+
+0.15 * iv_environment        // current IV vs historical (low IV = better entries)
+
+0.10 * historical_replay     // rolling 30-day replay P&L of similar signalsBuckets:
+
+A (≥ 75): high-confidence tradable — show big green "Tradable A" badge, recommend Primary contractB (60–74): tradable with caveats — show yellow badge, recommend Backup contract or smaller sizeC (45–59): directional only — show grey badge "Watch Only", suggest paper trade or passSkip (< 45): badge "Untradable — [reason: spread too wide / no liquid contracts / IV too high / earnings in 2 days]"Stays parallel to existing signal grade:A signal can be Signal Grade = A (the directional thesis is strong) but Tradability = Skip (no contract has tight enough spread). These are now two separate axes, and that's the whole point of the layer.
+
+Bonus benefit: the replay/backtest panel becomes vastly more useful — you can filter eligible past signals by tradability grade and see "what would have happened if I had only paper-traded A-tradables?"
+
+Schema additions (proposed, not built)-- Per-signal plan, computed once at signal generation timeCREATE TABLE signal_tradable_plan (signal_id           TEXT PRIMARY KEY REFERENCES signal_outcomes(id),tradability_grade   TEXT CHECK (tradability_grade IN ('A','B','C','skip')),tradability_score   NUMERIC,skip_reason         TEXT,primary_contract    JSONB,    -- {contract, strike, expiry, delta, bid, ask, oi}backup_contract     JSONB,stretch_contract    JSONB,entry_rule          TEXT,     -- 'immediate' | 'breakout' | 'retest' | 'momentum'exit_rule_set       JSONB,    -- {max_hold_min, theta_exit, trailing_stop, etc}computed_at         TIMESTAMPTZ DEFAULT now());-- Per-execution log (one row per replay or future paper trade tied to a plan)CREATE TABLE tradable_executions (id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),signal_id           TEXT NOT NULL,paper_trade_id      UUID REFERENCES paper_trades(id),tradability_grade   TEXT,contract_used       TEXT,     -- 'primary' | 'backup' | 'stretch'entry_rule_fired    BOOLEAN,exit_rule_fired     TEXT,     -- which rule actually exitedcreated_at          TIMESTAMPTZ DEFAULT now());No changes to signals, signal_outcomes, signal_scores, biddie tables, or alerts.
+
+How it surfaces in the UISignals card (read-only addition):
+
+[NVDA  call $210  • A-grade signal  • Tradability: B (68)]Primary contract: NVDA 250502C00210 · Δ 0.46 · spread 4% · OI 1,840Entry rule: Breakout confirmation (waiting for 19:33 close > $209.20)Exit rule: Max hold 90m · Trailing stop on +25%[Paper Trade Primary] [Paper Trade Backup] [Skip]Paper Trades / Replay Panel:
+
+New filter: Tradability ≥ B (default on) — hides untradable noise.Per-row column showing Signal Outcome | Tradability Grade | Replay Exit | Replay P&L — exactly the separation you asked about in the previous message.Replay summary: "50 signals last week → 23 tradable (A+B) → 18 entered (5 filtered by entry rule) → P&L +$X · Win rate Y% (P&L-based)".Rollout order I'd suggestPhase 1 — schema + contractPicker + tradability classifier (read-only, no behavioral change). Backfill against last 30 days of signals to validate the score buckets correlate with replay P&L.Phase 2 — surface tradability badges in signals UI and replay picker; default replay picker to Tradability ≥ B.Phase 3 — entryConfirmation and exitRules engines, applied to new paper trades only (live + replay), with admin-editable rule presets per signal type.Phase 4 — A/B comparison tooling: "with rules vs without rules" replay reports.Each phase is shippable independently and reversible. Phases 1–2 are pure additions with zero risk to existing flows; Phases 3–4 only affect paper trading, never signals or alerts.
+
+Let me know which phases you want me to plan in detail or start building, and whether you want any of the default thresholds tightened/loosened before I propose a concrete implementation plan.
