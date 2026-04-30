@@ -5938,6 +5938,178 @@ router.post("/whale/paper/alternatives", async (req, res) => {
   }
 });
 
+// ── Paper Automation Engine — Commit 2: safety controls (kill switch + cap) ──
+// Single source of truth for the runtime safety knobs. Stored as plain rows in
+// the existing app_settings key/value table (no new schema). Env vars override
+// the DB values so the kill switch keeps working even if the DB is wedged.
+//
+// Keys:
+//   paper_automation_paused        '1' | '0'  (default '0')
+//   paper_automation_paused_reason free text  (set when paused via API)
+//   paper_automation_paused_by     user id who flipped it (audit only)
+//   paper_automation_paused_at     ISO timestamp string (set when paused)
+//   paper_automation_max_open_pending  integer string (default '25')
+//
+// Cached for 10s in-process to keep monitor sweeps cheap. The pause check in
+// the monitor and the cap check in POST /whale/paper/trades both go through
+// getPaperAutomationSettings(), so DB flips take effect within ≤10s without a
+// server restart.
+const DEFAULT_MAX_OPEN_PENDING = 25;
+const SETTINGS_CACHE_TTL_MS = 10_000;
+type PaperAutomationSettings = {
+  paused: boolean;
+  pausedReason: string | null;
+  pausedBy: string | null;
+  pausedAt: string | null;
+  maxOpenPending: number;
+  source: { paused: "env" | "db" | "default"; max: "env" | "db" | "default" };
+};
+let _settingsCache: { at: number; value: PaperAutomationSettings } | null = null;
+
+async function getPaperAutomationSettings(opts?: { force?: boolean }): Promise<PaperAutomationSettings> {
+  const now = Date.now();
+  if (!opts?.force && _settingsCache && now - _settingsCache.at < SETTINGS_CACHE_TTL_MS) {
+    return _settingsCache.value;
+  }
+  const rows = await dbQuery(
+    `SELECT key, value FROM app_settings WHERE key IN
+      ('paper_automation_paused','paper_automation_paused_reason','paper_automation_paused_by',
+       'paper_automation_paused_at','paper_automation_max_open_pending')`,
+    []
+  );
+  const map = new Map<string, string>();
+  for (const r of rows?.rows || []) map.set(r.key, r.value);
+
+  const envPaused = process.env.PAPER_AUTOMATION_PAUSED;
+  const envPausedFlag = envPaused === "1" || envPaused === "true";
+  const dbPausedRaw = map.get("paper_automation_paused");
+  const dbPausedFlag = dbPausedRaw === "1" || dbPausedRaw === "true";
+  const paused = envPausedFlag || dbPausedFlag;
+  const pausedSource: "env" | "db" | "default" =
+    envPausedFlag ? "env" : (dbPausedRaw != null ? "db" : "default");
+
+  const envMax = Number(process.env.PAPER_AUTOMATION_MAX_OPEN_PENDING);
+  const dbMaxRaw = map.get("paper_automation_max_open_pending");
+  const dbMax = dbMaxRaw != null ? Number(dbMaxRaw) : NaN;
+  let maxOpenPending = DEFAULT_MAX_OPEN_PENDING;
+  let maxSource: "env" | "db" | "default" = "default";
+  if (Number.isFinite(envMax) && envMax > 0) { maxOpenPending = Math.floor(envMax); maxSource = "env"; }
+  else if (Number.isFinite(dbMax) && dbMax > 0) { maxOpenPending = Math.floor(dbMax); maxSource = "db"; }
+
+  const value: PaperAutomationSettings = {
+    paused,
+    pausedReason: envPausedFlag ? "PAPER_AUTOMATION_PAUSED env var" : (map.get("paper_automation_paused_reason") || null),
+    pausedBy: map.get("paper_automation_paused_by") || null,
+    pausedAt: map.get("paper_automation_paused_at") || null,
+    maxOpenPending,
+    source: { paused: pausedSource, max: maxSource },
+  };
+  _settingsCache = { at: now, value };
+  return value;
+}
+
+function invalidatePaperAutomationSettingsCache(): void {
+  _settingsCache = null;
+}
+
+async function isUserPaperAdmin(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  const r = await dbQuery(`SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1`, [userId]);
+  return !!(r && r.rows && r.rows.length);
+}
+
+// GET /whale/paper/automation-settings — read-only state for any auth user.
+// Future UI banners can poll this to surface "automation paused" without
+// granting toggle ability.
+router.get("/whale/paper/automation-settings", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const s = await getPaperAutomationSettings();
+    const isAdmin = await isUserPaperAdmin(userId);
+    // Per-user count surfaced for the future cap-status display.
+    const c = await dbQuery(
+      `SELECT COUNT(*)::int AS n FROM paper_trades WHERE user_id = $1 AND status IN ('open','pending_entry')`,
+      [userId]
+    );
+    const userOpenPending = c?.rows?.[0]?.n ?? 0;
+    res.json({
+      paused: s.paused,
+      pausedReason: s.pausedReason,
+      pausedBy: s.pausedBy,
+      pausedAt: s.pausedAt,
+      maxOpenPending: s.maxOpenPending,
+      userOpenPending,
+      capRemaining: Math.max(0, s.maxOpenPending - userOpenPending),
+      source: s.source,
+      isAdmin,
+    });
+  } catch (e: any) {
+    console.error("[paper-trade] settings get error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /whale/paper/automation-settings — admin only. Body fields are all
+// optional; omit a field to leave it unchanged. Examples:
+//   { paused: true, reason: "incident: bad fills" }
+//   { paused: false }
+//   { maxOpenPending: 50 }
+router.post("/whale/paper/automation-settings", async (req, res) => {
+  try {
+    const userId = await verifyBearerUser(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!(await isUserPaperAdmin(userId))) return res.status(403).json({ error: "Admin role required" });
+    const { paused, reason, maxOpenPending } = req.body || {};
+
+    if (paused !== undefined) {
+      const flag = paused === true || paused === "1" || paused === "true";
+      await dbQuery(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ('paper_automation_paused', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+        [flag ? "1" : "0"]
+      );
+      if (flag) {
+        const r = (typeof reason === "string" && reason.trim()) ? reason.trim().slice(0, 500) : "manual pause";
+        await dbQuery(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ('paper_automation_paused_reason', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`, [r]);
+        await dbQuery(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ('paper_automation_paused_by', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`, [userId]);
+        await dbQuery(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES ('paper_automation_paused_at', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`, [new Date().toISOString()]);
+        console.log(`[paper-trade] automation PAUSED by ${userId.slice(0,8)} reason="${r}"`);
+      } else {
+        // Unpause clears audit fields so a fresh pause writes new ones.
+        await dbQuery(`DELETE FROM app_settings WHERE key IN ('paper_automation_paused_reason','paper_automation_paused_by','paper_automation_paused_at')`, []);
+        console.log(`[paper-trade] automation RESUMED by ${userId.slice(0,8)}`);
+      }
+    }
+
+    if (maxOpenPending !== undefined) {
+      const n = Math.floor(Number(maxOpenPending));
+      if (!Number.isFinite(n) || n < 1 || n > 1000) {
+        return res.status(400).json({ error: "maxOpenPending must be an integer 1..1000" });
+      }
+      await dbQuery(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ('paper_automation_max_open_pending', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+        [String(n)]
+      );
+      console.log(`[paper-trade] automation max_open_pending set to ${n} by ${userId.slice(0,8)}`);
+    }
+
+    invalidatePaperAutomationSettingsCache();
+    const updated = await getPaperAutomationSettings({ force: true });
+    res.json({ success: true, settings: updated });
+  } catch (e: any) {
+    console.error("[paper-trade] settings post error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /whale/paper/trades — open a paper trade (server re-fetches quote, fills at ask)
 router.post("/whale/paper/trades", async (req, res) => {
   try {
@@ -5958,6 +6130,27 @@ router.post("/whale/paper/trades", async (req, res) => {
     if (!Number.isFinite(strikeNum) || strikeNum <= 0) return res.status(400).json({ error: "invalid strike" });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry))) return res.status(400).json({ error: "expiry must be YYYY-MM-DD" });
     if (isContractExpired(String(expiry))) return res.status(400).json({ error: "Contract is already expired" });
+
+    // ── Commit 2: per-user safety cap on (open + pending_entry) ──
+    // Applies to BOTH market mode and pending_entry mode. Counted statuses
+    // exclude 'closed' and 'cancelled' so finished trades never block new ones.
+    // Race window with simultaneous inserts is acceptable (cap enforced at
+    // creation time only; tiny over-shoot tolerated rather than introducing a
+    // serializable transaction in a hot path).
+    const settings = await getPaperAutomationSettings();
+    const countRes = await dbQuery(
+      `SELECT COUNT(*)::int AS n FROM paper_trades WHERE user_id = $1 AND status IN ('open','pending_entry')`,
+      [userId]
+    );
+    const current = countRes?.rows?.[0]?.n ?? 0;
+    if (current >= settings.maxOpenPending) {
+      return res.status(409).json({
+        error: `Trade cap reached: you have ${current} active trades (open + pending). Close or cancel some before opening a new one. Cap = ${settings.maxOpenPending}.`,
+        code: "TRADE_CAP_REACHED",
+        cap: settings.maxOpenPending,
+        current,
+      });
+    }
 
     const tickerUp = String(ticker).toUpperCase();
 
@@ -6294,7 +6487,7 @@ async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any
 }
 
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso, evaluatePendingEntry };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;

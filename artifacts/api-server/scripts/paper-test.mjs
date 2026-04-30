@@ -20,6 +20,16 @@
 //   list [--status x]    List your trades. status = open|closed|pending (default: pending).
 //   watch <id>           Poll one trade every 5s, print state on each change. Ctrl-C to stop.
 //   cleanup              Cancel + hide every TEST-PT-* signal_id you queued via this script.
+//
+// Commit 2 — safety controls (admin-only for write commands):
+//   settings             Show current automation settings (pause flag + cap + your usage).
+//   pause [reason...]    Set automation_paused=true. Monitor stops processing pendings.
+//   resume               Set automation_paused=false.
+//   set-cap <n>          Set max open+pending trades per user (1..1000).
+//   cap-test             Demonstrate the cap: lowers cap to (current+1), queues one more,
+//                        attempts a second queue (should 409 with TRADE_CAP_REACHED), restores.
+//   pause-test           Demonstrate the kill switch: pauses, queues a pending, waits one
+//                        monitor cycle (proves it does NOT fire), resumes, waits, confirms it fires.
 
 import process from "node:process";
 
@@ -43,7 +53,7 @@ if (!BEARER) {
 
 const BASE = `https://${DEV_DOMAIN}/api`;
 
-async function api(method, path, body) {
+async function api(method, path, body, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: {
@@ -56,6 +66,7 @@ async function api(method, path, body) {
   let json;
   try { json = JSON.parse(text); } catch { json = { raw: text }; }
   if (!res.ok) {
+    if (opts.allowNonOk) return { __status: res.status, ...json };
     console.error(`HTTP ${res.status} ${method} ${path}:`, json);
     process.exit(1);
   }
@@ -213,6 +224,92 @@ async function flowExpire() {
   await watch(t.id);
 }
 
+// ── Commit 2: safety control commands ────────────────────────────────────────
+
+async function settings() {
+  const s = await api("GET", "/whale/paper/automation-settings");
+  console.log("paused           :", s.paused, s.paused ? `(reason="${s.pausedReason}", source=${s.source.paused})` : "");
+  console.log("maxOpenPending   :", s.maxOpenPending, `(source=${s.source.max})`);
+  console.log("your active count:", s.userOpenPending, `(remaining=${s.capRemaining})`);
+  console.log("you are admin    :", s.isAdmin);
+  return s;
+}
+
+async function pause(reasonWords) {
+  const reason = (reasonWords && reasonWords.length) ? reasonWords.join(" ") : "manual pause via paper-test.mjs";
+  const r = await api("POST", "/whale/paper/automation-settings", { paused: true, reason });
+  console.log("✓ paused. settings:", JSON.stringify(r.settings, null, 2));
+}
+
+async function resume() {
+  const r = await api("POST", "/whale/paper/automation-settings", { paused: false });
+  console.log("✓ resumed. settings:", JSON.stringify(r.settings, null, 2));
+}
+
+async function setCap(nStr) {
+  const n = Math.floor(Number(nStr));
+  if (!Number.isFinite(n) || n < 1 || n > 1000) throw new Error("usage: set-cap <integer 1..1000>");
+  const r = await api("POST", "/whale/paper/automation-settings", { maxOpenPending: n });
+  console.log(`✓ cap set to ${n}. settings:`, JSON.stringify(r.settings, null, 2));
+}
+
+async function flowCapTest() {
+  console.log("\n=== FLOW: trade cap (queue blocked when cap reached) ===\n");
+  const before = await settings();
+  const newCap = before.userOpenPending + 1;
+  console.log(`\nLowering cap to ${newCap} (= your current ${before.userOpenPending} + 1) so we can hit it with a single new queue.`);
+  await setCap(newCap);
+
+  console.log("\n[1/2] Queue one pending — should SUCCEED (brings you to cap):");
+  const t1 = await queue({ ticker: "SPY", side: "call", strike: 720, trigger: 99999, direction: "at_or_above" });
+
+  console.log("\n[2/2] Queue another — should FAIL with HTTP 409 TRADE_CAP_REACHED:");
+  const blocked = await api("POST", "/whale/paper/trades", {
+    signalId: `TEST-PT-CAPBLOCKED-${Date.now()}`,
+    ticker: "SPY", optionType: "call", strike: 721, expiry: t1.expiry, contracts: 1,
+    mode: "pending_entry", entryTriggerPrice: 99999, entryTriggerDirection: "at_or_above",
+  }, { allowNonOk: true });
+  if (blocked.__status === 409 && blocked.code === "TRADE_CAP_REACHED") {
+    console.log(`✓ blocked correctly: HTTP 409  code=${blocked.code}  cap=${blocked.cap}  current=${blocked.current}`);
+    console.log(`  message: ${blocked.error}`);
+  } else {
+    console.log("✗ UNEXPECTED:", blocked);
+  }
+
+  console.log(`\nRestoring cap to ${before.maxOpenPending} and cancelling the test pending.`);
+  await api("POST", `/whale/paper/trades/${t1.id}/cancel`, {});
+  await setCap(before.maxOpenPending);
+  console.log("\nFinal:");
+  await settings();
+}
+
+async function flowPauseTest() {
+  console.log("\n=== FLOW: kill switch (paused monitor does NOT promote pendings) ===\n");
+  console.log("[1/5] Queueing pending with always-fire trigger (at_or_above @ $0.01):");
+  const t = await queue({ ticker: "SPY", side: "call", strike: 720, trigger: 0.01, direction: "at_or_above" });
+
+  console.log("\n[2/5] Pausing automation:");
+  await pause(["pause-test scenario"]);
+
+  console.log("\n[3/5] Waiting 70s for one monitor cycle (60s market / 5min off-hours).");
+  console.log("      The monitor MUST log [paper-trade-monitor] PAUSED ... and skip the row.");
+  await new Promise(r => setTimeout(r, 70_000));
+
+  const stillPending = await api("GET", "/whale/paper/trades?status=pending");
+  const found = stillPending.trades.find(x => x.id === t.id);
+  if (found && found.status === "pending_entry") {
+    console.log("✓ row is STILL pending_entry — monitor honored the pause.");
+  } else {
+    console.log("✗ UNEXPECTED: row is", found?.status, "— pause did not hold!");
+  }
+
+  console.log("\n[4/5] Resuming automation:");
+  await resume();
+
+  console.log("\n[5/5] Waiting up to ~70s for next monitor cycle, watching for promotion.");
+  await watch(t.id);
+}
+
 // ── Dispatch ─────────────────────────────────────────────────────────────────
 
 const [, , cmd, ...rest] = process.argv;
@@ -221,17 +318,24 @@ const flags = parseFlags(rest);
 (async () => {
   try {
     switch (cmd) {
-      case "trigger":  return await flowTrigger();
-      case "no-fire":  return await flowNoFire();
-      case "expire":   return await flowExpire();
-      case "queue":    { await queue(flags); return; }
-      case "cancel":   return await cancel(rest[0]);
-      case "list":     return await list(flags);
-      case "watch":    return await watch(rest[0]);
-      case "cleanup":  return await cleanup();
+      case "trigger":     return await flowTrigger();
+      case "no-fire":     return await flowNoFire();
+      case "expire":      return await flowExpire();
+      case "queue":       { await queue(flags); return; }
+      case "cancel":      return await cancel(rest[0]);
+      case "list":        return await list(flags);
+      case "watch":       return await watch(rest[0]);
+      case "cleanup":     return await cleanup();
+      case "settings":    return await settings();
+      case "pause":       return await pause(rest);
+      case "resume":      return await resume();
+      case "set-cap":     return await setCap(rest[0]);
+      case "cap-test":    return await flowCapTest();
+      case "pause-test":  return await flowPauseTest();
       default:
         console.log("Usage: node artifacts/api-server/scripts/paper-test.mjs <command>");
-        console.log("  trigger | no-fire | expire | queue | cancel <id> | list [--status x] | watch <id> | cleanup");
+        console.log("  pending: trigger | no-fire | expire | queue | cancel <id> | list [--status x] | watch <id> | cleanup");
+        console.log("  safety : settings | pause [reason] | resume | set-cap <n> | cap-test | pause-test");
         process.exit(1);
     }
   } catch (e) {

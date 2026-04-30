@@ -1,4 +1,4 @@
-import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry } from "./paperTradeService";
+import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings } from "./paperTradeService";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -81,8 +81,30 @@ async function processOpenTrades(): Promise<void> {
 //
 // Cap protects API rate limits (same shape as open-trades cap). NULLS FIRST
 // ordering guarantees newly-queued pendings get checked promptly.
+// Tracks the most recently logged paused state so we log a single line on each
+// transition (paused→running, running→paused) instead of every cycle.
+let _lastLoggedPausedState: boolean | null = null;
+
 async function processPendingEntries(): Promise<void> {
   try {
+    // Commit 2: respect the global kill switch. When paused we skip the entire
+    // sweep — pending rows stay pending, no quote calls, no promotions, no
+    // expiries. The existing open-trade exit monitor (processOpenTrades) is
+    // intentionally NOT paused: live positions still need their TP/SL/expiry
+    // evaluated regardless of whether new automation is paused.
+    const settings = await getPaperAutomationSettings();
+    if (settings.paused) {
+      if (_lastLoggedPausedState !== true) {
+        console.log(`[paper-trade-monitor] PAUSED (source=${settings.source.paused}, reason="${settings.pausedReason || "n/a"}") — pending sweep skipped`);
+        _lastLoggedPausedState = true;
+      }
+      return;
+    } else if (_lastLoggedPausedState === true) {
+      console.log(`[paper-trade-monitor] RESUMED — pending sweep active`);
+      _lastLoggedPausedState = false;
+    } else if (_lastLoggedPausedState === null) {
+      _lastLoggedPausedState = false;
+    }
     const PER_CYCLE_CAP = 200;
     const pending = await dbQuery(
       `SELECT * FROM paper_trades WHERE status = 'pending_entry' ORDER BY last_checked_at ASC NULLS FIRST, created_at ASC LIMIT $1`,
