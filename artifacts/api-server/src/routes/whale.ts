@@ -3599,12 +3599,12 @@ router.get("/whale/signals/history", async (req, res) => {
        FROM signal_outcomes WHERE signal_source = 'replit' AND COALESCE(category, '') != 'spread'`
     );
     const counts = countResult?.rows?.[0] || {};
-    res.json({
+    res.json(attachExecutionVerdicts({
       signals: result?.rows || [],
       count: result?.rows?.length || 0,
       totalPending: parseInt(counts.pending_count) || 0,
       totalSignals: parseInt(counts.total_count) || 0,
-    });
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

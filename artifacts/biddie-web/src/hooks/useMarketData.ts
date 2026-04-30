@@ -544,6 +544,7 @@ export function useMarketData() {
               recommendedStrike: s.recommended_strike,
               category,
               spreadDetails: s.spread_details || null,
+              executionVerdict: s.executionVerdict,
             } as MarketSignal;
             mapped.push(signal);
            } catch (mapErr) {
@@ -570,6 +571,7 @@ export function useMarketData() {
               detectedAtMs: Date.now(),
               category: s?.category || 'algorithm',
               spreadDetails: s?.spread_details || null,
+              executionVerdict: s?.executionVerdict,
             } as MarketSignal);
            }
           }

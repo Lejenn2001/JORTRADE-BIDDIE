@@ -117,6 +117,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     timeframe: classifyTimeframeFromRecord(record),
     category: record.category,
     reason: record.reason,
+    executionVerdict: record.executionVerdict,
     aiEvaluated: !!record.is_biddie_pick,
     priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
     outcome: record.outcome || null,
