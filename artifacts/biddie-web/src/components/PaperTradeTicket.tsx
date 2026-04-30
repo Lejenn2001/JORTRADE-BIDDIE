@@ -14,6 +14,10 @@ export interface PaperTradeSignalInput {
   signalInvalidation?: number | null;
   signalGrade?: string | null;
   signalConfidence?: string | null;
+  // "chat" indicates the contract was extracted from a Biddie chat message
+  // (no execution verdict, no signal plan). Renders an unverified banner
+  // and hides the "Plan from this signal" section. Default = "signal".
+  source?: "signal" | "chat";
 }
 
 interface ContractOption {
@@ -204,7 +208,12 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
 
   const totalCost = selected?.entry != null ? selected.entry * contracts * 100 : null;
   const isCall = signal.optionType === "call";
-  const hasPlan = signal.signalEntry != null || signal.signalTarget != null || signal.signalInvalidation != null || signal.signalGrade != null;
+  const isChatTrade = signal.source === "chat";
+  // Chat trades have no verified plan — never render the plan card for them,
+  // even if optional plan fields somehow get passed in.
+  const hasPlan = !isChatTrade && (
+    signal.signalEntry != null || signal.signalTarget != null || signal.signalInvalidation != null || signal.signalGrade != null
+  );
 
   async function submit() {
     if (!selected || selected.entry == null) {
@@ -258,6 +267,20 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {isChatTrade && (
+          <div className="px-5 py-3 bg-amber-500/15 border-b border-amber-500/30 shrink-0">
+            <div className="flex gap-2 items-start">
+              <AlertTriangle className="h-4 w-4 text-amber-300 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-200">Chat Trade (Unverified)</p>
+                <p className="text-[11px] leading-snug text-amber-200/80 mt-0.5">
+                  This contract came from a Biddie chat message — no execution verdict applied, no signal plan, no entry/target/stop. You're acting on a chat idea. Paper-only.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="px-5 py-3 bg-amber-500/10 border-b border-amber-500/20 shrink-0">
           <div className="flex gap-2 items-start">
@@ -328,9 +351,26 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
               <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Choose a contract</div>
               {visibleContracts.map((c) => {
                 const isSel = selectedSymbol === c.contractSymbol;
-                const tone = labelTone(c.label);
+                // Chat trades are unverified — strip backend recommendation
+                // language ("Recommended Contract" / "Highest-probability ...")
+                // so the modal never implies execution approval for ideas
+                // pulled out of a chat message. Budget Option labels are kept
+                // because they describe a price filter, not a verdict.
+                const isMatchToChat = isChatTrade
+                  && c.ticker === signal.ticker
+                  && c.strike === signal.strike
+                  && c.expiry === signal.expiry
+                  && c.optionType === signal.optionType;
+                const displayLabel = isChatTrade
+                  ? (isMatchToChat
+                      ? "As Quoted in Chat"
+                      : (isBudgetLabel(c.label) ? c.label : "Alternate Contract"))
+                  : c.label;
+                const tone = isChatTrade && !isBudgetLabel(c.label)
+                  ? { bg: "bg-muted/30", text: "text-foreground", border: "border-border/50" }
+                  : labelTone(c.label);
                 const fillSrc = c.entrySource ?? "ask";
-                const helper = helperTextFor(c.label);
+                const helper = isChatTrade ? null : helperTextFor(c.label);
                 return (
                   <button
                     key={c.contractSymbol}
@@ -349,7 +389,7 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
                           <div className="text-xs font-mono font-bold text-foreground truncate">{contractName(c)}</div>
                           <div className="flex flex-wrap items-center gap-1 mt-0.5">
                             <span className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${tone.bg} ${tone.text} ${tone.border}`}>
-                              {c.label}
+                              {displayLabel}
                             </span>
                             {c.expiry !== signal.expiry && (
                               <span className="text-[9px] italic text-blue-300/80" title="Same direction but a slightly later expiration. Pays off if the underlying makes the move within the extended window.">

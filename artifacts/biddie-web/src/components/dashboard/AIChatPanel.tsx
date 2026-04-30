@@ -1,19 +1,45 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight, Zap, Coins } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Lock, ArrowUpRight, Zap, Coins, ShoppingCart, Eye, ListChecks } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { useQuestionLimit, CREDIT_PACKS } from "@/hooks/useQuestionLimit";
 import ReactMarkdown from "react-markdown";
 import biddieRobot from "@/assets/biddie-robot.png";
 import { Link } from "react-router-dom";
+import PaperTradeTicket, { type PaperTradeSignalInput } from "@/components/PaperTradeTicket";
+import { extractContractsFromText, formatChatContract, type ChatContract } from "@/lib/extractContracts";
+
+function chatContractKey(c: ChatContract): string {
+  return `${c.ticker}|${c.strike}|${c.optionType}|${c.expiry}`;
+}
+
+function buildPaperTradeFromChat(c: ChatContract): PaperTradeSignalInput {
+  // Chat trades carry no signal plan and no execution verdict.
+  // The "chat-" signalId prefix prevents collision with real signal IDs.
+  return {
+    signalId: `chat-${chatContractKey(c)}`,
+    ticker: c.ticker,
+    optionType: c.optionType,
+    strike: c.strike,
+    expiry: c.expiry,
+    source: "chat",
+  };
+}
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  // ISO date when the message was created. Anchors the chat-trade contract
+  // parser so a "no year" expiry (e.g. "5/1") always resolves to the year
+  // the message was sent, never silently rolling forward to the next year
+  // on later renders. Optional for backward compatibility with older
+  // localStorage chat histories that pre-date this field.
+  createdAt?: string;
 }
 
 const quickPrompts = [
@@ -31,12 +57,84 @@ const greetings = [
 
 const AIChatPanel = () => {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const { canAsk, hasAccess, remaining, limit, increment, plan, credits, usingCredits, dailyLimitHit, addCredits } = useQuestionLimit();
   const [showCreditStore, setShowCreditStore] = useState(false);
   const firstName = profile?.full_name?.split(" ")[0] || "Trader";
   const [greeting] = useState(() => greetings[Math.floor(Math.random() * greetings.length)](firstName));
   const userId = profile?.id || 'anon';
   const storageKey = `biddie-chat-messages-${userId}`;
+  const monitorStorageKey = `biddie-chat-monitor-${userId}`;
+
+  // Modal state for chat-initiated paper trades. We reuse the existing
+  // PaperTradeTicket — passing source: "chat" tells it to show the
+  // "Chat Trade (Unverified)" banner and skip the signal-plan card.
+  // The execution evaluator is NEVER called from this path.
+  const [paperTradeSignal, setPaperTradeSignal] = useState<PaperTradeSignalInput | null>(null);
+
+  // Persist monitored chat ideas locally so the action bar can mark
+  // already-monitored contracts. (Deliberately localStorage — no schema
+  // changes, no backend coupling.)
+  const [monitoredKeys, setMonitoredKeys] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(`biddie-chat-monitor-${userId}`);
+      if (raw) {
+        const arr = JSON.parse(raw) as Array<{ ticker: string; strike: number; optionType: string; expiry: string }>;
+        return new Set(arr.map((x) => `${x.ticker}|${x.strike}|${x.optionType}|${x.expiry}`));
+      }
+    } catch {}
+    return new Set();
+  });
+
+  // Rehydrate monitoredKeys when the user identity becomes known. The
+  // initial state runs synchronously with profile?.id === undefined, so
+  // it falls back to the "anon" storage key. Once the real userId arrives,
+  // re-read from the correct key so the action bar correctly reflects
+  // monitored contracts saved in a prior session.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(monitorStorageKey);
+      if (raw) {
+        const arr = JSON.parse(raw) as Array<{ ticker: string; strike: number; optionType: string; expiry: string }>;
+        setMonitoredKeys(new Set(arr.map((x) => `${x.ticker}|${x.strike}|${x.optionType}|${x.expiry}`)));
+      } else {
+        setMonitoredKeys(new Set());
+      }
+    } catch {
+      setMonitoredKeys(new Set());
+    }
+  }, [monitorStorageKey]);
+
+  function handleBuyOrReview(c: ChatContract) {
+    setPaperTradeSignal(buildPaperTradeFromChat(c));
+  }
+
+  function handleMonitor(c: ChatContract) {
+    const key = chatContractKey(c);
+    setMonitoredKeys((prev) => {
+      if (prev.has(key)) {
+        toast({ title: "Already monitoring", description: formatChatContract(c) });
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(key);
+      try {
+        const arr = Array.from(next).map((k) => {
+          const [ticker, strikeS, optionType, expiry] = k.split("|");
+          return {
+            ticker,
+            strike: Number(strikeS),
+            optionType,
+            expiry,
+            addedAt: new Date().toISOString(),
+          };
+        });
+        localStorage.setItem(monitorStorageKey, JSON.stringify(arr));
+      } catch {}
+      toast({ title: "Added to Monitor", description: formatChatContract(c) });
+      return next;
+    });
+  }
 
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -71,6 +169,7 @@ const AIChatPanel = () => {
     if (!text.trim() || isLoading) return;
     if (!canAsk) return;
 
+    const nowIso = new Date().toISOString();
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const userMsg: Message = {
@@ -78,6 +177,7 @@ const AIChatPanel = () => {
       role: "user",
       content: text.trim(),
       timestamp: timeStr,
+      createdAt: nowIso,
     };
 
     const updatedMessages = [...messages, userMsg];
@@ -117,6 +217,7 @@ const AIChatPanel = () => {
         role: "assistant",
         content: data?.analysis || data?.reply || "I couldn't generate a response. Please try again.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -129,6 +230,7 @@ const AIChatPanel = () => {
           role: "assistant",
           content: "Sorry, I'm having trouble connecting right now. Please try again in a moment.",
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: new Date().toISOString(),
         },
       ]);
     } finally {
@@ -233,9 +335,70 @@ const AIChatPanel = () => {
               <span className="text-[10px] text-muted-foreground">{msg.timestamp}</span>
             </div>
             {msg.role === "assistant" ? (
-              <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_li]:text-sm [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_strong]:text-primary [&_h1]:text-primary [&_h2]:text-primary [&_h3]:text-foreground [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-2 [&_h2]:mb-1 [&_h3]:mb-1 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:mb-0.5">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              </div>
+              <>
+                <div className="prose prose-sm prose-invert max-w-none text-foreground [&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_li]:text-sm [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_strong]:text-primary [&_h1]:text-primary [&_h2]:text-primary [&_h3]:text-foreground [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-2 [&_h2]:mb-1 [&_h3]:mb-1 [&_ul]:pl-4 [&_ol]:pl-4 [&_li]:mb-0.5">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+                {(() => {
+                  // Anchor the parser to the message's createdAt date so an
+                  // expiry like "5/1" always resolves to the year the message
+                  // was sent — never silently rolls forward to next year on
+                  // later renders. Legacy messages without createdAt fall back
+                  // to "now" (same as before — preserves backward compat).
+                  const anchor = msg.createdAt ? new Date(msg.createdAt) : new Date();
+                  const chatContracts = extractContractsFromText(msg.content, anchor);
+                  if (chatContracts.length === 0) return null;
+                  return (
+                    <div className="mt-3 border-t border-amber-500/20 pt-2 space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/90">
+                        Chat Idea — Not Execution Approved
+                      </div>
+                      {chatContracts.map((c) => {
+                        const key = chatContractKey(c);
+                        const isMonitored = monitoredKeys.has(key);
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/30 border border-border/40 px-2 py-1.5"
+                          >
+                            <span className="text-[11px] font-mono font-bold text-foreground mr-auto">
+                              {formatChatContract(c)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleBuyOrReview(c)}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
+                              title="Open the paper trade modal pre-filled with this contract"
+                            >
+                              <ShoppingCart className="h-3 w-3" /> Buy Paper
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMonitor(c)}
+                              className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                                isMonitored
+                                  ? "bg-blue-500/25 text-blue-200 border-blue-500/50"
+                                  : "bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25"
+                              }`}
+                              title="Track this chat idea locally"
+                            >
+                              <Eye className="h-3 w-3" /> {isMonitored ? "Monitoring" : "Monitor"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleBuyOrReview(c)}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30 hover:bg-violet-500/25 transition-colors"
+                              title="Open the contract picker — choose a different strike or the budget option"
+                            >
+                              <ListChecks className="h-3 w-3" /> Review
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </>
             ) : (
               <p className="text-sm text-foreground whitespace-pre-line">{msg.content}</p>
             )}
@@ -356,6 +519,13 @@ const AIChatPanel = () => {
           </button>
         </div>
       </form>
+
+      {paperTradeSignal && (
+        <PaperTradeTicket
+          signal={paperTradeSignal}
+          onClose={() => setPaperTradeSignal(null)}
+        />
+      )}
     </div>
   );
 };
