@@ -17,6 +17,8 @@
 //   "SPY 711C TODAY"                                — relative expiry, no filler
 //   "QQQ $500 calls 0DTE"                           — 0DTE shorthand
 //   "AAPL 200P same day"                            — "same day" shorthand
+//   "CVNA puts at the $370 strike expiring 3/19/27" — side-first construction
+//   "GOOGL calls on $500 for 5/1"                   — side-first w/ "on"
 //
 // Algorithm: locate each "strike+side+date" pattern, then attribute it to the
 // nearest preceding non-denied ticker in the same line. This avoids accidental
@@ -63,6 +65,15 @@ const TICKER_DENY = new Set<string>([
   "SEE", "OUR", "OUT", "OFF",
   "GG", "LOL", "IMO", "IMHO", "TLDR", "FYI", "BTW", "AKA", "LMAO", "OMG", "WTF",
   "CASH", "FLOW", "WIN", "LOSE", "EAT", "EATS",
+  // Time words (in caps as emphasis) — never a ticker
+  "TODAY", "TONIGHT", "TOMORROW", "YESTERDAY",
+  "MONDAY", "TUESDAY", "FRIDAY", "WEEK", "WEEKLY", "MONTH", "YEAR",
+  // Macro/event abbreviations — never a ticker
+  "CPI", "FOMC", "NFP", "GDP", "FED", "ECB", "BOJ", "BOE", "PCE", "PMI", "ISM",
+  // Trading terms (caps emphasis form) — never a ticker
+  "CALL", "CALLS", "PUT", "PUTS", "HEDGE", "SWEEP", "STRIKE", "LEVEL",
+  "GAP", "PRINT", "ALERT", "NEWS", "READY", "GAINS", "TRADE", "TRADER",
+  "EARN", "EARNS", "BEAT", "MISS",
 ]);
 
 const SIDE_PAT = "([CcPp](?:alls?|uts?)?)";       // C, P, c, p, Call, Calls, Put, Puts
@@ -86,6 +97,24 @@ const RE_DATE_FIRST = new RegExp(
 // "200P same day". Resolves expiry to the message's own date (the `now` arg).
 const RE_RELATIVE_EXPIRY = new RegExp(
   "(?<![\\w])" + STRIKE_PAT + "\\s*" + SIDE_PAT + "\\b" + FILLER_PAT + "\\s+" + RELATIVE_EXPIRY_PAT + "\\b",
+  "gi"
+);
+
+// Pass D: SIDE-FIRST construction — e.g. "puts at the $370 strike expiring 3/19/27",
+// "calls on $500 for 5/1", "puts at 370 strike 3/19". Word side only (Calls/Puts) to
+// keep ambiguity low; the connecting bridge ("at"/"on" + optional "the") is required
+// to anchor the parse, so plain prose like "puts $370" alone won't match.
+const SIDE_WORD_PAT = "([CcPp](?:alls?|uts?))";
+const BRIDGE_PAT = "\\s+(?:at|on)(?:\\s+the)?\\s+";
+const OPT_STRIKE_WORD = "(?:\\s+strike)?";
+// Pass D1: SIDE bridge STRIKE [strike]? [filler]? DATE
+const RE_SIDE_FIRST_DATE = new RegExp(
+  "(?<![\\w])" + SIDE_WORD_PAT + BRIDGE_PAT + STRIKE_PAT + OPT_STRIKE_WORD + FILLER_PAT + "\\s+" + DATE_PAT + "\\b",
+  "gi"
+);
+// Pass D2: SIDE bridge STRIKE [strike]? [filler]? RELATIVE
+const RE_SIDE_FIRST_RELATIVE = new RegExp(
+  "(?<![\\w])" + SIDE_WORD_PAT + BRIDGE_PAT + STRIKE_PAT + OPT_STRIKE_WORD + FILLER_PAT + "\\s+" + RELATIVE_EXPIRY_PAT + "\\b",
   "gi"
 );
 
@@ -197,6 +226,26 @@ export function extractContractsFromText(text: string, now: Date = new Date()): 
   RE_RELATIVE_EXPIRY.lastIndex = 0;
   while ((m = RE_RELATIVE_EXPIRY.exec(text)) !== null) {
     const [, strikeStr, sideStr] = m;
+    const t = findNearestTicker(text, m.index);
+    if (!t) continue;
+    const spanEnd = m.index + m[0].length;
+    claim(t.index, spanEnd, t.ticker, strikeStr, sideStr, todayExpiry, text.slice(t.index, spanEnd));
+  }
+
+  RE_SIDE_FIRST_DATE.lastIndex = 0;
+  while ((m = RE_SIDE_FIRST_DATE.exec(text)) !== null) {
+    const [, sideStr, strikeStr, monthStr, dayStr, yearStrRaw] = m;
+    const t = findNearestTicker(text, m.index);
+    if (!t) continue;
+    const expiry = resolveExpiry(monthStr, dayStr, yearStrRaw, now);
+    if (!expiry) continue;
+    const spanEnd = m.index + m[0].length;
+    claim(t.index, spanEnd, t.ticker, strikeStr, sideStr, expiry, text.slice(t.index, spanEnd));
+  }
+
+  RE_SIDE_FIRST_RELATIVE.lastIndex = 0;
+  while ((m = RE_SIDE_FIRST_RELATIVE.exec(text)) !== null) {
+    const [, sideStr, strikeStr] = m;
     const t = findNearestTicker(text, m.index);
     if (!t) continue;
     const spanEnd = m.index + m[0].length;
