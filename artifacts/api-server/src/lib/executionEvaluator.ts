@@ -71,7 +71,9 @@ export function evaluateSignal(signal: any): ExecutionVerdict {
   const optionType = rawType === "call" || rawType === "put" ? rawType : null;
   const strike = extractPrice(signal.strike);
   const expiryYMD = parseExpiryYMD(signal.expiry);
-  const entry = extractPrice(signal.entryTrigger ?? signal.entry_trigger);
+  const entry =
+    extractPrice(signal.priceAtSignal ?? signal.price_at_signal) ??
+    extractPrice(signal.entryTrigger ?? signal.entry_trigger);
   const target = extractPrice(
     signal.targetZone ?? signal.target_zone ?? signal.targetNear ?? signal.target_near ?? signal.target,
   );
