@@ -1,0 +1,23 @@
+All 5 trades have fresh quotes (4–5 second age), real bid/ask, real underlying prices.
+
+Summary — Paper-Trade Monitor Quote Refresh: FIXED
+Root cause (the bug that made every trade show last_quote_underlying == entry_underlying since launch):
+
+PostgreSQL returns paper_trades.expiry (a DATE column) as a JS Date object. The monitor was doing String(t.expiry).slice(0, 10), which on a Date produces "Fri May 01" — no year. That string was then passed to new Date(), and JavaScript's loose Date parser silently defaults the year to 2001. The resulting OPRA contract symbol was O:NVDA010501C00205000 — a contract that doesn't exist, so Polygon returned 404 on every poll, every cycle, forever. Quotes never updated.
+
+Fix applied:
+
+New helper normalizeExpiryToIso(expiry: string | Date) in routes/whale.ts that branches on instanceof Date and uses UTC accessors, with safe fallbacks for ISO/loose strings.
+buildOptionContractSymbol and fetchOptionQuote now accept string | Date and normalize internally.
+All five String(t.expiry).slice(0, 10) call sites replaced (monitor + 4 sites in whale.ts).
+Diagnostic logging in fetchOptionQuote (status, contract, elapsed, body, request_id) — apiKey stripped from logged URL.
+Verification:
+
+Logs now show correct OPRA symbols: O:SPY260501C00695000 (year 26, not 01).
+DB query confirms all 5 open trades have moving underlying prices, real bid/ask, and ≤5s age on last_checked_at.
+Monitor cycles cleanly with no 404s.
+Constraints respected: No changes to signals, Biddie chat, alerts, schema, executionEvaluator, auto-close, Buy button, or PaperTradeTicket. The signals-pipeline inline OPRA builder (~line 2576) was left alone — it constructs expDate correctly via getFullYear() and is on a separate code path.
+
+Frontend changes from the prior turn (deriveQuoteState → LIVE/STALE/UNAVAILABLE/PENDING badges, suppressed P/L on UNAVAILABLE, "(N excluded)" disclosure) remain in place. With live quotes now flowing, almost all rows should display LIVE with real P/L during market hours.
+
+Dev only — no publish performed, awaiting your explicit approval per your standing rule.
