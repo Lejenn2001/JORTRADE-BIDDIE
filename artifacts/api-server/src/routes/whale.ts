@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
 import { priceMonitor, type PriceData } from "../lib/priceMonitor";
 import { attachExecutionVerdicts } from "../lib/executionEvaluator";
+import { isMarketOpenET, MARKET_CLOSED_MESSAGE } from "../lib/marketHours";
 
 const router = Router();
 
@@ -3180,7 +3181,7 @@ router.get("/whale/signals", async (_req, res) => {
 
 setInterval(async () => {
   try {
-    if (!isMarketHours()) return;
+    if (!isMarketOpenET()) return;
     if (signalsPipelineRunning) return;
     if (signalsCache && Date.now() - signalsCache.timestamp < SIGNALS_CACHE_TTL) return;
     console.log("[signals] scheduled refresh starting...");
@@ -4193,7 +4194,7 @@ router.get("/whale/premarket", async (_req, res) => {
 
     const result = {
       timestamp: getNowEastern(),
-      marketOpen: isMarketHours(),
+      marketOpen: isMarketOpenET(),
       tickers: snapshot,
       biggestGaps: sorted.slice(0, 5).map(([t, s]) => ({
         ticker: t,
@@ -4513,19 +4514,11 @@ function startFlowMonitor() {
 
 startFlowMonitor();
 
-function isMarketHours(): boolean {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short",
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
-  const hour = parseInt(get("hour"), 10);
-  const minute = parseInt(get("minute"), 10);
-  const day = get("weekday");
-  if (["Sat", "Sun"].includes(day)) return false;
-  const etTime = hour + minute / 60;
-  return etTime >= 9.5 && etTime < 16;
-}
+// NOTE: market-hours logic was moved to ../lib/marketHours.ts so that the
+// trade-execution gate (POST /whale/paper/trades), the auto-enter / auto-exit
+// monitor, and signal generation all share one source of truth. Use
+// isMarketOpenET() from that module — semantics are unchanged (weekends-only,
+// 9:30–16:00 ET, exclusive at 16:00).
 
 async function syncPriceMonitorSubscriptions() {
   try {
@@ -4777,7 +4770,7 @@ async function realtimeVerifySignals() {
         timeAtTarget = now.toISOString();
       }
 
-      const duringMarket = isMarketHours();
+      const duringMarket = isMarketOpenET();
 
       const prevStatus = signal.trade_status || "watching";
       let newStatus = prevStatus;
@@ -4906,7 +4899,7 @@ function startPriceMonitorSystem() {
   let lastMode: "market" | "after" | null = null;
 
   function adjustVerifyFrequency() {
-    const currentMode = isMarketHours() ? "market" : "after";
+    const currentMode = isMarketOpenET() ? "market" : "after";
     if (currentMode === lastMode) return;
     lastMode = currentMode;
 
@@ -4951,7 +4944,7 @@ router.get("/whale/prices/realtime", (_req, res) => {
   }
   res.json({
     connected: priceMonitor.isConnected(),
-    marketOpen: isMarketHours(),
+    marketOpen: isMarketOpenET(),
     subscribedTickers: priceMonitor.getSubscribedTickers(),
     tickerCount: priceMonitor.getSubscribedTickers().length,
     prices: data,
@@ -5101,7 +5094,7 @@ router.get("/whale/market-pulse", async (_req, res) => {
 
     const result = {
       timestamp: new Date().toISOString(),
-      marketOpen: isMarketHours(),
+      marketOpen: isMarketOpenET(),
       indices: {
         SPY: formatPrice(spyData),
         QQQ: formatPrice(qqqData),
@@ -6219,6 +6212,33 @@ router.post("/whale/paper/trades", async (req, res) => {
   try {
     const userId = await verifyBearerUser(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    // ─── Market-Hours Gate (Phase 1, Apr 2026) ────────────────────────────
+    // Trade-execution actions are intraday-only. Both Buy Now (market mode)
+    // and Queue at Entry (pending_entry mode) hit this same endpoint, and
+    // the chat action bar ("Buy Paper") routes through PaperTradeTicket
+    // which also POSTs here — so this single check covers all three entry
+    // surfaces. We reject BEFORE the per-user trade cap so closed-market
+    // attempts don't even consume a SELECT COUNT.
+    //
+    // Authoritative server-side gate: even if the frontend disable is
+    // bypassed (stale tab, custom client, curl) no paper_trade row can be
+    // inserted outside RTH. Frontend uses the same util to mirror the
+    // disabled state and show the message preemptively.
+    //
+    // What is NOT gated here:
+    //   - Manual close (POST .../close) and manual cancel (POST .../cancel)
+    //     remain available 24/7 so users can always exit/clean up positions.
+    //   - Auto-exit on contract expiry (handled in paperTradeMonitor).
+    //   - Pending-expiry cancellation (handled in paperTradeMonitor).
+    //   - Biddie chat / commentary / alerts (NOT a trade-creation surface).
+    if (!isMarketOpenET()) {
+      return res.status(409).json({
+        error: MARKET_CLOSED_MESSAGE,
+        code: "market_closed",
+      });
+    }
+
     const {
       signalId, ticker, optionType, strike, expiry, contracts,
       signalTarget, signalInvalidation, signalEntry, signalGrade, signalConfidence,
@@ -6405,9 +6425,30 @@ router.post("/whale/paper/trades/refresh-all", async (req, res) => {
     const open = await dbQuery(`SELECT * FROM paper_trades WHERE user_id = $1 AND status = 'open' ORDER BY opened_at DESC LIMIT 100`, [userId]);
     let refreshed = 0;
     let closed = 0;
+    // Phase 1 market-hours gate (Apr 2026): The Paper Trades dashboard polls
+    // this endpoint every 30s while visible. If we don't gate it, after-hours
+    // option-P&L auto-exits would still fire whenever a user has the tab open
+    // — bypassing the gate enforced on the background monitor in
+    // paperTradeMonitor.processOpenTrades. Match the monitor's after-hours
+    // behavior exactly: contract-expiry exits run 24/7, but option-P&L
+    // exits (hard stop / profit target / trailing) are paused until 9:30 ET.
+    const marketOpen = isMarketOpenET();
     if (open && open.rows.length) {
       for (const t of open.rows) {
         const expiryStr = normalizeExpiryToIso(t.expiry);
+        // Closed-market expiry-only pass: skip the Polygon round-trip for
+        // non-expired contracts (no auto-exit can fire anyway) but still
+        // settle expired contracts via intrinsic/0 so they don't hang in
+        // 'open' over a weekend.
+        if (!marketOpen) {
+          if (isContractExpired(expiryStr)) {
+            const r = await closeExpiredNoQuote(t);
+            if (r.closed) closed++;
+          } else {
+            await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);
+          }
+          continue;
+        }
         const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
         if (!q) {
           if (isContractExpired(expiryStr)) {
@@ -6462,6 +6503,33 @@ async function paperTradeRefreshHandler(req: any, res: any): Promise<void> {
     if (!row || !row.rows.length) { res.status(404).json({ error: "Paper trade not found" }); return; }
     const t = row.rows[0];
     const expiryStr = normalizeExpiryToIso(t.expiry);
+    // Phase 1 market-hours gate (Apr 2026): per-trade refresh is also
+    // exposed via row "refresh" buttons + occasional polling. After-hours
+    // we still want to settle expired contracts (so a Friday-expiry trade
+    // closes over the weekend), but option-P&L auto-exits must not fire.
+    // Parity with /refresh-all and the background monitor.
+    const marketOpen = isMarketOpenET();
+    if (!marketOpen) {
+      if (t.status === "open" && isContractExpired(expiryStr)) {
+        const r = await closeExpiredNoQuote(t);
+        const fresh = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1`, [id]);
+        res.json({
+          trade: fresh?.rows?.[0] ?? t,
+          quote: null,
+          closed: r.closed,
+          autoClosedReason: r.closed ? "closed_expired" : null,
+          lastFill: { price: r.exitPrice, source: r.source },
+          marketClosed: true,
+        });
+        return;
+      }
+      // Otherwise: no quote refresh, no auto-close evaluation. Just touch
+      // last_checked_at and return the row so the UI can render its current
+      // state with a "Market closed" indicator.
+      await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [id]).catch(() => null);
+      res.json({ trade: t, quote: null, closed: false, marketClosed: true });
+      return;
+    }
     const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
     if (!q) {
       // Parity with monitor: expired no-quote auto-closes via intrinsic/0.

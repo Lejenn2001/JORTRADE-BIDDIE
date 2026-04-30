@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, ShieldOff, Crosshair, CheckCircle2 } from "lucide-react";
+import { X, FlaskConical, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, ShieldOff, Crosshair, CheckCircle2, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useMarketStatus } from "@/hooks/useMarketStatus";
+import { MARKET_CLOSED_MESSAGE } from "@/lib/marketHours";
 
 export interface PaperTradeSignalInput {
   signalId: string;
@@ -160,6 +162,13 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
   // Mode is signal-only by design — chat trades never see the toggle.
   const canQueueAtEntry =
     signal.source !== "chat" && signal.signalEntry != null && Number.isFinite(Number(signal.signalEntry));
+  // Market-hours gate (Phase 1, Apr 2026): both Buy Now and Queue at Entry
+  // are intraday-only. The hook re-checks every 30s so the UI flips at the
+  // session boundaries without a refresh. Backend is authoritative — even if
+  // this returns true falsely (e.g. user clock skewed), the server will
+  // respond 409 { code: "market_closed" } and submit() will surface the
+  // same banner via toast.
+  const { isOpen: marketOpen } = useMarketStatus();
   const [mode, setMode] = useState<"buy_now" | "queue_at_entry">("buy_now");
   // Defensive: if the signal has no entry price (or props change), force back
   // to buy_now so we never submit a queue request without a trigger.
@@ -303,6 +312,20 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
           });
           return;
         }
+        // Phase 1 market-hours gate. Backend returns 409 { code:"market_closed" }
+        // any time POST /whale/paper/trades is attempted outside RTH. We may
+        // also reach this branch even when our local marketOpen flag is true
+        // (e.g. user clock skewed, race at the 4:00 PM cutoff). The toast is
+        // the canonical user-facing surface — the inline banner is a
+        // courtesy preview based on the local clock.
+        if (res.status === 409 && json?.code === "market_closed") {
+          toast({
+            title: "Market closed",
+            description: json?.error || MARKET_CLOSED_MESSAGE,
+            variant: "destructive",
+          });
+          return;
+        }
         throw new Error(json?.error || "Failed to open paper trade");
       }
       if (mode === "queue_at_entry") {
@@ -381,6 +404,20 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
             </div>
             <span className="text-[11px] text-muted-foreground">Exp {signal.expiry}</span>
           </div>
+
+          {/* Phase 1 market-hours banner. Renders ABOVE the entry-mode toggle
+              so the user immediately understands why the submit button is
+              disabled. Both Buy Now and Queue at Entry are gated — the queue
+              would be useless without a session for triggers to fire in. */}
+          {!marketOpen && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/40 p-2.5 flex items-start gap-2">
+              <Lock className="h-4 w-4 text-amber-300 mt-0.5 shrink-0" />
+              <div className="text-[11px] leading-snug text-amber-200/95">
+                <div className="font-bold uppercase tracking-wider text-amber-200 mb-0.5">{MARKET_CLOSED_MESSAGE}</div>
+                <div className="opacity-80">Regular session is 9:30 AM – 4:00 PM ET, weekdays. Buy Now and Queue at Entry resume at the next open.</div>
+              </div>
+            </div>
+          )}
 
           {/* Buy Now vs. Queue at Signal Entry — only offered for verified
               signals with a published entry price. Chat trades never see this
@@ -597,21 +634,30 @@ export default function PaperTradeTicket({ signal, onClose, onOpened }: { signal
               loading ||
               !selected ||
               // Buy Now requires a live ask; Queue mode does not.
-              (mode === "buy_now" && selected?.entry == null)
+              (mode === "buy_now" && selected?.entry == null) ||
+              // Phase 1 market-hours gate. Disable both modes outside RTH so
+              // the user can't even attempt a submit. Backend would reject
+              // anyway with 409 { code: "market_closed" }.
+              !marketOpen
             }
+            title={!marketOpen ? MARKET_CLOSED_MESSAGE : undefined}
             className={`flex-[2] py-2 rounded-lg text-xs font-bold text-white shadow-lg hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-              mode === "queue_at_entry"
-                ? "bg-gradient-to-r from-sky-500 to-blue-500 shadow-sky-500/30"
-                : "bg-gradient-to-r from-violet-500 to-blue-500 shadow-violet-500/30"
+              !marketOpen
+                ? "bg-muted/40 text-muted-foreground"
+                : mode === "queue_at_entry"
+                  ? "bg-gradient-to-r from-sky-500 to-blue-500 shadow-sky-500/30"
+                  : "bg-gradient-to-r from-violet-500 to-blue-500 shadow-violet-500/30"
             }`}
           >
-            {submitting
-              ? mode === "queue_at_entry" ? "Queueing…" : "Submitting…"
-              : mode === "queue_at_entry"
-                ? `Queue @ $${Number(signal.signalEntry).toFixed(2)}`
-                : selected?.entry != null
-                  ? `Paper Submit @ ${fmtMoney(selected.entry)}`
-                  : "Waiting for quote…"}
+            {!marketOpen
+              ? "Market closed"
+              : submitting
+                ? mode === "queue_at_entry" ? "Queueing…" : "Submitting…"
+                : mode === "queue_at_entry"
+                  ? `Queue @ $${Number(signal.signalEntry).toFixed(2)}`
+                  : selected?.entry != null
+                    ? `Paper Submit @ ${fmtMoney(selected.entry)}`
+                    : "Waiting for quote…"}
           </button>
         </div>
       </div>

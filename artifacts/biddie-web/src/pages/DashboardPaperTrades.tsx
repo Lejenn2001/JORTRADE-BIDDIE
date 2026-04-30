@@ -4,7 +4,8 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X, Clock, ChevronUp, ChevronDown } from "lucide-react";
+import { FlaskConical, AlertTriangle, RefreshCcw, Loader2, TrendingUp, TrendingDown, X, Clock, ChevronUp, ChevronDown, Lock } from "lucide-react";
+import { useMarketStatus } from "@/hooks/useMarketStatus";
 
 type PaperTradeStatus = "open" | "closed" | "pending_entry" | "cancelled";
 
@@ -493,6 +494,11 @@ export default function DashboardPaperTrades() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [automation, setAutomation] = useState<AutomationSettings | null>(null);
+  // Phase 1 market-hours status (Apr 2026). Drives a small badge next to the
+  // Automation badge so the user can see at a glance why pending entries
+  // aren't being evaluated and why exits are paused after-hours. Re-checks
+  // every 30s; weekends-only (no NYSE holiday calendar yet).
+  const { isOpen: marketOpen } = useMarketStatus();
 
   // "View Original Signal" panel state. Only one row's panel is expanded at
   // a time. Detail fetches are cached by signal_id so re-opening is instant.
@@ -767,6 +773,31 @@ export default function DashboardPaperTrades() {
                 Automation: {automation.paused ? "PAUSED" : "ON"}
               </span>
             )}
+            {/* Phase 1 market-hours indicator. Distinct from the Automation
+                badge above: the kill switch is admin-controlled, while this
+                follows the wall clock. Both must be ON for pending entries
+                to be evaluated. After-hours, only contract-expiry exits and
+                pending-expiry cancellations run; option-P&L exits and
+                trigger evaluation pause until the next session. */}
+            <span
+              className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded inline-flex items-center gap-1.5 border ${
+                marketOpen
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                  : "bg-amber-500/15 text-amber-300 border-amber-500/40"
+              }`}
+              title={
+                marketOpen
+                  ? "US equity options market is open (9:30 AM – 4:00 PM ET, weekdays). Trade execution and exit monitoring are active."
+                  : "Market closed — trading disabled until next session. Buy Now / Queue at Entry are disabled and option-P&L exits are paused. Contract-expiry handling continues."
+              }
+            >
+              {marketOpen ? (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              ) : (
+                <Lock className="h-2.5 w-2.5" />
+              )}
+              Market: {marketOpen ? "OPEN" : "CLOSED"}
+            </span>
           </div>
 
           <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 mb-4 flex gap-2">

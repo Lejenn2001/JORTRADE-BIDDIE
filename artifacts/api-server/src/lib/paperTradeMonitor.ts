@@ -1,4 +1,5 @@
 import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings } from "./paperTradeService";
+import { isMarketOpenET } from "./marketHours";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -6,18 +7,6 @@ const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let started = false;
-
-function isMarketHoursET(): boolean {
-  try {
-    const nowEt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const day = nowEt.getDay();
-    if (day === 0 || day === 6) return false;
-    const minutes = nowEt.getHours() * 60 + nowEt.getMinutes();
-    return minutes >= 9 * 60 + 30 && minutes <= 16 * 60;
-  } catch {
-    return false;
-  }
-}
 
 async function processOpenTrades(): Promise<void> {
   if (running) return;
@@ -34,6 +23,19 @@ async function processOpenTrades(): Promise<void> {
       [PER_CYCLE_CAP]
     );
     if (!open || !open.rows.length) return;
+
+    // ─── Market-Hours Gate (Phase 1, Apr 2026) ────────────────────────────
+    // Outside regular trading hours we run an EXPIRY-ONLY pass:
+    //   • If the contract has expired → close it via closeExpiredNoQuote
+    //     (ITM intrinsic value or zero — no Polygon call needed).
+    //   • Otherwise → just touch last_checked_at so round-robin ordering
+    //     stays balanced for when the market reopens.
+    // Option-P&L exits (hard_stop / profit_target / trailing_stop) and
+    // underlying-based exits (signal_invalidation / signal_target) are
+    // explicitly NOT evaluated outside RTH — quotes are stale, fills would
+    // be fictional, and the user has been told the market is closed.
+    const marketOpen = isMarketOpenET();
+
     let checked = 0;
     let closed = 0;
     for (const t of open.rows) {
@@ -44,6 +46,21 @@ async function processOpenTrades(): Promise<void> {
       // O:NVDA010501C00205000 that 404 on Polygon. normalizeExpiryToIso handles
       // Date | ISO-string | other defensively to a canonical YYYY-MM-DD.
       const expiryStr = normalizeExpiryToIso(t.expiry);
+
+      if (!marketOpen) {
+        // Expiry-only pass. No quote fetch.
+        if (isContractExpired(expiryStr)) {
+          const r = await closeExpiredNoQuote(t);
+          if (r.closed) {
+            closed++;
+            console.log(`[paper-trade-monitor] (closed-market) auto-closed ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: closed_expired @ ${r.exitPrice.toFixed(2)} (${r.source})`);
+          }
+        } else {
+          await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1`, [t.id]).catch(() => null);
+        }
+        continue;
+      }
+
       const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
       if (!q) {
         // No quote: expired contracts always close (intrinsic for ITM, 0 otherwise); else touch last_checked_at.
@@ -64,7 +81,10 @@ async function processOpenTrades(): Promise<void> {
         console.log(`[paper-trade-monitor] auto-closed ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: ${result.exitReason} @ ${result.fill.price.toFixed(2)} (${result.fill.source})`);
       }
     }
-    if (checked > 0) console.log(`[paper-trade-monitor] cycle: checked=${checked} closed=${closed}`);
+    if (checked > 0) {
+      const suffix = marketOpen ? "" : " (closed-market: expiry-only pass)";
+      console.log(`[paper-trade-monitor] cycle: checked=${checked} closed=${closed}${suffix}`);
+    }
   } catch (e: any) {
     console.error("[paper-trade-monitor] cycle error:", e?.message);
   } finally {
@@ -111,6 +131,15 @@ async function processPendingEntries(): Promise<void> {
       [PER_CYCLE_CAP]
     );
     if (!pending || !pending.rows.length) return;
+
+    // ─── Market-Hours Gate (Phase 1, Apr 2026) ────────────────────────────
+    // Outside RTH we do NOT auto-promote pending → open. Pending rows just
+    // wait for the next session. BUT pending-expiry cancellation runs 24/7
+    // (per product spec): if the contract has expired or the pending
+    // window has elapsed, we still flip to 'cancelled' so the user's slot
+    // counter stays accurate and stale rows don't accumulate.
+    const marketOpen = isMarketOpenET();
+
     let checked = 0;
     let triggered = 0;
     let cancelled = 0;
@@ -120,6 +149,7 @@ async function processPendingEntries(): Promise<void> {
       // Pre-flight: if the contract or pending window has expired, cancel
       // without paying a Polygon quote call. evaluatePendingEntry() also
       // handles these (defense in depth) but doing it here avoids the fetch.
+      // This pre-flight runs 24/7 — it is housekeeping, not trade execution.
       const contractExpired = isContractExpired(expiryStr);
       const pendingExpired = t.pending_expires_at != null && new Date(t.pending_expires_at).getTime() < Date.now();
       if (contractExpired || pendingExpired) {
@@ -134,6 +164,14 @@ async function processPendingEntries(): Promise<void> {
         console.log(`[paper-trade-monitor] pending cancelled ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: ${reason}`);
         continue;
       }
+
+      // Trigger evaluation is RTH-only. Outside RTH: stay queued, touch
+      // last_checked_at so round-robin ordering stays balanced.
+      if (!marketOpen) {
+        await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1 AND status = 'pending_entry'`, [t.id]).catch(() => null);
+        continue;
+      }
+
       const q = await fetchOptionQuote(t.ticker, expiryStr, t.option_type, Number(t.strike));
       if (!q) {
         await dbQuery(`UPDATE paper_trades SET last_checked_at = NOW() WHERE id = $1 AND status = 'pending_entry'`, [t.id]).catch(() => null);
@@ -149,7 +187,10 @@ async function processPendingEntries(): Promise<void> {
         console.log(`[paper-trade-monitor] pending → open ${t.ticker} ${t.option_type} $${t.strike} ${expiryStr}: trigger=${t.entry_trigger_direction}@${Number(t.entry_trigger_price).toFixed(2)} underlying=${u} fill=${r.fill.price.toFixed(2)} (${r.fill.source})`);
       }
     }
-    if (checked > 0) console.log(`[paper-trade-monitor] pending cycle: checked=${checked} triggered=${triggered} cancelled=${cancelled}`);
+    if (checked > 0) {
+      const suffix = marketOpen ? "" : " (closed-market: cancellations only, triggers paused)";
+      console.log(`[paper-trade-monitor] pending cycle: checked=${checked} triggered=${triggered} cancelled=${cancelled}${suffix}`);
+    }
   } catch (e: any) {
     console.error("[paper-trade-monitor] pending cycle error:", e?.message);
   }
@@ -157,7 +198,7 @@ async function processPendingEntries(): Promise<void> {
 
 function scheduleNext(): void {
   if (timer) clearTimeout(timer);
-  const delay = isMarketHoursET() ? MARKET_HOURS_INTERVAL_MS : OFF_HOURS_INTERVAL_MS;
+  const delay = isMarketOpenET() ? MARKET_HOURS_INTERVAL_MS : OFF_HOURS_INTERVAL_MS;
   timer = setTimeout(async () => {
     await processOpenTrades();
     await processPendingEntries();

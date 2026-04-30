@@ -20,6 +20,8 @@ import {
   buildPaperTradeFromChat,
   type ChatContract,
 } from "@/lib/extractContracts";
+import { useMarketStatus } from "@/hooks/useMarketStatus";
+import { MARKET_CLOSED_MESSAGE } from "@/lib/marketHours";
 
 interface ChatMessage {
   id: string;
@@ -62,6 +64,15 @@ const DashboardCommunity = () => {
   // in chat mode (source: "chat") so the modal shows the "Unverified" banner
   // and skips the signal plan card. The execution evaluator is NEVER called
   // from this path. Monitor persists to localStorage only.
+  //
+  // Phase 1 market-hours gate (Apr 2026): only the "Buy Paper" button is
+  // gated outside RTH (it would create a paper_trade row, which the backend
+  // also rejects with 409 { code: "market_closed" }). "Monitor" stays
+  // enabled because it's local-only (localStorage). "Review" stays enabled
+  // because it just opens the contract picker for analysis — submitting
+  // from inside that modal IS gated separately by PaperTradeTicket itself.
+  // Biddie chat / commentary is NOT gated.
+  const { isOpen: marketOpen } = useMarketStatus();
   const userIdForMonitor = session?.user?.id || "anon";
   const monitorStorageKey = `biddie-chat-monitor-${userIdForMonitor}`;
   const [paperTradeSignal, setPaperTradeSignal] = useState<PaperTradeSignalInput | null>(null);
@@ -655,10 +666,20 @@ const DashboardCommunity = () => {
                                       <button
                                         type="button"
                                         onClick={() => handleBuyOrReview(c)}
-                                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
-                                        title="Open the paper trade modal pre-filled with this contract"
+                                        disabled={!marketOpen}
+                                        className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                                          marketOpen
+                                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
+                                            : "bg-muted/30 text-muted-foreground/60 border-border/40 cursor-not-allowed"
+                                        }`}
+                                        title={
+                                          marketOpen
+                                            ? "Open the paper trade modal pre-filled with this contract"
+                                            : MARKET_CLOSED_MESSAGE
+                                        }
                                       >
-                                        <ShoppingCart className="h-3 w-3" /> Buy Paper
+                                        {marketOpen ? <ShoppingCart className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                                        {marketOpen ? "Buy Paper" : "Market closed"}
                                       </button>
                                       <button
                                         type="button"
