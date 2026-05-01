@@ -1,6 +1,7 @@
 import WebSocket from "ws";
+import { getPolygonKey } from "./polygonKey";
 
-const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_WS_URL = "wss://socket.polygon.io/stocks";
 const POLYGON_SNAPSHOT_URL = (tickers: string) =>
   `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers}&apiKey=${POLYGON_KEY()}`;

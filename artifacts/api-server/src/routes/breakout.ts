@@ -4,10 +4,11 @@ import pg from "pg";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { priceMonitor } from "../lib/priceMonitor";
+import { getPolygonKey } from "../lib/polygonKey";
 
 const router = Router();
 
-const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_KEY = () => getPolygonKey();
 const UW_BASE = "https://api.unusualwhales.com";
 const UW_HEADERS = () => ({ Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}` });
 

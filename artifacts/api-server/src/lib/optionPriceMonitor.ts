@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { getPolygonKey } from "./polygonKey";
 
 // Polygon Options WebSocket — Phase 1 (May 2026).
 //
@@ -18,7 +19,7 @@ import WebSocket from "ws";
 // The caller (paperTradeMonitor) maps contract → tradeIds and dispatches
 // to the existing evaluateAndMaybeClose() exit pipeline.
 
-const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_OPTIONS_WS_URL = "wss://socket.polygon.io/options";
 
 export interface OptionWsQuote {

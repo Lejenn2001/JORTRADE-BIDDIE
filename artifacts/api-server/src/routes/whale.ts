@@ -6,6 +6,7 @@ import { priceMonitor, type PriceData } from "../lib/priceMonitor";
 import { attachExecutionVerdicts } from "../lib/executionEvaluator";
 import { isMarketOpenET, MARKET_CLOSED_MESSAGE, getEodPhaseET } from "../lib/marketHours";
 import { getEodConfig } from "../lib/eodCloseConfig";
+import { getPolygonKey } from "../lib/polygonKey";
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const UW_BASE = "https://api.unusualwhales.com";
 const UW_HEADERS = () => ({ Authorization: `Bearer ${process.env["UNUSUAL_WHALES_API_KEY"] ?? ""}` });
 const AI_BASE_URL = process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"] ?? "https://api.anthropic.com";
 const AI_API_KEY = process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-const POLYGON_KEY = () => process.env["POLYGON_API_KEY"] ?? "";
+const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_AGGS_URL = (ticker: string, mult: number, span: string, from: string, to: string) =>
   `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${mult}/${span}/${from}/${to}?adjusted=true&sort=asc&apiKey=${POLYGON_KEY()}`;
 const POLYGON_SNAPSHOT_TICKER = (ticker: string) =>
@@ -3402,7 +3403,7 @@ router.get("/whale/signals/detail/:id", async (req, res) => {
 
     let priceHistory: any = null;
     try {
-      const polygonKey = process.env.POLYGON_API_KEY;
+      const polygonKey = getPolygonKey();
       if (polygonKey) {
         const fromDate = detectedAt.toISOString().split("T")[0];
         const toDate = now.toISOString().split("T")[0];
@@ -4070,7 +4071,7 @@ async function fetchPremarketSnapshot(tickers: string[]): Promise<Record<string,
   dayVolume?: number;
 }>> {
   const snapshot: Record<string, any> = {};
-  const polygonKey = process.env["POLYGON_API_KEY"] ?? "";
+  const polygonKey = getPolygonKey();
 
   if (!polygonKey) return snapshot;
 
@@ -4531,7 +4532,7 @@ async function syncPriceMonitorSubscriptions() {
       priceMonitor.updateSubscriptions(BASELINE);
       return;
     }
-    const tickers = [...new Set([...BASELINE, ...result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5)])];
+    const tickers = [...new Set([...BASELINE, ...result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5 && t !== "SPXW")])];
     priceMonitor.updateSubscriptions(tickers);
     console.log(`[price-monitor] Subscribed to ${tickers.length} tickers: ${tickers.join(", ")}`);
   } catch (e: any) {
@@ -5279,7 +5280,7 @@ interface OptionQuoteResult {
 }
 
 async function fetchOptionQuote(ticker: string, expiry: string | Date, optionType: "call" | "put", strike: number): Promise<OptionQuoteResult | null> {
-  const polygonKey = process.env["POLYGON_API_KEY"];
+  const polygonKey = getPolygonKey();
   if (!polygonKey) {
     console.warn(`[paper-trade] fetchOptionQuote: POLYGON_API_KEY missing for ${ticker} ${String(expiry)} ${optionType} ${strike}`);
     return null;
@@ -5776,7 +5777,7 @@ router.post("/whale/paper/alternatives", async (req, res) => {
       return res.status(400).json({ error: "expiry must be YYYY-MM-DD or ISO/MM-DD-YYYY" });
     }
 
-    const polygonKey = process.env["POLYGON_API_KEY"];
+    const polygonKey = getPolygonKey();
     if (!polygonKey) return res.status(503).json({ error: "Quotes unavailable" });
     const tickerUp = String(ticker).toUpperCase();
     const parentTicker = tickerUp === "SPXW" ? "SPX" : tickerUp;
@@ -7063,7 +7064,7 @@ router.get("/whale/admin/system-health", async (req, res) => {
 
     try {
       const r = await axios.get("https://api.polygon.io/v2/aggs/ticker/SPY/prev", {
-        params: { apiKey: process.env["POLYGON_API_KEY"] },
+        params: { apiKey: getPolygonKey() },
         timeout: 5000,
       });
       services.push({
