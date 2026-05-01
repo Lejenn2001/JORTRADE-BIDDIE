@@ -74,21 +74,30 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   cancelled: "Cancelled",
 };
 
-// QuoteState — derived purely from existing columns. No schema change.
+// QuoteState — derived from `last_checked_at` freshness only.
+//
+// Background (May 2026 fix): the previous heuristic compared
+// `last_quote_underlying` against `entry_underlying` and flagged a row as
+// UNAVAILABLE whenever they matched. That produced false negatives on two
+// real, healthy paths:
+//   1. Tickers not in the live priceMonitor stock subscription set —
+//      `evaluateExitFromWsQuote` writes `last_quote_underlying = null` on
+//      every WS tick, which the old heuristic read as "no live quote".
+//   2. Flat tape — when underlying genuinely doesn't move tick to tick, the
+//      old heuristic also flagged the row UNAVAILABLE, hiding P/L.
+//
+// New rule: `last_checked_at` is bumped by EVERY backend write path
+// (REST refresh, WS-driven evaluation, off-hours touch, expired close).
+// If it's recent, the monitor is alive on this row. If it's missing or
+// long-stale, it's not. That's what we care about.
 //
 // Definitions:
-//   LIVE        → background monitor has successfully refreshed at least once
-//                 (last_quote_underlying differs from entry_underlying), and the
-//                 last attempt was within the freshness window.
-//   STALE       → monitor previously succeeded but hasn't refreshed recently.
-//                 We display the last known quote, clearly labeled.
-//   UNAVAILABLE → monitor has NEVER successfully fetched a quote since this
-//                 trade was opened (last_quote_underlying === entry_underlying
-//                 and the trade is older than the warmup window). The displayed
-//                 last_quote_* values are just trade-open snapshots, NOT live
-//                 marks, so we suppress P/L to avoid pretending it's real.
-//   PENDING     → trade was just opened (< warmup window). The first monitor
-//                 cycle hasn't happened yet — this is normal, not a failure.
+//   LIVE        → last_checked_at within QUOTE_FRESH_SECONDS
+//   STALE       → last_checked_at older than QUOTE_FRESH_SECONDS
+//   PENDING     → no last_checked_at yet AND trade is younger than warmup
+//                 (the first monitor cycle simply hasn't run)
+//   UNAVAILABLE → no last_checked_at AND trade is older than warmup
+//                 (the monitor genuinely never touched this row — rare)
 type QuoteState = "live" | "stale" | "unavailable" | "pending";
 
 const QUOTE_FRESH_SECONDS = 120;     // monitor cycle is 60s; allow 2x for tolerance
@@ -104,29 +113,31 @@ function deriveQuoteState(t: PaperTrade): { state: QuoteState; ageOfQuoteSec: nu
   const tradeAgeSec = Math.max(0, (now - openedMs) / 1000);
   const ageSinceCheckSec = checkedMs != null ? Math.max(0, (now - checkedMs) / 1000) : null;
 
-  // Has the monitor produced an update DIFFERENT from the entry snapshot?
-  // entry_underlying is captured exactly once at trade open; last_quote_underlying
-  // is overwritten on every successful Polygon fetch. If they're still identical
-  // many minutes after opening, the monitor has never produced a live mark.
-  const entryU = t.entry_underlying != null ? Number(t.entry_underlying) : null;
-  const lastU = t.last_quote_underlying != null ? Number(t.last_quote_underlying) : null;
-  const hasFreshQuote = entryU != null && lastU != null && Number.isFinite(entryU) && Number.isFinite(lastU) && Math.abs(entryU - lastU) > 0.0001;
-
-  if (!hasFreshQuote) {
+  // Monitor has never touched this row.
+  if (ageSinceCheckSec == null) {
     if (tradeAgeSec < QUOTE_WARMUP_SECONDS) {
-      return { state: "pending", ageOfQuoteSec: null, ageSinceCheckSec };
+      return { state: "pending", ageOfQuoteSec: null, ageSinceCheckSec: null };
     }
-    return { state: "unavailable", ageOfQuoteSec: null, ageSinceCheckSec };
+    return { state: "unavailable", ageOfQuoteSec: null, ageSinceCheckSec: null };
   }
-  // We have a real refreshed quote. Treat ageSinceCheck as ageOfQuote — when the
-  // monitor writes a fresh mark it also bumps last_checked_at, so they're equal
-  // for "good" rows.
-  const fresh = ageSinceCheckSec != null && ageSinceCheckSec <= QUOTE_FRESH_SECONDS;
+  // Monitor has touched it — freshness is the only question.
+  const fresh = ageSinceCheckSec <= QUOTE_FRESH_SECONDS;
   return {
     state: fresh ? "live" : "stale",
     ageOfQuoteSec: ageSinceCheckSec,
     ageSinceCheckSec,
   };
+}
+
+// Fix #1 — Per-cell freshness dot color thresholds.
+// Independent of (and finer-grained than) the row-level QuoteState badge so
+// the user can see a smooth degradation: green within 10s of last update,
+// amber up to a minute, gray after that.
+function freshnessDotColor(ageSec: number | null): { dot: string; label: string } {
+  if (ageSec == null) return { dot: "bg-muted-foreground/40", label: "No update yet" };
+  if (ageSec < 10) return { dot: "bg-emerald-400", label: `Last update ${Math.round(ageSec)}s ago` };
+  if (ageSec < 60) return { dot: "bg-amber-400", label: `Last update ${Math.round(ageSec)}s ago` };
+  return { dot: "bg-muted-foreground/60", label: `Last update ${formatAge(ageSec)}` };
 }
 
 function formatAge(seconds: number | null): string {
@@ -146,21 +157,25 @@ const fmtTime = (iso: string | null) => {
     return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
   } catch { return "—"; }
 };
+// Fix #3 — Closed-trade badge label.
+// Every label is now explicitly prefixed "Manual close" or "Auto: …" so the
+// trader can tell at a glance whether THEY closed the trade or the monitor
+// did. Prior labels ("🎯 Target hit") were ambiguous on this point.
 const exitReasonLabel = (r: string | null): string => {
   if (!r) return "—";
-  if (r === "closed_manual" || r === "manual") return "Closed manually";
-  if (r === "target_hit") return "🎯 Target hit";
-  if (r === "stop_hit" || r === "invalidated") return "🛑 Stop hit";
-  if (r === "closed_expired" || r === "expired") return "⏰ Expired";
+  if (r === "closed_manual" || r === "manual") return "Manual close";
+  if (r === "target_hit") return "Auto: 🎯 Target hit";
+  if (r === "stop_hit" || r === "invalidated") return "Auto: 🛑 Stop hit";
+  if (r === "closed_expired" || r === "expired") return "Auto: ⏰ Expired";
   // Phase 1 / Commit 4 — Exit Strategy Layer reasons
-  if (r === "profit_target") return "💰 Profit target";
-  if (r === "hard_stop") return "🚨 Hard stop";
-  if (r === "trailing_stop") return "🛡️ Trailing stop";
+  if (r === "profit_target") return "Auto: 💰 Profit target";
+  if (r === "hard_stop") return "Auto: 🚨 Hard stop";
+  if (r === "trailing_stop") return "Auto: 🛡️ Trailing stop";
   // EOD auto-close (May 2026) — fires daily at 3:50 PM ET to flatten all open
   // paper trades before the bell. eod_close_stale = used last stored quote
   // because no fresh quote was available at 3:59 PM ET (rare).
-  if (r === "eod_close") return "🕓 EOD Auto-Close";
-  if (r === "eod_close_stale") return "🕓 EOD Auto-Close (stale quote)";
+  if (r === "eod_close") return "Auto: 🕓 EOD close";
+  if (r === "eod_close_stale") return "Auto: 🕓 EOD close (stale quote)";
   if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
 };
@@ -870,7 +885,7 @@ export default function DashboardPaperTrades() {
               <div className="text-lg font-bold text-foreground">{stats.winRate.toFixed(0)}%</div>
             </div>
             <div className="rounded-lg bg-card border border-border/40 p-3">
-              <div className="text-[10px] uppercase text-muted-foreground">Realized P/L</div>
+              <div className="text-[10px] uppercase text-muted-foreground" title="Sum of realized P/L across every closed paper trade for your account, all time. Not filtered to today.">Realized P/L (lifetime)</div>
               <div className={`text-lg font-bold ${stats.totalPl >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtMoney(stats.totalPl)}</div>
             </div>
           </div>
@@ -1147,9 +1162,23 @@ export default function DashboardPaperTrades() {
                       <div><span className="text-muted-foreground">Entry: </span><span className="font-mono text-foreground">{fmtMoney(entry)} <span className="text-muted-foreground">(at {sourceLabel(t.entry_fill_source)})</span></span></div>
                       {t.status === "open" ? (
                         quoteIsUsable ? (
-                          <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-foreground">{fmtMoney(last)} <span className="text-muted-foreground">(at {sourceLabel(t.last_quote_source)})</span></span></div>
+                          <div className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full ${freshnessDotColor(ageSinceCheckSec).dot}`}
+                              title={freshnessDotColor(ageSinceCheckSec).label}
+                            />
+                            <span className="text-muted-foreground">Current: </span>
+                            <span className="font-mono text-foreground">{fmtMoney(last)} <span className="text-muted-foreground">(at {sourceLabel(t.last_quote_source)})</span></span>
+                          </div>
                         ) : (
-                          <div><span className="text-muted-foreground">Current: </span><span className="font-mono text-muted-foreground">—</span></div>
+                          <div className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full ${freshnessDotColor(ageSinceCheckSec).dot}`}
+                              title={freshnessDotColor(ageSinceCheckSec).label}
+                            />
+                            <span className="text-muted-foreground">Current: </span>
+                            <span className="font-mono text-muted-foreground">—</span>
+                          </div>
                         )
                       ) : (
                         <div><span className="text-muted-foreground">Exit: </span><span className="font-mono text-foreground">{fmtMoney(t.exit_price)} <span className="text-muted-foreground">(at {sourceLabel(t.exit_fill_source)})</span></span></div>
