@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+// Unified source label surfaced by the LivePriceService backend (P2).
+// `live` = WS update within 60s, `rest` = REST snapshot or lagging WS (60–120s),
+// `stale` = >120s old or never received. Older payloads may omit it; treat
+// missing as `unknown` and render a neutral dot.
+type PriceSourceLabel = "live" | "rest" | "stale";
+
 interface PriceInfo {
   price: number;
   high: number;
@@ -8,6 +14,7 @@ interface PriceInfo {
   trades: number;
   lastUpdate: string;
   age: number;
+  source?: PriceSourceLabel;
 }
 
 interface RealtimePricesState {
@@ -65,4 +72,4 @@ export function useRealtimePrices(enabled = true, intervalMs = 15000) {
   return { ...state, getPrice };
 }
 
-export type { PriceInfo };
+export type { PriceInfo, PriceSourceLabel };

@@ -41,6 +41,7 @@ export interface LiveStockPrice {
   high?: number;
   low?: number;
   volume?: number;
+  trades?: number;
   prevClose?: number;
   changePercent?: number;
   source: PriceSourceLabel;
@@ -148,6 +149,11 @@ class StocksFacade {
     return this.get(t);
   }
 
+  /** Current actual WS subscription set (union of all owners). Read-only. */
+  getSubscribedTickers(): string[] {
+    return priceMonitor.getSubscribedTickers();
+  }
+
   status(): FeedStatus {
     const ownerSubsTotal = [...this.ownerSubs.values()].reduce((n, s) => n + s.size, 0);
     return {
@@ -179,6 +185,7 @@ class StocksFacade {
       high: raw.high,
       low: raw.low,
       volume: raw.volume,
+      trades: raw.trades,
       prevClose: raw.prevClose,
       changePercent: raw.changePercent,
       source: classifyStockSource(raw.source, ageMs),

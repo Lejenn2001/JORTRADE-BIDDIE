@@ -3,6 +3,7 @@ import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
 import { priceMonitor, type PriceData } from "../lib/priceMonitor";
+import { livePriceService } from "../lib/livePriceService";
 import { attachExecutionVerdicts } from "../lib/executionEvaluator";
 import { isMarketOpenET, MARKET_CLOSED_MESSAGE, getEodPhaseET } from "../lib/marketHours";
 import { getEodConfig } from "../lib/eodCloseConfig";
@@ -4926,29 +4927,36 @@ function startPriceMonitorSystem() {
 setTimeout(startPriceMonitorSystem, 5000);
 
 router.get("/whale/prices/realtime", (_req, res) => {
-  const prices = priceMonitor.getAllPrices();
+  // P2: read through LivePriceService — single source of truth for "current price".
+  // The `source` field surfaces the unified `live` | `rest` | `stale` label so the
+  // frontend can render the freshness dot. `underlyingSource` is kept as raw debug
+  // (`ws` | `snapshot` | `rest` | `none`) for ops/log traceability.
+  const facadePrices = livePriceService.stocks.getAll();
+  const subscribedTickers = livePriceService.stocks.getSubscribedTickers();
+  const status = livePriceService.status().stocks;
   const data: Record<string, any> = {};
-  for (const [ticker, pd] of prices) {
-    data[ticker] = {
-      price: pd.price,
-      high: pd.high,
-      low: pd.low,
-      volume: pd.volume,
-      trades: pd.trades,
-      source: pd.source ?? "ws",
-      bid: pd.bid,
-      ask: pd.ask,
-      prevClose: pd.prevClose,
-      changePercent: pd.changePercent,
-      lastUpdate: new Date(pd.lastUpdate).toISOString(),
-      age: Math.round((Date.now() - pd.lastUpdate) / 1000),
+  for (const p of facadePrices) {
+    data[p.ticker] = {
+      price: p.price,
+      high: p.high,
+      low: p.low,
+      volume: p.volume,
+      trades: p.trades,
+      source: p.source,                    // 'live' | 'rest' | 'stale' (NEW unified label)
+      underlyingSource: p.underlyingSource, // 'ws' | 'snapshot' | 'rest' | 'none' (raw debug)
+      bid: p.bid,
+      ask: p.ask,
+      prevClose: p.prevClose,
+      changePercent: p.changePercent,
+      lastUpdate: new Date(p.lastUpdate).toISOString(),
+      age: Math.round(p.ageMs / 1000),
     };
   }
   res.json({
-    connected: priceMonitor.isConnected(),
+    connected: status.connected,
     marketOpen: isMarketOpenET(),
-    subscribedTickers: priceMonitor.getSubscribedTickers(),
-    tickerCount: priceMonitor.getSubscribedTickers().length,
+    subscribedTickers,
+    tickerCount: subscribedTickers.length,
     prices: data,
   });
 });

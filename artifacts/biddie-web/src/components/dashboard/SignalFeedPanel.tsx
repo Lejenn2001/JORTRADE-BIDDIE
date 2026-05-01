@@ -1,13 +1,33 @@
 import { useState } from "react";
-import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, Radio, ChevronDown, ChevronUp, XCircle, HelpCircle } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Clock, Target, ShieldX, Zap, Crosshair, MapPin, Gauge, CheckCircle2, Flame, Waves, Plus, Check, Loader2, ChevronDown, ChevronUp, XCircle, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { MarketSignal } from "@/hooks/useMarketData";
-import type { PriceInfo } from "@/hooks/useRealtimePrices";
+import type { PriceInfo, PriceSourceLabel } from "@/hooks/useRealtimePrices";
 import SignalLegend from "./SignalLegend";
 import ConvictionScoreRing from "./ConvictionScoreRing";
 import BeginnerTooltip from "./BeginnerTooltip";
 import { simplifySignalDescription, compactDescription } from "@/lib/simplifyDescription";
 import biddieRobot from "@/assets/biddie-robot.png";
+
+// P2: freshness dot — single visual that reflects the unified source label
+// served by /api/whale/prices/realtime (LivePriceService).
+//   live  = green  (WS update within 60s — real-time tape)
+//   rest  = amber  (REST snapshot, or WS lagging 60–120s — degraded)
+//   stale = gray   (>120s old or never received — do not trust)
+//   anything else (missing field, legacy "ws"/"snapshot" values from a stale
+//   payload during a rolling restart, future label additions) → neutral dot.
+//   Lookup is hardened: we ONLY accept the three known labels and fall through
+//   to DOT_UNKNOWN otherwise. Without this guard, a legacy value like "ws"
+//   would index `SOURCE_DOT["ws" as any]` to undefined and crash on `dot.tip`.
+const SOURCE_DOT: Record<PriceSourceLabel, { cls: string; tip: string }> = {
+  live:  { cls: "bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.7)]", tip: "Live (WS, <60s)" },
+  rest:  { cls: "bg-amber-400",                                          tip: "REST snapshot (degraded)" },
+  stale: { cls: "bg-zinc-500",                                           tip: "Stale (>120s)" },
+};
+const DOT_UNKNOWN = { cls: "bg-zinc-600", tip: "Unknown source" };
+const KNOWN_SOURCES: ReadonlySet<string> = new Set<PriceSourceLabel>(["live", "rest", "stale"]);
+const sourceDot = (src: string | undefined): { cls: string; tip: string } =>
+  (src && KNOWN_SOURCES.has(src)) ? SOURCE_DOT[src as PriceSourceLabel] : DOT_UNKNOWN;
 
 interface Props {
   signals: MarketSignal[];
@@ -209,12 +229,22 @@ const SignalFeedPanel = ({ signals, loading, limit, title, subtitle, icon, taken
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {priceInfo && (
-                      <span className="flex items-center gap-1 text-xs font-mono">
-                        <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                        <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
-                      </span>
-                    )}
+                    {priceInfo && (() => {
+                      const dot = sourceDot(priceInfo.source);
+                      const ageLabel = `${Math.max(0, Math.round(priceInfo.age))}s ago`;
+                      return (
+                        <span
+                          className="flex items-center gap-1.5 text-xs font-mono"
+                          title={`${dot.tip} · last update ${ageLabel}`}
+                        >
+                          <span
+                            className={`inline-block h-1.5 w-1.5 rounded-full ${dot.cls}`}
+                            aria-label={dot.tip}
+                          />
+                          <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
+                        </span>
+                      );
+                    })()}
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                       <Clock className="h-2.5 w-2.5" />
                       {signal.timestamp}
