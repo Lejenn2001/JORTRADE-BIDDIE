@@ -1,0 +1,71 @@
+Final EOD auto-close direction:
+
+Build this future-ready, but safe.
+
+Goal:
+Create one shared EOD close engine that can support both paper trading now and future live broker trading later.
+
+Configuration:
+- paper_eod_close_enabled = true
+- live_eod_close_enabled = false for now
+- eod_close_time = 3:50 PM ET
+- eod_force_close_time = 3:59 PM ET
+
+Behavior now:
+- Apply EOD auto-close to paper trades only
+- Include all OPEN paper trades:
+  - manual entries
+  - Buy Now entries
+  - queued/auto entries that are already open
+  - chat-origin trades if open
+- Do not close pending_entry trades; leave pending logic separate
+
+EOD close logic:
+1. At 3:50 PM ET:
+   - Attempt to close all open trades using normal fill logic:
+     bid → mid → last
+   - exit_reason = "eod_close"
+
+2. From 3:50–3:59 PM ET:
+   - Keep retrying any open trades that did not close due to quote issues
+
+3. At 3:59 PM ET:
+   - If still open and no fresh quote is available, close using last stored quote
+   - exit_reason = "eod_close_stale"
+
+Safety:
+- Ignore automation kill switch for EOD close because this is risk management
+- Manual Force Close remains unchanged and available
+- Whichever closes first wins
+- Use SQL guard WHERE status='open' so duplicate closes are safe no-ops
+
+Sentinel:
+- Use trade-count-aware sentinel
+- Only mark EOD complete if at least one trade closed
+- Continue checking during the EOD window to catch late open trades
+
+Timezone:
+- Use America/New_York / ET
+- Handle DST correctly
+- Skip weekends
+- Holiday calendar can be later
+
+Future broker design:
+- Build shared logic so future live trading can use the same engine
+- Do not actually touch broker/live trades now
+- live_eod_close_enabled must remain false until we explicitly enable broker integration later
+
+Do NOT change:
+- signal generation
+- Biddie/chat
+- execution evaluator
+- existing exit rules
+- broker/live trading behavior
+
+Before building, confirm:
+- files impacted
+- where the EOD engine will run
+- how the config flags will be stored
+- how eod_close vs eod_close_stale will appear in the UI
+
+Do not publish until I approve.
