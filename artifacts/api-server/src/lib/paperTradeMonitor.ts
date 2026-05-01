@@ -1,6 +1,7 @@
-import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings } from "./paperTradeService";
+import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings, buildOptionContractSymbol, evaluateExitFromWsQuote } from "./paperTradeService";
 import { isMarketOpenET } from "./marketHours";
 import { runEodSweep, PaperTradeSource } from "./eodCloseEngine";
+import { optionPriceMonitor } from "./optionPriceMonitor";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -8,6 +9,90 @@ const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let started = false;
+
+// ─── WebSocket subscription routing (Phase 1, May 2026) ──────────────────
+// Maps an OCC contract symbol (e.g. "O:NVDA260515C00200000") to the set of
+// paper-trade row ids that share it. Multiple users can hold the same
+// contract; one WS event must dispatch to every interested trade. Updated
+// in lockstep with the REST sweep so the live set stays consistent with
+// the database.
+//
+// Gated by OPTION_WS_ENABLED env flag (default true). Set to "false" to
+// fully disable the options WebSocket — falls back cleanly to REST polling.
+function isOptionWsEnabled(): boolean {
+  const raw = (process.env["OPTION_WS_ENABLED"] ?? "true").trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+// paper_trades.id is a UUID (string). Do NOT coerce to number — Number(uuid) is NaN.
+const _wsContractToTradeIds = new Map<string, Set<string>>();
+
+// Build the desired symbol→tradeIds map from the current open ∪ pending_entry
+// set, then reconcile with optionPriceMonitor. Single DB roundtrip; cheap.
+async function reconcileWsSubscriptions(): Promise<void> {
+  if (!isOptionWsEnabled()) return;
+  try {
+    const rows = await dbQuery(
+      `SELECT id, ticker, expiry, option_type, strike, status
+         FROM paper_trades
+        WHERE status IN ('open', 'pending_entry')`,
+      []
+    ).catch(() => null);
+    if (!rows) return;
+
+    // Build two parallel structures:
+    //   - desiredSymbols: every contract we want WS data for (open + pending_entry,
+    //     so a fill that flips pending→open mid-cycle already has a hot subscription)
+    //   - next (routing map): only OPEN trade IDs — pending rows must NOT be routed
+    //     to evaluateExitFromWsQuote (they have no entry and the WHERE id=$1 AND
+    //     status='open' guard would no-op anyway, just creating per-tick DB churn)
+    const next = new Map<string, Set<string>>();
+    const desiredSymbols = new Set<string>();
+    for (const r of rows.rows) {
+      const expiryStr = normalizeExpiryToIso(r.expiry);
+      const strike = Number(r.strike);
+      if (!Number.isFinite(strike) || strike <= 0) continue;
+      let sym: string;
+      try {
+        ({ contractSymbol: sym } = buildOptionContractSymbol(r.ticker, expiryStr, r.option_type, strike));
+      } catch {
+        continue;
+      }
+      desiredSymbols.add(sym);
+      if (r.status !== "open") continue;
+      let set = next.get(sym);
+      if (!set) { set = new Set<string>(); next.set(sym, set); }
+      set.add(String(r.id));
+    }
+
+    // Replace map atomically (single-threaded JS event loop guarantees this
+    // is consistent for the WS callback that reads it).
+    _wsContractToTradeIds.clear();
+    for (const [sym, ids] of next) _wsContractToTradeIds.set(sym, ids);
+
+    optionPriceMonitor.updateSubscriptions([...desiredSymbols]);
+  } catch (e: any) {
+    console.warn(`[paper-trade-monitor] WS reconcile error: ${e?.message ?? e}`);
+  }
+}
+
+// Register the WS quote callback exactly once at module init.
+// Each callback dispatches to evaluateExitFromWsQuote for every trade row
+// that holds this contract. The adapter handles its own per-trade lock and
+// the underlying SQL race guard prevents duplicate closes vs the REST sweep.
+let _wsCallbackRegistered = false;
+function registerWsCallback(): void {
+  if (!isOptionWsEnabled()) return;
+  if (_wsCallbackRegistered) return;
+  _wsCallbackRegistered = true;
+  optionPriceMonitor.onQuote((symbol, quote) => {
+    const ids = _wsContractToTradeIds.get(symbol);
+    if (!ids || ids.size === 0) return;
+    for (const id of ids) {
+      // Fire-and-forget — the adapter has its own per-trade in-flight lock.
+      void evaluateExitFromWsQuote(id, quote);
+    }
+  });
+}
 
 async function processOpenTrades(): Promise<void> {
   if (running) return;
@@ -210,6 +295,10 @@ function scheduleNext(): void {
     // Only PaperTradeSource is registered today; LiveTradeSource is intentionally
     // not invoked (gated by LIVE_EOD_CLOSE_ENABLED env var, default false).
     await runEodSweep(PaperTradeSource);
+    // Reconcile the Polygon options WS subscription set against the current
+    // open ∪ pending_entry rows. Runs every cycle so subscribe/unsubscribe
+    // tracks trade lifecycle even when the REST sweep performs no work.
+    await reconcileWsSubscriptions();
     scheduleNext();
   }, delay);
 }
@@ -217,11 +306,17 @@ function scheduleNext(): void {
 export function startPaperTradeMonitor(): void {
   if (started) return;
   started = true;
-  console.log("[paper-trade-monitor] starting (60s market hours / 5min off-hours, processes open + pending_entry + eod-sweep)");
+  const wsFlag = isOptionWsEnabled() ? "ws-options-stream" : "ws-options-DISABLED";
+  console.log(`[paper-trade-monitor] starting (60s market hours / 5min off-hours, processes open + pending_entry + eod-sweep + ${wsFlag})`);
+  // Wire the options WS quote callback before the first reconcile so any
+  // events that arrive immediately after subscribe are routed to the right
+  // trade rows. The callback is idempotent and registers exactly once.
+  registerWsCallback();
   setTimeout(async () => {
     await processOpenTrades();
     await processPendingEntries();
     await runEodSweep(PaperTradeSource);
+    await reconcileWsSubscriptions();
     scheduleNext();
   }, 5_000);
 }

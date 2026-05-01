@@ -6787,8 +6787,81 @@ async function closeForEod(t: any, q: OptionQuoteResult | null, phase: "soft" | 
   return { closed: true, row: upd.rows[0], fill: { price: stalePrice, source: staleSource }, reason: "eod_close_stale" };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WebSocket-driven exit adapter (Phase 1, May 2026)
+//
+// The Polygon options WebSocket (wss://socket.polygon.io/options) streams
+// per-contract Q (quote) and T (trade) events to the optionPriceMonitor
+// singleton. paperTradeMonitor wires that monitor's quote callback to this
+// adapter, which:
+//   1. Loads the trade row by id (skips if no longer 'open')
+//   2. Translates the WS-style {bid, ask, last} into the existing
+//      OptionQuoteResult shape that evaluateAndMaybeClose() already consumes
+//   3. Coalesces concurrent events for the same trade via an in-process
+//      promise lock so a fast quote stream cannot launch overlapping
+//      evaluations of the same row
+//
+// CRITICAL: this path uses the SAME evaluateAndMaybeClose() and the SAME
+// race-safe SQL guard (`WHERE id=$N AND status='open'`) as the REST sweep.
+// First writer wins; the loser's RETURNING is empty and is reported as
+// closed=false. EOD close is NOT invoked here — it remains driven by the
+// monitor cycle through runEodSweep() so its sequencing is preserved.
+// NOTE: paper_trades.id is a UUID (string). Keep the key type as string end-to-end —
+// Number(uuid) yields NaN and would silently never match any row in the SQL guard below.
+const _wsExitInflight = new Map<string, Promise<void>>();
+async function evaluateExitFromWsQuote(
+  tradeId: string,
+  wsQuote: { contractSymbol: string; bid: number | null; ask: number | null; last: number | null },
+): Promise<void> {
+  const existing = _wsExitInflight.get(tradeId);
+  if (existing) {
+    // Another evaluation is in flight for this trade; let it absorb the
+    // latest cached quote when it re-enters. This is intentional — we
+    // prefer one fresh evaluation over thrashing N parallel ones, and the
+    // optionPriceMonitor cache always holds the most recent values.
+    return existing;
+  }
+  const p = (async () => {
+    try {
+      const sel = await dbQuery(`SELECT * FROM paper_trades WHERE id = $1 AND status = 'open' LIMIT 1`, [tradeId]).catch(() => null);
+      if (!sel || !sel.rows.length) return;
+      const t = sel.rows[0];
+      const bid = wsQuote.bid;
+      const ask = wsQuote.ask;
+      const last = wsQuote.last;
+      const mid = (bid != null && ask != null) ? (bid + ask) / 2 : null;
+      // underlying intentionally null — evaluateAndMaybeClose() resolves it
+      // from priceMonitor.getPrice(t.ticker), which is the same source used
+      // by signal triggers. Falling back to the row's stored last_quote_underlying
+      // would risk stale-stop firing.
+      const q: OptionQuoteResult = {
+        bid,
+        ask,
+        mid,
+        last,
+        underlying: null,
+        iv: null,
+        delta: null,
+        fetchedAt: Date.now(),
+        contractSymbol: wsQuote.contractSymbol,
+        expiry: normalizeExpiryToIso(t.expiry),
+      };
+      const result = await evaluateAndMaybeClose(t, q);
+      if (result.closed && result.fill && result.exitReason) {
+        console.log(`[option-price-monitor] WS-triggered close ${t.ticker} ${t.option_type} $${t.strike} ${q.expiry}: ${result.exitReason} @ ${result.fill.price.toFixed(2)} (${result.fill.source})`);
+      }
+    } catch (e: any) {
+      console.warn(`[option-price-monitor] WS exit eval failed for trade ${tradeId}: ${e?.message ?? e}`);
+    } finally {
+      _wsExitInflight.delete(tradeId);
+    }
+  })();
+  _wsExitInflight.set(tradeId, p);
+  return p;
+}
+
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, closeForEod, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, closeForEod, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings, buildOptionContractSymbol, evaluateExitFromWsQuote };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;
