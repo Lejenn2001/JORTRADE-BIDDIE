@@ -1,0 +1,42 @@
+Pause before P2.
+
+I’m seeing issues on the Paper Trading page that need to be diagnosed before we continue:
+
+1. Prices do not appear to be updating live on the paper trade cards.
+2. “Last quote 0s ago” is showing, but the current prices/P&L do not appear to be moving.
+3. Realized P/L still shows the same amount from last night.
+4. I cannot clearly tell which trades were auto-closed vs manually closed.
+5. I cannot tell which open trades are actively under automated monitoring.
+6. I need to confirm whether the paper trading page is reading live WS quotes, REST quotes, cached values, or stale DB values.
+
+Please do not proceed to P2 yet.
+
+First, diagnose the current Paper Trading page only.
+
+Please check:
+- What endpoint feeds the paper trading page?
+- Does that endpoint return updated option bid/ask/last values?
+- Is the frontend polling or refreshing correctly?
+- Is the refresh icon doing anything?
+- Are the open trades subscribed to optionPriceMonitor?
+- Are live option quotes updating in memory but not reaching the UI?
+- Are closed trades being excluded from the open view correctly?
+- Is realized P/L recalculating from closed trades correctly?
+- Are exit reasons saved clearly in the DB? Example: hard_stop, profit_target, trailing_stop, manual_force_close, EOD auto-close.
+- Are those exit reasons shown clearly in the UI?
+
+Important:
+Do not change signal logic.
+Do not change execution logic.
+Do not change Biddie/chat.
+Do not make broad refactors.
+Do not proceed to LivePriceService P2 until this is understood.
+
+Please report:
+1. Why the paper trade card price/P&L is not visibly updating live.
+2. Whether the backend is receiving live quotes for these open option contracts.
+3. Whether the frontend is failing to refresh/display them.
+4. Whether automation is currently monitoring these trades.
+5. Which trades were auto-closed today and why.
+6. What small UI change would make auto vs manual close obvious.
+7. What small UI change would make live/rest/stale source obvious on paper trade cards.
