@@ -4,7 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
 import { priceMonitor, type PriceData } from "../lib/priceMonitor";
 import { attachExecutionVerdicts } from "../lib/executionEvaluator";
-import { isMarketOpenET, MARKET_CLOSED_MESSAGE } from "../lib/marketHours";
+import { isMarketOpenET, MARKET_CLOSED_MESSAGE, getEodPhaseET } from "../lib/marketHours";
+import { getEodConfig } from "../lib/eodCloseConfig";
 
 const router = Router();
 
@@ -6239,6 +6240,26 @@ router.post("/whale/paper/trades", async (req, res) => {
       });
     }
 
+    // ─── EOD Force-Window Gate ────────────────────────────────────────────
+    // During the force-close phase (default 15:59–16:00 ET) the EOD engine
+    // is actively flattening every open position to avoid overnight risk.
+    // Allowing a new open in that 1-minute window could leave a position
+    // unattended if the force sweep ran before this insert lands. Refuse
+    // new opens here so the EOD invariant ("no overnight risk") holds even
+    // for the worst-case timing. Manual close/cancel are still available.
+    {
+      const cfg = getEodConfig();
+      if (cfg.paperEnabled) {
+        const phase = getEodPhaseET(cfg.closeTime, cfg.forceCloseTime);
+        if (phase === "force") {
+          return res.status(409).json({
+            error: "Trading paused for end-of-day auto-close. Try again at next session.",
+            code: "eod_force_window",
+          });
+        }
+      }
+    }
+
     const {
       signalId, ticker, optionType, strike, expiry, contracts,
       signalTarget, signalInvalidation, signalEntry, signalGrade, signalConfidence,
@@ -6669,8 +6690,105 @@ async function closeExpiredNoQuote(t: any): Promise<{ closed: boolean; row?: any
   return { closed: true, row: upd.rows[0], underlying, exitPrice, source };
 }
 
+// ─── EOD Auto-Close helper ───────────────────────────────────────────────────
+// Single close path used by the EOD engine. Behavior depends on `phase`:
+//
+//   phase = 'soft' (15:50–15:58 ET):
+//     • Fresh quote with usable bid/mid/last → close, exit_reason='eod_close'.
+//     • Fresh quote present but all bid/mid/last <= 0 → return closed:false,
+//       leave open for retry. NEVER falls through to stale.
+//     • No fresh quote → return closed:false, leave open for retry.
+//
+//   phase = 'force' (15:59 ET):
+//     • Fresh quote with usable bid/mid/last → close, exit_reason='eod_close'.
+//     • Otherwise → fall back to last stored quote (stale_bid → stale_mid →
+//       stale_last → stale_intrinsic → stale_otm), exit_reason='eod_close_stale'.
+//       ALWAYS terminates with a price (intrinsic/0 even when unexpired) so
+//       the force sweep guarantees flattening of every open trade.
+//
+// SQL guard `WHERE id=$N AND status='open'` makes this safe vs. concurrent
+// manual close — whichever fires first wins, the other is a no-op.
+async function closeForEod(t: any, q: OptionQuoteResult | null, phase: "soft" | "force"): Promise<{ closed: boolean; row?: any; fill?: { price: number; source: string }; reason: "eod_close" | "eod_close_stale" }> {
+  const expiryStr = normalizeExpiryToIso(t.expiry);
+  const expired = isContractExpired(expiryStr);
+
+  // ── Path 1: Fresh quote → standard bid/mid/last fill (same logic as the
+  //           manual close handler). exit_reason = 'eod_close'.
+  if (q != null) {
+    const itm = isItmAtPrice(t.option_type, Number(t.strike), q.underlying);
+    const fill = pickExitFill(q, expired, itm);
+    if (fill) {
+      const entry = Number(t.entry_price);
+      const contracts = Number(t.contracts);
+      const realizedPl = (fill.price - entry) * contracts * 100;
+      const realizedPlPct = entry > 0 ? ((fill.price - entry) / entry) * 100 : 0;
+      const upd = await dbQuery(
+        `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
+          exit_underlying = $3, exit_reason = 'eod_close', closed_at = NOW(),
+          realized_pl = $4, realized_pl_pct = $5,
+          exit_bid = $6, exit_ask = $7, exit_mid = $8, exit_last = $9,
+          last_quote_price = $1, last_quote_source = $2, last_quote_underlying = $3,
+          last_quote_bid = $6, last_quote_ask = $7, last_quote_mid = $8, last_quote_last = $9,
+          last_checked_at = NOW()
+         WHERE id = $10 AND status = 'open' RETURNING *`,
+        [fill.price, fill.source, q.underlying, realizedPl, realizedPlPct, q.bid, q.ask, q.mid, q.last, t.id]
+      ).catch(() => null);
+      if (!upd || !upd.rowCount) return { closed: false, reason: "eod_close" };
+      return { closed: true, row: upd.rows[0], fill, reason: "eod_close" };
+    }
+    // Fresh quote present but all bid/mid/last <= 0 → fall through.
+  }
+
+  // Soft phase NEVER falls through to stale — leave open for retry.
+  if (phase === "soft") return { closed: false, reason: "eod_close" };
+
+  // ── Path 2 (force only): Stale fallback → use last stored quote columns
+  //           from the trade row (written by every prior monitor cycle's
+  //           quote check). exit_reason = 'eod_close_stale'.
+  const sBid = t.last_quote_bid != null ? Number(t.last_quote_bid) : null;
+  const sMid = t.last_quote_mid != null ? Number(t.last_quote_mid) : null;
+  const sLast = t.last_quote_last != null ? Number(t.last_quote_last) : null;
+  let stalePrice: number | null = null;
+  let staleSource = "";
+  if (sBid != null && Number.isFinite(sBid) && sBid > 0)        { stalePrice = sBid;  staleSource = "stale_bid"; }
+  else if (sMid != null && Number.isFinite(sMid) && sMid > 0)   { stalePrice = sMid;  staleSource = "stale_mid"; }
+  else if (sLast != null && Number.isFinite(sLast) && sLast > 0){ stalePrice = sLast; staleSource = "stale_last"; }
+  else {
+    // No fresh quote AND no usable stored quote. Force phase MUST flatten,
+    // so always terminate with intrinsic (if underlying is known and ITM)
+    // or 0 (OTM / unknown underlying). Same fallback as closeExpiredNoQuote
+    // but applied regardless of expiry — the contract will expire at 4 PM
+    // anyway and we don't want to carry it overnight.
+    const u = t.last_quote_underlying != null ? Number(t.last_quote_underlying) : null;
+    const itm = isItmAtPrice(t.option_type, Number(t.strike), u);
+    if (itm === true && u != null) {
+      const strike = Number(t.strike);
+      stalePrice = t.option_type === "call" ? Math.max(0, u - strike) : Math.max(0, strike - u);
+      staleSource = "stale_intrinsic";
+    } else {
+      stalePrice = 0;
+      staleSource = "stale_otm";
+    }
+  }
+  const entry = Number(t.entry_price);
+  const contracts = Number(t.contracts);
+  const realizedPl = (stalePrice - entry) * contracts * 100;
+  const realizedPlPct = entry > 0 ? ((stalePrice - entry) / entry) * 100 : 0;
+  const staleUnderlying = t.last_quote_underlying != null ? Number(t.last_quote_underlying) : null;
+  const upd = await dbQuery(
+    `UPDATE paper_trades SET status = 'closed', exit_price = $1, exit_fill_source = $2,
+      exit_underlying = $3, exit_reason = 'eod_close_stale', closed_at = NOW(),
+      realized_pl = $4, realized_pl_pct = $5,
+      last_checked_at = NOW()
+     WHERE id = $6 AND status = 'open' RETURNING *`,
+    [stalePrice, staleSource, staleUnderlying, realizedPl, realizedPlPct, t.id]
+  ).catch(() => null);
+  if (!upd || !upd.rowCount) return { closed: false, reason: "eod_close_stale" };
+  return { closed: true, row: upd.rows[0], fill: { price: stalePrice, source: staleSource }, reason: "eod_close_stale" };
+}
+
 // Internal helpers re-exported for the background monitor
-export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings };
+export const __paperTradeInternals = { fetchOptionQuote, pickExitFill, isContractExpired, isItmAtPrice, evaluateAndMaybeClose, closeExpiredNoQuote, closeForEod, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings };
 
 const onlineUsersMap = new Map<string, { name: string; lastSeen: number }>();
 const ONLINE_TIMEOUT = 90_000;

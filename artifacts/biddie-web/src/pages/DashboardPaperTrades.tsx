@@ -156,6 +156,11 @@ const exitReasonLabel = (r: string | null): string => {
   if (r === "profit_target") return "💰 Profit target";
   if (r === "hard_stop") return "🚨 Hard stop";
   if (r === "trailing_stop") return "🛡️ Trailing stop";
+  // EOD auto-close (May 2026) — fires daily at 3:50 PM ET to flatten all open
+  // paper trades before the bell. eod_close_stale = used last stored quote
+  // because no fresh quote was available at 3:59 PM ET (rare).
+  if (r === "eod_close") return "🕓 EOD Auto-Close";
+  if (r === "eod_close_stale") return "🕓 EOD Auto-Close (stale quote)";
   if (r.endsWith("_pending_quote")) return `${exitReasonLabel(r.replace("_pending_quote", ""))} (waiting for quote)`;
   return r;
 };
@@ -171,6 +176,11 @@ const exitReasonStyle = (r: string | null) => {
   if (r === "profit_target") return "bg-emerald-500/20 text-emerald-200 border border-emerald-400/40";
   if (r === "hard_stop") return "bg-red-500/20 text-red-200 border border-red-400/40";
   if (r === "trailing_stop") return "bg-amber-500/20 text-amber-200 border border-amber-400/40";
+  // EOD auto-close: sky-blue (distinct from win/loss palette — signals
+  // "time-based close, not P/L-driven"). Stale variant adds an amber border
+  // to flag the data caveat without alarming.
+  if (r === "eod_close") return "bg-sky-500/20 text-sky-200 border border-sky-400/40";
+  if (r === "eod_close_stale") return "bg-sky-500/20 text-sky-200 border border-amber-400/50";
   return "bg-muted/30 text-muted-foreground";
 };
 const sourceLabel = (s: string | null | undefined) => {

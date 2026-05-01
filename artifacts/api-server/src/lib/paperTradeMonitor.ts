@@ -1,5 +1,6 @@
 import { fetchOptionQuote, evaluateAndMaybeClose, closeExpiredNoQuote, isContractExpired, dbQuery, normalizeExpiryToIso, evaluatePendingEntry, getPaperAutomationSettings } from "./paperTradeService";
 import { isMarketOpenET } from "./marketHours";
+import { runEodSweep, PaperTradeSource } from "./eodCloseEngine";
 
 const MARKET_HOURS_INTERVAL_MS = 60_000;
 const OFF_HOURS_INTERVAL_MS = 5 * 60_000;
@@ -202,6 +203,13 @@ function scheduleNext(): void {
   timer = setTimeout(async () => {
     await processOpenTrades();
     await processPendingEntries();
+    // EOD auto-close: cheap no-op outside the ET EOD window or when disabled.
+    // Runs AFTER the regular open-trade sweep so that hard_stop / profit_target /
+    // trailing_stop exits get first crack on every tick — EOD only handles the
+    // residue of trades that those existing rules didn't already close.
+    // Only PaperTradeSource is registered today; LiveTradeSource is intentionally
+    // not invoked (gated by LIVE_EOD_CLOSE_ENABLED env var, default false).
+    await runEodSweep(PaperTradeSource);
     scheduleNext();
   }, delay);
 }
@@ -209,10 +217,11 @@ function scheduleNext(): void {
 export function startPaperTradeMonitor(): void {
   if (started) return;
   started = true;
-  console.log("[paper-trade-monitor] starting (60s market hours / 5min off-hours, processes open + pending_entry)");
+  console.log("[paper-trade-monitor] starting (60s market hours / 5min off-hours, processes open + pending_entry + eod-sweep)");
   setTimeout(async () => {
     await processOpenTrades();
     await processPendingEntries();
+    await runEodSweep(PaperTradeSource);
     scheduleNext();
   }, 5_000);
 }

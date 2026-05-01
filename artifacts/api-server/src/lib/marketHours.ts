@@ -66,3 +66,60 @@ export function marketClosedReason(now: Date = new Date()): MarketClosedReason |
     return "after_close";
   }
 }
+
+// ─── EOD Auto-Close Phase Helpers ────────────────────────────────────────────
+// Used by the EOD close engine (eodCloseEngine.ts) to determine which sweep
+// phase, if any, is active right now. ET-aware via the same Intl.DateTimeFormat
+// pattern as isMarketOpenET above. Holiday calendar NOT modeled — same Phase 1
+// limitation as the rest of marketHours (weekends-only). On a holiday weekday
+// the phase will still progress through the EOD window; the engine's
+// fetchOpenTrades will simply return [] because Buy Paper was gated all day,
+// so the sweep is a silent no-op.
+//
+// Phases:
+//   "before" → before EOD_CLOSE_TIME (or weekend) → engine returns immediately
+//   "soft"   → [EOD_CLOSE_TIME, EOD_FORCE_CLOSE_TIME) → fresh quote only;
+//              if no quote, leave open and retry next monitor tick
+//   "force"  → [EOD_FORCE_CLOSE_TIME, 16:00) → fresh quote first, fall back
+//              to last stored quote if no fresh quote available
+//   "after"  → ≥ 16:00 ET (or weekend) → engine returns immediately
+
+export type EodPhase = "before" | "soft" | "force" | "after";
+
+export function getEodPhaseET(
+  closeTime: { hour: number; minute: number },
+  forceCloseTime: { hour: number; minute: number },
+  now: Date = new Date(),
+): EodPhase {
+  try {
+    const { weekday, hour, minute } = nowEtParts(now);
+    if (weekday === "Sat" || weekday === "Sun") return "before";
+    const m = hour * 60 + minute;
+    const closeM = closeTime.hour * 60 + closeTime.minute;
+    const forceM = forceCloseTime.hour * 60 + forceCloseTime.minute;
+    if (m < closeM) return "before";
+    if (m < forceM) return "soft";
+    if (m < 16 * 60) return "force";
+    return "after";
+  } catch {
+    // Fail-safe: if clock unreadable, do nothing (no EOD sweep).
+    return "before";
+  }
+}
+
+// Returns YYYY-MM-DD in ET. Used by the EOD sentinel so "today" rolls over
+// at ET midnight regardless of server timezone.
+export function currentEtDateString(now: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(now).reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
