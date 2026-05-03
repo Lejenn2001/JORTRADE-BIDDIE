@@ -60,3 +60,9 @@ id = "wRKuEkhXzCst9EdB2R30g"
 uri = "file://exports/JORTRADE_ADMIN_ANALYTICS_AUDIT.md"
 type = "text"
 title = "JORTRADE Admin + Analytics Baseline Audit"
+
+[[outputs]]
+id = "yoNN9Snr7lFXOfoCx8mB7"
+uri = "file://exports/jortrade-color-palette.jpg"
+type = "image"
+title = "JORTRADE — Color Palette"

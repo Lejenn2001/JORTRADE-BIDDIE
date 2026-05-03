@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>JORTRADE — Color Palette</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0A0B10;
+    --panel: #0E101B;
+    --raised: #151828;
+    --border: #1B1D2D;
+    --ink: #EEF1F6;
+    --ink-2: #CFD6E2;
+    --ink-3: #6C7693;
+    --brand: #425FF0;
+    --brand-light: #7187F4;
+    --purple: #994CE6;
+    --purple-soft: #8C47D1;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #EF4444;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 48px 32px 64px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .hero {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(66,95,240,0.25) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 20%, rgba(153,76,230,0.18) 0%, transparent 50%),
+      var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    margin-bottom: 36px;
+  }
+  h1 {
+    font: 800 42px/1.05 "Plus Jakarta Sans", "Inter", sans-serif;
+    margin: 0 0 8px;
+    background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+  }
+  .sub { color: var(--ink-3); margin: 0; font-size: 15px; }
+  .gradient-bar {
+    margin-top: 20px;
+    height: 8px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--brand) 0%, var(--purple) 100%);
+    box-shadow: 0 0 24px rgba(66,95,240,0.45), 0 0 48px rgba(153,76,230,0.25);
+  }
+
+  h2 {
+    font: 700 22px/1.2 "Plus Jakarta Sans", "Inter", sans-serif;
+    margin: 44px 0 6px;
+    letter-spacing: -0.01em;
+  }
+  h2 .tag {
+    display: inline-block;
+    margin-left: 10px;
+    font: 600 10px/1 "JetBrains Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    padding: 4px 8px; border-radius: 999px;
+    background: rgba(66,95,240,0.18);
+    color: var(--brand-light);
+    vertical-align: middle;
+  }
+  h2 .tag.purple { background: rgba(153,76,230,0.18); color: #C9A8FF; }
+  h3 {
+    font: 600 11px/1 "JetBrains Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--ink-3);
+    margin: 28px 0 12px;
+  }
+  .section-sub { color: var(--ink-3); margin: 0 0 20px; font-size: 14px; max-width: 760px; }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .swatch {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--panel);
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .swatch:hover { transform: translateY(-2px); border-color: rgba(66,95,240,0.5); }
+  .chip {
+    height: 88px;
+    display: flex; align-items: flex-end; justify-content: flex-end;
+    padding: 10px 12px;
+    font: 600 10px/1 "JetBrains Mono", monospace;
+    color: rgba(0,0,0,0.6);
+    text-shadow: 0 0 6px rgba(255,255,255,0.4);
+  }
+  .chip.dark { color: rgba(255,255,255,0.7); text-shadow: 0 0 6px rgba(0,0,0,0.4); }
+  .meta { padding: 12px 14px 14px; }
+  .meta .name { font-weight: 600; font-size: 13.5px; }
+  .meta .vals { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+  .meta code {
+    font: 500 11px/1.4 "JetBrains Mono", monospace;
+    color: var(--ink-3);
+  }
+  .meta code .lbl { color: var(--ink-3); opacity: 0.55; margin-right: 6px; }
+
+  /* live demo cards row */
+  .demo {
+    margin-top: 40px;
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .demo-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    background: var(--panel);
+  }
+  .demo-card .title {
+    font: 700 13px/1 "Plus Jakarta Sans", "Inter", sans-serif;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--ink-3);
+    margin-bottom: 14px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; border-radius: 10px;
+    font: 600 13px/1 "Plus Jakarta Sans", "Inter", sans-serif;
+    border: 0; cursor: default;
+  }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--brand) 0%, #5571F2 100%);
+    color: white;
+    box-shadow: 0 0 24px rgba(66,95,240,0.45);
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--ink-2);
+    border: 1px solid var(--border);
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font: 700 10px/1 "JetBrains Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 999px; }
+  .pill.live   { background: rgba(16,185,129,0.18); color: #34D399; }
+  .pill.live   .dot { background: #34D399; box-shadow: 0 0 6px rgba(52,211,153,0.7); }
+  .pill.rest   { background: rgba(245,158,11,0.18); color: #FBBF24; }
+  .pill.rest   .dot { background: #FBBF24; }
+  .pill.stale  { background: rgba(108,118,147,0.22); color: #94A3B8; }
+  .pill.stale  .dot { background: #6C7693; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .gap { height: 12px; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--ink-3);
+    font-size: 12.5px;
+  }
+  footer code {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--ink-2);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <h1>JORTRADE — Color Palette</h1>
+    <p class="sub">Two surfaces share the same brand DNA — a deep navy stage, an electric blue lead, and a violet accent. The promo site uses CSS custom properties; the dashboard uses shadcn-style HSL triples.</p>
+    <div class="gradient-bar"></div>
+  </div>
+
+  <!-- ============== BRAND CORE ============== -->
+  <h2>Brand Core <span class="tag">used everywhere</span></h2>
+  <p class="section-sub">These three colors define the look. Same hex on both surfaces — they're the brand.</p>
+  <div class="grid">
+    <div class="swatch">
+      <div class="chip" style="background:#425FF0">#425FF0</div>
+      <div class="meta">
+        <div class="name">Primary — Electric Blue</div>
+        <div class="vals">
+          <code><span class="lbl">hex</span>#425FF0</code>
+          <code><span class="lbl">hsl</span>230 85% 60%</code>
+        </div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="chip" style="background:#994CE6">#994CE6</div>
+      <div class="meta">
+        <div class="name">Accent — Violet</div>
+        <div class="vals">
+          <code><span class="lbl">hex</span>#994CE6</code>
+          <code><span class="lbl">hsl</span>270 75% 60%</code>
+        </div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="chip" style="background:#7187F4">#7187F4</div>
+      <div class="meta">
+        <div class="name">Highlight — Lighter Blue</div>
+        <div class="vals">
+          <code><span class="lbl">hex</span>#7187F4</code>
+          <code><span class="lbl">hsl</span>230 85% 70%</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== STAGE ============== -->
+  <h2>Stage / Surfaces <span class="tag">dark-mode only</span></h2>
+  <p class="section-sub">Layered navy backgrounds. Each darker tone sits behind the next. Promo is slightly bluer; dashboard is slightly cooler.</p>
+  <h3>Promo site</h3>
+  <div class="grid">
+    <div class="swatch"><div class="chip dark" style="background:#0E101B">#0E101B</div><div class="meta"><div class="name">Bg Dark — page</div><div class="vals"><code><span class="lbl">hex</span>#0E101B</code><code><span class="lbl">hsl</span>230 30% 8%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#151828">#151828</div><div class="meta"><div class="name">Bg Light — panel</div><div class="vals"><code><span class="lbl">hex</span>#151828</code><code><span class="lbl">hsl</span>230 30% 12%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#1D2135">#1D2135</div><div class="meta"><div class="name">Bg Muted — raised</div><div class="vals"><code><span class="lbl">hex</span>#1D2135</code><code><span class="lbl">hsl</span>230 30% 16%</code></div></div></div>
+  </div>
+
+  <h3>Dashboard (Biddie AI)</h3>
+  <div class="grid">
+    <div class="swatch"><div class="chip dark" style="background:#0A0B10">#0A0B10</div><div class="meta"><div class="name">Background — page root</div><div class="vals"><code><span class="lbl">hex</span>#0A0B10</code><code><span class="lbl">hsl</span>230 25% 5%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#0E101B">#0E101B</div><div class="meta"><div class="name">Card / Popover / Sidebar</div><div class="vals"><code><span class="lbl">hex</span>#0E101B</code><code><span class="lbl">hsl</span>232 30% 8%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#151828">#151828</div><div class="meta"><div class="name">Secondary — inset panel</div><div class="vals"><code><span class="lbl">hex</span>#151828</code><code><span class="lbl">hsl</span>232 30% 12%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#1B1D2D">#1B1D2D</div><div class="meta"><div class="name">Border / Input / Muted</div><div class="vals"><code><span class="lbl">hex</span>#1B1D2D</code><code><span class="lbl">hsl</span>232 25% 14%</code></div></div></div>
+  </div>
+
+  <!-- ============== TEXT ============== -->
+  <h2>Text Tones</h2>
+  <p class="section-sub">High-contrast at the top, fades to a quiet slate for metadata.</p>
+  <div class="grid">
+    <div class="swatch"><div class="chip" style="background:#FFFFFF">#FFFFFF</div><div class="meta"><div class="name">Text Primary (promo)</div><div class="vals"><code><span class="lbl">hex</span>#FFFFFF</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#EEF1F6">#EEF1F6</div><div class="meta"><div class="name">Foreground (dashboard)</div><div class="vals"><code><span class="lbl">hex</span>#EEF1F6</code><code><span class="lbl">hsl</span>220 30% 95%</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#CFD6E2">#CFD6E2</div><div class="meta"><div class="name">Text Secondary</div><div class="vals"><code><span class="lbl">hex</span>#CFD6E2</code><code><span class="lbl">hsl</span>220 25% 85%</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#94A3B8">#94A3B8</div><div class="meta"><div class="name">Text Muted (promo)</div><div class="vals"><code><span class="lbl">hex</span>#94A3B8</code></div></div></div>
+    <div class="swatch"><div class="chip dark" style="background:#6C7693">#6C7693</div><div class="meta"><div class="name">Muted Foreground (dash)</div><div class="vals"><code><span class="lbl">hex</span>#6C7693</code><code><span class="lbl">hsl</span>225 15% 50%</code></div></div></div>
+  </div>
+
+  <!-- ============== STATUS ============== -->
+  <h2>Status / Semantic</h2>
+  <p class="section-sub">Used for trade state, alerts, and the new live/rest/stale freshness dot on the Signals dashboard.</p>
+  <div class="grid">
+    <div class="swatch"><div class="chip" style="background:#10B981">#10B981</div><div class="meta"><div class="name">Success — promo</div><div class="vals"><code><span class="lbl">hex</span>#10B981</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#21C45D">#21C45D</div><div class="meta"><div class="name">Success — dashboard</div><div class="vals"><code><span class="lbl">hex</span>#21C45D</code><code><span class="lbl">hsl</span>142 71% 45%</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#F59E0B">#F59E0B</div><div class="meta"><div class="name">Warning</div><div class="vals"><code><span class="lbl">hex</span>#F59E0B</code><code><span class="lbl">hsl</span>38 92% 50%</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#EF4444">#EF4444</div><div class="meta"><div class="name">Error (promo)</div><div class="vals"><code><span class="lbl">hex</span>#EF4444</code></div></div></div>
+    <div class="swatch"><div class="chip" style="background:#DC2828">#DC2828</div><div class="meta"><div class="name">Destructive (dashboard)</div><div class="vals"><code><span class="lbl">hex</span>#DC2828</code><code><span class="lbl">hsl</span>0 72% 51%</code></div></div></div>
+  </div>
+
+  <!-- ============== GLOWS ============== -->
+  <h2>Glow Tokens <span class="tag purple">dashboard only</span></h2>
+  <p class="section-sub">Used as box-shadow and radial-gradient fill, not as solid surfaces. They're how the dashboard gets its "neon under glass" feel.</p>
+  <div class="grid">
+    <div class="swatch">
+      <div class="chip" style="background:#425FF0; box-shadow: inset 0 0 30px rgba(66,95,240,0.6);">#425FF0</div>
+      <div class="meta"><div class="name">Glow Blue</div><div class="vals"><code><span class="lbl">hex</span>#425FF0</code><code><span class="lbl">hsl</span>230 85% 60%</code></div></div>
+    </div>
+    <div class="swatch">
+      <div class="chip" style="background:#994CE6; box-shadow: inset 0 0 30px rgba(153,76,230,0.6);">#994CE6</div>
+      <div class="meta"><div class="name">Glow Purple</div><div class="vals"><code><span class="lbl">hex</span>#994CE6</code><code><span class="lbl">hsl</span>270 75% 60%</code></div></div>
+    </div>
+    <div class="swatch">
+      <div class="chip" style="background:#25AFF4; box-shadow: inset 0 0 30px rgba(37,175,244,0.6);">#25AFF4</div>
+      <div class="meta"><div class="name">Glow Cyan</div><div class="vals"><code><span class="lbl">hex</span>#25AFF4</code><code><span class="lbl">hsl</span>200 90% 55%</code></div></div>
+    </div>
+  </div>
+
+  <!-- ============== LIVE EXAMPLES ============== -->
+  <h2>In Context</h2>
+  <p class="section-sub">How the palette actually composes in real components.</p>
+
+  <div class="demo">
+
+    <div class="demo-card" style="background: linear-gradient(135deg, rgba(66,95,240,0.08), rgba(153,76,230,0.06)), var(--panel); border-color: rgba(66,95,240,0.25);">
+      <div class="title" style="color:#7187F4;">Signal Card</div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between;">
+        <div style="font:800 22px/1 'Plus Jakarta Sans',sans-serif;">NVDA</div>
+        <div class="row"><span class="pill live"><span class="dot"></span>LIVE</span></div>
+      </div>
+      <div style="margin-top:6px; color:var(--ink-3); font:500 12px 'JetBrains Mono',monospace;">$924.18 · +2.4%</div>
+      <div class="gap"></div>
+      <div class="row">
+        <button class="btn primary">Take Trade</button>
+        <button class="btn ghost">Details</button>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="title">Freshness Dots (P2)</div>
+      <div class="row" style="gap:16px;">
+        <span class="pill live"><span class="dot"></span>LIVE</span>
+        <span class="pill rest"><span class="dot"></span>REST</span>
+        <span class="pill stale"><span class="dot"></span>STALE</span>
+      </div>
+      <p style="margin:14px 0 0; color:var(--ink-3); font-size:12.5px;">
+        WS &lt;60s &nbsp;·&nbsp; REST snapshot or lagging WS &nbsp;·&nbsp; &gt;120s old or never received
+      </p>
+    </div>
+
+    <div class="demo-card" style="background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(66,95,240,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 80% 20%, rgba(153,76,230,0.10) 0%, transparent 50%),
+      var(--bg); border-color: var(--border);">
+      <div class="title" style="color:#C9A8FF;">Hero Background</div>
+      <p style="margin:0; color:var(--ink-2); font-size:13.5px;">
+        Two stacked radial gradients (blue top-center, purple top-right) over the page background — the dashboard's signature "atmospheric" treatment.
+      </p>
+    </div>
+
+  </div>
+
+  <footer>
+    <strong style="color:var(--ink-2);">Sources</strong> — Promo: <code>artifacts/jortrade-promo/src/index.css</code> · Dashboard: <code>artifacts/biddie-web/src/index.css</code><br/>
+    <strong style="color:var(--ink-2);">Fonts</strong> — Promo display/body: <code>Plus Jakarta Sans</code> · Dashboard display: <code>Orbitron</code> · Body: <code>Inter</code> · Mono (both): <code>JetBrains Mono</code>
+  </footer>
+
+</div>
+</body>
+</html>
