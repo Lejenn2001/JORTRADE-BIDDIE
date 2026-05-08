@@ -1,0 +1,79 @@
+You’re 100% right. Before more cleanup, you need a **plain-English system map** so you know what each page touches before anyone edits anything.
+
+Also: **saving in Replit is not the same as publishing.** Saving/committing changes keeps them in the workspace. Publishing is a separate action that pushes the app live. But I agree — we should treat every change like it could matter and document it first.
+
+Send this to Replit:
+
+Pause all feature cleanup work.
+
+Before we make more changes, I need a detailed plain-English system map of the current JORTRADE app.
+
+The goal is to understand exactly what every page does, what data it uses, what APIs it calls, what components it depends on, and what would be impacted if we edit or remove anything.
+
+I am trying to clean this platform up the right way, reduce unnecessary connected accounts/tools, and eventually migrate away from Replit. I need to protect the current working production data and avoid breaking the signal engine, analytics, market data, chat, or any connected systems.
+
+Please provide a page-by-page breakdown in regular English.
+
+For each page, include:
+
+1. Page name and route/path
+2. Main purpose of the page
+3. Key components used on the page
+4. Data sources used
+
+   * Replit Postgres
+   * Supabase
+   * Polygon
+   * Unusual Whales
+   * Claude/API
+   * any other service
+5. API endpoints called by the page
+6. Shared hooks/utilities used
+7. Whether the page reads data only or writes/saves data
+8. Whether the page depends on production-only data
+9. Whether the page is safe to edit visually without touching backend logic
+10. What could break if this page is changed incorrectly
+11. Whether this page is needed for the public JORTRADE product, private JORTRADE Futures, or both
+12. Recommendation: keep, clean up, rename, merge, or remove
+
+Please include these pages at minimum:
+
+* Dashboard
+* Biddie AI / JORTRADE Chat
+* Decision Engine
+* Market View
+* Breakout Scanner
+* Analytics
+* Market Catalyst Feed / Trump Feed
+* Settings
+* Admin
+* any hidden/internal pages
+* any removed or unused Paper Trades routes/components if they still exist in code
+
+Also include a separate section for shared systems:
+
+* signal engine
+* signal outcomes
+* analytics calculations
+* Biddie chat
+* market data / price feed
+* options flow
+* breakout scanner
+* authentication
+* database connections
+* environment variables
+* deployment/publishing flow
+
+Important:
+Do not make code changes yet. This is documentation/investigation only.
+
+Please also explain in plain English:
+
+* what “save” means in Replit
+* what “publish” means in Replit
+* whether saving code changes automatically publishes them
+* what happens to production data when publishing
+* what would be required to migrate this cleanly to GitHub and Vercel
+
+Final deliverable:
+A clear page-by-page architecture report that I can use as the cleanup roadmap before approving more changes.
