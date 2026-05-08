@@ -1,0 +1,73 @@
+We are going to begin a major cleanup and restructuring of JORTRADE. Before building additional features, I want to simplify, modernize, and reposition the platform into a cleaner AI-powered trading intelligence experience.
+
+Primary goals:
+
+* Reduce clutter
+* Improve navigation flow
+* Simplify language
+* Reorganize tabs/pages
+* Remove unnecessary complexity
+* Improve professionalism and scalability
+* Reposition away from “signal selling” and more toward market intelligence, education, analytics, and workflow support
+
+IMPORTANT:
+JORTRADE should NOT be framed as an auto-trading, financial advisory, or copy-trading platform. We are moving toward:
+
+* AI market intelligence
+* conversational trading analysis
+* breakout and momentum scanning
+* market structure interpretation
+* educational trade planning
+* trader workflow tools
+
+We will start with a full page-by-page review and cleanup.
+
+Initial priorities:
+
+1. Audit every page and component
+2. Remove dead/outdated/redundant UI elements
+3. Reorganize sidebar/tab order for a more logical trader workflow
+4. Simplify terminology across the platform
+5. Replace aggressive execution language with safer market-intelligence language
+6. Improve overall visual consistency and user experience
+
+Examples of terminology changes:
+
+* “Buy Signal” → “Setup Focus”
+* “Entry” → “Confirmation Zone”
+* “Target” → “Potential Reaction Area”
+* “Stop Loss” → “Structure Risk Level”
+* “Execution” → “Market Conditions”
+* Remove “BUY NOW,” “SELL,” or direct execution wording
+
+Core public-facing areas should focus on:
+
+* Biddie Chat
+* Market Search
+* Breakout Scanner
+* Market Intelligence Dashboard
+* Watchlists
+* Trader Journal
+* Analytics & Market Context
+
+JORTRADE Futures / execution automation will remain separate and private for internal use only.
+
+I want the platform to feel:
+
+* modern
+* intelligent
+* conversational
+* premium
+* clean
+* easy to understand
+* institutional-inspired without overwhelming users
+
+Before making major code changes:
+
+* estimate impact
+* identify affected files
+* avoid touching unrelated systems
+* prioritize modular cleanup
+* keep changes scoped and organized
+
+We will tackle this one section at a time starting with navigation, sidebar order, and terminology cleanup.
