@@ -1,0 +1,138 @@
+Pause all cleanup and code changes.
+
+I need a full JORTRADE Portable Build Book — detailed enough that I could hand it to another developer or move it into another development platform without losing how the system works.
+
+This should be documentation only. Do not change code, do not publish, do not migrate anything.
+
+Goal:
+Create a page-by-page and system-by-system technical guide that explains exactly what exists, how it works, what data it uses, what services it depends on, and what cheaper/better alternatives may exist.
+
+For every page, document:
+
+1. Page name and route
+2. User-facing purpose
+3. Exact files/components involved
+4. All child components used
+5. All hooks/utilities used
+6. All API endpoints called
+7. All database tables read from
+8. All database tables written to
+9. All third-party services used
+10. What data appears on the page
+11. Where each data field comes from
+12. What is live data vs delayed vs cached
+13. What is hardcoded vs dynamic
+14. What calculations/scoring happen
+15. What would break if removed
+16. Whether this page should be kept, merged, renamed, simplified, or removed
+17. Whether there may be a cheaper/easier alternative for any data/service used
+
+Include at minimum:
+
+* Dashboard
+* Biddie AI / JORTRADE Chat
+* Market View
+* Breakout Scanner
+* Decision Engine
+* Analytics
+* Market Catalyst Feed / Trump Feed
+* Settings
+* Admin
+* Paper Trades, even if hidden
+* duplicate/hidden routes like /dashboard/chat and /dashboard/pnl
+
+Then create deep-dive sections for:
+
+BIDDIE AI:
+
+* exact files controlling Biddie behavior
+* where the personality/system prompt lives
+* how messages are sent to Claude
+* what data Biddie can access
+* what messages are stored
+* what triggers automated messages
+* difference between Dashboard Biddie chat and JORTRADE community chat
+
+SIGNAL ENGINE:
+
+* exact files controlling signal generation
+* what Polygon data is used
+* what Unusual Whales data is used
+* how Algorithm Plays are created
+* how Whale Plays are created
+* how Spreads/Butterflies are created
+* what scoring/confidence logic exists
+* how entries/targets/invalidations are generated
+* how outcomes are verified
+* what tables store the results
+
+DECISION ENGINE:
+
+* exact data flow from backend to card
+* every field displayed on each card and where it comes from
+* what is calculated live
+* what is stored
+* what is cosmetic only
+* what is connected to alerts/reviews/paper trades
+
+BREAKOUT SCANNER:
+
+* exact files and endpoints
+* what tickers/universe it scans
+* what Polygon endpoints are used
+* what Unusual Whales data is used
+* scoring formula/rules
+* cache behavior
+* watchlist behavior
+* alert behavior
+
+MARKET DATA COST REVIEW:
+For each market-data use case, list the current provider and possible alternatives.
+
+Examples:
+
+* live stock prices
+* live futures prices
+* options quotes
+* options flow
+* VWAP
+* candle data
+* historical bars
+* market status
+* economic/news catalysts
+
+For each, include:
+
+* current provider
+* current endpoint/API if known
+* why we use it
+* whether it requires live tick data
+* whether the same need could be met with a cheaper provider
+* whether Tradovate, TradingView, broker data, Supabase, delayed data, or another provider could replace it
+* risk of switching
+* estimated difficulty to replace
+
+ANALYTICS/DATA PRESERVATION:
+
+* what data powers analytics
+* what data is stored in Replit Postgres
+* what data is stored in Supabase
+* what must be exported before migration
+* what format to export in
+* what is calculated dynamically vs permanently saved
+
+MIGRATION:
+Explain what would be needed to move away from Replit:
+
+* what GitHub preserves
+* what GitHub does not preserve
+* what database exports are needed
+* what environment variables must be copied
+* what frontend can move to Vercel
+* what backend needs long-running hosting
+* what could move to Supabase
+* what could move to Railway/Render/Fly/other
+* recommended cheaper/simpler architecture
+
+Final deliverable:
+A detailed “build book” written in plain English but with exact file names, endpoints, tables, and data providers. It should be detailed enough that another developer could rebuild or migrate JORTRADE with minimal guessing.
