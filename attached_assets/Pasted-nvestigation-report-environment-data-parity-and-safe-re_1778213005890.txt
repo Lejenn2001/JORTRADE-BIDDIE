@@ -1,0 +1,61 @@
+nvestigation report — environment, data parity, and safe restore
+Status: no changes made. All cleanup paused as requested.
+
+1. Are Replit and the published app using the same database/env vars?
+No, they are split for one DB and shared for the other. Two databases are at play:
+
+Data	Backing store	Dev (this workspace)	Prod (published)
+signal_outcomes, paper_trades, signal pipeline state, etc.	Replit Postgres (DATABASE_URL)	Dev DB	Separate prod DB
+Auth sessions + personal P&L trades table (the calendar that lets you log entries)	Supabase (VITE_SUPABASE_URL)	Same Supabase project	Same Supabase project
+VITE_SUPABASE_URL is a build-time client variable, so the same Supabase project serves both environments. DATABASE_URL is server-side and Replit auto-provisions a dev DB and a prod DB as separate instances.
+
+2. Will publishing connect to the same data source as the live published app?
+Yes, the API server in production will keep talking to the same prod Replit Postgres it's using right now, and the frontend will keep talking to the same Supabase project. Publishing does NOT swap the connection target.
+
+What publishing does to data:
+
+It pushes code.
+It diffs schema (dev vs prod) and applies any DDL changes — surfacing renames in the Publish UI for your confirmation.
+It does NOT copy dev row data into prod. The only way that happens is if you explicitly click the "overwrite data" option in the Publish UI yourself. The agent has no control over that toggle.
+The cleanup commits since publish (9bd07db..02360ec) touched zero schema files. Just sidebar config, removed UI cards, and one array-literal change in whale.ts. So a publish would have no schema diff to apply at all.
+3. Is dev Analytics looking incomplete because of env/data, or because of code?
+100% environment/data, 0% code. Hard numbers:
+
+signal_outcomes (replit, non-spread)	Dev	Prod
+Total rows	1,184	2,978
+Wins (hit + partial_hit)	814	1,991
+Losses (missed + near_miss)	252	652
+Pending	4	29
+Expired	114	306
+Earliest detected_at	2026-03-26 18:19 UTC	2026-03-26 18:19 UTC
+Latest detected_at	2026-05-08 02:57 UTC	2026-05-07 21:08 UTC
+Same start date. Both DBs have been independently accumulating signals since March 26 — the prod app has been writing to its DB 24/7 for ~6 weeks while running on jortrade.com, and the dev workspace only writes when you (or an Agent session) run it. So dev has ~40% of prod's data — that's real, that's expected, and that's why the Analytics page in the workspace shows fewer wins/losses than the live site.
+
+The Analytics page code itself is fine — same code, same mapping, both querying their respective DBs. The "2s/4s/43s" cells are an unrelated pre-existing label ({stats.total}s = "N signals", literal s for "signals") from a March 31 commit, also not a regression.
+
+4. Analytics UI/logic — untouched
+Confirmed. No edits in this turn. No edits planned.
+
+5. Publishing — not done
+Confirmed. Your live jortrade.com is unchanged and serving its own prod DB. getDeploymentInfo() reports isDeployed: true, hasSuccessfulBuild: true, primary URL https://jortrade.com (vm deployment).
+
+Safest restore path — three options, ranked
+You don't actually need a restore to protect prod data — prod is fully isolated and intact. But if you want the dev workspace to look/behave like the published version again so you can use the workspace for analytics, here are your options, safest first:
+
+Option A (safest, recommended): Use the published site for analytics, keep the dev workspace for cleanup work.
+
+Just visit jortrade.com directly when you need to see the full analytics history. Dev workspace stays for code work. No rollback, no risk.
+Cost: zero. Disruption: zero.
+Option B: Roll back the dev workspace to the last published checkpoint via the Replit checkpoint UI.
+
+The checkpoint at commit 9bd07db3 is the "Published your App" state. Rolling back to that would undo the cleanup commits (9c50842 → 02360ec) in the dev workspace only. Prod is not touched.
+This is reversible — Replit checkpoints don't lose history.
+Cost: you lose the cleanup work in the dev workspace until you reapply or merge it forward later.
+I should not perform a rollback for you — it's user-initiated through the Diagnostics/checkpoint UI. Tell me to proceed and I'll walk you through it.
+Option C: Leave everything as-is.
+
+The cleanup is in dev only. Prod is unaffected. When you're ready to migrate to GitHub/Vercel, you can cherry-pick whichever cleanup commits you want and discard the rest. Git history shows every cleanup commit isolated to a single concern.
+One thing to flag before any future move to GitHub/Vercel
+Your signal_outcomes, paper_trades, and the signal pipeline live on Replit Postgres, not Supabase. Moving the frontend (biddie-web) to Vercel is straightforward — it's a Vite SPA against Supabase + a remote API. But moving the API server off Replit means migrating the Replit Postgres data (or pointing the migrated API at a new Postgres host like Supabase Postgres / Neon / RDS). That's a bigger lift than just moving the frontend, and worth scoping before you decide on a target platform. Happy to draft a migration outline whenever you want.
+
+Awaiting your call. No further changes until you tell me which option (A/B/C) you want and whether to resume the price-unification plan, the cleanup track, or hold
