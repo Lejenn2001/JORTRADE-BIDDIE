@@ -31,6 +31,12 @@ interface Message {
   createdAt?: string;
 }
 
+const quickPrompts = [
+  "What's the best setup for today?",
+  "Any unusual options flow today?",
+  "Show me high-confidence plays",
+];
+
 const greetings = [
   (name: string) => `Hey ${name}! Biddie is watching the flow. Things are heating up.`,
   (name: string) => `Markets are moving ${name}. Let's find the edge.`,
@@ -404,6 +410,22 @@ const AIChatPanel = () => {
           </div>
         )}
       </div>
+
+      {messages.length === 0 && canAsk && (
+        <div className="px-4 pb-2">
+          <div className="flex flex-wrap gap-1.5">
+            {quickPrompts.map((q) => (
+              <button
+                key={q}
+                className="text-[10px] bg-muted/50 text-muted-foreground px-2.5 py-1 rounded-full border border-border hover:border-primary/40 transition-colors"
+                onClick={() => sendMessage(q)}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!canAsk && hasAccess && (
         <div className="px-4 pb-2">

@@ -649,9 +649,6 @@ const DashboardCommunity = () => {
                             if (chatContracts.length === 0) return null;
                             return (
                               <div className="mt-2 border-t border-amber-500/20 pt-2 space-y-1.5">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/90">
-                                  Chat Idea — Not Execution Approved
-                                </div>
                                 {chatContracts.map((c) => {
                                   const key = chatContractKey(c);
                                   const isMonitored = monitoredKeys.has(key);
