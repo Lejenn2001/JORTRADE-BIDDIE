@@ -4533,7 +4533,8 @@ async function syncPriceMonitorSubscriptions() {
       priceMonitor.updateSubscriptions(BASELINE);
       return;
     }
-    const tickers = [...new Set([...BASELINE, ...result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5 && t !== "SPXW")])];
+    const INDEX_BLOCKLIST = new Set(["SPXW", "SPX", "NDX", "VIX"]);
+    const tickers = [...new Set([...BASELINE, ...result.rows.map((r: any) => r.ticker).filter((t: string) => t && !t.includes(" ") && t.length <= 5 && !INDEX_BLOCKLIST.has(t))])];
     priceMonitor.updateSubscriptions(tickers);
     console.log(`[price-monitor] Subscribed to ${tickers.length} tickers: ${tickers.join(", ")}`);
   } catch (e: any) {

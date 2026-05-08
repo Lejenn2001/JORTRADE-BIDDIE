@@ -4,32 +4,27 @@ import {
   LayoutDashboard,
   Activity,
   BarChart3,
-  MessageSquare,
-  Wallet,
   Settings,
   LogOut,
   Bot,
   Menu,
   X,
-  Users,
   PieChart,
   Shield,
   Crosshair,
   Megaphone,
-  FlaskConical,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import jortradeLogo from "@/assets/jortrade-logo.png";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Users, label: "Jortrade Chat", path: "/dashboard/community" },
-  { icon: Activity, label: "Decision Engine", path: "/dashboard/signals" },
-  { icon: FlaskConical, label: "Paper Trades", path: "/dashboard/paper-trades" },
-  { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
+  { icon: Bot, label: "Biddie AI", path: "/dashboard/community" },
   { icon: BarChart3, label: "Market View", path: "/dashboard/market" },
+  { icon: Crosshair, label: "Breakout Scanner", path: "/dashboard/breakout" },
+  { icon: Activity, label: "Decision Engine", path: "/dashboard/signals" },
   { icon: PieChart, label: "Analytics", path: "/dashboard/analytics" },
-  { icon: Megaphone, label: "Trump Feed", path: "/dashboard/trump" },
+  { icon: Megaphone, label: "Market Catalyst Feed", path: "/dashboard/trump" },
   { icon: Settings, label: "Settings", path: "/dashboard/settings" },
 ];
 
