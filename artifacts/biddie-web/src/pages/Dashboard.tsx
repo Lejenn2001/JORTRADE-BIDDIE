@@ -1,116 +1,19 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import SignalFeedPanel from "@/components/dashboard/SignalFeedPanel";
 import AIChatPanel from "@/components/dashboard/AIChatPanel";
 import MarketStatusSign from "@/components/dashboard/MarketStatusSign";
 import TickerTape from "@/components/dashboard/TickerTape";
 
-import { useMarketData, type MarketSignal } from "@/hooks/useMarketData";
-import { useRealtimePrices } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
 import MarketPulse from "@/components/dashboard/MarketPulse";
-import { HelpCircle, X, Sparkles, Bot } from "lucide-react";
+import { HelpCircle, X, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import biddieRobot from "@/assets/biddie-robot.png";
 
-const getSignalScore = (signal: Pick<MarketSignal, "convictionScore" | "confidence">) =>
-  signal.convictionScore ?? Math.round(signal.confidence * 10);
-
-const formatRelativeTimestamp = (isoString: string) => {
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return "Today";
-
-  const eastern = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const month = eastern.getMonth() + 1;
-  const day = eastern.getDate();
-  const year = eastern.getFullYear();
-  const time = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "America/New_York",
-  });
-  return `${month}/${day}/${year} ${time}`;
-};
-
-const recordToDashboardSignal = (record: any): MarketSignal => {
-  const confidence = Number(record.confidence) || 0;
-  let convictionScore = Math.round(confidence * 10);
-  if (confidence >= 9) convictionScore = Math.max(convictionScore, 92);
-  else if (confidence >= 8) convictionScore = Math.max(convictionScore, 85);
-  else if (confidence >= 7) convictionScore = Math.max(convictionScore, 78);
-  else if (confidence >= 6) convictionScore = Math.max(convictionScore, 70);
-  const isBullish = record.signal_type === "bullish";
-  const putCall = record.put_call || record.option_type || "call";
-  const tags = [putCall === "call" ? "Call Flow" : "Put Flow"];
-
-  if (convictionScore >= 85) tags.push("🔥 ACT NOW");
-  else if (convictionScore >= 70) tags.push("⚡ HIGH CONVICTION");
-
-  const createdAt = record.detected_at || record.created_at;
-
-  return {
-    id: record.id,
-    ticker: record.ticker,
-    type: isBullish ? "bullish" : "bearish",
-    confidence,
-    convictionScore,
-    convictionLabel: convictionScore >= 90
-      ? "Extreme Conviction"
-      : convictionScore >= 80
-        ? "Very High Conviction"
-        : convictionScore >= 68
-          ? "High Conviction"
-          : convictionScore >= 50
-            ? "Moderate Conviction"
-            : "Low Conviction",
-    description: (() => {
-      let desc = record.description || record.reason ||
-        `${putCall === "call" ? "Call" : "Put"} flow on ${record.ticker}${record.strike ? ` at ${record.strike}` : ""}.`;
-      if (record.price_at_signal && !desc.includes('Price at $')) {
-        desc += ` Price at $${Number(record.price_at_signal).toFixed(2)}.`;
-      }
-      return desc;
-    })(),
-    timestamp: formatRelativeTimestamp(createdAt),
-    tags,
-    strike: record.strike ?? undefined,
-    expiry: record.expiry ?? undefined,
-    premium: record.premium ?? undefined,
-    putCall: (putCall as "call" | "put") ?? undefined,
-    suggestedTrade: `Buy ${record.ticker}${record.strike ? ` ${record.strike}` : ""} ${putCall === "put" ? "Puts" : "Calls"}${record.expiry ? ` exp ${record.expiry}` : ""}`,
-    targetZone: record.target_zone || record.target || undefined,
-    createdAt,
-    source: "live",
-    category: record.category,
-    reason: record.reason,
-    entryTrigger: record.entry_trigger,
-    invalidation: record.invalidation,
-    keyLevel: record.key_level,
-    srLevel: record.sr_level,
-    targetNear: record.target_near || undefined,
-    tradeStatus: record.trade_status || null,
-    aiEvaluated: !!record.is_biddie_pick,
-    priceAtSignal: record.price_at_signal ? Number(record.price_at_signal) : undefined,
-    outcome: record.outcome || null,
-    resolvedAt: record.resolved_at || null,
-    mfePercent: record.mfe_percent != null ? Number(record.mfe_percent) : null,
-    maxFavorablePrice: record.max_favorable_price != null ? Number(record.max_favorable_price) : null,
-    reinforcementCount: record.reinforcement_count != null ? Number(record.reinforcement_count) : 1,
-    lastReinforcedAt: record.last_reinforced_at || null,
-  };
-};
-
 const Dashboard = () => {
-  const { signals, loading } = useMarketData();
-  const { getPrice, connected: wsConnected } = useRealtimePrices();
   const { user, profile } = useAuth();
   const firstName = profile?.full_name?.split(" ")[0] || "Trader";
-  const [persistedSignals, setPersistedSignals] = useState<MarketSignal[]>([]);
-  const [persistedLoading, setPersistedLoading] = useState(true);
-  const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
-  const [takingId, setTakingId] = useState<string | null>(null);
 
   const welcomeKey = user?.id ? `biddie_welcomed_${user.id}` : null;
   const isFirstTime = welcomeKey ? !localStorage.getItem(welcomeKey) : false;
@@ -135,169 +38,6 @@ const Dashboard = () => {
       return () => clearTimeout(timer);
     }
   }, [showWelcome, isFirstTime]);
-
-  useEffect(() => {
-    const loadTodaysLiveSignals = async () => {
-      setPersistedLoading(true);
-
-      try {
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        todayStart.setHours(todayStart.getHours() - 4);
-
-        const resp = await fetch('/api/whale/signals/history?limit=300');
-        if (!resp.ok) throw new Error('Failed to fetch signal history');
-        const result = await resp.json();
-
-        setPersistedSignals((result.signals ?? []).filter((s: any) => s.review_status !== 'wrong').map(recordToDashboardSignal));
-      } catch (error) {
-        console.warn("Failed to load persisted dashboard signals:", error);
-        setPersistedSignals([]);
-      } finally {
-        setPersistedLoading(false);
-      }
-    };
-
-    loadTodaysLiveSignals();
-  }, []);
-
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetch(`/api/whale/trades?userId=${user.id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.trades) {
-          setTakenSignalIds(new Set(data.trades.map((t: any) => t.signal_id)));
-        }
-      })
-      .catch(() => {});
-  }, [user?.id]);
-
-  const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
-    if (!user?.id) return;
-    const isTaken = takenSignalIds.has(signal.id);
-    setTakingId(signal.id);
-    try {
-      if (isTaken) {
-        await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
-        setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
-      } else {
-        const livePrice = getPrice(signal.ticker);
-        await fetch("/api/whale/trades", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: user.id,
-            signalId: signal.id,
-            ticker: signal.ticker,
-            direction: signal.type,
-            category: signal.category || "algorithm",
-            strike: signal.strike,
-            expiry: signal.expiry,
-            optionType: signal.putCall,
-            entryTrigger: signal.entryTrigger,
-            target: signal.targetZone,
-            invalidation: signal.invalidation,
-            convictionScore: signal.convictionScore ?? Math.round(signal.confidence * 10),
-            entryPrice: livePrice?.price || signal.priceAtSignal || null,
-          }),
-        });
-        setTakenSignalIds(prev => new Set(prev).add(signal.id));
-      }
-    } catch (e) {
-      console.error("Trade toggle error:", e);
-    } finally {
-      setTakingId(null);
-    }
-  }, [user?.id, takenSignalIds]);
-
-  const allMergedSignals = useMemo(() => {
-    const mergedSignals = new Map<string, MarketSignal>();
-    const normalizeStrike = (strike?: string) => {
-      if (!strike) return '';
-      return String(strike).replace(/[$,]/g, '').replace(/\.00$/, '').trim();
-    };
-
-    for (const signal of persistedSignals) {
-      const key = `${signal.ticker}|${normalizeStrike(signal.strike)}|${signal.expiry}|${signal.putCall || ''}`;
-      mergedSignals.set(key, signal);
-    }
-
-    for (const signal of signals) {
-      const key = `${signal.ticker}|${normalizeStrike(signal.strike)}|${signal.expiry}|${signal.putCall || ''}`;
-      const existing = mergedSignals.get(key);
-
-      mergedSignals.set(key, {
-        ...existing,
-        ...signal,
-        createdAt: existing?.createdAt ?? signal.createdAt,
-      });
-    }
-
-    const all = Array.from(mergedSignals.values());
-    const filtered = all;
-    return filtered
-      .sort((a, b) => {
-        const timeA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const timeB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-        if (timeB !== timeA) return timeB - timeA;
-        return getSignalScore(b) - getSignalScore(a);
-      });
-  }, [persistedSignals, signals]);
-
-  const sortSignals = (list: MarketSignal[]) => {
-    return [...list].sort((a, b) => {
-      const timeA = a.detectedAtMs || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-      const timeB = b.detectedAtMs || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
-      return timeB - timeA;
-    });
-  };
-
-  const algorithmPlays = useMemo(() =>
-    sortSignals(
-      allMergedSignals
-        .filter(s => (s.category === 'algorithm' || (s.category !== 'whale' && s.category !== 'spread')) && getSignalScore(s) >= 60)
-    ).slice(0, 10),
-    [allMergedSignals]
-  );
-
-  const whalePlays = useMemo(() =>
-    sortSignals(
-      allMergedSignals
-        .filter(s => s.category === 'whale' && getSignalScore(s) >= 60)
-    ).slice(0, 10),
-    [allMergedSignals]
-  );
-
-  const spreadPlays = useMemo(() =>
-    sortSignals(
-      allMergedSignals
-        .filter(s => s.category === 'spread' && getSignalScore(s) >= 60)
-    ).slice(0, 10),
-    [allMergedSignals]
-  );
-
-  const dashboardFeatured = useMemo(() => [
-    ...algorithmPlays.slice(0, 3),
-    ...whalePlays.slice(0, 3),
-    ...spreadPlays.slice(0, 3),
-  ], [algorithmPlays, whalePlays, spreadPlays]);
-
-  useEffect(() => {
-    if (dashboardFeatured.length === 0) return;
-    const markDashboardSignals = async () => {
-      try {
-        const tickers = dashboardFeatured.map(s => s.ticker);
-        // Signal persistence is handled by the API server pipeline
-      } catch (e) {
-        console.warn("Failed to mark dashboard signals:", e);
-      }
-    };
-    markDashboardSignals();
-  }, [dashboardFeatured]);
-
-  const signalFeedLoading = loading || persistedLoading;
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">
@@ -406,47 +146,6 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 gap-4 lg:gap-6">
             <div className="max-h-[600px]">
               <AIChatPanel />
-            </div>
-            <div className="grid grid-cols-1 gap-4 lg:gap-6">
-              <SignalFeedPanel
-                signals={algorithmPlays}
-                loading={signalFeedLoading}
-                title="Algorithm Plays"
-                subtitle="AI detected setups using price action and options flow analysis. Short to mid term entries with confirmed momentum."
-                icon="algorithm"
-                limit={5}
-                takenSignalIds={takenSignalIds}
-                takingId={takingId}
-                onTakeTrade={handleTakeTrade}
-                getPrice={getPrice}
-                wsConnected={wsConnected}
-              />
-              <SignalFeedPanel
-                signals={whalePlays}
-                loading={signalFeedLoading}
-                title="Whale Plays"
-                subtitle="Tracks large volume trades from institutions and hedge funds. Multi day swing setups following smart money."
-                icon="whale"
-                limit={5}
-                takenSignalIds={takenSignalIds}
-                takingId={takingId}
-                onTakeTrade={handleTakeTrade}
-                getPrice={getPrice}
-                wsConnected={wsConnected}
-              />
-              <SignalFeedPanel
-                signals={spreadPlays}
-                loading={signalFeedLoading}
-                title="Spreads & Butterflies"
-                subtitle="Multi leg options strategies with defined risk. Built to cap your downside while keeping upside potential."
-                icon="spread"
-                limit={5}
-                takenSignalIds={takenSignalIds}
-                takingId={takingId}
-                onTakeTrade={handleTakeTrade}
-                getPrice={getPrice}
-                wsConnected={wsConnected}
-              />
             </div>
           </div>
         </main>
