@@ -66,7 +66,7 @@ const features = [
 
 const SignalBreakdownSection = () => {
   return (
-    <section className="relative py-28 overflow-hidden">
+    <section id="features" className="relative py-28 overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-full bg-[radial-gradient(ellipse_50%_40%_at_50%_30%,hsl(230_70%_40%_/_0.1)_0%,transparent_70%)] blur-2xl pointer-events-none" />
 
       <div className="container mx-auto px-6 relative z-10">
