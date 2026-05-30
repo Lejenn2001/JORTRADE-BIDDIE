@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export interface FlowAlert {
   ticker: string;
@@ -592,16 +591,12 @@ export function useMarketData() {
       }
     }
 
-    // Fallback to existing edge function
+    // Fallback edge function removed during Supabase migration.
+    // The primary source above (/api/whale/signals) is now authoritative.
     try {
-      const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { action: 'flow' },
-      });
-      if (error) throw error;
+      const alerts: any[] = [];
+      const keyLevelsMap: Record<string, number[]> = {};
 
-      const alerts = data?.data || [];
-      const keyLevelsMap: Record<string, number[]> = data?.key_levels || {};
-      
       if (alerts.length === 0) return;
 
       type SignalWithMeta = MarketSignal & { _totalPremium: number };
@@ -724,13 +719,8 @@ export function useMarketData() {
 
   const fetchWhaleAlerts = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { action: 'whale-alerts' },
-      });
-      if (error) throw error;
-
-      const alerts = data?.data || [];
-      const keyLevelsMap: Record<string, number[]> = data?.key_levels || {};
+      const alerts: any[] = [];
+      const keyLevelsMap: Record<string, number[]> = {};
       if (alerts.length === 0) return;
 
       const newWhaleAlerts: FlowAlert[] = alerts
@@ -803,10 +793,7 @@ export function useMarketData() {
 
   const fetchMarketOverview = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { action: 'market' },
-      });
-      if (error) throw error;
+      const data: any = null;
       if (data?.data) setMarketOverview(data.data);
     } catch (e) {
       console.error('Failed to fetch market overview:', e);
@@ -815,10 +802,7 @@ export function useMarketData() {
 
   const fetchTickerData = useCallback(async (ticker: string): Promise<TickerData | null> => {
     try {
-      const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { action: 'ticker', ticker },
-      });
-      if (error) throw error;
+      const data: TickerData | null = null;
       return data;
     } catch (e) {
       console.error(`Failed to fetch ticker ${ticker}:`, e);

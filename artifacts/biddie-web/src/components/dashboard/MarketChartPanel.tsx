@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import { TrendingUp, Search, Info, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 const quickTickers = ["NQ", "SPX", "PLTR", "TSLA", "NVDA", "AAPL"];
@@ -135,14 +134,9 @@ const MarketChartPanel = () => {
     });
 
     try {
-      const [analysisResult, signalResult] = await Promise.all([
-        supabase.functions.invoke('ticker-analysis', {
-          body: { ticker, traderName },
-        }),
-        fetch(`${API_BASE}/api/whale/signals/history?limit=200`).then(r => r.json()).catch(() => ({ signals: [] })),
-      ]);
-
-      if (analysisResult.error) throw analysisResult.error;
+      const signalResult = await fetch(`${API_BASE}/api/whale/signals/history?limit=200`)
+        .then(r => r.json())
+        .catch(() => ({ signals: [] }));
 
       let entryPrice = "";
       let alertTime = "";
@@ -161,9 +155,7 @@ const MarketChartPanel = () => {
         }
       }
 
-      if (analysisResult.data && analysisResult.data.bias) {
-        setInsight({ ...(analysisResult.data as TickerInsight), entryPrice, alertTime });
-      }
+      setInsight({ ...defaultInsight, entryPrice, alertTime });
     } catch (e) {
       console.error('Failed to fetch analysis:', e);
       setInsight({

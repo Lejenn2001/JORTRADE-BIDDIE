@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 interface TickerItem {
   symbol: string;
@@ -21,11 +22,9 @@ const TickerTape = () => {
 
   const fetchPrices = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("stock-quotes", {
-        body: { symbols: SYMBOLS },
-      });
-
-      if (error) throw error;
+      const res = await fetch(`${API_BASE}/api/whale/stock-quotes?symbols=${SYMBOLS.join(",")}`);
+      if (!res.ok) return;
+      const data = await res.json();
       const quotes = data?.quotes || [];
       if (quotes.length > 0) {
         setTickers(quotes);

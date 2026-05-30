@@ -1,0 +1,3 @@
+- [Replit "locked" secret override](secret-override-pattern.md) — secret won't update in-place (locked/duplicate entries)? Read a NEW env-var name you control with old as fallback; verify via /proc of the restarted process, not stale tool env.
+- [Biddie admin & auth](biddie-admin-and-auth.md) — admin gate checks Replit-Postgres user_roles first then Supabase(anon); two role stores; SEED_ADMIN_IDS is the reliable path; signup "check email" toast is stale (confirm is OFF).
+- [Lovable migration orphans](lovable-migration-orphans.md) — features whose server side lived in Lovable edge functions (e.g. Telegram notifications) break silently on migration; UI stays but no backend sender.

@@ -89,8 +89,8 @@ async function fetchPolygonSnapshot(ticker: string): Promise<{ price: number; pr
 const claude = new Anthropic({ baseURL: AI_BASE_URL, apiKey: AI_API_KEY });
 
 const SUPABASE_URL = process.env["VITE_SUPABASE_URL"] || "";
-const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
-const SUPABASE_SERVICE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"] || SUPABASE_KEY;
+const SUPABASE_KEY = process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "";
+const SUPABASE_SERVICE_KEY = process.env["SUPABASE_SERVICE_KEY_OVERRIDE"] || process.env["SUPABASE_SERVICE_ROLE_KEY"] || SUPABASE_KEY;
 
 function supabaseAdminHeaders() {
   return {
@@ -113,8 +113,7 @@ async function dbQuery(text: string, params?: any[]): Promise<any> {
 }
 
 const SEED_ADMIN_IDS = [
-  "6e8cffca-7c06-4896-b67f-478965ac6556",
-  "5845af78-f880-431b-b2c0-56a9923e6835",
+  "418cc13d-d2f4-4314-950d-f8cc3c30e05c",
 ];
 
 (async () => {
@@ -4962,6 +4961,42 @@ router.get("/whale/prices/realtime", (_req, res) => {
   });
 });
 
+// Stock quotes for the dashboard ticker tape. Replaces the former Supabase
+// `stock-quotes` edge function during the Supabase migration. Pulls Polygon
+// snapshots for the requested symbols and returns the shape TickerTape expects.
+router.get("/whale/stock-quotes", async (req, res) => {
+  try {
+    const symbols = String(req.query.symbols || "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+      .slice(0, 50);
+    if (symbols.length === 0) {
+      res.json({ quotes: [] });
+      return;
+    }
+    const snapshot = await fetchPremarketSnapshot(symbols);
+    const quotes = symbols.map((symbol) => {
+      const s = snapshot[symbol];
+      if (!s || s.preMarketPrice == null) {
+        return { symbol, price: "—", change: "", changePercent: "—", isUp: true };
+      }
+      const pct = s.gapPct ?? 0;
+      const gap = s.gap ?? 0;
+      return {
+        symbol,
+        price: `$${s.preMarketPrice.toFixed(2)}`,
+        change: `${gap >= 0 ? "+" : ""}${gap.toFixed(2)}`,
+        changePercent: `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`,
+        isUp: pct >= 0,
+      };
+    });
+    res.json({ quotes });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "stock-quotes failed", quotes: [] });
+  }
+});
+
 let marketPulseCache: { data: any; timestamp: number } | null = null;
 const MARKET_PULSE_TTL = 60_000;
 
@@ -7135,9 +7170,10 @@ router.get("/whale/admin/system-health", async (req, res) => {
 
     try {
       const supabaseUrl = process.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"] || "";
-      const supabaseKey = process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
+      const supabaseKey = process.env["SUPABASE_SERVICE_KEY_OVERRIDE"] || process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
+      const projectRef = supabaseUrl.replace(/^https?:\/\//, "").split(".")[0] || "unknown";
       if (supabaseUrl && supabaseKey) {
-        const r = await axios.get(`${supabaseUrl}/rest/v1/profiles?select=id&limit=1`, {
+        await axios.get(`${supabaseUrl}/rest/v1/profiles?select=id&limit=1`, {
           headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
           timeout: 5000,
         });
@@ -7145,8 +7181,8 @@ router.get("/whale/admin/system-health", async (req, res) => {
           name: "Supabase (Auth)",
           description: "User login, accounts, profiles, session management",
           status: "ok",
-          details: "Connected — authentication active",
-          url: "https://supabase.com/dashboard",
+          details: `Connected — project ${projectRef} (authentication active)`,
+          url: `https://supabase.com/dashboard/project/${projectRef}`,
           usage: "Free tier — 50,000 monthly active users",
         });
       } else {
@@ -7182,6 +7218,26 @@ router.get("/whale/admin/system-health", async (req, res) => {
       });
     } else {
       services.push({ name: "Discord Webhook", description: "Sends signal alerts to your Discord channel", status: "warning", details: "Not configured", url: "" });
+    }
+
+    try {
+      const tgToken = process.env["TELEGRAM_BOT_TOKEN"] || "";
+      if (tgToken) {
+        const r = await axios.get(`https://api.telegram.org/bot${tgToken}/getMe`, { timeout: 5000 });
+        const botName = r.data?.result?.username ? `@${r.data.result.username}` : "bot";
+        services.push({
+          name: "Telegram Bot",
+          description: "Sends signal alerts and notifications to traders via Telegram",
+          status: "ok",
+          details: `Connected — ${botName} active`,
+          url: "https://core.telegram.org/bots",
+          usage: "Free — unlimited messages",
+        });
+      } else {
+        services.push({ name: "Telegram Bot", description: "Sends signal alerts and notifications to traders via Telegram", status: "warning", details: "Not configured — add TELEGRAM_BOT_TOKEN to enable alerts", url: "https://core.telegram.org/bots" });
+      }
+    } catch (e: any) {
+      services.push({ name: "Telegram Bot", description: "Sends signal alerts and notifications to traders via Telegram", status: "error", details: e.response?.status === 401 ? "Invalid bot token" : e.message, url: "https://core.telegram.org/bots" });
     }
 
     res.json({ services });

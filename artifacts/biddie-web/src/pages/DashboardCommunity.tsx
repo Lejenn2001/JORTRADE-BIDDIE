@@ -518,7 +518,7 @@ const DashboardCommunity = () => {
       <DashboardSidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader />
-        {profile?.selected_plan === "starter" ? (
+        {profile?.selected_plan === "starter" && !isAdmin ? (
           <main className="flex-1 flex items-center justify-center p-6 bg-mesh">
             <div className="glass-panel rounded-xl border-glow-purple p-8 text-center max-w-sm">
               <img src={biddieRobot} alt="Biddie" className="w-20 h-20 mx-auto mb-4 opacity-40 grayscale" />

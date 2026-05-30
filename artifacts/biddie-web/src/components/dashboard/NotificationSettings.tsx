@@ -107,36 +107,9 @@ const NotificationSettings = () => {
   };
 
   const sendTestAlert = async () => {
-    if (!telegramChatId) {
-      toast.error("Enter your Telegram chat ID first");
-      return;
-    }
-    setTestingSend(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("telegram-alert", {
-        body: {
-          signals: [{
-            ticker: "TEST",
-            signal_type: "bullish",
-            put_call: "call",
-            strike: "$150",
-            expiry: "2026-04-17",
-            premium: "$25K",
-            confidence: 9.0,
-            description: "Test alert — your notifications are working! 🎉",
-          }],
-          override_chat_id: telegramChatId,
-        },
-      });
-
-      if (error) throw error;
-      toast.success("Test alert sent! Check your Telegram.");
-    } catch (err) {
-      console.error("Test alert failed:", err);
-      toast.error("Failed to send test alert. Make sure you started @BiddieAIBot first.");
-    } finally {
-      setTestingSend(false);
-    }
+    // Telegram delivery is being rebuilt on the JORTRADE server and will launch
+    // alongside text signals. Until then we save the chat ID but don't send.
+    toast.info("Telegram alerts are coming soon — they'll switch on when text signals launch. Your chat ID is saved.");
   };
 
   if (loading) {
@@ -157,7 +130,10 @@ const NotificationSettings = () => {
             <Send className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-foreground">Telegram Alerts</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground">Telegram Alerts</h3>
+              <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Coming soon</span>
+            </div>
             <p className="text-xs text-muted-foreground">Get signal alerts sent to your Telegram</p>
           </div>
           <Switch

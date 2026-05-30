@@ -47,6 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.replit
 
 # Pasted planning notes / scratch attachments
 attached_assets/
