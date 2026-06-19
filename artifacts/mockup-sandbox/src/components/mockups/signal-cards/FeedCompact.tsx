@@ -61,38 +61,38 @@ function CompactCard(d: CardData) {
     "bg-white/10 text-muted-foreground";
 
   return (
-    <div className="group relative rounded-2xl bg-gradient-to-b from-white/[0.04] to-white/[0.01] px-4 py-3.5 transition-colors hover:from-white/[0.06]">
+    <div className="group relative rounded-2xl border border-white/[0.07] bg-gradient-to-b from-white/[0.05] to-white/[0.015] px-4 py-3.5 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.85),0_0_22px_-14px_rgba(110,130,255,0.55)] transition-all hover:-translate-y-px hover:border-white/[0.13] hover:from-white/[0.07] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.9),0_0_28px_-12px_rgba(110,130,255,0.7)]">
       <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
       <div className="pl-2.5">
-        {/* Meta: signal time (left) · live price + alert bell (right) */}
-        <div className="mb-2 flex items-center justify-between">
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Clock className="h-3 w-3" /> {d.signalTime}
-          </span>
-          <span className="flex items-center gap-2.5">
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {d.price}
-            </span>
-            <button className="text-muted-foreground transition-colors hover:text-foreground" title="Set an alert">
-              <Bell className="h-3.5 w-3.5" />
-            </button>
-          </span>
-        </div>
-        {/* Header: ticker + confidence */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            {bull
-              ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
-              : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
-            <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
-            {mfe != null && (
-              <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
-                {mfe}%
-              </span>
-            )}
+        {/* Header: ticker + live price (left) · signal time + alert + confidence (right) */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {bull
+                ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
+                : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
+              <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
+              {mfe != null && (
+                <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
+                  {mfe}%
+                </span>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[13px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold text-foreground">{d.price}</span>
+            </div>
           </div>
-          <MiniRing value={d.confidence} />
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Clock className="h-3 w-3" /> {d.signalTime}
+              <button className="text-muted-foreground/70 transition-colors hover:text-foreground" title="Set an alert">
+                <Bell className="h-3.5 w-3.5" />
+              </button>
+            </span>
+            <MiniRing value={d.confidence} />
+          </div>
         </div>
 
         {/* Flow label */}
@@ -387,7 +387,7 @@ export function FeedCompact() {
         </div>
 
         {/* Compact feed */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {CARDS.map((c) => <CompactCard key={c.ticker} {...c} />)}
         </div>
       </div>
