@@ -1,7 +1,9 @@
 export function getPolygonKey(): string {
-  // Polygon allows only ONE live WebSocket connection per API key. The deployed
-  // (production) app and this dev workspace must therefore use DIFFERENT keys, or
-  // they fight over the single connection slot and both get kicked (close 1008).
+  // Polygon allows only ONE live WebSocket connection per ACCOUNT (not per key).
+  // The deployed (production) app and this dev workspace must therefore use keys
+  // from DIFFERENT Polygon accounts, or they fight over the single connection
+  // slot and both get kicked (close 1008). A second key on the SAME account does
+  // NOT get its own slot — see priceMonitor.ts for the WS gating that enforces this.
   if (process.env["NODE_ENV"] === "production") {
     return (
       process.env["POLYGON_API_KEY_PROD"] ??

@@ -23,22 +23,27 @@ const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_OPTIONS_WS_URL = "wss://socket.polygon.io/options";
 
 // Polygon allows only ONE live WebSocket connection per ACCOUNT on the options
-// cluster too. Prod owns the single slot; dev may open its own options WS ONLY
-// when it has a dedicated key on a SEPARATE account — a different key string on
-// the SAME account still collides (code 1008 loop on both). Dev WS is therefore
-// gated behind an explicit opt-in (POLYGON_DEV_WS=1). Default for dev = REST
-// option-quote fallback, which can never steal prod's slot.
+// cluster too. Prod owns the single slot; any other env may open its own options
+// WS ONLY when it has a dedicated key on a SEPARATE account — a different key
+// string on the SAME account still collides (code 1008 loop on both). Non-prod
+// WS is therefore gated behind an explicit opt-in (POLYGON_DEV_WS=1). Default
+// for non-prod = REST option-quote fallback, which can never steal prod's slot.
+//
+// Env model matches priceMonitor.ts: this GCE deployment does NOT export
+// NODE_ENV, so UNSET must be treated as production (open WS). REST-only is forced
+// only for KNOWN non-prod values (development/test/staging).
 //   • POLYGON_WS_FORCE=1   → always use WS (overrides everything)
 //   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
-//   • NODE_ENV=development → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+//   • known non-prod NODE_ENV → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+const IS_KNOWN_NON_PROD =
+  process.env["NODE_ENV"] === "development" ||
+  process.env["NODE_ENV"] === "test" ||
+  process.env["NODE_ENV"] === "staging";
 const DEV_WS_ENABLED =
-  process.env["NODE_ENV"] === "development" &&
-  isUsingDevKey() &&
-  process.env["POLYGON_DEV_WS"] === "1";
+  IS_KNOWN_NON_PROD && isUsingDevKey() && process.env["POLYGON_DEV_WS"] === "1";
 const REST_ONLY =
   process.env["POLYGON_WS_FORCE"] !== "1" &&
-  (process.env["POLYGON_REST_ONLY"] === "1" ||
-    (process.env["NODE_ENV"] === "development" && !DEV_WS_ENABLED));
+  (process.env["POLYGON_REST_ONLY"] === "1" || (IS_KNOWN_NON_PROD && !DEV_WS_ENABLED));
 console.log(
   `[option-price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"}, devKey=${isUsingDevKey()}, devWs=${DEV_WS_ENABLED})`,
 );

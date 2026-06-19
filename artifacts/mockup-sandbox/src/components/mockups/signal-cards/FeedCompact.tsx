@@ -120,27 +120,25 @@ function CompactCard(d: CardData) {
         {/* Divider */}
         <div className="my-3 border-t border-white/10" />
 
-        {/* Biddie toggle + reinforcement (left) · strength % and confidence ring (right) */}
+        {/* Biddie toggle (left) · reinforcement + strength % + confidence ring (right) */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              onClick={() => setOpen((o) => !o)}
-              aria-label="Biddie's take"
-              className="flex shrink-0 items-center gap-1.5 text-left"
-            >
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
-                <Sparkles className="h-2.5 w-2.5 text-primary" />
-              </span>
-              <span className="text-[11px] font-bold text-primary">Biddie</span>
-              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-            </button>
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Biddie's take"
+            className="flex shrink-0 items-center gap-1.5 text-left"
+          >
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
+              <Sparkles className="h-2.5 w-2.5 text-primary" />
+            </span>
+            <span className="text-[11px] font-bold text-primary">Biddie</span>
+            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          <div className="flex shrink-0 items-center gap-2">
             {d.reinforcement != null && (
               <span className="inline-flex shrink-0 items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
                 <TrendingUp className="h-3 w-3" /> {ordinal(d.reinforcement)} reinforcement
               </span>
             )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2.5">
             {mfe != null && (
               <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
                 MFE {mfe}%

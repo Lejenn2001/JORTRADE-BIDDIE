@@ -6,25 +6,28 @@ const POLYGON_WS_URL = "wss://socket.polygon.io/stocks";
 
 // Polygon allows only ONE live WebSocket connection per ACCOUNT (not per key).
 // The deployed (production) app owns that single slot so paying members get live
-// data. The dev workspace may open its OWN WS ONLY when it has a dedicated key
-// that belongs to a SEPARATE Polygon account — otherwise dev and prod fight over
-// the one slot and Polygon kicks both with code 1008 in a loop.
+// data. Any OTHER environment may open its OWN WS ONLY when it has a dedicated
+// key on a SEPARATE Polygon account — otherwise the two fight over the one slot
+// and Polygon kicks both with code 1008 in a loop. A different key string on the
+// SAME account is NOT enough (still 1008), so non-prod WS is gated behind an
+// EXPLICIT opt-in (POLYGON_DEV_WS=1) that asserts the key is a separate account.
 //
-// A different key string on the SAME account is NOT enough (still 1008), so dev
-// WS is gated behind an EXPLICIT opt-in (POLYGON_DEV_WS=1) that confirms the dev
-// key is a separate account. Default for dev = REST snapshot polling, which can
-// never steal prod's slot.
+// NOTE on the env model: this GCE deployment does NOT export NODE_ENV, so an
+// UNSET value must be treated as production (open WS) or the live feed dies. We
+// therefore force REST-only only for KNOWN non-prod values (development/test/
+// staging). Unset/production → WS on; known non-prod → REST-only unless opted in.
 //   • POLYGON_WS_FORCE=1   → always use WS (overrides everything; use if prod is down)
 //   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
-//   • NODE_ENV=development → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+//   • known non-prod NODE_ENV → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+const IS_KNOWN_NON_PROD =
+  process.env["NODE_ENV"] === "development" ||
+  process.env["NODE_ENV"] === "test" ||
+  process.env["NODE_ENV"] === "staging";
 const DEV_WS_ENABLED =
-  process.env["NODE_ENV"] === "development" &&
-  isUsingDevKey() &&
-  process.env["POLYGON_DEV_WS"] === "1";
+  IS_KNOWN_NON_PROD && isUsingDevKey() && process.env["POLYGON_DEV_WS"] === "1";
 const REST_ONLY =
   process.env["POLYGON_WS_FORCE"] !== "1" &&
-  (process.env["POLYGON_REST_ONLY"] === "1" ||
-    (process.env["NODE_ENV"] === "development" && !DEV_WS_ENABLED));
+  (process.env["POLYGON_REST_ONLY"] === "1" || (IS_KNOWN_NON_PROD && !DEV_WS_ENABLED));
 console.log(
   `[price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"}, devKey=${isUsingDevKey()}, devWs=${DEV_WS_ENABLED})`,
 );
