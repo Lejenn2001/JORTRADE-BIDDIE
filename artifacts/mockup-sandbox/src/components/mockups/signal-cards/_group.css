@@ -1,0 +1,24 @@
+/* JORTRADE dark theme tokens — mirrors biddie-web index.css .dark palette.
+   Scoped to this mockup group so it does not leak into other sandbox groups. */
+:root {
+  --background: 230 25% 5%;
+  --foreground: 220 30% 95%;
+  --card: 232 30% 8%;
+  --card-foreground: 220 30% 95%;
+  --popover: 232 30% 8%;
+  --popover-foreground: 220 30% 95%;
+  --primary: 230 85% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 232 25% 14%;
+  --secondary-foreground: 220 30% 95%;
+  --muted: 232 25% 14%;
+  --muted-foreground: 225 15% 50%;
+  --accent: 270 75% 60%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 232 25% 14%;
+  --input: 232 25% 14%;
+  --ring: 230 85% 60%;
+  --radius: 0.75rem;
+}
