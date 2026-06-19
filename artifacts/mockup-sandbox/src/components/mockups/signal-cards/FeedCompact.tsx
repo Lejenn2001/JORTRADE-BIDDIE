@@ -66,32 +66,24 @@ function CompactCard(d: CardData) {
 
       <div className="pl-2.5">
         {/* Header: ticker + live price (left) · signal time + alert + confidence (right) */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {bull
               ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
               : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
             <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
-            {mfe != null && (
-              <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
-                {mfe}%
-              </span>
-            )}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <span className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <button className="text-muted-foreground/70 transition-colors hover:text-foreground" title="Set an alert">
-                <Bell className="h-3.5 w-3.5" />
-              </button>
-              <span className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {d.price}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" /> {d.signalTime}
-              </span>
+          <span className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+            <button className="text-muted-foreground/70 transition-colors hover:text-foreground" title="Set an alert">
+              <Bell className="h-3.5 w-3.5" />
+            </button>
+            <span className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {d.price}
             </span>
-            <MiniRing value={d.confidence} />
-          </div>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" /> {d.signalTime}
+            </span>
+          </span>
         </div>
 
         {/* Flow label */}
@@ -121,18 +113,31 @@ function CompactCard(d: CardData) {
         {/* Divider */}
         <div className="my-3 border-t border-white/10" />
 
-        {/* Biddie: small inline collapsible header */}
-        <button
-          onClick={() => setOpen((o) => !o)}
-          aria-label="Biddie's take"
-          className="flex w-full items-center gap-1.5 text-left"
-        >
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
-            <Sparkles className="h-2.5 w-2.5 text-primary" />
-          </span>
-          <span className="text-[11px] font-bold text-primary">Biddie</span>
-          <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-        </button>
+        {/* Biddie toggle (left) + strength % and confidence ring (right) */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Biddie's take"
+            className="flex items-center gap-1.5 text-left"
+          >
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
+              <Sparkles className="h-2.5 w-2.5 text-primary" />
+            </span>
+            <span className="text-[11px] font-bold text-primary">Biddie</span>
+            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          <div className="flex shrink-0 items-center gap-2.5">
+            {mfe != null && (
+              <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
+                {mfe}%
+              </span>
+            )}
+            <span className="flex items-center gap-1.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Confidence</span>
+              <MiniRing value={d.confidence} />
+            </span>
+          </div>
+        </div>
 
         {open && (
           <div className="mt-2 space-y-2">
