@@ -2,7 +2,7 @@ import "./_group.css";
 import { useState } from "react";
 import {
   TrendingUp, TrendingDown, Shield, Target, Zap, Clock, ChevronDown, Sparkles,
-  Radio, Search, Filter, HelpCircle, Waves, Crosshair, Gauge, Layers, Activity,
+  Radio, Search, Filter, HelpCircle, Waves, Crosshair, Activity,
 } from "lucide-react";
 
 function MiniRing({ value }: { value: number }) {
@@ -93,8 +93,6 @@ function CompactCard(d: CardData) {
             <Activity className="h-3 w-3" /> {d.flowType}
           </span>
           <span className="text-foreground/80 font-medium">{d.expiry} · ${d.strike} {d.putCall}</span>
-          <span className="text-muted-foreground/40">·</span>
-          <span className="text-accent font-semibold">{d.premium}</span>
         </div>
 
         {/* Clean key stats (no boxes) */}
@@ -116,15 +114,6 @@ function CompactCard(d: CardData) {
             <span className="text-muted-foreground">{d.guardLabel}</span>
             <span className={`font-semibold ${guardColor}`}>{d.guard}</span>
           </span>
-        </div>
-
-        {/* Muted meta line: VWAP · psych level · vol/OI */}
-        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground/70">
-          <span className="flex items-center gap-1"><Gauge className="h-2.5 w-2.5" />{d.vwap}</span>
-          <span className="text-muted-foreground/25">·</span>
-          <span>{d.psych}</span>
-          <span className="text-muted-foreground/25">·</span>
-          <span className="flex items-center gap-1"><Layers className="h-2.5 w-2.5" />Vol {d.volume} / OI {d.openInterest}</span>
         </div>
 
         {/* Star-only toggle */}
@@ -163,7 +152,7 @@ const CARDS: CardData[] = [
     keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
     vwap: "Above today's avg $1066", psych: "$1080 round number", volume: "2,310", openInterest: "1,450",
     status: "Active", defaultOpen: true,
-    about: "A trader keeps buying these STX calls over and over — basically a bet that the stock keeps climbing. It's been holding steady and pushing toward $1080. If it keeps holding up, the next spot to watch is up near $1090.",
+    about: "About $1.4M hit these $1080 calls, and the same strike got bought 40+ times on the ask side — meaning big buyers kept paying full price to get in, the kind of steady demand that often points to institutions. STX is holding above its average price for the day and pressing toward $1080. As long as it keeps holding, the next spot to watch is up near $1090.",
   },
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
@@ -171,7 +160,7 @@ const CARDS: CardData[] = [
     keyLevel: "$138", outlook: "$150", guardLabel: "Support", guard: "$138",
     vwap: "Above today's avg $142", psych: "$145 round number", volume: "18.5K", openInterest: "9.2K",
     status: "Active",
-    about: "Someone placed a big, fast bet that NVDA keeps climbing, and the stock looks strong right now. If it keeps going, the next spot people are watching is around $150. The confidence here is high — though that still never means it's a sure thing.",
+    about: "A single $3.2M sweep tore through the $145 calls — one fast, aggressive order that paid full price, usually a sign someone with deep pockets wanted in right away. NVDA is trading above its average price for the day and pushing on $145, where a lot of contracts already sit. The next spot people are watching is around $150. Confidence is high at 81 — strong, though never a sure thing.",
   },
   {
     ticker: "SPY", direction: "bear", putCall: "Put", confidence: 58, strength: "Developing", age: "44m",
@@ -179,7 +168,7 @@ const CARDS: CardData[] = [
     keyLevel: "$585", outlook: "$575", guardLabel: "Resistance", guard: "$592",
     vwap: "Above today's avg $586", psych: "$590 round number", volume: "12.0K", openInterest: "30.4K",
     status: "Developing",
-    about: "This one's a bet that the market dips a little. SPY keeps getting stuck around $590 and hasn't been able to push higher. It hasn't really started dropping yet, but if it slips, the next spot to watch is down near $575.",
+    about: "About $2.1M went into the $580 puts — a sizable bet the market dips a little. It's piling up right as SPY keeps stalling near $590, a ceiling it can't push past. It hasn't actually dropped yet (still above its average price for the day), but if it slips, the next spot to watch is down near $575.",
   },
   {
     ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
@@ -187,7 +176,7 @@ const CARDS: CardData[] = [
     keyLevel: "$168", outlook: "$182", guardLabel: "Support", guard: "$168",
     vwap: "Above today's avg $171", psych: "$175 round number", volume: "8.4K", openInterest: "5.1K",
     status: "Active",
-    about: "Traders keep quietly buying AMD calls again and again — a bet it keeps rising. Every time it dips, it bounces back around $168, which is a good sign. If that holds, the next spot to watch is up near $182.",
+    about: "About $1.1M came into the $175 calls, with the same strike getting hit again and again on the ask side — steady, repeated buying at full price, often a sign of bigger money stepping in. Every time AMD dips it bounces off $168, and it's holding above its average price for the day. That points higher, toward $182.",
   },
   {
     ticker: "AAPL", direction: "bull", putCall: "Call", confidence: 49, strength: "Early", age: "1h",
@@ -195,7 +184,7 @@ const CARDS: CardData[] = [
     keyLevel: "$205", outlook: "$214", guardLabel: "Support", guard: "$205",
     vwap: "Near today's avg $208", psych: "$210 round number", volume: "1.2K", openInterest: "3.4K",
     status: "Developing",
-    about: "There's a little interest in AAPL climbing, but it's pretty light so far — nothing strong yet. It's holding around $205 for now. If more buyers show up, the next spot to watch is around $214.",
+    about: "Only about $420K has trickled into the $210 calls so far — light and scattered, so nothing strong yet, which is why confidence sits at just 49. AAPL is holding around $205, near its average price for the day. If more buyers step in and it holds above $205, the next spot to watch is near $214.",
   },
 ];
 
