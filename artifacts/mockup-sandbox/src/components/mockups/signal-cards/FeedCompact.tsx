@@ -146,10 +146,7 @@ function CompactCard(d: CardData) {
                 MFE {mfe}%
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Confidence</span>
-              <MiniRing value={d.confidence} />
-            </span>
+            <MiniRing value={d.confidence} />
           </div>
         </div>
 
