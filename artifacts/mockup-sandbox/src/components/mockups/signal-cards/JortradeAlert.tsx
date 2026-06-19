@@ -90,7 +90,7 @@ export function JortradeAlert() {
         >
           <div className="text-base font-bold text-emerald-400 -mt-0.5">Bullish Flow Detected</div>
           <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
-            Watching reaction near $1,080.
+            Unusual activity has emerged in the Jun 20 $1080 Calls.
           </p>
         </Row>
 
@@ -101,7 +101,7 @@ export function JortradeAlert() {
           label="Support" labelColor="text-emerald-400"
         >
           <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
-            Support remains near $1,068.
+            Support remains near $1068.
           </p>
         </Row>
 
@@ -112,7 +112,7 @@ export function JortradeAlert() {
           label="Outlook" labelColor="text-accent"
         >
           <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
-            Potential continuation toward the $1,090 area if momentum persists.
+            Potential continuation toward the $1090 area if bullish momentum persists.
           </p>
         </Row>
 
@@ -122,7 +122,7 @@ export function JortradeAlert() {
           tile="bg-yellow-400/12 border border-yellow-400/20"
           label="Status" labelColor="text-yellow-400"
         >
-          <div className="text-lg font-bold text-foreground mt-0.5">Monitoring</div>
+          <div className="text-lg font-bold text-foreground mt-0.5">Active</div>
         </Row>
 
         <div className="h-2" />
