@@ -231,7 +231,7 @@ function TermsGuide() {
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] text-muted-foreground"
       >
-        <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Quick Guide — what these mean</span>
+        <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Terms Guide — what these mean</span>
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -242,6 +242,15 @@ function TermsGuide() {
               <p className="leading-snug text-muted-foreground">{it.desc}</p>
             </div>
           ))}
+
+          <div className="mt-1 border-t border-white/10 pt-3">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-400/90">Education only · Not financial advice</p>
+            <p className="text-[11px] leading-snug text-muted-foreground/80">
+              JORTRADE shows market activity and learning tools — not recommendations to buy or sell anything. Options are
+              risky and can lose value quickly; you can lose your entire investment. Any trades you make are your own
+              decision and your own risk. Do your own research, and consider speaking with a licensed financial advisor.
+            </p>
+          </div>
         </div>
       )}
     </div>
