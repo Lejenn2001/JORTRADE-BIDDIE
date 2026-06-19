@@ -68,7 +68,7 @@ function CompactCard(d: CardData) {
     "bg-white/10 text-muted-foreground";
 
   return (
-    <div className="group relative rounded-2xl border border-white/[0.07] bg-gradient-to-b from-white/[0.05] to-white/[0.015] px-4 py-3.5 shadow-[0_4px_24px_-12px_rgba(0,0,0,0.85),0_0_22px_-14px_rgba(110,130,255,0.55)] transition-all hover:-translate-y-px hover:border-white/[0.13] hover:from-white/[0.07] hover:shadow-[0_8px_30px_-10px_rgba(0,0,0,0.9),0_0_28px_-12px_rgba(110,130,255,0.7)]">
+    <div className="group relative rounded-2xl border border-[hsl(230_85%_62%/0.16)] bg-gradient-to-b from-[hsl(230_70%_55%/0.09)] via-white/[0.012] to-[hsl(232_40%_20%/0.04)] px-4 py-3.5 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),inset_0_0_20px_hsl(230_85%_60%/0.05),0_0_24px_-10px_hsl(230_85%_60%/0.38),inset_0_1px_0_0_hsl(230_90%_72%/0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[hsl(230_85%_62%/0.28)] hover:shadow-[0_14px_38px_-12px_rgba(0,0,0,0.95),inset_0_0_24px_hsl(230_85%_60%/0.08),0_0_34px_-8px_hsl(230_85%_60%/0.55),inset_0_1px_0_0_hsl(230_90%_72%/0.18)]">
       <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
       <div className="pl-2.5">
