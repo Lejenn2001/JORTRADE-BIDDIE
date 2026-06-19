@@ -3,6 +3,26 @@ import { getPolygonKey } from "./polygonKey";
 
 const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_WS_URL = "wss://socket.polygon.io/stocks";
+
+// Polygon allows only ONE live WebSocket connection per account. The deployed
+// (production) app must own that single real-time connection so paying members
+// get live data. In the dev workspace we therefore NEVER open the WS — it would
+// fight the live app for the one slot (causing endless code-1008 disconnects on
+// both). Dev uses REST snapshot polling instead: slightly delayed, but it never
+// competes for the connection.
+//
+// Gating is a POSITIVE dev signal (not "anything that isn't prod") so the SAFE
+// default — including an unset/misconfigured NODE_ENV — is to open the WS like
+// production. REST-only kicks in only for an explicit dev signal.
+//   • POLYGON_WS_FORCE=1   → always use WS (overrides everything; use if prod is down)
+//   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
+//   • NODE_ENV=development → REST-only (the normal dev-workspace case)
+const REST_ONLY =
+  process.env["POLYGON_WS_FORCE"] !== "1" &&
+  (process.env["NODE_ENV"] === "development" || process.env["POLYGON_REST_ONLY"] === "1");
+console.log(
+  `[price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"})`,
+);
 const POLYGON_SNAPSHOT_URL = (tickers: string) =>
   `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers}&apiKey=${POLYGON_KEY()}`;
 const POLYGON_TICKER_SNAPSHOT_URL = (ticker: string) =>
@@ -40,6 +60,15 @@ class PriceMonitor {
 
   connect() {
     if (this.isShuttingDown) return;
+    if (REST_ONLY) {
+      // Dev: do not open the real-time WS. Serve prices via REST polling instead
+      // so we never take the live app's single Polygon connection slot.
+      if (!this.snapshotPollTimer && this.subscribedTickers.size > 0) {
+        this.fetchSnapshotForTickers([...this.subscribedTickers]);
+        this.startSnapshotPoll();
+      }
+      return;
+    }
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) return;
     if (!POLYGON_KEY()) {
       console.log("[price-monitor] No POLYGON_API_KEY, skipping WebSocket connection");
@@ -245,7 +274,11 @@ class PriceMonitor {
           const ticker = t.ticker;
           if (!ticker) continue;
 
-          const lastTrade = t.lastTrade?.p ?? t.day?.c ?? 0;
+          // Use || (not ??) so zero-valued fields fall through. When the market
+          // is closed (weekend/holiday/pre-market) lastTrade.p and day.c are 0,
+          // so fall back to the previous session close — the ticker then shows
+          // the last known price instead of going blank.
+          const lastTrade = t.lastTrade?.p || t.day?.c || t.prevDay?.c || 0;
           if (lastTrade <= 0) continue;
 
           const existing = this.priceData.get(ticker);
@@ -261,8 +294,8 @@ class PriceMonitor {
           } else {
             const data: PriceData = {
               price: lastTrade,
-              high: t.day?.h ?? lastTrade,
-              low: t.day?.l ?? lastTrade,
+              high: t.day?.h || lastTrade,
+              low: t.day?.l || lastTrade,
               volume: t.day?.v ?? 0,
               lastUpdate: Date.now(),
               trades: existing?.trades ?? 0,
@@ -283,7 +316,10 @@ class PriceMonitor {
 
   private startSnapshotPoll() {
     this.stopSnapshotPoll();
-    this.snapshotPollTimer = setInterval(() => this.pollSnapshots(), 30000);
+    // In REST-only (dev) mode the snapshot poll IS the price feed, so poll
+    // faster. With a live WS, it's only a fallback for stale tickers, so 30s.
+    const interval = REST_ONLY ? 10000 : 30000;
+    this.snapshotPollTimer = setInterval(() => this.pollSnapshots(), interval);
   }
 
   private stopSnapshotPoll() {

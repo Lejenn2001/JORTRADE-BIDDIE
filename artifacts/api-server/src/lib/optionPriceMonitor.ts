@@ -22,6 +22,23 @@ import { getPolygonKey } from "./polygonKey";
 const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_OPTIONS_WS_URL = "wss://socket.polygon.io/options";
 
+// Polygon allows only ONE live WebSocket connection per account on the options
+// cluster too. The deployed (production) app must own it; the dev workspace must
+// NOT open this WS or it would fight the live app (endless code-1008 drops on
+// both). In dev, option-quote callers fall back to REST snapshots instead.
+//
+// Positive dev signal so the SAFE default (incl. unset NODE_ENV) is to open the
+// WS like production. See priceMonitor.ts for the full rationale.
+//   • POLYGON_WS_FORCE=1   → always use WS (overrides everything)
+//   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
+//   • NODE_ENV=development → REST-only (normal dev case)
+const REST_ONLY =
+  process.env["POLYGON_WS_FORCE"] !== "1" &&
+  (process.env["NODE_ENV"] === "development" || process.env["POLYGON_REST_ONLY"] === "1");
+console.log(
+  `[option-price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"})`,
+);
+
 export interface OptionWsQuote {
   contractSymbol: string;
   bid: number | null;
@@ -49,6 +66,11 @@ class OptionPriceMonitor {
 
   connect() {
     if (this.isShuttingDown) return;
+    if (REST_ONLY) {
+      // Dev: never open the options WS. Callers fall back to REST option quotes
+      // so we don't take the live app's single Polygon options connection slot.
+      return;
+    }
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) return;
     if (!POLYGON_KEY()) {
       console.log("[option-price-monitor] No POLYGON_API_KEY, skipping WebSocket connection");
