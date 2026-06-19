@@ -55,6 +55,15 @@ function getMarketState() {
     return remaining;
   };
 
+  // Seconds from now until the UPCOMING Sunday 6:00 PM ET futures reopen.
+  // (Sunday-before-6PM is handled separately, so this always targets a future Sunday.)
+  const dayIndex: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const secsUntilSundayFutures = () => {
+    let daysUntilSun = (7 - (dayIndex[weekday] ?? 0)) % 7;
+    if (daysUntilSun === 0) daysUntilSun = 7; // today is Sunday → next week's open
+    return (86400 - totalSec) + (daysUntilSun - 1) * 86400 + futuresSundaySec;
+  };
+
   const isPremarket = isTradingDay && totalSec >= premarketSec && totalSec < openSec;
   const isOpen = isTradingDay && totalSec >= openSec && totalSec < closeSec;
   const isAfterHours = isTradingDay && totalSec >= closeSec && totalSec < afterHoursEnd;
@@ -87,30 +96,31 @@ function getMarketState() {
     remainingSec = afterHoursEnd - totalSec;
   } else {
     status = "closed";
-    const secLeftToday = 86400 - totalSec;
 
     if (isSunday && totalSec < futuresSundaySec) {
+      // Sunday before the futures reopen.
       targetLabel = "FUTURES OPEN AT";
       targetTime = "6:00 PM ET";
       remainingSec = futuresSundaySec - totalSec;
     } else if (isTradingDay && totalSec < premarketSec) {
+      // Early hours of a real trading day — pre-market opens at 4 AM today.
       targetLabel = "PRE-MARKET OPENS AT";
       targetTime = "4:00 AM ET";
       remainingSec = premarketSec - totalSec;
     } else {
-      if (weekday === "Fri" && !isHoliday && totalSec >= afterHoursEnd) {
+      // After-hours/weekend/holiday: the market reopens at whichever comes
+      // first — the upcoming Sunday futures session or the next trading day's
+      // pre-market. (On a Friday holiday, Sunday futures come first.)
+      const premarketSecs = secsUntilNextPremarket();
+      const sundayFuturesSecs = secsUntilSundayFutures();
+      if (sundayFuturesSecs < premarketSecs) {
         targetLabel = "FUTURES OPEN AT";
         targetTime = "SUN 6:00 PM ET";
-        remainingSec = secLeftToday + 86400 + futuresSundaySec;
-      } else if (weekday === "Sat") {
-        targetLabel = "FUTURES OPEN AT";
-        targetTime = "SUN 6:00 PM ET";
-        remainingSec = secLeftToday + futuresSundaySec;
+        remainingSec = sundayFuturesSecs;
       } else {
-        // Weekday after-hours-end, or a holiday: count to next real trading day.
         targetLabel = "PRE-MARKET OPENS AT";
         targetTime = "4:00 AM ET";
-        remainingSec = secsUntilNextPremarket();
+        remainingSec = premarketSecs;
       }
     }
   }
