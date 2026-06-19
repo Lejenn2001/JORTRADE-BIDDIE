@@ -2,7 +2,7 @@ import "./_group.css";
 import { useState } from "react";
 import {
   TrendingUp, TrendingDown, Target, Zap, Clock, ChevronDown, Sparkles,
-  Radio, Search, Filter, HelpCircle, Waves, Activity,
+  Radio, Search, Filter, HelpCircle, Waves, Activity, Bell,
 } from "lucide-react";
 
 function MiniRing({ value }: { value: number }) {
@@ -30,6 +30,8 @@ type CardData = {
   confidence: number;        // convictionScore
   strength: string;          // convictionLabel, reworded
   age: string;
+  price: string;             // current underlying price (live)
+  signalTime: string;        // date + time the signal fired
   expiry: string;            // expiry
   strike: string;            // strike
   premium: string;           // premium (total $ on the line)
@@ -63,6 +65,20 @@ function CompactCard(d: CardData) {
       <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
       <div className="pl-2.5">
+        {/* Meta: signal time (left) · live price + alert bell (right) */}
+        <div className="mb-2 flex items-center justify-between">
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Clock className="h-3 w-3" /> {d.signalTime}
+          </span>
+          <span className="flex items-center gap-2.5">
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {d.price}
+            </span>
+            <button className="text-muted-foreground transition-colors hover:text-foreground" title="Set an alert">
+              <Bell className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </div>
         {/* Header: ticker + confidence */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -134,6 +150,7 @@ function CompactCard(d: CardData) {
 const CARDS: CardData[] = [
   {
     ticker: "STX", direction: "bull", putCall: "Call", confidence: 66, strength: "Building", age: "28m",
+    price: "$1072.40", signalTime: "Jun 19 · 10:16 AM",
     expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits",
     levels: [
       { label: "Support", value: "$1064" },
@@ -145,6 +162,7 @@ const CARDS: CardData[] = [
   },
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
+    price: "$143.20", signalTime: "Jun 19 · 10:32 AM",
     expiry: "Jun 27", strike: "145", premium: "$3.2M", flowType: "Sweep",
     levels: [
       { label: "Support", value: "$138" },
@@ -156,6 +174,7 @@ const CARDS: CardData[] = [
   },
   {
     ticker: "SPY", direction: "bear", putCall: "Put", confidence: 58, strength: "Developing", age: "44m",
+    price: "$583.90", signalTime: "Jun 19 · 10:00 AM",
     expiry: "Jun 20", strike: "580", premium: "$2.1M", flowType: "Flow",
     levels: [
       { label: "Resistance", value: "$592" },
@@ -167,6 +186,7 @@ const CARDS: CardData[] = [
   },
   {
     ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
+    price: "$176.10", signalTime: "Jun 19 · 10:35 AM",
     expiry: "Jun 27", strike: "175", premium: "$1.1M", flowType: "Repeated Hits",
     levels: [
       { label: "Support", value: "$168" },
@@ -178,6 +198,7 @@ const CARDS: CardData[] = [
   },
   {
     ticker: "AAPL", direction: "bull", putCall: "Call", confidence: 49, strength: "Early", age: "1h",
+    price: "$208.30", signalTime: "Jun 19 · 9:44 AM",
     expiry: "Jul 3", strike: "210", premium: "$420K", flowType: "Light Flow",
     levels: [
       { label: "Key level", value: "$205" },
