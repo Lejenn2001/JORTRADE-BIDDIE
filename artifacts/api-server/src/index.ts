@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startPaperTradeMonitor } from "./lib/paperTradeMonitor";
+import { refreshMarketCalendarFromPolygon } from "./lib/marketHours";
 
 const rawPort = process.env["PORT"];
 
@@ -35,4 +36,12 @@ app.listen(port, (err) => {
   }, 1000);
 
   startPaperTradeMonitor();
+
+  // Seed the holiday / early-close calendar from Polygon's official feed, then
+  // refresh once a day. Static table is the fallback if this never succeeds.
+  void refreshMarketCalendarFromPolygon();
+  setInterval(
+    () => void refreshMarketCalendarFromPolygon(),
+    24 * 60 * 60 * 1000,
+  );
 });
