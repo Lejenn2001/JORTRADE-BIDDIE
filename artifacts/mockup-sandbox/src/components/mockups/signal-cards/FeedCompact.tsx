@@ -93,16 +93,9 @@ function CompactCard(d: CardData) {
           </span>
         </div>
 
-        {/* Flow label + reinforcement (key conviction signal) */}
-        <div className="mt-2 flex items-center gap-2">
-          <span className={`text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
-            {flowLabel}
-          </span>
-          {d.reinforcement != null && (
-            <span className="inline-flex items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
-              <TrendingUp className="h-3 w-3" /> {ordinal(d.reinforcement)} reinforcement
-            </span>
-          )}
+        {/* Flow label */}
+        <div className={`mt-2 text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
+          {flowLabel}
         </div>
 
         {/* Contract + premium */}
@@ -127,19 +120,26 @@ function CompactCard(d: CardData) {
         {/* Divider */}
         <div className="my-3 border-t border-white/10" />
 
-        {/* Biddie toggle (left) + strength % and confidence ring (right) */}
+        {/* Biddie toggle + reinforcement (left) · strength % and confidence ring (right) */}
         <div className="flex items-center justify-between gap-2">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            aria-label="Biddie's take"
-            className="flex items-center gap-1.5 text-left"
-          >
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
-              <Sparkles className="h-2.5 w-2.5 text-primary" />
-            </span>
-            <span className="text-[11px] font-bold text-primary">Biddie</span>
-            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-          </button>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              onClick={() => setOpen((o) => !o)}
+              aria-label="Biddie's take"
+              className="flex shrink-0 items-center gap-1.5 text-left"
+            >
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
+                <Sparkles className="h-2.5 w-2.5 text-primary" />
+              </span>
+              <span className="text-[11px] font-bold text-primary">Biddie</span>
+              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            {d.reinforcement != null && (
+              <span className="inline-flex shrink-0 items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
+                <TrendingUp className="h-3 w-3" /> {ordinal(d.reinforcement)} reinforcement
+              </span>
+            )}
+          </div>
           <div className="flex shrink-0 items-center gap-2.5">
             {mfe != null && (
               <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
@@ -334,7 +334,7 @@ function TermsGuide() {
   );
 }
 
-function Tab({ icon, label, count, color, active }: { icon: React.ReactNode; label: string; count: number; color: string; active?: boolean }) {
+function Tab({ icon, label, count, color, active, onClick }: { icon: React.ReactNode; label: string; count: number; color: string; active?: boolean; onClick?: () => void }) {
   const activeCls =
     color === "emerald" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
     : color === "blue" ? "bg-blue-500/20 text-blue-400 border border-blue-500/40"
@@ -342,7 +342,7 @@ function Tab({ icon, label, count, color, active }: { icon: React.ReactNode; lab
   const pillCls =
     color === "emerald" ? "bg-emerald-500/30" : color === "blue" ? "bg-blue-500/30" : "bg-violet-500/30";
   return (
-    <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+    <button onClick={onClick} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
       active ? activeCls : "bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50"
     }`}>
       {icon}
@@ -353,6 +353,8 @@ function Tab({ icon, label, count, color, active }: { icon: React.ReactNode; lab
 }
 
 export function FeedCompact() {
+  const [tab, setTab] = useState<"algo" | "whale">("algo");
+  const whale = tab === "whale";
   return (
     <div className="min-h-screen bg-background p-5 font-sans antialiased flex justify-center">
       <div className="w-full max-w-[480px] space-y-3">
@@ -393,8 +395,8 @@ export function FeedCompact() {
 
         {/* Tabs */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Tab icon={<Zap className="h-3.5 w-3.5" />} label="Algorithm Plays" count={3} color="emerald" active />
-          <Tab icon={<Waves className="h-3.5 w-3.5" />} label="Whale Activity" count={2} color="blue" />
+          <Tab icon={<Zap className="h-3.5 w-3.5" />} label="Algorithm Plays" count={CARDS.length} color="emerald" active={!whale} onClick={() => setTab("algo")} />
+          <Tab icon={<Waves className="h-3.5 w-3.5" />} label="Whale Activity" count={WHALE_CARDS.length} color="blue" active={whale} onClick={() => setTab("whale")} />
           <Tab icon={<Target className="h-3.5 w-3.5" />} label="Spreads & Butterflies" count={0} color="violet" />
           <span className="ml-auto text-[11px] text-muted-foreground font-semibold">
             Total: <span className="text-foreground">300</span>
@@ -425,28 +427,21 @@ export function FeedCompact() {
         {/* Group header */}
         <div className="flex items-center justify-between pt-1 pb-0.5">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-emerald-400" />
-            <span className="text-[13px] font-bold tracking-wide text-emerald-400">⚡ 1–3 DAY FLOW</span>
+            {whale
+              ? <Waves className="h-4 w-4 text-blue-400" />
+              : <Clock className="h-4 w-4 text-emerald-400" />}
+            <span className={`text-[13px] font-bold tracking-wide ${whale ? "text-blue-400" : "text-emerald-400"}`}>
+              {whale ? "🐋 WHALE ACTIVITY" : "⚡ 1–3 DAY FLOW"}
+            </span>
           </div>
-          <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/15 rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center">3</span>
+          <span className={`text-[11px] font-bold rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center ${whale ? "text-blue-400 bg-blue-500/15" : "text-emerald-400 bg-emerald-500/15"}`}>
+            {whale ? WHALE_CARDS.length : CARDS.length}
+          </span>
         </div>
 
-        {/* Compact feed */}
+        {/* Compact feed (tab-driven) */}
         <div className="space-y-3">
-          {CARDS.map((c) => <CompactCard key={c.ticker} {...c} />)}
-        </div>
-
-        {/* Whale Activity group */}
-        <div className="flex items-center justify-between pt-3 pb-0.5">
-          <div className="flex items-center gap-2">
-            <Waves className="h-4 w-4 text-blue-400" />
-            <span className="text-[13px] font-bold tracking-wide text-blue-400">🐋 WHALE ACTIVITY</span>
-          </div>
-          <span className="text-[11px] font-bold text-blue-400 bg-blue-500/15 rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center">2</span>
-        </div>
-
-        <div className="space-y-3">
-          {WHALE_CARDS.map((c) => <CompactCard key={c.ticker} {...c} />)}
+          {(whale ? WHALE_CARDS : CARDS).map((c) => <CompactCard key={c.ticker} {...c} />)}
         </div>
       </div>
     </div>
