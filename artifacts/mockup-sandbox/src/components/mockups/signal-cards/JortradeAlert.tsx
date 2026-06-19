@@ -1,5 +1,5 @@
 import "./_group.css";
-import { Zap, TrendingUp, ShieldCheck, Eye, Clock, CalendarClock } from "lucide-react";
+import { TrendingUp, ShieldCheck, Eye, Clock, CalendarClock } from "lucide-react";
 
 function BullIcon({ className }: { className?: string }) {
   return (
@@ -56,11 +56,7 @@ export function JortradeAlert() {
       <div className="w-full max-w-[400px] rounded-2xl border border-primary/25 bg-card overflow-hidden shadow-[0_0_36px_-12px_hsl(230_85%_60%/0.5)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-accent" />
-            <span className="text-[12px] font-bold tracking-[0.18em] uppercase text-accent">JORTRADE Alert</span>
-            <span className="inline-flex items-center rounded-md bg-emerald-500/15 text-emerald-400 px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase">Live</span>
-          </div>
+          <span className="inline-flex items-center rounded-md bg-emerald-500/15 text-emerald-400 px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase">Live</span>
           <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" /> 28m ago
           </span>
