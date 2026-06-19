@@ -1,8 +1,8 @@
 import "./_group.css";
 import { useState } from "react";
 import {
-  TrendingUp, TrendingDown, Shield, Target, Zap, Clock, ChevronDown, Sparkles,
-  Radio, Search, Filter, HelpCircle, Waves, Crosshair, Activity,
+  TrendingUp, TrendingDown, Target, Zap, Clock, ChevronDown, Sparkles,
+  Radio, Search, Filter, HelpCircle, Waves, Activity,
 } from "lucide-react";
 
 function MiniRing({ value }: { value: number }) {
@@ -51,7 +51,6 @@ function CompactCard(d: CardData) {
   const [open, setOpen] = useState(!!d.defaultOpen);
   const bull = d.direction === "bull";
   const flowBg = bull ? "bg-primary/15 text-primary" : "bg-rose-500/15 text-rose-400";
-  const guardColor = bull ? "text-emerald-400" : "text-rose-400";
   const statusChip = d.status === "Active"
     ? "bg-cyan-400/15 text-cyan-300"
     : "bg-yellow-400/15 text-yellow-400";
@@ -95,24 +94,18 @@ function CompactCard(d: CardData) {
           <span className="text-foreground/80 font-medium">{d.expiry} · ${d.strike} {d.putCall}</span>
         </div>
 
-        {/* Clean key stats (no boxes) */}
-        <div className="mt-2 flex items-center gap-2.5 text-[11px] flex-wrap">
-          <span className="flex items-center gap-1">
-            <Crosshair className="h-3 w-3 text-primary" />
-            <span className="text-muted-foreground">Key Level</span>
-            <span className="font-semibold text-primary">{d.keyLevel}</span>
+        {/* One plain line: where it could go */}
+        <div className="mt-2 flex items-center gap-1.5 text-[12px]">
+          {d.direction === "bull" ? (
+            <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+          ) : (
+            <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
+          )}
+          <span className="text-muted-foreground">
+            {d.direction === "bull" ? "Could climb toward" : "Could slip toward"}
           </span>
-          <span className="text-muted-foreground/30">·</span>
-          <span className="flex items-center gap-1">
-            <Target className="h-3 w-3 text-accent" />
-            <span className="text-muted-foreground">Outlook</span>
-            <span className="font-semibold text-accent">{d.outlook}</span>
-          </span>
-          <span className="text-muted-foreground/30">·</span>
-          <span className="flex items-center gap-1">
-            <Shield className={`h-3 w-3 ${guardColor}`} />
-            <span className="text-muted-foreground">{d.guardLabel}</span>
-            <span className={`font-semibold ${guardColor}`}>{d.guard}</span>
+          <span className={`font-semibold ${d.direction === "bull" ? "text-emerald-400" : "text-rose-400"}`}>
+            {d.outlook}
           </span>
         </div>
 
