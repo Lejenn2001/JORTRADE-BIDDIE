@@ -23,4 +23,10 @@ Biddie's narratives must match the LIVE Biddie AI chat persona (`BIDDIE_SYSTEM` 
 
 **Safer market-intelligence labels (Jennifer's locked remap):** Trade/Buy → "Notable Activity"/"Flow Focus"; Entry → "Key Level"/"Area of Interest"; Target → **"Range"** (final; "Outlook" was rejected as confusing); Invalidation → "Support"/"Resistance"; Act Now/Buy Now → "Active"; Signal → "Opportunity"/"Flow"; Conviction → "Confidence"/"Strength". VWAP stays "VWAP" but value is just "Above"/"Near"/"Below". Dropped the standalone "Key Level" row entirely (confusing next to "Support"). Also relabeled section header "1–3 DAY TRADE" → "1–3 DAY FLOW".
 
+**MFE / progress pill (Jennifer's locked choice):** the real card shows `signal.mfePercent` as an "MFE X%" pill (best move so far as % of target; color: ≥75 emerald, ≥50 blue, ≥30 orange, else gray/red). On the beginner card show it as a BARE color-coded percentage only — just "62%", NO "MFE" (jargon) and NO "to target" (the word *target* implies a recommendation/signal, which JORTRADE avoids). Only appears once a play is Active. Meaning goes in the legend, not the pill.
+
+**Legend = "Quick Guide — what these mean"** (renamed from "Signal Terms Guide" — *signal* is avoid-listed). Collapsible, collapsed by default, plain-English one-liners for: the % progress pill (+ color meaning), Call/Put Flow, Confidence ring, Premium, Support/Resistance, Range, VWAP. Jennifer's rule: keep card pills minimal, push all definitions into this guide.
+
+**Premium in Biddie:** Jennifer DECIDED the $ premium figure (e.g. "$1.4M") MAY appear inside the Biddie message even though it also shows in the stat block — "because it's collapsable I don't see a problem... details help." This RELAXES the earlier "no dollar amounts in the message" rule for premium specifically.
+
 **Note for real implementation:** live version should generate each story fresh from that opportunity's actual data, not pick from canned text.

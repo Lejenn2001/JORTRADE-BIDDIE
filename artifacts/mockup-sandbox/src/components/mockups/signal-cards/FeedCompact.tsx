@@ -79,8 +79,8 @@ function CompactCard(d: CardData) {
               : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
             <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
             {mfe != null && (
-              <span className={`inline-flex items-center gap-0.5 h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
-                <TrendingUp className="h-2.5 w-2.5" />{mfe}% to target
+              <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
+                {mfe}%
               </span>
             )}
           </div>
@@ -188,6 +188,66 @@ const CARDS: CardData[] = [
   },
 ];
 
+function TermsGuide() {
+  const [open, setOpen] = useState(false);
+  const items: { term: React.ReactNode; desc: string }[] = [
+    {
+      term: (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="flex h-4 items-center rounded-full bg-sky-400/15 px-1.5 text-[10px] font-bold text-sky-400">62%</span>
+          <span className="font-semibold text-foreground">Progress</span>
+        </span>
+      ),
+      desc: "How far the play has moved since it started. Gray = just getting going · orange = partway · blue = a solid move · green = nearly there.",
+    },
+    {
+      term: <span className="text-[11px] font-bold tracking-wide text-emerald-400">CALL / PUT FLOW</span>,
+      desc: "Which way the money's leaning. Green Call = bets it climbs · Red Put = bets it drifts lower.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Confidence ring</span>,
+      desc: "How strong the setup looks right now, 0–100. Higher is stronger — never a sure thing.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Premium</span>,
+      desc: "Total money spent on these options. Bigger amounts mean larger players are paying attention.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Support / Resistance</span>,
+      desc: "A price floor (Support) or ceiling (Resistance). The idea holds as long as price stays on the right side of it.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Range</span>,
+      desc: "The area price could move toward next if it keeps going.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">VWAP</span>,
+      desc: "The stock's average price for the day. Above = strength, Below = weakness.",
+    },
+  ];
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.02]">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] text-muted-foreground"
+      >
+        <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Quick Guide — what these mean</span>
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-2.5 px-4 pb-3 pt-0">
+          {items.map((it, i) => (
+            <div key={i} className="text-[12px]">
+              <div className="mb-0.5">{it.term}</div>
+              <p className="leading-snug text-muted-foreground">{it.desc}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Tab({ icon, label, count, color, active }: { icon: React.ReactNode; label: string; count: number; color: string; active?: boolean }) {
   const activeCls =
     color === "emerald" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
@@ -273,13 +333,8 @@ export function FeedCompact() {
           <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-muted-foreground">Show Resolved (295)</span>
         </div>
 
-        {/* Signal Terms Guide */}
-        <div className="rounded-xl border border-white/5 bg-white/[0.02]">
-          <div className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] text-muted-foreground">
-            <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Signal Terms Guide</span>
-            <ChevronDown className="h-4 w-4" />
-          </div>
-        </div>
+        {/* Quick Guide */}
+        <TermsGuide />
 
         {/* Group header */}
         <div className="flex items-center justify-between pt-1 pb-0.5">
