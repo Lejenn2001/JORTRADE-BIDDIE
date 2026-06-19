@@ -101,7 +101,7 @@ function CompactCard(d: CardData) {
           className="mt-2.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <Sparkles className="h-3 w-3 text-primary" />
-          What we're seeing
+          Biddie's take
           <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
         </button>
 
@@ -127,27 +127,27 @@ const CARDS: CardData[] = [
   {
     ticker: "STX", direction: "bull", confidence: 66, age: "28m", headline: "Bullish Flow", contract: "Jun 20 $1080 Calls",
     supportLabel: "Support", support: "$1068", outlook: "$1090", status: "Active", defaultOpen: true,
-    about: "Something caught our eye in STX's Jun 20 $1080 calls — premium has been stacking up on the ask side, the kind of footprint larger players tend to leave behind. The stock is still holding above $1068, and while that floor stays intact the $1090 zone remains part of the picture. Participation here is moderate but building, so this one is still developing.",
+    about: "Okay, here's the deal with STX. A big trader came in and scooped up a chunk of the $1080 calls that run through June 20 — basically a bet that the stock keeps climbing. The encouraging part is STX is holding steady around $1068, which acts like a floor, so there's real demand showing up to defend it. If that holds, the next spot people are eyeing is up near $1090. It's still early, so think of it as a story that's just starting to unfold.",
   },
   {
     ticker: "NVDA", direction: "bull", confidence: 81, age: "12m", headline: "Bullish Flow", contract: "Jun 27 $145 Calls",
     supportLabel: "Support", support: "$138", outlook: "$150", status: "Active",
-    about: "NVDA's Jun 27 $145 calls lit up with heavy, one-sided flow today, nearly all of it printing at the ask while relative volume runs well above its usual pace. Price is sitting comfortably above VWAP and the $138 shelf keeps holding, so buyers remain firmly in the driver's seat. A confidence read of 81 reflects how closely the flow and price action line up right now — though no read ever settles what comes next.",
+    about: "This one's looking strong. A lot of money rushed into NVDA's $145 calls (June 27), and almost everyone paid full price to jump in — which usually means folks are confident and don't want to miss out. The stock's trading above its average price for the day and holding nicely above $138, so the bulls are clearly in charge right now. That's why the confidence score is sitting up at 81. Just keep in mind: a high score means the odds look good, never that it's a sure thing.",
   },
   {
     ticker: "SPY", direction: "bear", confidence: 58, age: "44m", headline: "Bearish Flow", contract: "Jun 20 $580 Puts",
     supportLabel: "Resist.", support: "$592", outlook: "$575", status: "Developing",
-    about: "There's a bearish tilt forming in SPY's Jun 20 $580 puts, where open interest climbed on a wave of ask-side prints. The timing stands out — it's happening just as price stalls beneath resistance at $592. For now SPY is still above VWAP, so this reads more like a warning shot than a takeover, but a slip toward $575 would give that side of the story more weight.",
+    about: "Heads up — this one leans the other way. Someone's been piling into SPY puts (the $580s for June 20), which is a bet the market drifts lower. And it's happening right as SPY bumps into a kind of ceiling near $592 that it can't quite push through. That said, it's still hanging above its average price for the day, so the bears haven't fully taken over yet — if things start slipping, $575 is the level to keep an eye on.",
   },
   {
     ticker: "AMD", direction: "bull", confidence: 73, age: "9m", headline: "Bullish Flow", contract: "Jun 27 $175 Calls",
     supportLabel: "Support", support: "$168", outlook: "$182", status: "Active",
-    about: "Call interest has been rolling steadily into AMD's Jun 27 $175s, and the repeat prints suggest it isn't a one-off. The $168 level keeps absorbing dips, and that resilience is what keeps the $182 area realistic. Flow and price are pointing the same way at the moment, even if the move is still early.",
+    about: "AMD's been quietly interesting. The same $175 calls (June 27) keep getting hit again and again — not just one trade but a steady stream, which tells you the interest is real. And every time the stock dips, it keeps bouncing off $168, so that floor is holding up well. As long as that's the case, $182 is the area people are watching next.",
   },
   {
     ticker: "AAPL", direction: "bull", confidence: 49, age: "1h", headline: "Bullish Flow", contract: "Jul 3 $210 Calls",
     supportLabel: "Support", support: "$205", outlook: "$214", status: "Developing",
-    about: "The picture on AAPL is murkier. There's some call activity in the Jul 3 $210s, but it's lighter and more scattered, and a confidence score of 49 reflects that flow and price aren't fully aligned yet. The stock is leaning on $205 support; firmer footing there would make a push toward $214 a more believable part of the story.",
+    about: "AAPL's a bit of a maybe right now. There's some action in the $210 calls (July 3), but it's pretty light and scattered, so nothing's really jumping off the page yet — that's why the score is only 49. It's leaning on $205 as a support level, and if it can firm up there and pull in more interest, $214 starts to come into play. For now, it's just one to keep on the radar.",
   },
 ];
 
