@@ -231,7 +231,7 @@ function TermsGuide() {
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-2.5 text-[13px] text-muted-foreground"
       >
-        <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Terms Guide — what these mean</span>
+        <span className="flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Terms Guide</span>
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
