@@ -129,7 +129,7 @@ function CompactCard(d: CardData) {
           <div className="flex shrink-0 items-center gap-2.5">
             {mfe != null && (
               <span className={`inline-flex items-center h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
-                {mfe}%
+                MFE {mfe}%
               </span>
             )}
             <span className="flex items-center gap-1.5">
