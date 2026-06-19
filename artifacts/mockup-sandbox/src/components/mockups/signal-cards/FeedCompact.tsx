@@ -1,5 +1,6 @@
 import "./_group.css";
-import { TrendingUp, TrendingDown, Shield, Target, Zap, Clock } from "lucide-react";
+import { useState } from "react";
+import { TrendingUp, TrendingDown, Shield, Target, Zap, Clock, ChevronDown, Sparkles } from "lucide-react";
 
 function MiniRing({ value }: { value: number }) {
   const r = 15;
@@ -40,9 +41,12 @@ type CardData = {
   support: string;
   outlook: string;
   status: "Active" | "Monitoring";
+  about: string;
+  defaultOpen?: boolean;
 };
 
 function CompactCard(d: CardData) {
+  const [open, setOpen] = useState(!!d.defaultOpen);
   const bull = d.direction === "bull";
   const accentBar = bull ? "bg-emerald-400" : "bg-rose-400";
   const flowBg = bull ? "bg-primary/15 text-primary" : "bg-rose-500/15 text-rose-400";
@@ -90,17 +94,61 @@ function CompactCard(d: CardData) {
           <Chip icon={<Shield className={`h-3 w-3 ${supColor}`} />} label={d.supportLabel} val={d.support} valColor={supColor} />
           <Chip icon={<Target className="h-3 w-3 text-accent" />} label="Outlook" val={d.outlook} valColor="text-accent" />
         </div>
+
+        {/* About toggle */}
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="mt-2.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Sparkles className="h-3 w-3 text-primary" />
+          About this signal
+          <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </button>
+
+        {/* About panel */}
+        {open && (
+          <div className="mt-2 rounded-lg bg-primary/[0.06] border border-primary/15 px-3 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20">
+                <Sparkles className="h-3 w-3 text-primary" />
+              </span>
+              <span className="text-[11px] font-bold text-primary">Biddie</span>
+              <span className="text-[10px] text-muted-foreground">· in plain English</span>
+            </div>
+            <p className="text-[12px] text-foreground/80 leading-relaxed">{d.about}</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 const CARDS: CardData[] = [
-  { ticker: "STX",  direction: "bull", confidence: 66, age: "28m", headline: "Bullish Flow", contract: "Jun 20 $1080 Calls", supportLabel: "Support", support: "$1068", outlook: "$1090", status: "Active" },
-  { ticker: "NVDA", direction: "bull", confidence: 81, age: "12m", headline: "Bullish Flow", contract: "Jun 27 $145 Calls",  supportLabel: "Support", support: "$138",  outlook: "$150",  status: "Active" },
-  { ticker: "SPY",  direction: "bear", confidence: 58, age: "44m", headline: "Bearish Flow", contract: "Jun 20 $580 Puts",   supportLabel: "Resist.", support: "$592",  outlook: "$575",  status: "Monitoring" },
-  { ticker: "AMD",  direction: "bull", confidence: 73, age: "9m",  headline: "Bullish Flow", contract: "Jun 27 $175 Calls",  supportLabel: "Support", support: "$168",  outlook: "$182",  status: "Active" },
-  { ticker: "AAPL", direction: "bull", confidence: 49, age: "1h",  headline: "Bullish Flow", contract: "Jul 3 $210 Calls",   supportLabel: "Support", support: "$205",  outlook: "$214",  status: "Monitoring" },
+  {
+    ticker: "STX", direction: "bull", confidence: 66, age: "28m", headline: "Bullish Flow", contract: "Jun 20 $1080 Calls",
+    supportLabel: "Support", support: "$1068", outlook: "$1090", status: "Active", defaultOpen: true,
+    about: "A large trader stepped into the Jun 20 $1080 Calls on STX — the kind of size that usually means someone with conviction is leaning bullish. Price is holding support near $1068, which tells me buyers are defending this area. If that strength keeps up, there's room to drift toward the $1090 zone. I've got this one marked Active and I'm watching how it reacts — we let the setup come to us instead of chasing.",
+  },
+  {
+    ticker: "NVDA", direction: "bull", confidence: 81, age: "12m", headline: "Bullish Flow", contract: "Jun 27 $145 Calls",
+    supportLabel: "Support", support: "$138", outlook: "$150", status: "Active",
+    about: "This is a strong one. Heavy call buying showed up on the Jun 27 $145 Calls, and the confidence here is high — the flow is one-sided and aggressive. NVDA is holding nicely above $138 support, and as long as that holds, momentum could carry it toward $150. It's Active and looking healthy, but remember: high confidence means the odds look good, not guaranteed.",
+  },
+  {
+    ticker: "SPY", direction: "bear", confidence: 58, age: "44m", headline: "Bearish Flow", contract: "Jun 20 $580 Puts",
+    supportLabel: "Resist.", support: "$592", outlook: "$575", status: "Monitoring",
+    about: "Heads up — the activity here leans bearish. A trader loaded up on the Jun 20 $580 Puts, which is a bet that SPY drifts lower. It's bumping against resistance near $592, and if sellers keep the pressure on, the $575 area is the spot to watch. I'm only Monitoring this one for now — the conviction is moderate, so I want to see it confirm before leaning in.",
+  },
+  {
+    ticker: "AMD", direction: "bull", confidence: 73, age: "9m", headline: "Bullish Flow", contract: "Jun 27 $175 Calls",
+    supportLabel: "Support", support: "$168", outlook: "$182", status: "Active",
+    about: "Solid bullish flow on AMD — a sizable position in the Jun 27 $175 Calls. Support is holding near $168, and the buyers look committed. If the momentum sticks, $182 is the next area of interest. Active and worth keeping on your radar.",
+  },
+  {
+    ticker: "AAPL", direction: "bull", confidence: 49, age: "1h", headline: "Bullish Flow", contract: "Jul 3 $210 Calls",
+    supportLabel: "Support", support: "$205", outlook: "$214", status: "Monitoring",
+    about: "This one's more of a 'keep an eye on it' than a green light. There's some bullish call activity on the Jul 3 $210 Calls, but the confidence is on the lower side, so I'm not getting excited yet. Price is sitting near $205 support — if it firms up and buyers step in, $214 is the upside to watch. Monitoring for now.",
+  },
 ];
 
 export function FeedCompact() {
