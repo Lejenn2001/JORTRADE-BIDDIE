@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Globe, Building2, Landmark } from "lucide-react";
 import { useWeather } from "@/hooks/useWeather";
+import { isMarketHolidayET, earlyCloseMinutesET, isTradingDayET } from "@/lib/marketHours";
 
 function getETNow() {
   const now = new Date();
@@ -27,17 +28,36 @@ function getMarketState() {
   const futuresSundaySec = 18 * 3600;
   const premarketSec = 4 * 3600;
   const openSec = 9 * 3600 + 30 * 60;
-  const closeSec = 16 * 3600;
+  // Early-close days (e.g. day after Thanksgiving, Christmas Eve) close at 1 PM ET.
+  const earlyCloseMin = earlyCloseMinutesET(now);
+  const isEarlyClose = earlyCloseMin != null;
+  const closeSec = isEarlyClose ? (earlyCloseMin as number) * 60 : 16 * 3600;
   const afterHoursEnd = 20 * 3600;
 
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const isWeekday = weekdays.includes(weekday);
+  // A full-day market holiday (Juneteenth, Thanksgiving, Christmas, etc.) is NOT
+  // a trading day even though it falls on a weekday.
+  const isHoliday = isMarketHolidayET(now);
+  const isTradingDay = isWeekday && !isHoliday;
   const isSunday = weekday === "Sun";
   const isSundayFutures = isSunday && totalSec >= futuresSundaySec;
 
-  const isPremarket = isWeekday && totalSec >= premarketSec && totalSec < openSec;
-  const isOpen = isWeekday && totalSec >= openSec && totalSec < closeSec;
-  const isAfterHours = isWeekday && totalSec >= closeSec && totalSec < afterHoursEnd;
+  // Seconds from now until the next real trading day's 4:00 AM ET pre-market,
+  // skipping weekends and holidays.
+  const secsUntilNextPremarket = () => {
+    let remaining = (86400 - totalSec) + premarketSec;
+    let cursor = new Date(now.getTime() + 86400 * 1000);
+    for (let i = 0; i < 10 && !isTradingDayET(cursor); i++) {
+      remaining += 86400;
+      cursor = new Date(cursor.getTime() + 86400 * 1000);
+    }
+    return remaining;
+  };
+
+  const isPremarket = isTradingDay && totalSec >= premarketSec && totalSec < openSec;
+  const isOpen = isTradingDay && totalSec >= openSec && totalSec < closeSec;
+  const isAfterHours = isTradingDay && totalSec >= closeSec && totalSec < afterHoursEnd;
 
   let status: "open" | "premarket" | "afterhours" | "closed" | "futures";
   let targetLabel = "";
@@ -47,7 +67,7 @@ function getMarketState() {
   if (isOpen) {
     status = "open";
     targetLabel = "MARKET CLOSES AT";
-    targetTime = "4:00 PM ET";
+    targetTime = isEarlyClose ? "1:00 PM ET" : "4:00 PM ET";
     remainingSec = closeSec - totalSec;
   } else if (isPremarket) {
     status = "premarket";
@@ -58,7 +78,8 @@ function getMarketState() {
     status = "futures";
     targetLabel = "PRE-MARKET OPENS AT";
     targetTime = "4:00 AM ET";
-    remainingSec = (86400 - totalSec) + premarketSec;
+    // Next real trading day (skips a Monday holiday, etc.).
+    remainingSec = secsUntilNextPremarket();
   } else if (isAfterHours) {
     status = "afterhours";
     targetLabel = "AFTER-HOURS END AT";
@@ -72,12 +93,12 @@ function getMarketState() {
       targetLabel = "FUTURES OPEN AT";
       targetTime = "6:00 PM ET";
       remainingSec = futuresSundaySec - totalSec;
-    } else if (isWeekday && totalSec < premarketSec) {
+    } else if (isTradingDay && totalSec < premarketSec) {
       targetLabel = "PRE-MARKET OPENS AT";
       targetTime = "4:00 AM ET";
       remainingSec = premarketSec - totalSec;
     } else {
-      if (weekday === "Fri" && totalSec >= afterHoursEnd) {
+      if (weekday === "Fri" && !isHoliday && totalSec >= afterHoursEnd) {
         targetLabel = "FUTURES OPEN AT";
         targetTime = "SUN 6:00 PM ET";
         remainingSec = secLeftToday + 86400 + futuresSundaySec;
@@ -86,9 +107,10 @@ function getMarketState() {
         targetTime = "SUN 6:00 PM ET";
         remainingSec = secLeftToday + futuresSundaySec;
       } else {
+        // Weekday after-hours-end, or a holiday: count to next real trading day.
         targetLabel = "PRE-MARKET OPENS AT";
         targetTime = "4:00 AM ET";
-        remainingSec = secLeftToday + premarketSec;
+        remainingSec = secsUntilNextPremarket();
       }
     }
   }
@@ -131,7 +153,7 @@ function getMarketState() {
     return isWeekday && etMins >= 3 * 60 && etMins < 12 * 60;
   })();
 
-  const nyActive = isWeekday && totalSec >= openSec && totalSec < closeSec;
+  const nyActive = isTradingDay && totalSec >= openSec && totalSec < closeSec;
 
   return { status, isOpen: status === "open", countdown, currentTime, dateStr, targetLabel, targetTime, asiaActive, londonActive, nyActive };
 }

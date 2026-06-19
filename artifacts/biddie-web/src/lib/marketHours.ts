@@ -103,3 +103,38 @@ export function marketClosedReason(now: Date = new Date()): MarketClosedReason |
     return "after_close";
   }
 }
+
+// True if the given date is a full-day NYSE holiday (cash session does not run).
+export function isMarketHolidayET(now: Date = new Date()): boolean {
+  try {
+    return FULL_CLOSE.has(etDateString(now));
+  } catch {
+    return false;
+  }
+}
+
+// Minutes-since-ET-midnight of an early close (e.g. 780 = 13:00), or null if the
+// given date is not an early-close day.
+export function earlyCloseMinutesET(now: Date = new Date()): number | null {
+  try {
+    const e = EARLY_CLOSE.get(etDateString(now));
+    return e ? e.hour * 60 + e.minute : null;
+  } catch {
+    return null;
+  }
+}
+
+// True if the given date is a normal trading day (a weekday that is not a
+// full-day holiday). Early-close days are still trading days.
+export function isTradingDayET(now: Date = new Date()): boolean {
+  try {
+    const wd = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+    }).format(now);
+    if (wd === "Sat" || wd === "Sun") return false;
+    return !isMarketHolidayET(now);
+  } catch {
+    return false;
+  }
+}
