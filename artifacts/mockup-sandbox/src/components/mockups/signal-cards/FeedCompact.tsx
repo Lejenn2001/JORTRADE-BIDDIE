@@ -50,87 +50,81 @@ type CardData = {
 function CompactCard(d: CardData) {
   const [open, setOpen] = useState(!!d.defaultOpen);
   const bull = d.direction === "bull";
-  const flowBg = bull ? "bg-primary/15 text-primary" : "bg-rose-500/15 text-rose-400";
-  const statusChip = d.status === "Active"
-    ? "bg-cyan-400/15 text-cyan-300"
-    : "bg-yellow-400/15 text-yellow-400";
   const accent = bull
     ? "bg-emerald-400/80 shadow-[0_0_10px_rgba(52,211,153,0.5)]"
     : "bg-rose-400/80 shadow-[0_0_10px_rgba(251,113,133,0.5)]";
+  const flowLabel = `${d.putCall} Flow`;
+  const flowColor = bull ? "text-emerald-400" : "text-rose-400";
+  const vwapPos = d.vwap.split(" ")[0];
+  const paragraphs = d.about.split("\n\n");
 
   return (
     <div className="group relative rounded-2xl bg-gradient-to-b from-white/[0.04] to-white/[0.01] px-4 py-3.5 transition-colors hover:from-white/[0.06]">
       <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
       <div className="pl-2.5">
-        {/* Header */}
+        {/* Header: ticker + confidence */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
             {bull
-              ? <TrendingUp className="h-4 w-4 text-primary shrink-0" />
+              ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
               : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
             <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
-            <span className={`inline-flex items-center h-5 rounded-full px-2 text-[9px] font-bold tracking-[0.1em] uppercase ${flowBg}`}>
-              {d.putCall}
-            </span>
-            <span className={`inline-flex items-center gap-0.5 h-5 rounded-full px-2 text-[9px] font-bold uppercase tracking-wider ${statusChip}`}>
-              {d.status === "Active" && <Zap className="h-2.5 w-2.5" />}
-              {d.status}
-            </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Clock className="h-2.5 w-2.5" />{d.age}
-            </span>
-            <MiniRing value={d.confidence} />
+          <MiniRing value={d.confidence} />
+        </div>
+
+        {/* Flow label */}
+        <div className={`mt-2 text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
+          {flowLabel}
+        </div>
+
+        {/* Contract + premium */}
+        <div className="mt-1.5">
+          <div className="text-[13px] font-semibold text-foreground">{d.expiry} ${d.strike} {d.putCall}s</div>
+          <div className="text-[12px] text-muted-foreground">{d.premium} Premium</div>
+        </div>
+
+        {/* Divider */}
+        <div className="my-3 border-t border-white/10" />
+
+        {/* Levels: label left, value right */}
+        <div className="space-y-1.5 text-[12px]">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{d.guardLabel}</span>
+            <span className="font-semibold text-foreground">{d.guard}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Range</span>
+            <span className={`font-semibold ${flowColor}`}>{d.outlook}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">VWAP</span>
+            <span className="font-semibold text-foreground">{vwapPos}</span>
           </div>
         </div>
 
-        {/* Contract + flow focus + premium */}
-        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[12px]">
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <Activity className="h-3 w-3" /> {d.flowType}
-          </span>
-          <span className="text-foreground/80 font-medium">{d.expiry} · ${d.strike} {d.putCall}</span>
-        </div>
+        {/* Divider */}
+        <div className="my-3 border-t border-white/10" />
 
-        {/* Short level pill: RANGE TO $X (details live in the message) */}
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1">
-            {d.direction === "bull" ? (
-              <TrendingUp className="h-3 w-3 text-emerald-400" />
-            ) : (
-              <TrendingDown className="h-3 w-3 text-rose-400" />
-            )}
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Range to</span>
-            <span className={`text-[12px] font-bold ${d.direction === "bull" ? "text-emerald-400" : "text-rose-400"}`}>
-              {d.outlook}
-            </span>
-          </span>
-        </div>
-
-        {/* Star-only toggle */}
+        {/* Biddie: small inline collapsible header */}
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Biddie's take"
-          className={`mt-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-            open ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-primary hover:bg-white/5"
-          }`}
+          className="flex w-full items-center gap-1.5 text-left"
         >
-          <Sparkles className="h-3.5 w-3.5" />
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
+            <Sparkles className="h-2.5 w-2.5 text-primary" />
+          </span>
+          <span className="text-[11px] font-bold text-primary">Biddie</span>
+          <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
 
-        {/* Quote-style Biddie panel */}
         {open && (
-          <div className="mt-1.5 pl-3 border-l-2 border-primary/30">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
-                <Sparkles className="h-2.5 w-2.5 text-primary" />
-              </span>
-              <span className="text-[11px] font-bold text-primary">Biddie</span>
-              <span className="text-[10px] text-muted-foreground">· in plain English</span>
-            </div>
-            <p className="text-[12px] text-foreground/75 leading-relaxed">{d.about}</p>
+          <div className="mt-2 space-y-2">
+            {paragraphs.map((p, i) => (
+              <p key={i} className="text-[12px] text-foreground/75 leading-relaxed">{p}</p>
+            ))}
           </div>
         )}
       </div>
@@ -145,7 +139,7 @@ const CARDS: CardData[] = [
     keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
     vwap: "Above today's avg $1066", psych: "$1080 round number", volume: "2,310", openInterest: "1,450",
     status: "Active", defaultOpen: true,
-    about: "About $1.4M hit these $1080 calls, and the same strike got bought 40+ times on the ask side — meaning big buyers kept paying full price to get in, the kind of steady demand that often points to institutions. STX is holding above its average price for the day and pressing toward $1080. As long as it keeps holding, the next spot to watch is up near $1090.",
+    about: "Repeated ask-side activity continues to hit the $1080 Calls, suggesting buyers remain active.\n\nSTX is holding above VWAP and support near $1064, keeping the $1090 area in focus.",
   },
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
@@ -153,7 +147,7 @@ const CARDS: CardData[] = [
     keyLevel: "$138", outlook: "$150", guardLabel: "Support", guard: "$138",
     vwap: "Above today's avg $142", psych: "$145 round number", volume: "18.5K", openInterest: "9.2K",
     status: "Active",
-    about: "A single $3.2M sweep tore through the $145 calls — one fast, aggressive order that paid full price, usually a sign someone with deep pockets wanted in right away. NVDA is trading above its average price for the day and pushing on $145, where a lot of contracts already sit. The next spot people are watching is around $150. Confidence is high at 81 — strong, though never a sure thing.",
+    about: "A large sweep moved through the $145 Calls on the ask side, pointing to strong buying interest.\n\nNVDA is holding above VWAP and support near $138, keeping the $150 area in focus.",
   },
   {
     ticker: "SPY", direction: "bear", putCall: "Put", confidence: 58, strength: "Developing", age: "44m",
@@ -161,7 +155,7 @@ const CARDS: CardData[] = [
     keyLevel: "$585", outlook: "$575", guardLabel: "Resistance", guard: "$592",
     vwap: "Above today's avg $586", psych: "$590 round number", volume: "12.0K", openInterest: "30.4K",
     status: "Developing",
-    about: "About $2.1M went into the $580 puts — a sizable bet the market dips a little. It's piling up right as SPY keeps stalling near $590, a ceiling it can't push past. It hasn't actually dropped yet (still above its average price for the day), but if it slips, the next spot to watch is down near $575.",
+    about: "Activity is building in the $580 Puts, suggesting some traders are positioning for a move lower.\n\nSPY is stalling under resistance near $592 and hasn't broken down yet, keeping the $575 area in focus.",
   },
   {
     ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
@@ -169,7 +163,7 @@ const CARDS: CardData[] = [
     keyLevel: "$168", outlook: "$182", guardLabel: "Support", guard: "$168",
     vwap: "Above today's avg $171", psych: "$175 round number", volume: "8.4K", openInterest: "5.1K",
     status: "Active",
-    about: "About $1.1M came into the $175 calls, with the same strike getting hit again and again on the ask side — steady, repeated buying at full price, often a sign of bigger money stepping in. Every time AMD dips it bounces off $168, and it's holding above its average price for the day. That points higher, toward $182.",
+    about: "Repeated ask-side activity continues to hit the $175 Calls, suggesting buyers remain active.\n\nAMD is holding above VWAP and support near $168, keeping the $182 area in focus.",
   },
   {
     ticker: "AAPL", direction: "bull", putCall: "Call", confidence: 49, strength: "Early", age: "1h",
@@ -177,7 +171,7 @@ const CARDS: CardData[] = [
     keyLevel: "$205", outlook: "$214", guardLabel: "Support", guard: "$205",
     vwap: "Near today's avg $208", psych: "$210 round number", volume: "1.2K", openInterest: "3.4K",
     status: "Developing",
-    about: "Only about $420K has trickled into the $210 calls so far — light and scattered, so nothing strong yet, which is why confidence sits at just 49. AAPL is holding around $205, near its average price for the day. If more buyers step in and it holds above $205, the next spot to watch is near $214.",
+    about: "Activity in the $210 Calls is light and scattered so far, so nothing stands out strongly yet.\n\nAAPL is holding near VWAP and support around $205, keeping the $214 area in focus.",
   },
 ];
 
