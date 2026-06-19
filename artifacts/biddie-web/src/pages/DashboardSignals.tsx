@@ -6,18 +6,31 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useMarketData, type MarketSignal, type SignalTimeframe } from "@/hooks/useMarketData";
 import { useRealtimePrices, type PriceInfo } from "@/hooks/useRealtimePrices";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle, ThumbsUp, ThumbsDown, MessageSquare, Send } from "lucide-react";
+import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle, ThumbsUp, ThumbsDown, MessageSquare, Send, Sparkles, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
 import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
-import { compactDescription } from "@/lib/simplifyDescription";
-import PaperTradeTicket, { type PaperTradeSignalInput } from "@/components/PaperTradeTicket";
-import { FlaskConical } from "lucide-react";
+import { compactDescription, simplifySignalDescription } from "@/lib/simplifyDescription";
 
 type FilterType = "all" | "call" | "put";
 type ViewTab = "algorithm" | "whale" | "spread";
+
+const ordinalSuffix = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+const formatExpiryShort = (e?: string) => {
+  if (!e) return "";
+  const d = new Date(e);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+  }
+  return e;
+};
 
 const ALGO_SECTION_META = {
   buy_now: {
@@ -188,21 +201,6 @@ function extractFirstPrice(text: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildPaperTradeInput(s: MarketSignal): PaperTradeSignalInput {
-  return {
-    signalId: s.id,
-    ticker: s.ticker,
-    optionType: s.putCall === "put" ? "put" : "call",
-    strike: extractFirstPrice(s.strike) ?? 0,
-    expiry: String(s.expiry || ""),
-    signalEntry: s.priceAtSignal ?? extractFirstPrice(s.entryTrigger),
-    signalTarget: extractFirstPrice(s.targetZone) ?? extractFirstPrice(s.targetNear),
-    signalInvalidation: extractFirstPrice(s.invalidation),
-    signalGrade: s.convictionScore != null ? `Score ${s.convictionScore}` : (s.convictionLabel || null),
-    signalConfidence: s.confidence != null ? `${s.confidence}/10${s.convictionLabel ? ` · ${s.convictionLabel}` : ""}` : null,
-  };
-}
-
 const DashboardSignals = () => {
   const { signals: liveSignals, loading: liveLoading } = useMarketData();
   const { getPrice, connected: wsConnected, marketOpen } = useRealtimePrices();
@@ -214,10 +212,7 @@ const DashboardSignals = () => {
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [showResolved, setShowResolved] = useState(searchParams.get("resolved") === "true");
   const [, setResolvedTick] = useState(0);
-  const [takenSignalIds, setTakenSignalIds] = useState<Set<string>>(new Set());
-  const [takingId, setTakingId] = useState<string | null>(null);
   const [alertSignal, setAlertSignal] = useState<MarketSignal | null>(null);
-  const [paperTradeSignal, setPaperTradeSignal] = useState<PaperTradeSignalInput | null>(null);
   const [alertPrice, setAlertPrice] = useState("");
   const [alertCondition, setAlertCondition] = useState<"above" | "below">("above");
   const [alertSaving, setAlertSaving] = useState(false);
@@ -257,56 +252,6 @@ const DashboardSignals = () => {
       })
       .catch(() => {});
   }, [isAdmin]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetch(`/api/whale/trades?userId=${user.id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.trades) {
-          setTakenSignalIds(new Set(data.trades.map((t: any) => t.signal_id)));
-        }
-      })
-      .catch(() => {});
-  }, [user?.id]);
-
-  const handleTakeTrade = useCallback(async (signal: MarketSignal) => {
-    if (!user?.id) return;
-    const isTaken = takenSignalIds.has(signal.id);
-    setTakingId(signal.id);
-    try {
-      if (isTaken) {
-        await fetch(`/api/whale/trades/${signal.id}?userId=${user.id}`, { method: "DELETE" });
-        setTakenSignalIds(prev => { const next = new Set(prev); next.delete(signal.id); return next; });
-      } else {
-        const livePrice = getPrice?.(signal.ticker);
-        await fetch("/api/whale/trades", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: user.id,
-            signalId: signal.id,
-            ticker: signal.ticker,
-            direction: signal.type,
-            category: signal.category,
-            strike: signal.strike,
-            expiry: signal.expiry,
-            optionType: signal.putCall,
-            entryTrigger: signal.entryTrigger,
-            target: signal.targetZone,
-            invalidation: signal.invalidation,
-            convictionScore: signal.convictionScore,
-            entryPrice: livePrice?.price || signal.priceAtSignal || null,
-          }),
-        });
-        setTakenSignalIds(prev => new Set(prev).add(signal.id));
-      }
-    } catch (e) {
-      console.error("Failed to toggle trade:", e);
-    } finally {
-      setTakingId(null);
-    }
-  }, [user?.id, takenSignalIds]);
 
   const handleOpenAlert = useCallback((signal: MarketSignal) => {
     const livePrice = getPrice?.(signal.ticker);
@@ -689,7 +634,7 @@ const DashboardSignals = () => {
                       {sectionSignals.map((signal, i) => (
                         <motion.div key={`${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                           <SignalErrorBoundary>
-                            <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                            <SignalCard signal={signal} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                           </SignalErrorBoundary>
                         </motion.div>
                       ))}
@@ -723,7 +668,7 @@ const DashboardSignals = () => {
                     {whaleSignals.map((signal, i) => (
                       <motion.div key={`w-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -757,7 +702,7 @@ const DashboardSignals = () => {
                     {spreadSignals.map((signal, i) => (
                       <motion.div key={`s-${signal.id}-${i}`} id={`signal-${signal.id}`} custom={i} initial="hidden" animate="visible" variants={cardVariants}>
                         <SignalErrorBoundary>
-                          <SignalCard signal={signal} isTaken={takenSignalIds.has(signal.id)} isTaking={takingId === signal.id} onTakeTrade={handleTakeTrade} onReviewTrade={(s) => setPaperTradeSignal(buildPaperTradeInput(s))} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
+                          <SignalCard signal={signal} getPrice={getPrice} onSetAlert={handleOpenAlert} hasAlert={alertTickers.has(signal.ticker)} isAdmin={isAdmin} userId={user?.id} onReviewChange={handleReviewChange} />
                         </SignalErrorBoundary>
                       </motion.div>
                     ))}
@@ -858,16 +803,6 @@ const DashboardSignals = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {paperTradeSignal && (
-          <PaperTradeTicket
-            signal={paperTradeSignal}
-            onClose={() => setPaperTradeSignal(null)}
-            onOpened={() => {
-              toast({ title: "📒 Logged in Paper Trades", description: "View and manage it from the Paper Trades page." });
-            }}
-          />
-        )}
       </div>
     </div>
   );
@@ -969,7 +904,7 @@ function AdminReviewPanel({ signalId, userId, onReviewChange, signalMeta }: { si
 
 const EXECUTION_UNIVERSE = new Set(["SPY", "QQQ", "IWM", "SPX", "SPXW"]);
 
-function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; isTaken?: boolean; isTaking?: boolean; onTakeTrade?: (s: MarketSignal) => void; onReviewTrade?: (s: MarketSignal) => void; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
+function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
   const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
@@ -1003,13 +938,57 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
   const isRecentlyResolved = !!(signal.resolvedAt && (Date.now() - new Date(signal.resolvedAt).getTime() < 300_000));
   const isCelebrating = isRecentlyResolved && isWinner;
 
+  const [open, setOpen] = useState(false);
+  const priceInfo = getPrice?.(signal.ticker);
+  const bull = isCall;
+  const accent = bull
+    ? "bg-emerald-400/80 shadow-[0_0_10px_rgba(52,211,153,0.5)]"
+    : "bg-rose-400/80 shadow-[0_0_10px_rgba(251,113,133,0.5)]";
+  const flowColor = bull ? "text-emerald-400" : "text-rose-400";
+  const flowLabel = signal.putCall === "put" ? "PUT FLOW" : "CALL FLOW";
+  const is0DTE = (() => {
+    if (!signal.expiry) return false;
+    const exp = new Date(signal.expiry);
+    return !isNaN(exp.getTime()) && exp.toISOString().split("T")[0] === new Date().toISOString().split("T")[0];
+  })();
+  const mfeVal = signal.mfePercent ?? null;
+  const showBuyNow = score >= 80 && !is0DTE && (mfeVal == null || mfeVal < 70);
+  const showMoveOver = !is0DTE && mfeVal != null && mfeVal >= 70;
+  const contractLine = (() => {
+    const parts = [
+      formatExpiryShort(signal.expiry),
+      signal.strike ? `$${signal.strike}` : "",
+      signal.putCall === "put" ? "Puts" : signal.putCall === "call" ? "Calls" : "",
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join(" ");
+    return signal.suggestedTrade || "";
+  })();
+  const levelRows: { label: string; value: string; tone?: "flow" | "bad" }[] = [];
+  if (signal.entryTrigger) levelRows.push({ label: "Entry", value: signal.entryTrigger });
+  if (signal.targetZone) {
+    const tn = signal.targetNear;
+    const tz = signal.targetZone;
+    levelRows.push({ label: "Target", value: tn && tn !== tz ? `${tn} – ${tz}` : tz, tone: "flow" });
+  }
+  if (signal.keyLevel) levelRows.push({ label: "Key level", value: signal.keyLevel });
+  if (signal.srLevel || signal.gammaLevelLabel) levelRows.push({ label: "S/R", value: signal.srLevel || signal.gammaLevelLabel || "" });
+  if (signal.invalidation) levelRows.push({ label: "Invalidation", value: signal.invalidation, tone: "bad" });
+  const biddieParagraphs = simplifySignalDescription(signal).split("\n\n").filter(Boolean);
+  const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
+
   return (
-    <div className={`rounded-xl border overflow-hidden transition-shadow relative ${
+    <div className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
       isCelebrating
-        ? "shadow-[0_0_30px_-3px_rgba(234,179,8,0.7),0_0_60px_-5px_rgba(16,185,129,0.4)] border-yellow-400/80 ring-2 ring-yellow-400/50 animate-pulse"
-        : hasUpdatedLogic ? "shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] border-yellow-500/60 ring-2 ring-yellow-400/30" : glowClass
-    } ${
-      isCelebrating ? "bg-gradient-to-r from-yellow-500/20 via-emerald-500/15 to-yellow-500/20" : hasUpdatedLogic ? "bg-yellow-500/10" : isWinner ? "bg-emerald-500/10" : isLoser ? "bg-red-500/10" : isExpired ? "bg-zinc-500/10" : isWhale ? "bg-blue-500/5" : isSpread ? "bg-violet-500/5" : isCall ? "bg-primary/5" : "bg-destructive/5"
+        ? "border-yellow-400/80 ring-2 ring-yellow-400/50 shadow-[0_0_30px_-3px_rgba(234,179,8,0.7),0_0_60px_-5px_rgba(16,185,129,0.4)] animate-pulse bg-gradient-to-r from-yellow-500/20 via-emerald-500/15 to-yellow-500/20"
+        : hasUpdatedLogic
+        ? "border-yellow-500/60 ring-2 ring-yellow-400/30 shadow-[0_0_20px_-3px_rgba(234,179,8,0.5)] bg-yellow-500/10"
+        : isWinner
+        ? "border-emerald-400/30 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),0_0_24px_-10px_rgba(16,185,129,0.45)] bg-emerald-500/[0.07] hover:-translate-y-0.5"
+        : isLoser
+        ? "border-rose-400/25 shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),0_0_24px_-10px_rgba(244,63,94,0.4)] bg-rose-500/[0.06] hover:-translate-y-0.5"
+        : isExpired
+        ? "border-white/[0.08] shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9)] bg-zinc-500/[0.06] hover:-translate-y-0.5"
+        : "border-[hsl(230_85%_62%/0.16)] bg-gradient-to-b from-[hsl(230_70%_55%/0.09)] via-white/[0.012] to-[hsl(232_40%_20%/0.04)] shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),inset_0_0_20px_hsl(230_85%_60%/0.05),0_0_24px_-10px_hsl(230_85%_60%/0.38),inset_0_1px_0_0_hsl(230_90%_72%/0.12)] hover:-translate-y-0.5 hover:border-[hsl(230_85%_62%/0.28)] hover:shadow-[0_14px_38px_-12px_rgba(0,0,0,0.95),inset_0_0_24px_hsl(230_85%_60%/0.08),0_0_34px_-8px_hsl(230_85%_60%/0.55),inset_0_1px_0_0_hsl(230_90%_72%/0.18)]"
     }`}>
       {isCelebrating && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -1071,63 +1050,6 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
         </div>
       )}
 
-      <div className={`px-3 sm:px-4 py-2 flex items-center justify-between ${
-        isWhale ? "bg-blue-500/15" : isSpread ? "bg-violet-500/15" : "bg-emerald-500/15"
-      }`}>
-        <div className="flex items-center gap-2">
-          {isWhale ? (
-            <Waves className="h-3 w-3 text-blue-400" />
-          ) : isSpread ? (
-            <Target className="h-3 w-3 text-violet-400" />
-          ) : (
-            <Zap className="h-3 w-3 text-accent" />
-          )}
-          <span className={`text-[11px] sm:text-xs font-bold tracking-widest uppercase ${
-            isWhale ? "text-blue-400" : isSpread ? "text-violet-400" : "text-accent"
-          }`}>
-            {isWhale ? "Whale Play" : isSpread ? "Spread Play" : "Algorithm Play"}
-          </span>
-          {signal.timeframe === "buy_now" ? (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
-          ) : (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
-          )}
-          {signal.timeframe !== "buy_now" && signal.mfePercent != null && signal.mfePercent >= 75 ? (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
-          ) : signal.convictionScore >= 80 && signal.timeframe !== "buy_now" && (signal.mfePercent == null || signal.mfePercent < 75) ? (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
-          ) : null}
-          {isAI && (
-            <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {onSetAlert && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSetAlert(signal); }}
-              className={`p-1 rounded transition-colors group ${hasAlert ? "bg-amber-500/20" : "hover:bg-amber-500/20"}`}
-              title={hasAlert ? "Alert set — tap to add another" : "Set price alert"}
-            >
-              <Bell className={`h-3.5 w-3.5 transition-colors ${hasAlert ? "text-amber-400 fill-amber-400/30" : "text-muted-foreground group-hover:text-amber-400"}`} />
-            </button>
-          )}
-          {(() => {
-            const priceInfo = getPrice?.(signal.ticker);
-            if (!priceInfo) return null;
-            return (
-              <span className="flex items-center gap-1 text-xs font-mono">
-                <Radio className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                <span className="text-foreground font-semibold">${priceInfo.price.toFixed(2)}</span>
-              </span>
-            );
-          })()}
-          <span className="text-[9px] sm:text-[10px] text-muted-foreground flex items-center gap-1">
-            <Clock className="h-2.5 w-2.5" />
-            {signal.timestamp}
-          </span>
-        </div>
-      </div>
-
       {(() => {
         const ev = signal.executionVerdict || { verdict: "not_evaluated" as const, reason: "Execution engine not rebuilt yet" };
         const isExecTicker = EXECUTION_UNIVERSE.has(String(signal.ticker || "").toUpperCase());
@@ -1152,314 +1074,304 @@ function SignalCard({ signal, isTaken, isTaking, onTakeTrade, onReviewTrade, get
         );
       })()}
 
-      <div className="px-3 sm:px-4 py-3 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isCall ? (
-              <TrendingUp className="h-4 w-4 text-primary" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-destructive" />
-            )}
-            <span className="font-bold text-sm sm:text-base text-foreground">{signal.ticker}</span>
-            <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
-              isCall ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"
-            }`}>
-              {signal.putCall === "call" ? "CALL" : "PUT"}
+      <div className="relative px-4 py-3.5">
+        <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
+
+        <div className="pl-2.5">
+          {/* Header: ticker + put/call (left) · alert + live price + time (right) */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {bull
+                ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
+                : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
+              <span className="text-base font-bold tracking-tight text-foreground">{signal.ticker}</span>
+              <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
+                signal.putCall === "put" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"
+              }`}>
+                {signal.putCall === "call" ? "CALL" : signal.putCall === "put" ? "PUT" : signal.type?.toUpperCase()}
+              </span>
+            </div>
+            <span className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+              {onSetAlert && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSetAlert(signal); }}
+                  className={`transition-colors ${hasAlert ? "text-amber-400" : "text-muted-foreground/70 hover:text-foreground"}`}
+                  title={hasAlert ? "Alert set — tap to add another" : "Set price alert"}
+                >
+                  <Bell className={`h-3.5 w-3.5 ${hasAlert ? "fill-amber-400/30" : ""}`} />
+                </button>
+              )}
+              {priceInfo && (
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      priceInfo.source === "live"
+                        ? "bg-emerald-400 animate-pulse"
+                        : priceInfo.source === "rest"
+                          ? "bg-amber-400"
+                          : "bg-zinc-500"
+                    }`}
+                    title={
+                      priceInfo.source === "live"
+                        ? "Live price (real-time)"
+                        : priceInfo.source === "rest"
+                          ? "Recent price (slightly delayed)"
+                          : "Last known price (not live)"
+                    }
+                  />
+                  ${priceInfo.price.toFixed(2)}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" /> {signal.timestamp}
+              </span>
+            </span>
+          </div>
+
+          {/* Flow label (left) · win/loss status (right) */}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className={`text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
+              {flowLabel}
             </span>
             {(() => {
-              let ts = signal.tradeStatus || "watching";
-              const o = signal.outcome;
-              const isExpired = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const mfe = signal.mfePercent ?? 0;
+              let ts: string = signal.tradeStatus || "watching";
+              const o: string | null | undefined = signal.outcome;
+              const isExp = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+              const m = signal.mfePercent ?? 0;
               if (o === "hit" || o === "win") ts = "hit";
-              else if (o === "partial_hit") ts = "partial_hit";
+              else if (o === "partial_hit") ts = "partial";
               else if (o === "near_miss") ts = "near_miss";
               else if (o === "missed" || o === "loss") ts = "miss";
               else if (o === "expired") ts = "expired";
-              if (isExpired && mfe >= 50) {
-                if (mfe >= 75) ts = "hit";
-                else ts = "partial_hit";
-              } else if (isExpired && !o && mfe >= 30) {
+              if (isExp && m >= 50) {
+                if (m >= 75) ts = "hit";
+                else ts = "partial";
+              } else if (isExp && !o && m >= 30) {
                 ts = "near_miss";
-              } else if (isExpired && !o && mfe < 30) {
+              } else if (isExp && !o && m < 30) {
                 ts = "miss";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "WIN", desc: "The price made it to the target — this trade scored!", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "WIN", desc: "Good move in the right direction — past 50% of the target, counts as a win!", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right direction but below 50% win threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
-                miss: { label: "LOSS", desc: "The price went the wrong way and hit our safety net (stop loss)", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                expired: { label: "EXPIRED", desc: "Time ran out before anything happened — like a hall pass that expired", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
+                hit: { label: "WIN", desc: "Price reached 75%+ of the target — full hit, real profit opportunity", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial: { label: "WIN", desc: "Price moved 50-74% toward target — partial hit, tradeable and counts as a win", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "WIN", desc: "Price moved 50-74% toward target — partial hit, tradeable and counts as a win", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right idea but below 50% threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
+                miss: { label: "LOSS", desc: "Signal didn't produce a tradeable move — MFE below 50% or invalidation breached", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                expired: { label: "EXPIRED", desc: "Time ran out before the signal played out", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
                 active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
                 ran_without_entry: { label: "RAN WITHOUT ENTRY", desc: "Price moved 15%+ toward target but never hit our entry — the trade ran without us", color: "text-amber-400 bg-amber-400/15", icon: <Target className="h-3 w-3" /> },
                 watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
               };
               const info = statusInfo[ts] || statusInfo.watching;
               return (
-                <span className="relative group inline-flex">
+                <span className="relative group/status inline-flex shrink-0">
                   <span className={`inline-flex items-center gap-0.5 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${info.color}`}>
                     {info.icon} {info.label}
                   </span>
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                  <span className="absolute bottom-full right-0 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground w-48 text-wrap opacity-0 group-hover/status:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg leading-relaxed">
                     {info.desc}
                   </span>
                 </span>
               );
             })()}
-            {signal.mfePercent != null && (() => {
-              const isResolved = signal.outcome === "hit" || signal.outcome === "win" || signal.outcome === "partial_hit" || signal.outcome === "near_miss" || signal.outcome === "missed" || signal.outcome === "loss" || signal.outcome === "expired";
-              const isExpiredDate = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const isDone = isResolved || isExpiredDate;
-              return (
-                <span className="relative group inline-flex">
-                  <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
-                    signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
-                    signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
-                    signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
-                    isDone ? "bg-red-400/15 text-red-400" :
-                    "bg-muted/20 text-muted-foreground"
-                  }`}>
-                    MFE {signal.mfePercent.toFixed(0)}%
-                  </span>
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg max-w-[200px] text-wrap">
-                    {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
-                     signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
-                     signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
-                     signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
-                     "Miss — below 50% of target"}
-                    {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
-                  </span>
-                </span>
-              );
-            })()}
           </div>
-          <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
-        </div>
 
-        <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed line-clamp-2">
-          {compactDescription(signal)}
-        </p>
+          {/* Secondary pills */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {is0DTE ? (
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+            ) : (
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+            )}
+            {showMoveOver ? (
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
+            ) : showBuyNow ? (
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
+            ) : null}
+            {signal.aiEvaluated && (
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
+            )}
+          </div>
 
-        <div className="relative grid grid-cols-1 gap-1.5 text-[11px] sm:text-xs">
-          {signal.suggestedTrade && (
-            <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
-              <Target className="h-3 w-3 text-primary mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Trade: </span>
-                <span className="text-foreground font-semibold">{signal.suggestedTrade}</span>
-              </div>
+          {/* Contract + premium */}
+          {contractLine && (
+            <div className="mt-1.5">
+              <div className="text-[13px] font-semibold text-foreground">{contractLine}</div>
+              {signal.premium && <div className="text-[12px] text-muted-foreground">{signal.premium} Premium</div>}
             </div>
           )}
-          {signal.entryTrigger && (
-            <div className="flex items-start gap-2 bg-muted/30 rounded-lg px-2.5 py-1.5">
-              <TrendingUp className="h-3 w-3 text-primary mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Entry: </span>
-                <span className="text-foreground font-semibold">{signal.entryTrigger}</span>
-              </div>
-            </div>
-          )}
-          {signal.targetZone && (
-            <div className="flex items-start gap-2 bg-primary/10 rounded-lg px-2.5 py-1.5">
-              <MapPin className="h-3 w-3 text-primary mt-0.5 shrink-0" />
-              <div className="min-w-0 flex items-center gap-1.5">
-                <span className="text-muted-foreground">Target: </span>
-                {(() => {
-                  const tn = signal.targetNear;
-                  const tz = signal.targetZone;
-                  if (!tn || tn === tz) return <span className="text-primary font-semibold">{tz}</span>;
-                  const tzVal = parseFloat((tz || '').replace(/[^0-9.]/g, '')) || 0;
-                  const tnVal = parseFloat((tn || '').replace(/[^0-9.]/g, '')) || 0;
-                  const first = isCall ? (tzVal < tnVal ? tz : tn) : (tzVal > tnVal ? tn : tz);
-                  const second = isCall ? (tzVal < tnVal ? tn : tz) : (tzVal > tnVal ? tz : tn);
-                  const firstLabel = "Nearest target";
-                  const secondLabel = "Extended target";
-                  return (
-                    <>
-                      <span className="text-primary font-semibold">{first} – {second}</span>
-                      <span className="relative group">
-                        <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-primary/20 text-primary text-[8px] font-bold cursor-help">i</span>
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                          {first}: {firstLabel} · {second}: {secondLabel}
-                        </span>
-                      </span>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-          {signal.invalidation && (
-            <div className="flex items-start gap-2 bg-destructive/10 rounded-lg px-2.5 py-1.5">
-              <ShieldX className="h-3 w-3 text-destructive mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Invalidation: </span>
-                <span className="text-destructive font-semibold">{signal.invalidation}</span>
-              </div>
-            </div>
-          )}
-          {signal.keyLevel && (
-            <div className="flex items-start gap-2 bg-primary/10 rounded-lg px-2.5 py-1.5">
-              <Crosshair className="h-3 w-3 text-primary mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">Key level: </span>
-                <span className="text-primary font-semibold">{signal.keyLevel}</span>
-              </div>
-            </div>
-          )}
-          {(signal.srLevel || signal.gammaLevelLabel) && (
-            <div className="flex items-start gap-2 bg-accent/10 rounded-lg px-2.5 py-1.5">
-              <Gauge className="h-3 w-3 text-accent mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <span className="text-muted-foreground">S/R: </span>
-                <span className="text-accent font-semibold">{signal.srLevel || signal.gammaLevelLabel}</span>
-              </div>
-            </div>
-          )}
-        </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0" title="Signal strength reflects the quality of the underlying setup. It does not by itself approve the trade — see the Execution row above the card for entry approval.">Signal Strength:</span>
-          {signal.tags.filter((tag) => {
-            const upper = tag.toUpperCase();
-            if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
-            return true;
-          }).map((tag) => {
-            const tagUpper = tag.toUpperCase();
-            const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
-            const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
-            const isGamma = tagUpper.includes('GAMMA');
-            const isWhaleTag = tagUpper.includes('WHALE');
-            const isUpdated = tagUpper.includes('UPDATED LOGIC');
-            let tagStyle = "bg-muted/50 text-muted-foreground";
-            if (isUpdated) tagStyle = "bg-yellow-500/30 text-yellow-300 font-bold";
-            else if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
-            else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
-            else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
-            else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
-            return (
-              <span
-                key={tag}
-                className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  tagStyle
-                }`}
-              >
-                {tag}
-              </span>
-            );
-          })}
-          {(signal.reinforcementCount ?? 0) > 1 && (() => {
-            const count = signal.reinforcementCount!;
-            const suffix = count === 2 ? 'nd' : count === 3 ? 'rd' : 'th';
-            return (
-              <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                {count}{suffix} Reinforcement
-              </span>
-            );
-          })()}
-          {signal.expiry && (
-            <span className="text-[9px] sm:text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full font-medium">
-              Exp: {signal.expiry}
-            </span>
-          )}
-        </div>
-
-        {(() => {
-          const ev = signal.executionVerdict || { verdict: "not_evaluated" as const, reason: "Execution engine not rebuilt yet" };
-          const isExecTicker = EXECUTION_UNIVERSE.has(String(signal.ticker || "").toUpperCase());
-          const hasContractFields = !!(signal.strike && signal.expiry && signal.putCall && signal.entryTrigger && signal.invalidation && signal.category !== "spread" && !["hit","miss","missed","partial_hit","near_miss","expired","win","loss"].includes(String(signal.outcome || "")));
-          const showBuy = ev.verdict === "tradeable" && isExecTicker && !!onReviewTrade && hasContractFields;
-          const showReview = !!onReviewTrade && hasContractFields;
-          const showSkipNotice = ev.verdict === "skip";
-          const showTaken = !!onTakeTrade && ev.verdict !== "skip";
-          const buttonCount = (showBuy ? 1 : 0) + (showReview ? 1 : 0) + (showTaken ? 1 : 0);
-          const gridClass = buttonCount === 3 ? "grid grid-cols-3 gap-2" : buttonCount === 2 ? "grid grid-cols-2 gap-2" : "";
-          const widthClass = buttonCount > 1 ? "" : "w-full ";
-
-          if (!showBuy && !showReview && !showTaken && !showSkipNotice) return null;
-
-          return (
-            <div className="pt-2 mt-2 border-t border-white/5 space-y-2">
-              {showSkipNotice && (() => {
-                const isPoorRR = /risk\/?reward|R:R/i.test(ev.reason || "");
-                const friendly = isPoorRR
-                  ? "Risk/reward not favorable at current price."
-                  : "Signal may still be valid, but execution conditions are not favorable right now.";
-                return (
-                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/5 border border-red-500/20" title={`Not Ready — ${ev.reason}`}>
-                    <XCircle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-bold text-red-300 uppercase tracking-wider">Not Ready · Buy disabled</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">{friendly}</div>
-                      <div className="text-[10px] text-muted-foreground/70 mt-0.5 italic truncate">Detail: {ev.reason}</div>
-                    </div>
+          {/* Levels */}
+          {levelRows.length > 0 && (
+            <>
+              <div className="my-3 border-t border-white/10" />
+              <div className="space-y-1.5 text-[12px]">
+                {levelRows.map((lvl, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground shrink-0">{lvl.label}</span>
+                    <span className={`font-semibold text-right ${lvl.tone === "flow" ? flowColor : lvl.tone === "bad" ? "text-destructive" : "text-foreground"}`}>{lvl.value}</span>
                   </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Divider */}
+          <div className="my-3 border-t border-white/10" />
+
+          {/* Biddie toggle (left) · reinforcement + MFE + conviction ring (right) */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-label="Biddie's take"
+              className="flex shrink-0 items-center gap-1.5 text-left"
+            >
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/20">
+                <Sparkles className="h-2.5 w-2.5 text-primary" />
+              </span>
+              <span className="text-[11px] font-bold text-primary">Biddie</span>
+              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {(signal.reinforcementCount ?? 0) > 1 && (
+                <span className="inline-flex shrink-0 items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
+                  <TrendingUp className="h-3 w-3" /> {ordinalSuffix(signal.reinforcementCount!)} reinforcement
+                </span>
+              )}
+              {signal.mfePercent != null && (() => {
+                const oc: string | null | undefined = signal.outcome;
+                const isResolved = oc === "hit" || oc === "win" || oc === "partial_hit" || oc === "near_miss" || oc === "missed" || oc === "loss" || oc === "expired";
+                const isExpiredDate = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+                const isDone = isResolved || isExpiredDate;
+                return (
+                  <span className="relative group/mfe inline-flex">
+                    <span className={`inline-flex items-center gap-1 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${
+                      signal.mfePercent >= 75 ? "bg-emerald-400/15 text-emerald-400" :
+                      signal.mfePercent >= 50 ? "bg-blue-400/15 text-blue-400" :
+                      signal.mfePercent >= 30 ? "bg-orange-400/15 text-orange-400" :
+                      isDone ? "bg-red-400/15 text-red-400" :
+                      "bg-muted/20 text-muted-foreground"
+                    }`}>
+                      MFE {signal.mfePercent.toFixed(0)}%
+                    </span>
+                    <span className="absolute bottom-full right-0 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground w-[200px] text-wrap opacity-0 group-hover/mfe:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg leading-relaxed">
+                      {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
+                       signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
+                       signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
+                       signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
+                       "Miss — below 50% of target"}
+                      {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
+                    </span>
+                  </span>
                 );
               })()}
-
-              {(showBuy || showReview || showTaken) && (
-                <div className={gridClass}>
-                  {showBuy && (
-                    <button
-                      onClick={() => onReviewTrade!(signal)}
-                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 hover:text-emerald-200 transition-all shadow-[0_0_10px_-2px_rgba(16,185,129,0.4)]`}
-                      title={`Tradeable in execution universe (${signal.ticker.toUpperCase()}) — opens a paper trade ticket. No real broker connection.`}
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      <span>Buy (Paper)</span>
-                    </button>
-                  )}
-                  {showReview && (
-                    <button
-                      onClick={() => onReviewTrade!(signal)}
-                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30 hover:bg-violet-500/20 hover:text-violet-200 transition-all`}
-                      title={ev.verdict === "skip"
-                        ? `Not Ready — ${ev.reason}. Buy is disabled; monitor to test whether the filter would have worked.`
-                        : ev.verdict === "watch"
-                          ? `Watch / Wait — ${ev.reason}. Monitor only; no Buy until execution is Ready to Enter.`
-                          : !isExecTicker && ev.verdict === "tradeable"
-                            ? `Ready to Enter, but ${signal.ticker} is outside the execution universe (SPY/QQQ/IWM/SPX/SPXW). Monitor only.`
-                            : ev.verdict === "tradeable"
-                              ? "Open a simulated paper trade alongside Buy to track this contract."
-                              : "Open a simulated paper trade on this exact contract — no real money"}
-                    >
-                      <FlaskConical className="h-3.5 w-3.5" />
-                      <span>{ev.verdict === "not_evaluated" ? "Review Trade" : "Monitor"}</span>
-                    </button>
-                  )}
-                  {showTaken && (
-                    <button
-                      onClick={() => onTakeTrade!(signal)}
-                      disabled={isTaking}
-                      className={`${widthClass}flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                        isTaken
-                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30"
-                          : "bg-white/5 text-muted-foreground border border-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-                      } disabled:opacity-50`}
-                    >
-                      {isTaking ? (
-                        <span className="animate-pulse">...</span>
-                      ) : isTaken ? (
-                        <>
-                          <Check className="h-3.5 w-3.5" />
-                          <span>Trade Taken</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>I Took This Trade</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              )}
+              <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
             </div>
-          );
-        })()}
-        {isAdmin && userId && (
-          <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} signalMeta={{ ticker: signal.ticker, strike: signal.strike, option_type: signal.putCall, expiry: signal.expiry, entry_trigger: signal.entry, target: signal.target, invalidation: signal.invalidation, category: signal.category, detected_at: signal.createdAt }} />
-        )}
+          </div>
+
+          {/* Expanded: Biddie's take + details + tags */}
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 space-y-2">
+                  {biddieParagraphs.map((p, i) => (
+                    <p key={i} className="text-[12px] text-foreground/75 leading-relaxed">{p}</p>
+                  ))}
+                </div>
+
+                {hasDetails && (
+                  <div className="mt-2 space-y-1.5">
+                    {signal.pricePattern && (
+                      <div className="flex items-start gap-2 bg-emerald-500/10 rounded-lg px-3 py-1.5 text-xs">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-400 mt-0.5 shrink-0" />
+                        <span className="text-muted-foreground">Pattern: </span>
+                        <span className="text-emerald-400 font-semibold">{signal.pricePattern}</span>
+                      </div>
+                    )}
+                    {signal.spreadDetails && (
+                      <div className="flex items-start gap-2 bg-violet-500/10 rounded-lg px-3 py-1.5 text-xs">
+                        <Target className="h-3 w-3 text-violet-400 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="text-muted-foreground">Strategy: </span>
+                          <span className="text-violet-400 font-semibold">{signal.spreadDetails.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                          {signal.spreadDetails.legs && (
+                            <span className="text-muted-foreground text-[10px] block mt-0.5">{signal.spreadDetails.legs}</span>
+                          )}
+                          {(signal.spreadDetails.max_profit || signal.spreadDetails.max_loss) && (
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">
+                              {signal.spreadDetails.max_profit != null && `Max Profit: $${signal.spreadDetails.max_profit}`}
+                              {signal.spreadDetails.max_profit != null && signal.spreadDetails.max_loss != null && ' | '}
+                              {signal.spreadDetails.max_loss != null && `Max Loss: $${signal.spreadDetails.max_loss}`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {signal.gammaZone && signal.gammaZone !== 'neutral' && (
+                      <div className={`flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs ${
+                        signal.gammaZone === 'negative' ? 'bg-orange-500/10' : 'bg-blue-500/10'
+                      }`}>
+                        <Gauge className={`h-3 w-3 mt-0.5 shrink-0 ${
+                          signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+                        }`} />
+                        <div>
+                          <span className="text-muted-foreground">Gamma: </span>
+                          <span className={`font-semibold ${
+                            signal.gammaZone === 'negative' ? 'text-orange-400' : 'text-blue-400'
+                          }`}>
+                            {signal.gammaZone === 'negative' ? 'Negative' : 'Positive'} — {signal.gammaDescription}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {signal.tags.filter((tag) => {
+                  const upper = tag.toUpperCase();
+                  if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
+                  return true;
+                }).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {signal.tags.filter((tag) => {
+                      const upper = tag.toUpperCase();
+                      if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
+                      return true;
+                    }).map((tag) => {
+                      const tagUpper = tag.toUpperCase();
+                      const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
+                      const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
+                      const isGamma = tagUpper.includes('GAMMA');
+                      const isWhaleTag = tagUpper.includes('WHALE');
+                      const isUpdated = tagUpper.includes('UPDATED LOGIC');
+                      let tagStyle = "bg-muted/50 text-muted-foreground";
+                      if (isUpdated) tagStyle = "bg-yellow-500/30 text-yellow-300 font-bold";
+                      else if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
+                      else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
+                      else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
+                      else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
+                      return (
+                        <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tagStyle}`}>
+                          {tag}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {isAdmin && userId && (
+            <AdminReviewPanel signalId={signal.id} userId={userId} onReviewChange={(s) => onReviewChange?.(signal.id, s)} signalMeta={{ ticker: signal.ticker, strike: signal.strike, option_type: signal.putCall, expiry: signal.expiry, entry_trigger: signal.entry, target: signal.target, invalidation: signal.invalidation, category: signal.category, detected_at: signal.createdAt }} />
+          )}
+        </div>
       </div>
     </div>
   );

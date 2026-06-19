@@ -16,7 +16,7 @@ description: How JORTRADE/biddie-web determines admin, the two user_roles stores
 **How to reliably make someone admin:** add their auth UUID to `SEED_ADMIN_IDS` in `whale.ts` (seeds the Replit Postgres table on startup) — deterministic, RLS-independent. Optionally also insert into Supabase `user_roles` for the admin panel UI. The seed loop only does `ON CONFLICT DO NOTHING`; it never deletes, so stale UUIDs linger harmlessly.
 
 # Auth quirk: misleading "check your email" toast
-- The cuyj Supabase project has email confirmation effectively OFF (signups are auto-confirmed: `email_confirmed_at` is set immediately without clicking a link).
+- The Supabase project has email confirmation effectively OFF (signups are auto-confirmed: `email_confirmed_at` is set immediately without clicking a link).
 - Despite that, the signup screen still shows a "check your email" message. It is a stale/misleading frontend toast — users can log in immediately. Consider fixing the message if confirm stays off.
 
 # Verifying without the proxy
