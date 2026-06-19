@@ -57,6 +57,7 @@ function CompactCard(d: CardData) {
   const flowLabel = `${d.putCall} Flow`;
   const flowColor = bull ? "text-emerald-400" : "text-rose-400";
   const vwapPos = d.vwap.split(" ")[0];
+  const outlookLabel = d.guardLabel === "Support" ? "Resistance" : "Support";
   const paragraphs = d.about.split("\n\n");
   const mfe = d.mfePercent;
   const mfeColor =
@@ -108,7 +109,7 @@ function CompactCard(d: CardData) {
             <span className="font-semibold text-foreground">{d.guard}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Range</span>
+            <span className="text-muted-foreground">{outlookLabel}</span>
             <span className={`font-semibold ${flowColor}`}>{d.outlook}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -215,10 +216,6 @@ function TermsGuide() {
     {
       term: <span className="font-semibold text-foreground">Support / Resistance</span>,
       desc: "A price floor (Support) or ceiling (Resistance). The idea holds as long as price stays on the right side of it.",
-    },
-    {
-      term: <span className="font-semibold text-foreground">Range</span>,
-      desc: "The area price could move toward next if it keeps going.",
     },
     {
       term: <span className="font-semibold text-foreground">VWAP</span>,
