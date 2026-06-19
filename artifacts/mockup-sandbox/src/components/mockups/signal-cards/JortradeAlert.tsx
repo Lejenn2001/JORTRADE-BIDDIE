@@ -1,5 +1,5 @@
 import "./_group.css";
-import { Zap, TrendingUp, Crosshair, ShieldCheck, Eye, Clock } from "lucide-react";
+import { Zap, TrendingUp, ShieldCheck, Eye, Clock } from "lucide-react";
 
 function BullIcon({ className }: { className?: string }) {
   return (
@@ -88,17 +88,8 @@ export function JortradeAlert() {
         >
           <div className="text-base font-bold text-emerald-400 -mt-0.5">Bullish Flow Detected</div>
           <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
-            Large call activity has emerged near the $1,080 area.
+            Watching reaction near $1,080.
           </p>
-        </Row>
-
-        {/* Key level */}
-        <Row
-          icon={<Crosshair className="h-5 w-5 text-primary" />}
-          tile="bg-primary/12 border border-primary/20"
-          label="Key Level" labelColor="text-primary"
-        >
-          <div className="text-xl font-bold text-foreground mt-0.5">$1,080</div>
         </Row>
 
         {/* Support */}
@@ -107,7 +98,9 @@ export function JortradeAlert() {
           tile="bg-emerald-500/12 border border-emerald-500/20"
           label="Support" labelColor="text-emerald-400"
         >
-          <div className="text-xl font-bold text-foreground mt-0.5">$1,068</div>
+          <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
+            Support remains near $1,068.
+          </p>
         </Row>
 
         {/* Outlook */}
@@ -117,7 +110,7 @@ export function JortradeAlert() {
           label="Outlook" labelColor="text-accent"
         >
           <p className="text-[13px] text-muted-foreground leading-relaxed mt-1">
-            Potential continuation toward the $1,090 – $1,095 area.
+            Potential continuation toward the $1,090 area if momentum persists.
           </p>
         </Row>
 
