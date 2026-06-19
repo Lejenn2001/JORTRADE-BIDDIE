@@ -133,27 +133,27 @@ const CARDS: CardData[] = [
   {
     ticker: "STX", direction: "bull", confidence: 66, age: "28m", headline: "Bullish Flow", contract: "Jun 20 $1080 Calls",
     supportLabel: "Support", support: "$1068", outlook: "$1090", status: "Active", defaultOpen: true,
-    about: "Okay, here's the deal with STX. A big trader came in and scooped up a chunk of the $1080 calls that run through June 20 — basically a bet that the stock keeps climbing. The encouraging part is STX is holding steady around $1068, which acts like a floor, so there's real demand showing up to defend it. If that holds, the next spot people are eyeing is up near $1090. It's still early, so think of it as a story that's just starting to unfold.",
+    about: "STX is catching some real attention. A large trader stepped in and picked up a sizable batch of the $1080 calls expiring June 20 — in plain terms, a bet that the stock keeps climbing. What's encouraging is that STX keeps holding around $1068, a level that's been acting like a floor, so there's steady demand defending it. As long as that holds, the next area worth watching is up near $1090. It's still early, so this is more of a story just beginning to take shape.",
   },
   {
     ticker: "NVDA", direction: "bull", confidence: 81, age: "12m", headline: "Bullish Flow", contract: "Jun 27 $145 Calls",
     supportLabel: "Support", support: "$138", outlook: "$150", status: "Active",
-    about: "This one's looking strong. A lot of money rushed into NVDA's $145 calls (June 27), and almost everyone paid full price to jump in — which usually means folks are confident and don't want to miss out. The stock's trading above its average price for the day and holding nicely above $138, so the bulls are clearly in charge right now. That's why the confidence score is sitting up at 81. Just keep in mind: a high score means the odds look good, never that it's a sure thing.",
+    about: "This one's looking strong. A lot of money moved into NVDA's $145 calls (June 27), and most of it paid full price to get in — usually a sign of real confidence. The stock is trading above its average price for the day and holding comfortably above $138, so the bulls are clearly in control for now. That's what's pushing the confidence score up to 81. Keep in mind, though: a high score means the odds look favorable, not that it's guaranteed.",
   },
   {
     ticker: "SPY", direction: "bear", confidence: 58, age: "44m", headline: "Bearish Flow", contract: "Jun 20 $580 Puts",
     supportLabel: "Resist.", support: "$592", outlook: "$575", status: "Developing",
-    about: "Heads up — this one leans the other way. Someone's been piling into SPY puts (the $580s for June 20), which is a bet the market drifts lower. And it's happening right as SPY bumps into a kind of ceiling near $592 that it can't quite push through. That said, it's still hanging above its average price for the day, so the bears haven't fully taken over yet — if things start slipping, $575 is the level to keep an eye on.",
+    about: "SPY is leaning the other way here. A trader has been building a position in the $580 puts (June 20), which is a bet the market drifts lower. It's worth noting because it's happening just as SPY runs into a kind of ceiling near $592 that it hasn't been able to push through. For now the stock is still above its average price for the day, so the bears haven't taken full control yet — if it starts to slip, $575 is the level to keep an eye on.",
   },
   {
     ticker: "AMD", direction: "bull", confidence: 73, age: "9m", headline: "Bullish Flow", contract: "Jun 27 $175 Calls",
     supportLabel: "Support", support: "$168", outlook: "$182", status: "Active",
-    about: "AMD's been quietly interesting. The same $175 calls (June 27) keep getting hit again and again — not just one trade but a steady stream, which tells you the interest is real. And every time the stock dips, it keeps bouncing off $168, so that floor is holding up well. As long as that's the case, $182 is the area people are watching next.",
+    about: "AMD has been quietly building interest. The $175 calls (June 27) keep getting picked up again and again — not a single trade, but a steady stream, which suggests the interest is genuine. Each time the stock dips, it keeps bouncing off $168, so that level is holding up well. As long as it does, $182 is the next area drawing attention.",
   },
   {
     ticker: "AAPL", direction: "bull", confidence: 49, age: "1h", headline: "Bullish Flow", contract: "Jul 3 $210 Calls",
     supportLabel: "Support", support: "$205", outlook: "$214", status: "Developing",
-    about: "AAPL's a bit of a maybe right now. There's some action in the $210 calls (July 3), but it's pretty light and scattered, so nothing's really jumping off the page yet — that's why the score is only 49. It's leaning on $205 as a support level, and if it can firm up there and pull in more interest, $214 starts to come into play. For now, it's just one to keep on the radar.",
+    about: "AAPL is more of a wait-and-see right now. There's some activity in the $210 calls (July 3), but it's light and scattered, so nothing stands out strongly yet — which is why the score sits at just 49. The stock is leaning on $205 as support, and if it firms up there and draws more interest, $214 comes into view. For now, it's simply one to keep an eye on.",
   },
 ];
 
