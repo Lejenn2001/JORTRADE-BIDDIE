@@ -1,27 +1,32 @@
 import WebSocket from "ws";
-import { getPolygonKey } from "./polygonKey";
+import { getPolygonKey, isUsingDevKey } from "./polygonKey";
 
 const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_WS_URL = "wss://socket.polygon.io/stocks";
 
-// Polygon allows only ONE live WebSocket connection per account. The deployed
-// (production) app must own that single real-time connection so paying members
-// get live data. In the dev workspace we therefore NEVER open the WS — it would
-// fight the live app for the one slot (causing endless code-1008 disconnects on
-// both). Dev uses REST snapshot polling instead: slightly delayed, but it never
-// competes for the connection.
+// Polygon allows only ONE live WebSocket connection per ACCOUNT (not per key).
+// The deployed (production) app owns that single slot so paying members get live
+// data. The dev workspace may open its OWN WS ONLY when it has a dedicated key
+// that belongs to a SEPARATE Polygon account — otherwise dev and prod fight over
+// the one slot and Polygon kicks both with code 1008 in a loop.
 //
-// Gating is a POSITIVE dev signal (not "anything that isn't prod") so the SAFE
-// default — including an unset/misconfigured NODE_ENV — is to open the WS like
-// production. REST-only kicks in only for an explicit dev signal.
+// A different key string on the SAME account is NOT enough (still 1008), so dev
+// WS is gated behind an EXPLICIT opt-in (POLYGON_DEV_WS=1) that confirms the dev
+// key is a separate account. Default for dev = REST snapshot polling, which can
+// never steal prod's slot.
 //   • POLYGON_WS_FORCE=1   → always use WS (overrides everything; use if prod is down)
 //   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
-//   • NODE_ENV=development → REST-only (the normal dev-workspace case)
+//   • NODE_ENV=development → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+const DEV_WS_ENABLED =
+  process.env["NODE_ENV"] === "development" &&
+  isUsingDevKey() &&
+  process.env["POLYGON_DEV_WS"] === "1";
 const REST_ONLY =
   process.env["POLYGON_WS_FORCE"] !== "1" &&
-  (process.env["NODE_ENV"] === "development" || process.env["POLYGON_REST_ONLY"] === "1");
+  (process.env["POLYGON_REST_ONLY"] === "1" ||
+    (process.env["NODE_ENV"] === "development" && !DEV_WS_ENABLED));
 console.log(
-  `[price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"})`,
+  `[price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"}, devKey=${isUsingDevKey()}, devWs=${DEV_WS_ENABLED})`,
 );
 const POLYGON_SNAPSHOT_URL = (tickers: string) =>
   `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers}&apiKey=${POLYGON_KEY()}`;

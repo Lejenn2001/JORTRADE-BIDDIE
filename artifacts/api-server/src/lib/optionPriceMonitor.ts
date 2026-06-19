@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { getPolygonKey } from "./polygonKey";
+import { getPolygonKey, isUsingDevKey } from "./polygonKey";
 
 // Polygon Options WebSocket — Phase 1 (May 2026).
 //
@@ -22,21 +22,25 @@ import { getPolygonKey } from "./polygonKey";
 const POLYGON_KEY = () => getPolygonKey();
 const POLYGON_OPTIONS_WS_URL = "wss://socket.polygon.io/options";
 
-// Polygon allows only ONE live WebSocket connection per account on the options
-// cluster too. The deployed (production) app must own it; the dev workspace must
-// NOT open this WS or it would fight the live app (endless code-1008 drops on
-// both). In dev, option-quote callers fall back to REST snapshots instead.
-//
-// Positive dev signal so the SAFE default (incl. unset NODE_ENV) is to open the
-// WS like production. See priceMonitor.ts for the full rationale.
+// Polygon allows only ONE live WebSocket connection per ACCOUNT on the options
+// cluster too. Prod owns the single slot; dev may open its own options WS ONLY
+// when it has a dedicated key on a SEPARATE account — a different key string on
+// the SAME account still collides (code 1008 loop on both). Dev WS is therefore
+// gated behind an explicit opt-in (POLYGON_DEV_WS=1). Default for dev = REST
+// option-quote fallback, which can never steal prod's slot.
 //   • POLYGON_WS_FORCE=1   → always use WS (overrides everything)
 //   • POLYGON_REST_ONLY=1  → force REST-only regardless of NODE_ENV
-//   • NODE_ENV=development → REST-only (normal dev case)
+//   • NODE_ENV=development → REST-only UNLESS POLYGON_DEV_WS=1 AND a dedicated dev key
+const DEV_WS_ENABLED =
+  process.env["NODE_ENV"] === "development" &&
+  isUsingDevKey() &&
+  process.env["POLYGON_DEV_WS"] === "1";
 const REST_ONLY =
   process.env["POLYGON_WS_FORCE"] !== "1" &&
-  (process.env["NODE_ENV"] === "development" || process.env["POLYGON_REST_ONLY"] === "1");
+  (process.env["POLYGON_REST_ONLY"] === "1" ||
+    (process.env["NODE_ENV"] === "development" && !DEV_WS_ENABLED));
 console.log(
-  `[option-price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"})`,
+  `[option-price-monitor] mode: ${REST_ONLY ? "REST-only (WS disabled)" : "WebSocket (real-time)"} (NODE_ENV=${process.env["NODE_ENV"] ?? "unset"}, devKey=${isUsingDevKey()}, devWs=${DEV_WS_ENABLED})`,
 );
 
 export interface OptionWsQuote {

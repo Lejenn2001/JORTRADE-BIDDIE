@@ -1,0 +1,32 @@
+---
+name: Polygon WebSocket is one-connection-per-account (not per-key)
+description: Why a dedicated dev Polygon key still 1008-collides with prod, and how dev WS is gated.
+---
+
+# Rule
+Polygon's real-time WebSocket allows only ONE simultaneous connection per
+ACCOUNT per cluster (stocks / options) — NOT per API key. A second key string
+created under the SAME Polygon account does NOT get its own slot.
+
+# Symptom
+With a dedicated dev key, the dev WS authenticates fine (`auth_success`) and then
+Polygon immediately drops it with **close code 1008** in a tight reconnect loop.
+Auth success + 1008 = "max connections exceeded" = another live connection on the
+same account (the deployed prod app). While this loops, dev and prod cross-kick
+each other every ~1s, degrading the LIVE feed paying members see.
+
+**Why:** auth_failed would mean a bad/under-entitled key; 1008 AFTER auth means
+the key is valid but the account's single slot is already taken.
+
+# How dev WS is gated
+Dev opens its own WS ONLY when ALL of: `NODE_ENV=development`, a dedicated dev key
+present (`isUsingDevKey()`), AND explicit opt-in `POLYGON_DEV_WS=1`. The opt-in is
+a human assertion that the dev key is a SEPARATE Polygon account. Default dev =
+REST snapshot polling, which never steals prod's slot. Flags live in
+`priceMonitor.ts` / `optionPriceMonitor.ts` (`DEV_WS_ENABLED` / `REST_ONLY`).
+`POLYGON_WS_FORCE=1` overrides everything; `POLYGON_REST_ONLY=1` forces REST.
+
+**How to apply:** never enable dev WS on a same-account key — it harms prod. Only
+set `POLYGON_DEV_WS=1` once a truly separate Polygon account/plan funds the dev key.
+The rest of the price-service consolidation (single service, live/rest/stale tags)
+works fine with dev on REST; dev WS is only needed to exercise live dots in dev.
