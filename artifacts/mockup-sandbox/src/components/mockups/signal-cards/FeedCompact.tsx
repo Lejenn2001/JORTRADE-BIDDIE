@@ -243,12 +243,19 @@ function TermsGuide() {
             </div>
           ))}
 
-          <div className="mt-1 border-t border-white/10 pt-3">
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-400/90">Education only · Not financial advice</p>
+          <div className="mt-1 space-y-1.5 border-t border-white/10 pt-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90">Education only · Not financial advice</p>
             <p className="text-[11px] leading-snug text-muted-foreground/80">
-              JORTRADE shows market activity and learning tools — not recommendations to buy or sell anything. Options are
-              risky and can lose value quickly; you can lose your entire investment. Any trades you make are your own
-              decision and your own risk. Do your own research, and consider speaking with a licensed financial advisor.
+              All information is for educational and informational purposes only and should not be considered financial,
+              investment, or trading advice.
+            </p>
+            <p className="text-[11px] leading-snug text-muted-foreground/80">
+              Trading options involves significant risk and may not be suitable for all investors. You are solely
+              responsible for your trading decisions and any resulting profits or losses. Always conduct your own research
+              and consult a licensed financial professional.
+            </p>
+            <p className="text-[11px] leading-snug text-muted-foreground/80">
+              All tools, alerts, and analysis are provided "as-is" and are used entirely at your own risk.
             </p>
           </div>
         </div>
