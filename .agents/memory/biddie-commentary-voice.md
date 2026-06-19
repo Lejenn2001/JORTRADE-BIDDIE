@@ -30,3 +30,5 @@ Biddie's narratives must match the LIVE Biddie AI chat persona (`BIDDIE_SYSTEM` 
 **Premium in Biddie:** Jennifer DECIDED the $ premium figure (e.g. "$1.4M") MAY appear inside the Biddie message even though it also shows in the stat block — "because it's collapsable I don't see a problem... details help." This RELAXES the earlier "no dollar amounts in the message" rule for premium specifically.
 
 **Note for real implementation:** live version should generate each story fresh from that opportunity's actual data, not pick from canned text.
+
+**Reinforcement chip (KEY signal, both card types):** Jennifer: "the big thing for both are the reinforcements, we really need to include that." Show an emerald reinforcement chip on the flow row (e.g. "88th reinforcement") on BOTH Algorithm Plays and Whale Activity cards — it = how many times buyers re-added to the position. Whale cards reuse the SAME compact card layout/wiring as algo cards; only the data + a 🐋 Whale Activity group header differ. "Don't add anything new" = reuse the algo card component, no new sections.

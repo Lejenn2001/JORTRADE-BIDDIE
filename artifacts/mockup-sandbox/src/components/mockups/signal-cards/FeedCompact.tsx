@@ -36,12 +36,19 @@ type CardData = {
   strike: string;            // strike
   premium: string;           // premium (total $ on the line)
   flowType: string;          // sweep / repeated hits / block / flow
+  reinforcement?: number;    // how many times buyers have re-added to this position (key conviction signal)
   levels: { label: string; value: string; flow?: boolean }[]; // data-driven rows — Support/Resistance/VWAP/Psych level/Key level; count + labels vary per card
   status: "Active" | "Developing";
   mfePercent?: number;       // best move so far as % of target (only once active)
   about: string;
   defaultOpen?: boolean;
 };
+
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 
 function CompactCard(d: CardData) {
   const [open, setOpen] = useState(!!d.defaultOpen);
@@ -86,9 +93,16 @@ function CompactCard(d: CardData) {
           </span>
         </div>
 
-        {/* Flow label */}
-        <div className={`mt-2 text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
-          {flowLabel}
+        {/* Flow label + reinforcement (key conviction signal) */}
+        <div className="mt-2 flex items-center gap-2">
+          <span className={`text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
+            {flowLabel}
+          </span>
+          {d.reinforcement != null && (
+            <span className="inline-flex items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
+              <TrendingUp className="h-3 w-3" /> {ordinal(d.reinforcement)} reinforcement
+            </span>
+          )}
         </div>
 
         {/* Contract + premium */}
@@ -155,7 +169,7 @@ const CARDS: CardData[] = [
   {
     ticker: "STX", direction: "bull", putCall: "Call", confidence: 66, strength: "Building", age: "28m",
     price: "$1072.40", signalTime: "Jun 19 · 10:16 AM",
-    expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits",
+    expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits", reinforcement: 14,
     levels: [
       { label: "Support", value: "$1064" },
       { label: "Resistance", value: "$1090", flow: true },
@@ -167,7 +181,7 @@ const CARDS: CardData[] = [
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
     price: "$143.20", signalTime: "Jun 19 · 10:32 AM",
-    expiry: "Jun 27", strike: "145", premium: "$3.2M", flowType: "Sweep",
+    expiry: "Jun 27", strike: "145", premium: "$3.2M", flowType: "Sweep", reinforcement: 6,
     levels: [
       { label: "Support", value: "$138" },
       { label: "Resistance", value: "$150", flow: true },
@@ -191,7 +205,7 @@ const CARDS: CardData[] = [
   {
     ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
     price: "$176.10", signalTime: "Jun 19 · 10:35 AM",
-    expiry: "Jun 27", strike: "175", premium: "$1.1M", flowType: "Repeated Hits",
+    expiry: "Jun 27", strike: "175", premium: "$1.1M", flowType: "Repeated Hits", reinforcement: 9,
     levels: [
       { label: "Support", value: "$168" },
       { label: "Resistance", value: "$182", flow: true },
@@ -210,6 +224,33 @@ const CARDS: CardData[] = [
     ],
     status: "Developing", mfePercent: 24,
     about: "Activity in the $210 Calls is light and scattered — only about $420K so far. Nothing's jumping out yet.\n\n$205 is the level to watch underneath and $214 is the ceiling above. Until more money shows up, this one's more 'keep an eye on it' than anything.",
+  },
+];
+
+const WHALE_CARDS: CardData[] = [
+  {
+    ticker: "MU", direction: "bull", putCall: "Call", confidence: 78, strength: "Strong", age: "47m",
+    price: "$1133.95", signalTime: "Jun 19 · 9:32 AM",
+    expiry: "Jun 26", strike: "1050", premium: "$5.8M", flowType: "Sweep", reinforcement: 88,
+    levels: [
+      { label: "Support", value: "$1050" },
+      { label: "Resistance", value: "$1179", flow: true },
+      { label: "Key level", value: "Pivot $1050" },
+    ],
+    status: "Active", mfePercent: 70, defaultOpen: true,
+    about: "A whale just swept the $1050 Calls — 99% of the order hit the ask, meaning they paid up to get in fast. That's about $5.8M committed in a single move.\n\nWhat really stands out: buyers have reinforced this position 88 times — they keep coming back to it. Think of $1050 as the floor (the pivot everyone watches) and $1179 as the ceiling in view.",
+  },
+  {
+    ticker: "TSLA", direction: "bear", putCall: "Put", confidence: 64, strength: "Building", age: "21m",
+    price: "$242.10", signalTime: "Jun 19 · 9:58 AM",
+    expiry: "Jun 27", strike: "230", premium: "$4.2M", flowType: "Block", reinforcement: 23,
+    levels: [
+      { label: "Resistance", value: "$255" },
+      { label: "Support", value: "$228", flow: true },
+      { label: "VWAP", value: "Below" },
+    ],
+    status: "Active", mfePercent: 44,
+    about: "A large block hit the $230 Puts — around $4.2M in one print. These are bets that TSLA heads lower, placed by someone with real size.\n\nBuyers have come back to reinforce this 23 times now, so the conviction is building. $255 is the ceiling capping it above and $228 is the floor traders are watching below.",
   },
 ];
 
@@ -393,6 +434,19 @@ export function FeedCompact() {
         {/* Compact feed */}
         <div className="space-y-3">
           {CARDS.map((c) => <CompactCard key={c.ticker} {...c} />)}
+        </div>
+
+        {/* Whale Activity group */}
+        <div className="flex items-center justify-between pt-3 pb-0.5">
+          <div className="flex items-center gap-2">
+            <Waves className="h-4 w-4 text-blue-400" />
+            <span className="text-[13px] font-bold tracking-wide text-blue-400">🐋 WHALE ACTIVITY</span>
+          </div>
+          <span className="text-[11px] font-bold text-blue-400 bg-blue-500/15 rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center">2</span>
+        </div>
+
+        <div className="space-y-3">
+          {WHALE_CARDS.map((c) => <CompactCard key={c.ticker} {...c} />)}
         </div>
       </div>
     </div>
