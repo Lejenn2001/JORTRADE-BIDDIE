@@ -34,14 +34,7 @@ type CardData = {
   strike: string;            // strike
   premium: string;           // premium (total $ on the line)
   flowType: string;          // sweep / repeated hits / block / flow
-  keyLevel: string;          // entryTrigger / keyLevel  -> "Key Level"
-  outlook: string;           // targetZone -> "Outlook"
-  guardLabel: "Support" | "Resistance"; // invalidation / srLevel
-  guard: string;
-  vwap: string;              // VWAP reference from description
-  psych: string;             // psychological / round-number level
-  volume: string;            // volume
-  openInterest: string;      // open interest
+  levels: { label: string; value: string; flow?: boolean }[]; // data-driven rows — Support/Resistance/VWAP/Psych level/Key level; count + labels vary per card
   status: "Active" | "Developing";
   mfePercent?: number;       // best move so far as % of target (only once active)
   about: string;
@@ -56,8 +49,6 @@ function CompactCard(d: CardData) {
     : "bg-rose-400/80 shadow-[0_0_10px_rgba(251,113,133,0.5)]";
   const flowLabel = `${d.putCall} Flow`;
   const flowColor = bull ? "text-emerald-400" : "text-rose-400";
-  const vwapPos = d.vwap.split(" ")[0];
-  const outlookLabel = d.guardLabel === "Support" ? "Resistance" : "Support";
   const paragraphs = d.about.split("\n\n");
   const mfe = d.mfePercent;
   const mfeColor =
@@ -104,18 +95,12 @@ function CompactCard(d: CardData) {
 
         {/* Levels: label left, value right */}
         <div className="space-y-1.5 text-[12px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">{d.guardLabel}</span>
-            <span className="font-semibold text-foreground">{d.guard}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">{outlookLabel}</span>
-            <span className={`font-semibold ${flowColor}`}>{d.outlook}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">VWAP</span>
-            <span className="font-semibold text-foreground">{vwapPos}</span>
-          </div>
+          {d.levels.map((lvl, i) => (
+            <div key={i} className="flex items-center justify-between">
+              <span className="text-muted-foreground">{lvl.label}</span>
+              <span className={`font-semibold ${lvl.flow ? flowColor : "text-foreground"}`}>{lvl.value}</span>
+            </div>
+          ))}
         </div>
 
         {/* Divider */}
@@ -150,42 +135,56 @@ const CARDS: CardData[] = [
   {
     ticker: "STX", direction: "bull", putCall: "Call", confidence: 66, strength: "Building", age: "28m",
     expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits",
-    keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
-    vwap: "Above today's avg $1066", psych: "$1080 round number", volume: "2,310", openInterest: "1,450",
+    levels: [
+      { label: "Support", value: "$1064" },
+      { label: "Resistance", value: "$1090", flow: true },
+      { label: "VWAP", value: "Above" },
+    ],
     status: "Active", mfePercent: 62, defaultOpen: true,
     about: "Buyers keep coming back to the $1080 Calls, with roughly $1.4M already flowing into the strike. That's the kind of activity that gets people's attention.\n\nThink of $1064 as the floor and $1090 as the ceiling everyone's looking at right now. STX is sitting in the middle of that story, and the next chapter depends on which direction wins out.",
   },
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
     expiry: "Jun 27", strike: "145", premium: "$3.2M", flowType: "Sweep",
-    keyLevel: "$138", outlook: "$150", guardLabel: "Support", guard: "$138",
-    vwap: "Above today's avg $142", psych: "$145 round number", volume: "18.5K", openInterest: "9.2K",
-    status: "Active",
-    about: "A large sweep moved through the $145 Calls on the ask side, pointing to strong buying interest.\n\nNVDA is holding above VWAP and support near $138, keeping the $150 area in focus.",
+    levels: [
+      { label: "Support", value: "$138" },
+      { label: "Resistance", value: "$150", flow: true },
+      { label: "VWAP", value: "Above" },
+    ],
+    status: "Active", mfePercent: 78,
+    about: "A big sweep just hit the $145 Calls — about $3.2M in one shot. That's a serious buyer stepping in fast, not nibbling around the edges.\n\n$138 is the floor holding this up, and $150 is the next ceiling in view. As long as NVDA stays above $138, the climb toward $150 stays the story.",
   },
   {
     ticker: "SPY", direction: "bear", putCall: "Put", confidence: 58, strength: "Developing", age: "44m",
     expiry: "Jun 20", strike: "580", premium: "$2.1M", flowType: "Flow",
-    keyLevel: "$585", outlook: "$575", guardLabel: "Resistance", guard: "$592",
-    vwap: "Above today's avg $586", psych: "$590 round number", volume: "12.0K", openInterest: "30.4K",
-    status: "Developing",
-    about: "Activity is building in the $580 Puts, suggesting some traders are positioning for a move lower.\n\nSPY is stalling under resistance near $592 and hasn't broken down yet, keeping the $575 area in focus.",
+    levels: [
+      { label: "Resistance", value: "$592" },
+      { label: "Support", value: "$575", flow: true },
+      { label: "VWAP", value: "Below" },
+    ],
+    status: "Developing", mfePercent: 41,
+    about: "Money's been flowing into the $580 Puts — around $2.1M so far. These are bets that SPY drifts lower, not higher.\n\n$592 is the ceiling capping it for now, and $575 is the floor traders are watching below. The move lower only really gets going if $575 gives way.",
   },
   {
     ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
     expiry: "Jun 27", strike: "175", premium: "$1.1M", flowType: "Repeated Hits",
-    keyLevel: "$168", outlook: "$182", guardLabel: "Support", guard: "$168",
-    vwap: "Above today's avg $171", psych: "$175 round number", volume: "8.4K", openInterest: "5.1K",
-    status: "Active",
-    about: "Repeated ask-side activity continues to hit the $175 Calls, suggesting buyers remain active.\n\nAMD is holding above VWAP and support near $168, keeping the $182 area in focus.",
+    levels: [
+      { label: "Support", value: "$168" },
+      { label: "Resistance", value: "$182", flow: true },
+      { label: "Psych level", value: "$175" },
+    ],
+    status: "Active", mfePercent: 55,
+    about: "Buyers keep tapping the $175 Calls, with about $1.1M in so far — steady interest rather than one big swing.\n\n$168 is the floor underneath and $182 is the ceiling ahead. $175 is a round number the stock tends to react around, so watch how it behaves there.",
   },
   {
     ticker: "AAPL", direction: "bull", putCall: "Call", confidence: 49, strength: "Early", age: "1h",
     expiry: "Jul 3", strike: "210", premium: "$420K", flowType: "Light Flow",
-    keyLevel: "$205", outlook: "$214", guardLabel: "Support", guard: "$205",
-    vwap: "Near today's avg $208", psych: "$210 round number", volume: "1.2K", openInterest: "3.4K",
-    status: "Developing",
-    about: "Activity in the $210 Calls is light and scattered so far, so nothing stands out strongly yet.\n\nAAPL is holding near VWAP and support around $205, keeping the $214 area in focus.",
+    levels: [
+      { label: "Key level", value: "$205" },
+      { label: "Resistance", value: "$214", flow: true },
+    ],
+    status: "Developing", mfePercent: 24,
+    about: "Activity in the $210 Calls is light and scattered — only about $420K so far. Nothing's jumping out yet.\n\n$205 is the level to watch underneath and $214 is the ceiling above. Until more money shows up, this one's more 'keep an eye on it' than anything.",
   },
 ];
 
@@ -216,6 +215,14 @@ function TermsGuide() {
     {
       term: <span className="font-semibold text-foreground">Support / Resistance</span>,
       desc: "A price floor (Support) or ceiling (Resistance). The idea holds as long as price stays on the right side of it.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Key level</span>,
+      desc: "A price the stock has reacted to before — worth watching for a bounce or a breakdown.",
+    },
+    {
+      term: <span className="font-semibold text-foreground">Psych level</span>,
+      desc: "A round number (like $175 or $200) that traders naturally watch, so price often pauses there.",
     },
     {
       term: <span className="font-semibold text-foreground">VWAP</span>,
