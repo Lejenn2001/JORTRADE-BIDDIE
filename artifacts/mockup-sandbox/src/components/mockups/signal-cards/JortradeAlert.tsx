@@ -1,5 +1,5 @@
 import "./_group.css";
-import { Zap, TrendingUp, ShieldCheck, Eye, Clock } from "lucide-react";
+import { Zap, TrendingUp, ShieldCheck, Eye, Clock, CalendarClock } from "lucide-react";
 
 function BullIcon({ className }: { className?: string }) {
   return (
@@ -68,10 +68,16 @@ export function JortradeAlert() {
 
         {/* Ticker + confidence ring */}
         <div className="px-5 pb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <TrendingUp className="h-6 w-6 text-primary shrink-0" />
-            <span className="text-3xl font-bold tracking-tight text-foreground">STX</span>
-            <span className="inline-flex items-center rounded-full bg-primary/15 text-primary px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] uppercase">Call Flow</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <TrendingUp className="h-6 w-6 text-primary shrink-0" />
+              <span className="text-3xl font-bold tracking-tight text-foreground">STX</span>
+              <span className="inline-flex items-center rounded-full bg-primary/15 text-primary px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] uppercase">Call Flow</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5 pl-9 text-[11px] font-medium text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5 text-muted-foreground/80" />
+              Expires Jun 20
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <ConfRing value={66} />
