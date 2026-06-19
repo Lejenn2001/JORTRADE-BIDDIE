@@ -139,7 +139,7 @@ const CARDS: CardData[] = [
     keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
     vwap: "Above today's avg $1066", psych: "$1080 round number", volume: "2,310", openInterest: "1,450",
     status: "Active", defaultOpen: true,
-    about: "Buyers keep stepping back into the $1080 Calls, so the interest here isn't fading.\n\nThink of $1064 as the floor. As long as STX stays above it, the move toward $1090 stays in play — but if it slips under $1064, the bullish idea has broken down.",
+    about: "Buyers keep stepping back into the $1080 Calls — around $1.4M spent so far. That's a real chunk of money, so this isn't a few small bets; bigger players are showing up.\n\nThink of $1064 as the floor. As long as STX stays above it, the move toward $1090 stays in play — but if it slips under $1064, the bullish idea has broken down.",
   },
   {
     ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
