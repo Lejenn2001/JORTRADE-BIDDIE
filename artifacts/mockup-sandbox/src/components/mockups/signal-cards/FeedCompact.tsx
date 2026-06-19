@@ -2,7 +2,7 @@ import "./_group.css";
 import { useState } from "react";
 import {
   TrendingUp, TrendingDown, Shield, Target, Zap, Clock, ChevronDown, Sparkles,
-  Radio, Search, Filter, HelpCircle, Waves, XCircle,
+  Radio, Search, Filter, HelpCircle, Waves, Crosshair, Gauge, Layers, Activity,
 } from "lucide-react";
 
 function MiniRing({ value }: { value: number }) {
@@ -10,7 +10,7 @@ function MiniRing({ value }: { value: number }) {
   const c = 2 * Math.PI * r;
   const offset = c - (value / 100) * c;
   return (
-    <div className="relative h-9 w-9 shrink-0" title={`Confidence ${value}`}>
+    <div className="relative h-9 w-9 shrink-0" title={`Confidence ${value} / 100`}>
       <svg className="h-full w-full -rotate-90" viewBox="0 0 40 40">
         <circle cx="20" cy="20" r={r} fill="none" stroke="hsl(232 25% 16%)" strokeWidth="3.5" />
         <circle cx="20" cy="20" r={r} fill="none" stroke="hsl(270 75% 62%)" strokeWidth="3.5"
@@ -26,13 +26,22 @@ function MiniRing({ value }: { value: number }) {
 type CardData = {
   ticker: string;
   direction: "bull" | "bear";
-  confidence: number;
+  putCall: "Call" | "Put";
+  confidence: number;        // convictionScore
+  strength: string;          // convictionLabel, reworded
   age: string;
-  headline: string;
-  contract: string;
-  supportLabel: string;
-  support: string;
-  outlook: string;
+  expiry: string;            // expiry
+  strike: string;            // strike
+  premium: string;           // premium (total $ on the line)
+  flowType: string;          // sweep / repeated hits / block / flow
+  keyLevel: string;          // entryTrigger / keyLevel  -> "Key Level"
+  outlook: string;           // targetZone -> "Outlook"
+  guardLabel: "Support" | "Resistance"; // invalidation / srLevel
+  guard: string;
+  vwap: string;              // VWAP reference from description
+  psych: string;             // psychological / round-number level
+  volume: string;            // volume
+  openInterest: string;      // open interest
   status: "Active" | "Developing";
   about: string;
   defaultOpen?: boolean;
@@ -42,8 +51,7 @@ function CompactCard(d: CardData) {
   const [open, setOpen] = useState(!!d.defaultOpen);
   const bull = d.direction === "bull";
   const flowBg = bull ? "bg-primary/15 text-primary" : "bg-rose-500/15 text-rose-400";
-  const headColor = bull ? "text-emerald-400" : "text-rose-400";
-  const supColor = bull ? "text-emerald-400" : "text-rose-400";
+  const guardColor = bull ? "text-emerald-400" : "text-rose-400";
   const statusChip = d.status === "Active"
     ? "bg-cyan-400/15 text-cyan-300"
     : "bg-yellow-400/15 text-yellow-400";
@@ -55,16 +63,16 @@ function CompactCard(d: CardData) {
     <div className="group relative rounded-2xl bg-gradient-to-b from-white/[0.04] to-white/[0.01] px-4 py-3.5 transition-colors hover:from-white/[0.06]">
       <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
-      {/* Top row */}
       <div className="pl-2.5">
+        {/* Header */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             {bull
               ? <TrendingUp className="h-4 w-4 text-primary shrink-0" />
               : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
             <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
             <span className={`inline-flex items-center h-5 rounded-full px-2 text-[9px] font-bold tracking-[0.1em] uppercase ${flowBg}`}>
-              {bull ? "Call" : "Put"}
+              {d.putCall}
             </span>
             <span className={`inline-flex items-center gap-0.5 h-5 rounded-full px-2 text-[9px] font-bold uppercase tracking-wider ${statusChip}`}>
               {d.status === "Active" && <Zap className="h-2.5 w-2.5" />}
@@ -79,18 +87,22 @@ function CompactCard(d: CardData) {
           </div>
         </div>
 
-        {/* Headline + contract */}
-        <div className="mt-1.5 flex items-baseline gap-1.5 min-w-0">
-          <span className={`text-[12px] font-semibold shrink-0 ${headColor}`}>{d.headline}</span>
-          <span className="text-[11px] text-muted-foreground truncate">· {d.contract}</span>
+        {/* Contract + flow focus + premium */}
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[12px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Activity className="h-3 w-3" /> {d.flowType}
+          </span>
+          <span className="text-foreground/80 font-medium">{d.expiry} · ${d.strike} {d.putCall}</span>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="text-accent font-semibold">{d.premium}</span>
         </div>
 
-        {/* Inline stats (no boxes) */}
-        <div className="mt-2 flex items-center gap-2.5 text-[11px]">
+        {/* Clean key stats (no boxes) */}
+        <div className="mt-2 flex items-center gap-2.5 text-[11px] flex-wrap">
           <span className="flex items-center gap-1">
-            <Shield className={`h-3 w-3 ${supColor}`} />
-            <span className="text-muted-foreground">{d.supportLabel}</span>
-            <span className={`font-semibold ${supColor}`}>{d.support}</span>
+            <Crosshair className="h-3 w-3 text-primary" />
+            <span className="text-muted-foreground">Key Level</span>
+            <span className="font-semibold text-primary">{d.keyLevel}</span>
           </span>
           <span className="text-muted-foreground/30">·</span>
           <span className="flex items-center gap-1">
@@ -98,6 +110,21 @@ function CompactCard(d: CardData) {
             <span className="text-muted-foreground">Outlook</span>
             <span className="font-semibold text-accent">{d.outlook}</span>
           </span>
+          <span className="text-muted-foreground/30">·</span>
+          <span className="flex items-center gap-1">
+            <Shield className={`h-3 w-3 ${guardColor}`} />
+            <span className="text-muted-foreground">{d.guardLabel}</span>
+            <span className={`font-semibold ${guardColor}`}>{d.guard}</span>
+          </span>
+        </div>
+
+        {/* Muted meta line: VWAP · psych level · vol/OI */}
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground/70">
+          <span className="flex items-center gap-1"><Gauge className="h-2.5 w-2.5" />{d.vwap}</span>
+          <span className="text-muted-foreground/25">·</span>
+          <span>{d.psych}</span>
+          <span className="text-muted-foreground/25">·</span>
+          <span className="flex items-center gap-1"><Layers className="h-2.5 w-2.5" />Vol {d.volume} / OI {d.openInterest}</span>
         </div>
 
         {/* Star-only toggle */}
@@ -111,7 +138,7 @@ function CompactCard(d: CardData) {
           <Sparkles className="h-3.5 w-3.5" />
         </button>
 
-        {/* Quote-style Biddie panel (no box) */}
+        {/* Quote-style Biddie panel */}
         {open && (
           <div className="mt-1.5 pl-3 border-l-2 border-primary/30">
             <div className="flex items-center gap-1.5 mb-1">
@@ -131,29 +158,44 @@ function CompactCard(d: CardData) {
 
 const CARDS: CardData[] = [
   {
-    ticker: "STX", direction: "bull", confidence: 66, age: "28m", headline: "Bullish Flow", contract: "Jun 20 $1080 Calls",
-    supportLabel: "Support", support: "$1068", outlook: "$1090", status: "Active", defaultOpen: true,
-    about: "STX is catching some real attention. A large trader stepped in and picked up a sizable batch of the $1080 calls expiring June 20 — in plain terms, a bet that the stock keeps climbing. What's encouraging is that STX keeps holding around $1068, a level that's been acting like a floor, so there's steady demand defending it. As long as that holds, the next area worth watching is up near $1090. It's still early, so this is more of a story just beginning to take shape.",
+    ticker: "STX", direction: "bull", putCall: "Call", confidence: 66, strength: "Building", age: "28m",
+    expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits",
+    keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
+    vwap: "Above VWAP $1066", psych: "$1080 round-number level", volume: "2,310", openInterest: "1,450",
+    status: "Active", defaultOpen: true,
+    about: "STX is showing steady, repeated interest — the same $1080 calls keep getting picked up again and again, and the orders are hitting the ask side, which usually means folks are willing to pay up to get involved. About $1.4M is committed so far. The stock is holding above its average price for the day (around $1066) and pressing toward the $1080 round-number level, where a lot of contracts already sit. As long as it stays above the $1072 area, the next zone of interest is up near $1090.",
   },
   {
-    ticker: "NVDA", direction: "bull", confidence: 81, age: "12m", headline: "Bullish Flow", contract: "Jun 27 $145 Calls",
-    supportLabel: "Support", support: "$138", outlook: "$150", status: "Active",
-    about: "This one's looking strong. A lot of money moved into NVDA's $145 calls (June 27), and most of it paid full price to get in — usually a sign of real confidence. The stock is trading above its average price for the day and holding comfortably above $138, so the bulls are clearly in control for now. That's what's pushing the confidence score up to 81. Keep in mind, though: a high score means the odds look favorable, not that it's guaranteed.",
+    ticker: "NVDA", direction: "bull", putCall: "Call", confidence: 81, strength: "Strong", age: "12m",
+    expiry: "Jun 27", strike: "145", premium: "$3.2M", flowType: "Sweep",
+    keyLevel: "$138", outlook: "$150", guardLabel: "Support", guard: "$138",
+    vwap: "Above VWAP $142", psych: "$145 level", volume: "18.5K", openInterest: "9.2K",
+    status: "Active",
+    about: "NVDA is the strongest of the group right now. A large sweep moved through the $145 calls — about $3.2M — and most of it paid the ask, a sign of real urgency. The stock is trading comfortably above its average price for the day (around $142) and leaning on the $145 level, where open interest is heavy. With the bulls in control above $138, the area drawing attention next sits near $150. The confidence reading is high at 81, which means the picture looks favorable — not that anything is guaranteed.",
   },
   {
-    ticker: "SPY", direction: "bear", confidence: 58, age: "44m", headline: "Bearish Flow", contract: "Jun 20 $580 Puts",
-    supportLabel: "Resist.", support: "$592", outlook: "$575", status: "Developing",
-    about: "SPY is leaning the other way here. A trader has been building a position in the $580 puts (June 20), which is a bet the market drifts lower. It's worth noting because it's happening just as SPY runs into a kind of ceiling near $592 that it hasn't been able to push through. For now the stock is still above its average price for the day, so the bears haven't taken full control yet — if it starts to slip, $575 is the level to keep an eye on.",
+    ticker: "SPY", direction: "bear", putCall: "Put", confidence: 58, strength: "Developing", age: "44m",
+    expiry: "Jun 20", strike: "580", premium: "$2.1M", flowType: "Flow",
+    keyLevel: "$585", outlook: "$575", guardLabel: "Resistance", guard: "$592",
+    vwap: "Above VWAP $586", psych: "$590 level", volume: "12.0K", openInterest: "30.4K",
+    status: "Developing",
+    about: "SPY is leaning the other way. Activity has been building in the $580 puts — roughly $2.1M — which is a lean toward lower prices. It's worth noting because SPY keeps stalling near the $590 area, a kind of ceiling it hasn't pushed through. For now the index is still holding above its average price for the day (around $586), so the move lower hasn't taken hold yet. If it slips under the $585 zone, the next area of interest is down near $575.",
   },
   {
-    ticker: "AMD", direction: "bull", confidence: 73, age: "9m", headline: "Bullish Flow", contract: "Jun 27 $175 Calls",
-    supportLabel: "Support", support: "$168", outlook: "$182", status: "Active",
-    about: "AMD has been quietly building interest. The $175 calls (June 27) keep getting picked up again and again — not a single trade, but a steady stream, which suggests the interest is genuine. Each time the stock dips, it keeps bouncing off $168, so that level is holding up well. As long as it does, $182 is the next area drawing attention.",
+    ticker: "AMD", direction: "bull", putCall: "Call", confidence: 73, strength: "Steady", age: "9m",
+    expiry: "Jun 27", strike: "175", premium: "$1.1M", flowType: "Repeated Hits",
+    keyLevel: "$168", outlook: "$182", guardLabel: "Support", guard: "$168",
+    vwap: "Above VWAP $171", psych: "$175 level", volume: "8.4K", openInterest: "5.1K",
+    status: "Active",
+    about: "AMD keeps drawing quiet, repeated interest in the $175 calls — not one big order, but a steady stream, with about $1.1M committed. Each time the stock dips it keeps bouncing off the $168 area, which is holding up as support, and it's sitting just above its average price for the day. As long as $168 holds, the zone people are watching next is up near $182, with the $175 level sitting in between.",
   },
   {
-    ticker: "AAPL", direction: "bull", confidence: 49, age: "1h", headline: "Bullish Flow", contract: "Jul 3 $210 Calls",
-    supportLabel: "Support", support: "$205", outlook: "$214", status: "Developing",
-    about: "AAPL is more of a wait-and-see right now. There's some activity in the $210 calls (July 3), but it's light and scattered, so nothing stands out strongly yet — which is why the score sits at just 49. The stock is leaning on $205 as support, and if it firms up there and draws more interest, $214 comes into view. For now, it's simply one to keep an eye on.",
+    ticker: "AAPL", direction: "bull", putCall: "Call", confidence: 49, strength: "Early", age: "1h",
+    expiry: "Jul 3", strike: "210", premium: "$420K", flowType: "Light Flow",
+    keyLevel: "$205", outlook: "$214", guardLabel: "Support", guard: "$205",
+    vwap: "Near VWAP $208", psych: "$210 level", volume: "1.2K", openInterest: "3.4K",
+    status: "Developing",
+    about: "AAPL is early and worth only a light look right now. There's some activity in the $210 calls, but it's scattered and small — around $420K — so nothing stands out strongly yet, which is why the confidence reading sits at just 49. It's leaning on the $205 area for support and trading near its average price for the day. If interest picks up and it holds above $205, the next zone of interest is up near $214 (the $210 level sits right in the path).",
   },
 ];
 
@@ -254,7 +296,7 @@ export function FeedCompact() {
         <div className="flex items-center justify-between pt-1 pb-0.5">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-emerald-400" />
-            <span className="text-[13px] font-bold tracking-wide text-emerald-400">⚡ 1–3 DAY TRADE</span>
+            <span className="text-[13px] font-bold tracking-wide text-emerald-400">⚡ 1–3 DAY FLOW</span>
           </div>
           <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/15 rounded-full h-5 min-w-5 px-1.5 flex items-center justify-center">3</span>
         </div>
