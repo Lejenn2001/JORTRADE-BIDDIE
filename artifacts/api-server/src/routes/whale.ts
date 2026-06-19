@@ -4099,7 +4099,10 @@ async function fetchPremarketSnapshot(tickers: string[]): Promise<Record<string,
         const lastTradePrice = t.lastTrade?.p ?? 0;
         const dayClose = t.day?.c ?? 0;
         const prevClose = t.prevDay?.c ?? 0;
-        const livePrice = lastTradePrice || dayClose;
+        // Fall back to previous close when the market is closed (weekend/holiday/
+        // pre-market) — lastTrade and day.c are both 0 then, so without this the
+        // ticker tape skips every symbol and shows "—".
+        const livePrice = lastTradePrice || dayClose || prevClose;
 
         if (livePrice <= 0) continue;
 
