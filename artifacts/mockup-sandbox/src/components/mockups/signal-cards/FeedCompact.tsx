@@ -43,6 +43,7 @@ type CardData = {
   volume: string;            // volume
   openInterest: string;      // open interest
   status: "Active" | "Developing";
+  mfePercent?: number;       // best move so far as % of target (only once active)
   about: string;
   defaultOpen?: boolean;
 };
@@ -57,6 +58,13 @@ function CompactCard(d: CardData) {
   const flowColor = bull ? "text-emerald-400" : "text-rose-400";
   const vwapPos = d.vwap.split(" ")[0];
   const paragraphs = d.about.split("\n\n");
+  const mfe = d.mfePercent;
+  const mfeColor =
+    mfe == null ? "" :
+    mfe >= 75 ? "bg-emerald-400/15 text-emerald-400" :
+    mfe >= 50 ? "bg-sky-400/15 text-sky-400" :
+    mfe >= 30 ? "bg-orange-400/15 text-orange-400" :
+    "bg-white/10 text-muted-foreground";
 
   return (
     <div className="group relative rounded-2xl bg-gradient-to-b from-white/[0.04] to-white/[0.01] px-4 py-3.5 transition-colors hover:from-white/[0.06]">
@@ -70,6 +78,11 @@ function CompactCard(d: CardData) {
               ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
               : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
             <span className="text-base font-bold tracking-tight text-foreground">{d.ticker}</span>
+            {mfe != null && (
+              <span className={`inline-flex items-center gap-0.5 h-5 rounded-full px-2 text-[10px] font-bold ${mfeColor}`}>
+                <TrendingUp className="h-2.5 w-2.5" />{mfe}% to target
+              </span>
+            )}
           </div>
           <MiniRing value={d.confidence} />
         </div>
@@ -138,7 +151,7 @@ const CARDS: CardData[] = [
     expiry: "Jun 20", strike: "1080", premium: "$1.4M", flowType: "Repeated Hits",
     keyLevel: "$1072", outlook: "$1090", guardLabel: "Support", guard: "$1064",
     vwap: "Above today's avg $1066", psych: "$1080 round number", volume: "2,310", openInterest: "1,450",
-    status: "Active", defaultOpen: true,
+    status: "Active", mfePercent: 62, defaultOpen: true,
     about: "Buyers keep stepping back into the $1080 Calls — around $1.4M spent so far. That's a real chunk of money, so this isn't a few small bets; bigger players are showing up.\n\nThink of $1064 as the floor. As long as STX stays above it, the move toward $1090 stays in play — but if it slips under $1064, the bullish idea has broken down.",
   },
   {
