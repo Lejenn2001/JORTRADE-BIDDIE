@@ -94,18 +94,18 @@ function CompactCard(d: CardData) {
           <span className="text-foreground/80 font-medium">{d.expiry} · ${d.strike} {d.putCall}</span>
         </div>
 
-        {/* One plain line: where it could go */}
-        <div className="mt-2 flex items-center gap-1.5 text-[12px]">
-          {d.direction === "bull" ? (
-            <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-          ) : (
-            <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
-          )}
-          <span className="text-muted-foreground">
-            {d.direction === "bull" ? "Could climb toward" : "Could slip toward"}
-          </span>
-          <span className={`font-semibold ${d.direction === "bull" ? "text-emerald-400" : "text-rose-400"}`}>
-            {d.outlook}
+        {/* Short level pill: RANGE TO $X (details live in the message) */}
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1">
+            {d.direction === "bull" ? (
+              <TrendingUp className="h-3 w-3 text-emerald-400" />
+            ) : (
+              <TrendingDown className="h-3 w-3 text-rose-400" />
+            )}
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Range to</span>
+            <span className={`text-[12px] font-bold ${d.direction === "bull" ? "text-emerald-400" : "text-rose-400"}`}>
+              {d.outlook}
+            </span>
           </span>
         </div>
 
