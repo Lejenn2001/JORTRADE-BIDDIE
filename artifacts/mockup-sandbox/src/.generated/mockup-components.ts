@@ -5,5 +5,6 @@ export const modules: ModuleMap = {
   "./components/mockups/leaner-landing-v2/LeanerLandingV2.tsx": () => import("../components/mockups/leaner-landing-v2/LeanerLandingV2.tsx"),
   "./components/mockups/signal-cards/FlowCard.tsx": () => import("../components/mockups/signal-cards/FlowCard.tsx"),
   "./components/mockups/signal-cards/IntelBrief.tsx": () => import("../components/mockups/signal-cards/IntelBrief.tsx"),
+  "./components/mockups/signal-cards/JortradeAlert.tsx": () => import("../components/mockups/signal-cards/JortradeAlert.tsx"),
   "./components/mockups/signal-cards/MonitorFeed.tsx": () => import("../components/mockups/signal-cards/MonitorFeed.tsx")
 };
