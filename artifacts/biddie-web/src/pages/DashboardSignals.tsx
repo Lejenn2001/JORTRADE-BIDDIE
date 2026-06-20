@@ -1114,30 +1114,6 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
         </div>
       )}
 
-      {(() => {
-        const ev = signal.executionVerdict || { verdict: "not_evaluated" as const, reason: "Execution engine not rebuilt yet" };
-        const isExecTicker = EXECUTION_UNIVERSE.has(String(signal.ticker || "").toUpperCase());
-        const styles: Record<string, { wrap: string; label: string; pill: string }> = {
-          tradeable: { wrap: "bg-emerald-500/10 border-emerald-500/20", label: "text-emerald-400", pill: "bg-emerald-500/20 text-emerald-300" },
-          watch: { wrap: "bg-amber-500/10 border-amber-500/20", label: "text-amber-400", pill: "bg-amber-500/20 text-amber-300" },
-          skip: { wrap: "bg-red-500/10 border-red-500/20", label: "text-red-400", pill: "bg-red-500/20 text-red-300" },
-          not_evaluated: { wrap: "bg-zinc-500/10 border-zinc-500/20", label: "text-zinc-400", pill: "bg-zinc-500/20 text-zinc-300" },
-        };
-        const labelText: Record<string, string> = { tradeable: "ACTIVE", watch: "DEVELOPING", skip: "QUIET", not_evaluated: "NOT EVALUATED" };
-        const s = styles[ev.verdict] || styles.not_evaluated;
-        return (
-          <div className={`px-3 sm:px-4 py-1.5 border-b flex items-center gap-2 ${s.wrap}`} title={`Execution: ${labelText[ev.verdict]} — ${ev.reason}`}>
-            <Gauge className={`h-3 w-3 ${s.label}`} />
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Execution:</span>
-            <span className={`text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded ${s.pill}`}>{labelText[ev.verdict]}</span>
-            {isExecTicker && (
-              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300" title="Part of the execution universe (SPY, QQQ, IWM, SPX, SPXW).">EXEC</span>
-            )}
-            <span className="text-[10px] text-muted-foreground truncate">· {ev.reason}</span>
-          </div>
-        );
-      })()}
-
       <div className="relative px-4 py-3.5">
         <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
 
