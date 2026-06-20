@@ -313,7 +313,6 @@ const CARDS: CardData[] = [
     ticker: "NVDA", direction: "bull", putCall: "Call", tier: "fast",
     price: "$143.20", priceSource: "live", signalTime: "9:42 AM",
     contract: "Jun 20 $145 Call", premium: "$3.2M",
-    secondary: "Strong",
     status: "active", trade: "Day", reinforcement: 6, mfe: 48,
     levels: [
       { label: "Area of Interest", value: "$142.50" },
