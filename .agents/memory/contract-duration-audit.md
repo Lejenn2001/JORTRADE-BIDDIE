@@ -23,3 +23,11 @@ Audit of `signal_outcomes` winners (hit/partial_hit), ~848 winners, Mar–Jun 20
 Shorter = cheaper (30d ≈ 8× a 0DTE) AND bigger % payoff on the same move (gamma leverage). Catch: ultra-short gets crushed overnight if it doesn't move that day — bites the ~25% that aren't same-day.
 
 **Takeaway / how to apply:** sweet spot is ~2-7 DTE weeklies (cheap + high leverage + cushion for next-day movers), which is roughly what the system already picks. True 0DTE = cheapest/highest payoff but punishing on misses. Reinforces that for this product, SPEED/timing matters more than the conviction number. Caveats: model assumes fixed IV (real IV varies/crush), ignores bid-ask spread; mfe_percent is PEAK not exit price.
+
+## Can we PREDICT same-day hit at signal time?
+Baseline 33.6% of ALL signals hit same day (ET calendar day; convert detected_at AT TIME ZONE 'America/New_York'). What predicts it:
+- **Required move to target** (parse $ from `target` text vs `price_at_signal`): <0.5% → 60.5% same-day, 0.5-1% → 51%, 1-2% → 30%, 2-4% → 23%, 4%+ → 13.7%. Strong, monotonic.
+- **Time of day** (ET hour): 9am hour (open) → 63%, 10am → 43%, midday → ~30%, after 4pm/after-hours → ~0% (mechanical: no session left).
+- **Combo** early(9-10 ET) AND small(<1%) → **76.1%** same-day vs 29.4% rest (n=142).
+- **Does NOT predict:** conviction_score (80+ → 37% vs 33%) and sweep (29% vs 35%, slightly worse). Speed predictors are required-move + time-of-day, NOT the score.
+**Apply:** any "will hit same day / suggest short contract" feature should key off required-move-% and minutes-left-in-session, not conviction. Honest ceiling ~76% even on the best combo — it's a probability tilt, never a guarantee.
