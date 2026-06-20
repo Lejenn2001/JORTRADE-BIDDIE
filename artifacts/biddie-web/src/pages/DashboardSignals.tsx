@@ -984,16 +984,18 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
     const tn = signal.targetNear;
     const tz = signal.targetZone;
     let rangeVal = tz;
-    if (tn && tn !== tz) {
-      const a = parseFloat((tn.match(/[0-9.]+/) || [])[0] || "");
-      const b = parseFloat((tz.match(/[0-9.]+/) || [])[0] || "");
-      if (!isNaN(a) && !isNaN(b)) {
-        const lo = a <= b ? tn : tz;
-        const hi = a <= b ? tz : tn;
-        rangeVal = isCall ? `${lo} – ${hi}` : `${hi} – ${lo}`;
-      } else {
-        rangeVal = `${tn} – ${tz}`;
-      }
+    const sources = tn && tn !== tz ? `${tn} ${tz}` : tz;
+    const tokens = (sources.match(/\$?[0-9][0-9,]*(?:\.[0-9]+)?/g) || [])
+      .map((raw) => ({ raw, num: parseFloat(raw.replace(/[$,]/g, "")) }))
+      .filter((t) => !isNaN(t.num));
+    const unique = tokens.filter((t, i) => tokens.findIndex((u) => u.num === t.num) === i);
+    if (unique.length >= 2) {
+      const sorted = [...unique].sort((a, b) => a.num - b.num);
+      const lo = sorted[0].raw;
+      const hi = sorted[sorted.length - 1].raw;
+      rangeVal = isCall ? `${lo} – ${hi}` : `${hi} – ${lo}`;
+    } else if (tn && tn !== tz) {
+      rangeVal = `${tn} – ${tz}`;
     }
     levelRows.push({ label: "Range", value: rangeVal, tone: "flow" });
   }
