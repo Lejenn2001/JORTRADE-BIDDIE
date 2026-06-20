@@ -7,3 +7,4 @@
 - [Polygon live-price feed gap](polygon-live-price-feed.md) — live prices dead post-migration: dev POLYGON_API_KEY_DEV rejected (401/WS auth fail), prod has NO Polygon key; needs valid paid key per-scope before LivePriceService P0.
 - [GitHub backup & .replit tracking](github-backup-and-replit-tracking.md) — .replit holds plaintext secrets so it's untracked; push clean backups by rebuilding ONE commit on the remote tip via code_execution git (main-agent bash blocks destructive git).
 - [Market hours holiday calendar](market-hours-calendar.md) — market-open gate is holiday + early-close aware: static NYSE table is the fail-safe seed, Polygon's calendar refreshes it at runtime; frontend keeps a static-only mirror.
+- [Conviction score audit](conviction-score-audit.md) — conviction_score ≈ zero corr (-0.04) with resolved win rate; it's an EXPIRATION filter (higher score = move happens before expiry), not a win predictor. Don't sell it as win probability.
