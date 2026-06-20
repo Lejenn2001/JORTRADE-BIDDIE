@@ -955,6 +955,9 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
 
   const [open, setOpen] = useState(false);
   const priceInfo = getPrice?.(signal.ticker);
+  const displayPrice = priceInfo?.source === "live"
+    ? priceInfo.price
+    : (signal.priceAtSignal ?? priceInfo?.price);
   const bull = isCall;
   const accent = bull
     ? "bg-emerald-400/80 shadow-[0_0_10px_rgba(52,211,153,0.5)]"
@@ -1162,12 +1165,10 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                     title={
                       priceInfo.source === "live"
                         ? "Live price (real-time)"
-                        : priceInfo.source === "rest"
-                          ? "Recent price (slightly delayed)"
-                          : "Last known price (not live)"
+                        : "Price this signal was built from (live feed unavailable)"
                     }
                   />
-                  ${priceInfo.price.toFixed(2)}
+                  ${(displayPrice ?? priceInfo.price).toFixed(2)}
                 </span>
               )}
               <span className="flex items-center gap-1">
