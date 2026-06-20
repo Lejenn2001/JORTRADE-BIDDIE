@@ -1085,11 +1085,6 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                 ? <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
                 : <TrendingDown className="h-4 w-4 text-rose-400 shrink-0" />}
               <span className="text-base font-bold tracking-tight text-foreground">{signal.ticker}</span>
-              <span className={`inline-flex items-center h-5 text-[10px] font-bold uppercase px-2 rounded-full ${
-                signal.putCall === "put" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"
-              }`}>
-                {signal.putCall === "call" ? "CALL" : signal.putCall === "put" ? "PUT" : signal.type?.toUpperCase()}
-              </span>
             </div>
             <span className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
               {onSetAlert && (
