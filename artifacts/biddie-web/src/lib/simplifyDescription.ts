@@ -37,7 +37,18 @@ function cleanPremium(raw?: string): string | null {
   if (!raw) return null;
   const t = raw.trim();
   if (!t) return null;
-  return t.startsWith("$") ? t : `$${t}`;
+  // Already abbreviated (e.g. "$500K", "1.2M") — keep as-is.
+  if (/[KMB]\s*$/i.test(t.replace(/premium/gi, "").trim())) {
+    return t.startsWith("$") ? t : `$${t}`;
+  }
+  const n = Number(t.replace(/[^0-9.]/g, ""));
+  if (!isFinite(n) || n <= 0) return t.startsWith("$") ? t : `$${t}`;
+  const abbr =
+    n >= 1e9 ? `${(n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1)}B` :
+    n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1)}M` :
+    n >= 1e3 ? `${Math.round(n / 1e3)}K` :
+    `${n}`;
+  return `$${abbr}`;
 }
 
 export function isSweep(signal: SignalInfo): boolean {
