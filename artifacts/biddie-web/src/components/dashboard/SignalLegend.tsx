@@ -29,9 +29,9 @@ const badges = [
 ];
 
 const dotColors = [
-  { color: "bg-emerald-400 animate-pulse", text: "text-emerald-400", label: "Live", desc: "Price is updating live, second by second." },
-  { color: "bg-amber-400", text: "text-amber-400", label: "Recent", desc: "Price from a recent check — a few seconds old." },
-  { color: "bg-zinc-500", text: "text-zinc-400", label: "Stale", desc: "Couldn't refresh just now — price may be old." },
+  { color: "bg-emerald-400 animate-pulse", text: "text-emerald-400", label: "Live", desc: "Live price, updating second by second." },
+  { color: "bg-amber-400", text: "text-amber-400", label: "Recent", desc: "Live feed is only polling right now, so the card shows the price this signal was built from — that way it lines up with the levels." },
+  { color: "bg-zinc-500", text: "text-zinc-400", label: "Stale", desc: "No live feed right now — the card shows the price this signal was built from." },
 ];
 
 const mfeColors = [
