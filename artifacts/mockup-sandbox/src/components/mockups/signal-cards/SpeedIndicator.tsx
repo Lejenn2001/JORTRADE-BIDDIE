@@ -69,6 +69,53 @@ function SpeedTag({ tier }: { tier: Tier }) {
   );
 }
 
+// The "?" circle that explains what each pace means (replaces the big header block).
+function PaceHelp() {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/70 hover:text-foreground"
+        aria-label="What does Pace mean?"
+      >
+        <HelpCircle className="h-3.5 w-3.5" />
+      </button>
+      {show && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-[270px] rounded-xl border border-border bg-popover p-3 shadow-xl">
+          <div className="text-[11px] font-bold text-foreground">What Pace means</div>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            How soon a play tends to resolve — read from how small a move it needs
+            and how much trading time is left in the day.
+          </p>
+          <div className="mt-2.5 space-y-2">
+            {(["fast", "medium", "slow"] as Tier[]).map((t) => {
+              const m = TIER_META[t];
+              return (
+                <div key={t} className="flex items-center gap-2.5">
+                  <SpeedGauge tier={t} size={42} />
+                  <div className="leading-tight">
+                    <div className={`text-[11px] font-bold ${m.color}`}>{m.label}</div>
+                    <div className="text-[9.5px] text-muted-foreground">{m.sub}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-amber-400/15 bg-amber-400/[0.06] px-2.5 py-2">
+            <HelpCircle className="mt-0.5 h-3 w-3 shrink-0 text-amber-400/80" />
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Pace is a tendency, not a promise. Even the quickest-looking setups don't
+              always finish the same day — about one in four still takes longer.
+            </p>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 type PriceSource = "live" | "rest" | "stale";
 type StatusKey = "active" | "watching" | "hit";
 
@@ -143,7 +190,7 @@ function Card(d: CardData) {
   const paragraphs = d.about.split("\n\n");
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-[hsl(230_85%_62%/0.16)] bg-gradient-to-b from-[hsl(230_70%_55%/0.09)] via-white/[0.012] to-[hsl(232_40%_20%/0.04)] shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),inset_0_0_20px_hsl(230_85%_60%/0.05),0_0_24px_-10px_hsl(230_85%_60%/0.38)]">
+    <div className="group relative rounded-2xl border border-[hsl(230_85%_62%/0.16)] bg-gradient-to-b from-[hsl(230_70%_55%/0.09)] via-white/[0.012] to-[hsl(232_40%_20%/0.04)] shadow-[0_8px_30px_-14px_rgba(0,0,0,0.9),inset_0_0_20px_hsl(230_85%_60%/0.05),0_0_24px_-10px_hsl(230_85%_60%/0.38)]">
       <div className="relative px-4 py-3.5">
         <div className={`absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full ${accent}`} />
         <div className="pl-2.5">
@@ -234,16 +281,22 @@ function Card(d: CardData) {
                   MFE {d.mfe}%
                 </span>
               )}
-              {/* ↓↓↓ Pace gauge — sits exactly where the conviction ring used to be ↓↓↓ */}
-              <SpeedTag tier={d.tier} />
             </div>
           </div>
 
-          {/* transparent inputs — what the pace is read from */}
-          <div className="mt-2 text-[11px] text-muted-foreground/80">{d.needs}</div>
-
           {open && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-3">
+              {/* Pace now lives inside Biddie's take */}
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Pace</span>
+                    <PaceHelp />
+                  </div>
+                  <SpeedTag tier={d.tier} />
+                </div>
+                <div className="mt-2 text-[11px] text-muted-foreground/80">{d.needs}</div>
+              </div>
               {paragraphs.map((p, i) => (
                 <p key={i} className="text-[12px] text-foreground/75 leading-relaxed">{p}</p>
               ))}
@@ -316,39 +369,18 @@ export function SpeedIndicator() {
             </span>
             <div>
               <h1 className="text-lg font-black tracking-tight text-foreground">Pace</h1>
-              <p className="text-[11px] text-muted-foreground">Replaces the old confidence number — same card, everything else stays</p>
+              <p className="text-[11px] text-muted-foreground">Now lives inside Biddie's take</p>
             </div>
           </div>
 
           <p className="mt-3 text-[12px] leading-relaxed text-foreground/75">
-            Nothing else on the card changes. The only swap is the round confidence
-            score in the bottom-right — it becomes a small <span className="font-semibold text-foreground">Pace</span> gauge
-            showing roughly <span className="font-semibold text-foreground">how soon a play tends to resolve</span>,
-            read from two honest things we know the moment it appears: how small a
-            move it needs, and how much trading time is left in the day.
+            The round confidence score is gone. Instead, each play's
+            <span className="font-semibold text-foreground"> Pace</span> is tucked inside
+            <span className="font-semibold text-foreground"> Biddie's take</span> — tap the Biddie
+            row on any card below to open it. The
+            <span className="inline-flex h-3.5 w-3.5 align-text-bottom items-center justify-center mx-0.5 text-muted-foreground"><HelpCircle className="h-3.5 w-3.5" /></span>
+            next to Pace explains what each pace means.
           </p>
-
-          {/* three tiers */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {(["fast", "medium", "slow"] as Tier[]).map((t) => {
-              const m = TIER_META[t];
-              return (
-                <div key={t} className="flex flex-col items-center rounded-xl border border-white/[0.06] bg-white/[0.02] px-2 py-3 text-center">
-                  <SpeedGauge tier={t} size={58} />
-                  <div className={`mt-1.5 text-[11px] font-bold ${m.color}`}>{m.label}</div>
-                  <div className="mt-0.5 text-[9.5px] leading-tight text-muted-foreground">{m.sub}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-400/15 bg-amber-400/[0.06] px-3 py-2.5">
-            <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400/80" />
-            <p className="text-[11px] leading-snug text-muted-foreground">
-              Pace is a tendency, not a promise. Even the quickest-looking setups don't always
-              finish the same day — roughly one in four still takes longer.
-            </p>
-          </div>
         </div>
 
         {/* live examples in the real card */}
