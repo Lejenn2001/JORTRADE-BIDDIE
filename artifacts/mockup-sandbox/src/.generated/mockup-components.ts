@@ -8,5 +8,6 @@ export const modules: ModuleMap = {
   "./components/mockups/signal-cards/FlowCard.tsx": () => import("../components/mockups/signal-cards/FlowCard.tsx"),
   "./components/mockups/signal-cards/IntelBrief.tsx": () => import("../components/mockups/signal-cards/IntelBrief.tsx"),
   "./components/mockups/signal-cards/JortradeAlert.tsx": () => import("../components/mockups/signal-cards/JortradeAlert.tsx"),
-  "./components/mockups/signal-cards/MonitorFeed.tsx": () => import("../components/mockups/signal-cards/MonitorFeed.tsx")
+  "./components/mockups/signal-cards/MonitorFeed.tsx": () => import("../components/mockups/signal-cards/MonitorFeed.tsx"),
+  "./components/mockups/signal-cards/SpeedIndicator.tsx": () => import("../components/mockups/signal-cards/SpeedIndicator.tsx")
 };
