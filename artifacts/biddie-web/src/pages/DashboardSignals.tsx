@@ -1324,41 +1324,6 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                   </div>
                 )}
 
-                {signal.tags.filter((tag) => {
-                  const upper = tag.toUpperCase();
-                  if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
-                  return true;
-                }).length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {signal.tags.filter((tag) => {
-                      const upper = tag.toUpperCase();
-                      if (upper.includes('ACT NOW') && !(signal.priceConfirmed && signal.gammaZone && signal.gammaZone !== 'neutral')) return false;
-                      return true;
-                    }).map((tag) => {
-                      const tagUpper = tag.toUpperCase();
-                      const isUrgent = tagUpper.includes('ACT NOW') || tagUpper.includes('HIGH CONVICTION');
-                      const isPriceConfirmed = tagUpper.includes('PRICE CONFIRMED');
-                      const isGamma = tagUpper.includes('GAMMA');
-                      const isWhaleTag = tagUpper.includes('WHALE');
-                      const isUpdated = tagUpper.includes('UPDATED LOGIC');
-                      let tagStyle = "bg-muted/50 text-muted-foreground";
-                      if (isUpdated) tagStyle = "bg-yellow-500/30 text-yellow-300 font-bold";
-                      else if (isPriceConfirmed) tagStyle = "bg-emerald-500/20 text-emerald-400 animate-pulse";
-                      else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
-                      else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
-                      else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
-                      const safeTag = tag
-                        .replace(/conviction/gi, "Confidence")
-                        .replace(/act now/gi, "Active")
-                        .replace(/\bsignal\b/gi, "Flow");
-                      return (
-                        <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tagStyle}`}>
-                          {safeTag}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
               </motion.div>
             )}
           </AnimatePresence>
