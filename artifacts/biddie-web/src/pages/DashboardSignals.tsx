@@ -976,6 +976,54 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
   const biddieParagraphs = simplifySignalDescription(signal).split("\n\n").filter(Boolean);
   const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
 
+  const tradeBadge = is0DTE ? (
+    <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
+  ) : (
+    <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
+  );
+
+  const statusBadge = (() => {
+    let ts: string = signal.tradeStatus || "watching";
+    const o: string | null | undefined = signal.outcome;
+    const isExp = signal.expiry ? new Date(signal.expiry) < new Date() : false;
+    const m = signal.mfePercent ?? 0;
+    if (o === "hit" || o === "win") ts = "hit";
+    else if (o === "partial_hit") ts = "partial";
+    else if (o === "near_miss") ts = "near_miss";
+    else if (o === "missed" || o === "loss") ts = "miss";
+    else if (o === "expired") ts = "expired";
+    if (isExp && m >= 50) {
+      if (m >= 75) ts = "hit";
+      else ts = "partial";
+    } else if (isExp && !o && m >= 30) {
+      ts = "near_miss";
+    } else if (isExp && !o && m < 30) {
+      ts = "miss";
+    }
+    const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
+      hit: { label: "WIN", desc: "Price moved 75%+ of the way through the range — a full win.", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+      partial: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+      partial_hit: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+      near_miss: { label: "LOSS", desc: "Price moved 30–49% through the range — the right idea, but it fell short.", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
+      miss: { label: "LOSS", desc: "Price didn't move far through the range, or the support level gave way.", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+      expired: { label: "EXPIRED", desc: "Time ran out before this played out.", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
+      active: { label: "ACTIVE", desc: "This one is moving through the range right now.", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
+      ran_without_entry: { label: "MOVED EARLY", desc: "Price moved 15%+ through the range before reaching the area of interest — it moved without us.", color: "text-amber-400 bg-amber-400/15", icon: <Target className="h-3 w-3" /> },
+      watching: { label: "WATCHING", desc: "Waiting for the price to come into the area of interest — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
+    };
+    const info = statusInfo[ts] || statusInfo.watching;
+    return (
+      <span className="relative group/status inline-flex shrink-0">
+        <span className={`inline-flex items-center gap-0.5 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${info.color}`}>
+          {info.icon} {info.label}
+        </span>
+        <span className="absolute bottom-full right-0 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground w-48 text-wrap opacity-0 group-hover/status:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg leading-relaxed">
+          {info.desc}
+        </span>
+      </span>
+    );
+  })();
+
   return (
     <div className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
       isCelebrating
@@ -1123,61 +1171,15 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
             </span>
           </div>
 
-          {/* Flow label (left) · win/loss status (right) */}
-          <div className="mt-2 flex items-center justify-between gap-2">
+          {/* Flow label */}
+          <div className="mt-2 flex items-center gap-2">
             <span className={`text-[10px] font-bold uppercase tracking-[0.18em] ${flowColor}`}>
               {flowLabel}
             </span>
-            {(() => {
-              let ts: string = signal.tradeStatus || "watching";
-              const o: string | null | undefined = signal.outcome;
-              const isExp = signal.expiry ? new Date(signal.expiry) < new Date() : false;
-              const m = signal.mfePercent ?? 0;
-              if (o === "hit" || o === "win") ts = "hit";
-              else if (o === "partial_hit") ts = "partial";
-              else if (o === "near_miss") ts = "near_miss";
-              else if (o === "missed" || o === "loss") ts = "miss";
-              else if (o === "expired") ts = "expired";
-              if (isExp && m >= 50) {
-                if (m >= 75) ts = "hit";
-                else ts = "partial";
-              } else if (isExp && !o && m >= 30) {
-                ts = "near_miss";
-              } else if (isExp && !o && m < 30) {
-                ts = "miss";
-              }
-              const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "WIN", desc: "Price moved 75%+ of the way through the range — a full win.", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                near_miss: { label: "LOSS", desc: "Price moved 30–49% through the range — the right idea, but it fell short.", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
-                miss: { label: "LOSS", desc: "Price didn't move far through the range, or the support level gave way.", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                expired: { label: "EXPIRED", desc: "Time ran out before this played out.", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
-                active: { label: "ACTIVE", desc: "This one is moving through the range right now.", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
-                ran_without_entry: { label: "MOVED EARLY", desc: "Price moved 15%+ through the range before reaching the area of interest — it moved without us.", color: "text-amber-400 bg-amber-400/15", icon: <Target className="h-3 w-3" /> },
-                watching: { label: "WATCHING", desc: "Waiting for the price to come into the area of interest — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
-              };
-              const info = statusInfo[ts] || statusInfo.watching;
-              return (
-                <span className="relative group/status inline-flex shrink-0">
-                  <span className={`inline-flex items-center gap-0.5 h-5 text-[10px] font-bold px-2 rounded-full cursor-help ${info.color}`}>
-                    {info.icon} {info.label}
-                  </span>
-                  <span className="absolute bottom-full right-0 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground w-48 text-wrap opacity-0 group-hover/status:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg leading-relaxed">
-                    {info.desc}
-                  </span>
-                </span>
-              );
-            })()}
           </div>
 
           {/* Secondary pills */}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {is0DTE ? (
-              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">Day Trade</span>
-            ) : (
-              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-blue-500/20 text-blue-400 uppercase tracking-wider">Swing Trade</span>
-            )}
             {showMoveOver ? (
               <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
             ) : showBuyNow ? (
@@ -1227,7 +1229,9 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
               <span className="text-[11px] font-bold text-primary">Biddie</span>
               <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {statusBadge}
+              {tradeBadge}
               {(signal.reinforcementCount ?? 0) > 1 && (
                 <span className="inline-flex shrink-0 items-center gap-1 h-5 rounded-full bg-emerald-400/15 px-2 text-[10px] font-bold text-emerald-300" title="How many times buyers have re-added to this position">
                   <TrendingUp className="h-3 w-3" /> {ordinalSuffix(signal.reinforcementCount!)} reinforcement
