@@ -21,10 +21,10 @@ function parsePremiumValue(raw: string): number {
 
 function premiumColor(val: number): string {
   if (val >= 5_000_000) return "This is a massive bet. This trader means business and is extremely confident";
-  if (val >= 2_000_000) return "That's a huge amount of money. This is a very serious, high-conviction play";
+  if (val >= 2_000_000) return "That's a huge amount of money. This is a very serious, high-confidence play";
   if (val >= 1_000_000) return "Over a million dollars. That's a big bet and worth paying close attention to";
   if (val >= 500_000) return "That's a really significant amount. Someone with deep pockets is making a move";
-  if (val >= 100_000) return "That's a solid bet. Enough money to show real conviction";
+  if (val >= 100_000) return "That's a solid bet. Enough money to show real confidence";
   return "A noteworthy trade worth keeping an eye on";
 }
 
@@ -97,14 +97,14 @@ export function simplifySignalDescription(signal: SignalInfo): string {
   if (signal.putCall === "put") {
     if (signal.strike) {
       const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} put. They profit if ${ticker} keeps falling`);
+      chunks.push(`on a $${cleanStrike} put. They do well if ${ticker} keeps sliding`);
     } else {
       chunks.push(`betting ${ticker} goes lower`);
     }
   } else if (signal.putCall === "call") {
     if (signal.strike) {
       const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} call. They profit if ${ticker} keeps rising`);
+      chunks.push(`on a $${cleanStrike} call. They do well if ${ticker} keeps climbing`);
     } else {
       chunks.push(`betting ${ticker} goes higher`);
     }
@@ -120,11 +120,11 @@ export function simplifySignalDescription(signal: SignalInfo): string {
     } else if (pct >= 90) {
       chunks.push(`${pct}% ask aggression — Almost full asking price. Extremely urgent. They barely tried to get a better deal, which shows high confidence`);
     } else if (pct >= 80) {
-      chunks.push(`${pct}% ask aggression — Very aggressive. They paid close to the asking price, showing strong conviction but left a tiny bit of room to negotiate`);
+      chunks.push(`${pct}% ask aggression — Very aggressive. They paid close to the asking price, showing strong confidence but left a tiny bit of room to negotiate`);
     } else if (pct >= 70) {
       chunks.push(`${pct}% ask aggression — Fairly aggressive. They leaned toward the asking price, which shows they wanted in quickly but weren't in a total rush`);
     } else if (pct >= 50) {
-      chunks.push(`${pct}% ask aggression — Moderate. They split the difference between the bid and ask, not in a huge hurry but still leaning toward buying`);
+      chunks.push(`${pct}% ask aggression — Moderate. They split the difference between the bid and ask, not in a huge hurry but still leaning in`);
     } else {
       chunks.push(`${pct}% ask aggression — Low urgency. They mostly paid closer to the bid (the lower price), meaning they were patient and negotiated for a better deal`);
     }

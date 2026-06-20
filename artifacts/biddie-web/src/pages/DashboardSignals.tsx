@@ -34,13 +34,13 @@ const formatExpiryShort = (e?: string) => {
 
 const ALGO_SECTION_META = {
   buy_now: {
-    label: "🔥 ACT NOW",
+    label: "🔥 ACTIVE",
     iconComponent: Zap,
     iconClass: "h-4 w-4 text-emerald-400",
-    description: "Price confirmed — act immediately",
+    description: "Price action confirmed — moving now",
   },
   short_term: {
-    label: "⚡ 1–3 DAY TRADE",
+    label: "⚡ 1–3 DAY FLOW",
     iconComponent: Clock,
     iconClass: "h-4 w-4 text-emerald-400",
     description: "Algorithm-detected setups with short-term expiry",
@@ -123,7 +123,7 @@ function dbRecordToSignal(record: any): MarketSignal {
     putCall: putCall as 'call' | 'put' | undefined,
     suggestedTrade: record.category === 'spread' && record.spread_details?.legs
       ? `${record.ticker} ${record.spread_details.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Spread'} — ${record.spread_details.legs}`
-      : `Buy ${record.ticker} $${record.strike || ''} ${putCall === 'call' ? 'Call' : 'Put'}${record.expiry ? ` (${record.expiry})` : ''}`,
+      : `${record.ticker} $${record.strike || ''} ${putCall === 'call' ? 'Calls' : 'Puts'}${record.expiry ? ` (${record.expiry})` : ''}`,
     targetZone: record.target_zone || record.target || undefined,
     createdAt,
     source: 'live',
@@ -964,15 +964,15 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
     return signal.suggestedTrade || "";
   })();
   const levelRows: { label: string; value: string; tone?: "flow" | "bad" }[] = [];
-  if (signal.entryTrigger) levelRows.push({ label: "Entry", value: signal.entryTrigger });
+  if (signal.entryTrigger) levelRows.push({ label: "Area of Interest", value: signal.entryTrigger });
   if (signal.targetZone) {
     const tn = signal.targetNear;
     const tz = signal.targetZone;
-    levelRows.push({ label: "Target", value: tn && tn !== tz ? `${tn} – ${tz}` : tz, tone: "flow" });
+    levelRows.push({ label: "Range", value: tn && tn !== tz ? `${tn} – ${tz}` : tz, tone: "flow" });
   }
-  if (signal.keyLevel) levelRows.push({ label: "Key level", value: signal.keyLevel });
-  if (signal.srLevel || signal.gammaLevelLabel) levelRows.push({ label: "S/R", value: signal.srLevel || signal.gammaLevelLabel || "" });
-  if (signal.invalidation) levelRows.push({ label: "Invalidation", value: signal.invalidation, tone: "bad" });
+  if (signal.keyLevel) levelRows.push({ label: "Key Level", value: signal.keyLevel });
+  if (signal.srLevel || signal.gammaLevelLabel) levelRows.push({ label: "Support / Resistance", value: signal.srLevel || signal.gammaLevelLabel || "" });
+  if (signal.invalidation) levelRows.push({ label: isCall ? "Support" : "Resistance", value: signal.invalidation, tone: "bad" });
   const biddieParagraphs = simplifySignalDescription(signal).split("\n\n").filter(Boolean);
   const hasDetails = signal.pricePattern || signal.gammaZone || signal.spreadDetails;
 
@@ -1003,13 +1003,13 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
       {isCelebrating && (
         <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-yellow-500/20 via-emerald-500/20 to-yellow-500/20 border-b border-yellow-400/30 flex items-center justify-center gap-2">
           <span className="text-sm font-black tracking-wider text-yellow-300 uppercase animate-pulse">
-            {signal.outcome === "hit" ? "🎯 TARGET HIT! 🎯" : "⚡ PARTIAL HIT! ⚡"}
+            {signal.outcome === "hit" ? "🎯 BIG WIN! 🎯" : "⚡ PARTIAL WIN! ⚡"}
           </span>
         </div>
       )}
       {isRecentlyResolved && isExpired && (
         <div className="px-3 sm:px-4 py-1.5 bg-zinc-500/15 border-b border-zinc-500/20 flex items-center justify-center gap-2">
-          <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">Signal Expired — Removing shortly</span>
+          <span className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase">Opportunity Expired — Removing shortly</span>
         </div>
       )}
       {isAdmin && signal.reviewStatus === "wrong" && (
@@ -1032,7 +1032,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
         return (
           <div className="px-3 sm:px-4 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2">
             <Clock className="h-3.5 w-3.5 text-amber-400" />
-            <span className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">Signal from {dayName} {dateStr}</span>
+            <span className="text-[10px] font-bold tracking-wider text-amber-400 uppercase">Opportunity from {dayName} {dateStr}</span>
           </div>
         );
       })()}
@@ -1044,7 +1044,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
           {signal.gammaZone && signal.gammaZone !== 'neutral' && (
             <>
               <Flame className="h-3.5 w-3.5 text-orange-400 animate-pulse" />
-              <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">ACT NOW</span>
+              <span className="text-[10px] font-bold tracking-wider text-orange-400 uppercase">ACTIVE</span>
             </>
           )}
         </div>
@@ -1059,7 +1059,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
           skip: { wrap: "bg-red-500/10 border-red-500/20", label: "text-red-400", pill: "bg-red-500/20 text-red-300" },
           not_evaluated: { wrap: "bg-zinc-500/10 border-zinc-500/20", label: "text-zinc-400", pill: "bg-zinc-500/20 text-zinc-300" },
         };
-        const labelText: Record<string, string> = { tradeable: "READY TO ENTER", watch: "WATCH / WAIT", skip: "NOT READY", not_evaluated: "NOT EVALUATED" };
+        const labelText: Record<string, string> = { tradeable: "ACTIVE", watch: "DEVELOPING", skip: "QUIET", not_evaluated: "NOT EVALUATED" };
         const s = styles[ev.verdict] || styles.not_evaluated;
         return (
           <div className={`px-3 sm:px-4 py-1.5 border-b flex items-center gap-2 ${s.wrap}`} title={`Execution: ${labelText[ev.verdict]} — ${ev.reason}`}>
@@ -1067,7 +1067,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Execution:</span>
             <span className={`text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded ${s.pill}`}>{labelText[ev.verdict]}</span>
             {isExecTicker && (
-              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300" title="Part of the execution universe (SPY, QQQ, IWM, SPX, SPXW). Buy actions are enabled here only when execution is READY TO ENTER.">EXEC</span>
+              <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300" title="Part of the execution universe (SPY, QQQ, IWM, SPX, SPXW).">EXEC</span>
             )}
             <span className="text-[10px] text-muted-foreground truncate">· {ev.reason}</span>
           </div>
@@ -1152,15 +1152,15 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                 ts = "miss";
               }
               const statusInfo: Record<string, { label: string; desc: string; color: string; icon: React.ReactNode }> = {
-                hit: { label: "WIN", desc: "Price reached 75%+ of the target — full hit, real profit opportunity", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial: { label: "WIN", desc: "Price moved 50-74% toward target — partial hit, tradeable and counts as a win", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                partial_hit: { label: "WIN", desc: "Price moved 50-74% toward target — partial hit, tradeable and counts as a win", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
-                near_miss: { label: "LOSS", desc: "Price moved 30-49% toward target — right idea but below 50% threshold", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
-                miss: { label: "LOSS", desc: "Signal didn't produce a tradeable move — MFE below 50% or invalidation breached", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
-                expired: { label: "EXPIRED", desc: "Time ran out before the signal played out", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
-                active: { label: "ACTIVE", desc: "We're in! The price hit our entry — this trade is live right now", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
-                ran_without_entry: { label: "RAN WITHOUT ENTRY", desc: "Price moved 15%+ toward target but never hit our entry — the trade ran without us", color: "text-amber-400 bg-amber-400/15", icon: <Target className="h-3 w-3" /> },
-                watching: { label: "WATCHING", desc: "Waiting for the price to come to us — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
+                hit: { label: "WIN", desc: "Price moved 75%+ of the way through the range — a full win.", color: "text-emerald-400 bg-emerald-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                partial_hit: { label: "WIN", desc: "Price moved 50–74% through the range — a partial win.", color: "text-blue-400 bg-blue-400/15", icon: <CheckCircle2 className="h-3 w-3" /> },
+                near_miss: { label: "LOSS", desc: "Price moved 30–49% through the range — the right idea, but it fell short.", color: "text-orange-400 bg-orange-400/15", icon: <Target className="h-3 w-3" /> },
+                miss: { label: "LOSS", desc: "Price didn't move far through the range, or the support level gave way.", color: "text-red-400 bg-red-400/15", icon: <XCircle className="h-3 w-3" /> },
+                expired: { label: "EXPIRED", desc: "Time ran out before this played out.", color: "text-zinc-400 bg-zinc-400/15", icon: <Clock className="h-3 w-3" /> },
+                active: { label: "ACTIVE", desc: "This one is moving through the range right now.", color: "text-cyan-400 bg-cyan-400/15 animate-pulse", icon: <Zap className="h-3 w-3" /> },
+                ran_without_entry: { label: "MOVED EARLY", desc: "Price moved 15%+ through the range before reaching the area of interest — it moved without us.", color: "text-amber-400 bg-amber-400/15", icon: <Target className="h-3 w-3" /> },
+                watching: { label: "WATCHING", desc: "Waiting for the price to come into the area of interest — like fishing, we don't chase!", color: "text-yellow-400 bg-yellow-400/15", icon: <Clock className="h-3 w-3" /> },
               };
               const info = statusInfo[ts] || statusInfo.watching;
               return (
@@ -1186,10 +1186,10 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
             {showMoveOver ? (
               <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-orange-500/20 text-orange-400 uppercase tracking-wider">Move Almost Over</span>
             ) : showBuyNow ? (
-              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Buy Now</span>
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider animate-pulse">Strong</span>
             ) : null}
             {signal.aiEvaluated && (
-              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Pick</span>
+              <span className="inline-flex items-center h-5 text-[10px] font-bold px-2 rounded-full bg-emerald-500/30 text-emerald-300 uppercase tracking-wider animate-pulse border border-emerald-400/30">Biddie Reviewed</span>
             )}
           </div>
 
@@ -1255,11 +1255,11 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                       MFE {signal.mfePercent.toFixed(0)}%
                     </span>
                     <span className="absolute bottom-full right-0 mb-1.5 px-2.5 py-1.5 bg-popover border border-border rounded-md text-[10px] text-muted-foreground w-[200px] text-wrap opacity-0 group-hover/mfe:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg leading-relaxed">
-                      {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% of target — still active` :
-                       signal.mfePercent >= 75 ? "Full hit — price reached 75%+ of target" :
-                       signal.mfePercent >= 50 ? "Partial hit — 50-74% of target, tradeable" :
-                       signal.mfePercent >= 30 ? "Near miss — 30-49% of target, right idea" :
-                       "Miss — below 50% of target"}
+                      {!isDone ? `Best move so far: ${signal.mfePercent.toFixed(0)}% through the range — still active` :
+                       signal.mfePercent >= 75 ? "Full move — price went 75%+ through the range" :
+                       signal.mfePercent >= 50 ? "Partial move — 50–74% through the range" :
+                       signal.mfePercent >= 30 ? "Fell short — 30–49% through the range" :
+                       "Small move — under 50% through the range"}
                       {signal.maxFavorablePrice ? ` (best: $${signal.maxFavorablePrice.toFixed(2)})` : ""}
                     </span>
                   </span>
@@ -1356,9 +1356,13 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                       else if (isWhaleTag) tagStyle = "bg-blue-500/20 text-blue-400";
                       else if (isUrgent) tagStyle = "bg-destructive/20 text-destructive animate-pulse";
                       else if (isGamma) tagStyle = "bg-orange-500/20 text-orange-400";
+                      const safeTag = tag
+                        .replace(/conviction/gi, "Confidence")
+                        .replace(/act now/gi, "Active")
+                        .replace(/\bsignal\b/gi, "Flow");
                       return (
                         <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${tagStyle}`}>
-                          {tag}
+                          {safeTag}
                         </span>
                       );
                     })}
