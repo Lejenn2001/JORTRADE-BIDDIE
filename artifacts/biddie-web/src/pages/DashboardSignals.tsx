@@ -925,6 +925,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
   const isSpread = signal.category === "spread";
 
   const isAI = signal.aiEvaluated;
+  const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
 
   const glowClass = isAI
     ? "shadow-[0_0_20px_-3px_rgba(16,185,129,0.5)] border-emerald-400/60 ring-1 ring-emerald-400/20"
