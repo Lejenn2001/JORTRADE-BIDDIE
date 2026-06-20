@@ -15,13 +15,22 @@ interface SignalInfo {
   targetNear?: string;
   gammaLevelLabel?: string;
   reinforcementCount?: number;
+  priceAtSignal?: number;
 }
 
-function cleanLevel(raw?: string): string | null {
-  if (!raw) return null;
-  const m = raw.match(/[0-9][0-9,]*\.?[0-9]*/);
+function levelNum(raw?: string | number | null): number | null {
+  if (raw == null) return null;
+  const s = String(raw);
+  // Prefer the number right after a "$" so labels like "R1 at $1092.08" don't
+  // get misread as 1 (from "R1"). Fall back to the first number otherwise.
+  const m = s.match(/\$\s*([0-9][0-9,]*\.?[0-9]*)/) || s.match(/([0-9][0-9,]*\.?[0-9]*)/);
   if (!m) return null;
-  return `$${m[0].replace(/,/g, "")}`;
+  const n = parseFloat(m[1].replace(/,/g, ""));
+  return isNaN(n) ? null : n;
+}
+
+function fmtLevel(n: number): string {
+  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
 function cleanPremium(raw?: string): string | null {
@@ -80,9 +89,8 @@ export function simplifySignalDescription(signal: SignalInfo): string {
     signal.putCall === "call" ||
     (signal.putCall !== "put" && signal.type === "bullish");
   const contract = isCall ? "calls" : "puts";
-  const betClause = isCall ? "a bet it climbs" : "a bet it drifts lower";
-  const strike = signal.strike ? cleanLevel(String(signal.strike)) : null;
-  const strikeRef = strike ? `the ${strike} ${contract}` : `the ${contract}`;
+  const strikeN = levelNum(signal.strike);
+  const strikeRef = strikeN ? `the ${fmtLevel(strikeN)} ${contract}` : `the ${contract}`;
   const premium = cleanPremium(signal.premium);
   const sweep = /sweep/i.test(desc);
   const reinforce =
@@ -93,11 +101,11 @@ export function simplifySignalDescription(signal: SignalInfo): string {
   // --- Paragraph 1: what's happening in the flow ---
   let lead: string;
   if (sweep) {
-    lead = `A large sweep hit ${strikeRef} — ${betClause}`;
+    lead = `A large sweep hit ${strikeRef}`;
   } else if (reinforce) {
-    lead = `Demand keeps coming back to ${strikeRef} — ${betClause}`;
+    lead = `Demand keeps coming back to ${strikeRef}`;
   } else {
-    lead = `Notable flow came through on ${strikeRef} — ${betClause}`;
+    lead = `Notable flow came through on ${strikeRef}`;
   }
   if (premium) lead += `, with about ${premium} flowing in`;
   lead += ".";
@@ -112,59 +120,60 @@ export function simplifySignalDescription(signal: SignalInfo): string {
   }
   const p1 = `${lead} ${color}`;
 
-  // --- Paragraph 2: the levels story (ties the card's rows together) ---
-  const area = cleanLevel(signal.entryTrigger);
-  const tn = cleanLevel(signal.targetNear);
-  const tz = cleanLevel(signal.targetZone);
-  const guard =
-    cleanLevel(signal.invalidation) ||
-    cleanLevel(signal.srLevel) ||
-    cleanLevel(signal.keyLevel);
+  // --- Paragraph 2: the levels story ---
+  // Field NAMES in the data are unreliable (e.g. "target" can just be the strike,
+  // "target_near" can be the resistance above). So we ignore the names: pull every
+  // number, then pick the nearest level BELOW the center as the floor and the
+  // nearest ABOVE as the ceiling. This guarantees floor < center < ceiling and
+  // can never produce "moves toward the level it's already at."
+  const center =
+    levelNum(signal.entryTrigger) ?? strikeN ?? signal.priceAtSignal ?? null;
 
-  let rangeText: string | null = null;
-  if (tn && tz && tn !== tz) {
-    const a = parseFloat(tn.slice(1));
-    const b = parseFloat(tz.slice(1));
-    if (!isNaN(a) && !isNaN(b)) {
-      const lo = a <= b ? tn : tz;
-      const hi = a <= b ? tz : tn;
-      rangeText = isCall ? `${lo} to ${hi}` : `${hi} down to ${lo}`;
-    } else {
-      rangeText = tz;
+  const candidates = [
+    signal.targetZone,
+    signal.targetNear,
+    signal.keyLevel,
+    signal.srLevel,
+    signal.invalidation,
+    signal.gammaLevelLabel,
+  ]
+    .map(levelNum)
+    .filter((n): n is number => n != null);
+
+  let floorN: number | null = null;
+  let ceilN: number | null = null;
+  if (center != null) {
+    for (const n of candidates) {
+      if (n < center && (floorN == null || n > floorN)) floorN = n;
+      if (n > center && (ceilN == null || n < ceilN)) ceilN = n;
     }
-  } else if (tz) {
-    rangeText = tz;
   }
 
   const sentences: string[] = [];
-  if (area) sentences.push(`Right now the action is centered around ${area}.`);
+  if (center != null) sentences.push(`Right now it's centered around ${fmtLevel(center)}.`);
 
   if (isCall) {
-    if (rangeText && guard) {
+    if (floorN != null && ceilN != null) {
       sentences.push(
-        `If the bulls stay in control, the move could stretch toward ${rangeText}, while ${guard} is the floor holding it up — as long as it stays above there, the climb stays in focus.`
+        `${fmtLevel(floorN)} is the floor underneath, and there's room toward ${fmtLevel(ceilN)} overhead — as long as it holds above ${fmtLevel(floorN)}, the upside stays in focus.`
       );
-    } else if (rangeText) {
+    } else if (ceilN != null) {
+      sentences.push(`If demand stays in control, there's room toward ${fmtLevel(ceilN)} overhead.`);
+    } else if (floorN != null) {
       sentences.push(
-        `If the bulls stay in control, the move could stretch toward ${rangeText}.`
-      );
-    } else if (guard) {
-      sentences.push(
-        `${guard} is the floor to watch — as long as it stays above there, the upside stays in focus.`
+        `${fmtLevel(floorN)} is the floor underneath — as long as it holds above there, the upside stays in focus.`
       );
     }
   } else {
-    if (rangeText && guard) {
+    if (floorN != null && ceilN != null) {
       sentences.push(
-        `If the bears keep the upper hand, the slide could reach toward ${rangeText}, with ${guard} as the ceiling overhead — as long as it stays below there, the move lower stays in focus.`
+        `${fmtLevel(ceilN)} is the ceiling overhead, with room toward ${fmtLevel(floorN)} below — as long as it stays under ${fmtLevel(ceilN)}, the move lower stays in focus.`
       );
-    } else if (rangeText) {
+    } else if (floorN != null) {
+      sentences.push(`If the pressure stays on, there's room toward ${fmtLevel(floorN)} below.`);
+    } else if (ceilN != null) {
       sentences.push(
-        `If the bears keep the upper hand, the slide could reach toward ${rangeText}.`
-      );
-    } else if (guard) {
-      sentences.push(
-        `${guard} is the ceiling to watch — as long as it stays below there, the move lower stays in focus.`
+        `${fmtLevel(ceilN)} is the ceiling overhead — as long as it stays under there, the move lower stays in focus.`
       );
     }
   }
