@@ -32,6 +32,22 @@ const formatExpiryShort = (e?: string) => {
   return e;
 };
 
+const formatPremium = (raw?: string) => {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  if (/[KMB]\s*$/i.test(s.replace(/premium/gi, "").trim())) {
+    return s.startsWith("$") ? s : `$${s}`;
+  }
+  const n = Number(s.replace(/[^0-9.]/g, ""));
+  if (!isFinite(n) || n <= 0) return s.startsWith("$") ? s : `$${s}`;
+  const abbr =
+    n >= 1e9 ? `${(n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1)}B` :
+    n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1)}M` :
+    n >= 1e3 ? `${Math.round(n / 1e3)}K` :
+    `${n}`;
+  return `$${abbr}`;
+};
+
 const ALGO_SECTION_META = {
   buy_now: {
     label: "🔥 ACTIVE",
@@ -958,7 +974,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
     const parts = [
       formatExpiryShort(signal.expiry),
       signal.strike ? `$${signal.strike}` : "",
-      signal.putCall === "put" ? "Puts" : signal.putCall === "call" ? "Calls" : "",
+      signal.putCall === "put" ? "Put" : signal.putCall === "call" ? "Call" : "",
     ].filter(Boolean);
     if (parts.length > 0) return parts.join(" ");
     return signal.suggestedTrade || "";
@@ -1194,7 +1210,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
           {contractLine && (
             <div className="mt-1.5">
               <div className="text-[13px] font-semibold text-foreground">{contractLine}</div>
-              {signal.premium && <div className="text-[12px] text-muted-foreground">{signal.premium} Premium</div>}
+              {signal.premium && <div className="text-[12px] text-muted-foreground">{formatPremium(signal.premium)} Premium</div>}
             </div>
           )}
 
