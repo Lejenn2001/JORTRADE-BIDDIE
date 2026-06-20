@@ -8,3 +8,4 @@
 - [GitHub backup & .replit tracking](github-backup-and-replit-tracking.md) — .replit holds plaintext secrets so it's untracked; push clean backups by rebuilding ONE commit on the remote tip via code_execution git (main-agent bash blocks destructive git).
 - [Market hours holiday calendar](market-hours-calendar.md) — market-open gate is holiday + early-close aware: static NYSE table is the fail-safe seed, Polygon's calendar refreshes it at runtime; frontend keeps a static-only mirror.
 - [Conviction score audit](conviction-score-audit.md) — conviction_score ≈ zero corr (-0.04) with resolved win rate; it's an EXPIRATION filter (higher score = move happens before expiry), not a win predictor. Don't sell it as win probability.
+- [Contract duration audit](contract-duration-audit.md) — 75% of winners hit SAME DAY (median ~3h), 92% already on ≤7 DTE; short-dated wins on both cost AND gamma leverage; decay only bites the ~25% non-same-day movers. Speed > the score.
