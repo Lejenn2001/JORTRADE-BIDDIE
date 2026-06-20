@@ -52,7 +52,7 @@ const SignalLegend = () => {
       >
         <span className="flex items-center gap-1.5">
           <HelpCircle className="h-3.5 w-3.5" />
-          Signal Terms Guide
+          Terms Guide
         </span>
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </button>
