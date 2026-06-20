@@ -985,7 +985,7 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
     const tz = signal.targetZone;
     let rangeVal = tz;
     const sources = tn && tn !== tz ? `${tn} ${tz}` : tz;
-    const tokens = (sources.match(/\$?[0-9][0-9,]*(?:\.[0-9]+)?/g) || [])
+    const tokens = (sources.match(/\$[0-9][0-9,]*(?:\.[0-9]+)?/g) || [])
       .map((raw) => ({ raw, num: parseFloat(raw.replace(/[$,]/g, "")) }))
       .filter((t) => !isNaN(t.num));
     const unique = tokens.filter((t, i) => tokens.findIndex((u) => u.num === t.num) === i);
