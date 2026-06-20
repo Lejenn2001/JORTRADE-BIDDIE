@@ -110,6 +110,12 @@ const SignalLegend = () => {
               ))}
             </div>
           </div>
+
+          <div className="border-t border-muted/30 pt-2.5">
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              JORTRADE is an AI-powered analysis tool using data analysis and probabilistic models. This is not financial advice. Signals are observations, not recommendations to buy or sell — always do your own research.
+            </p>
+          </div>
         </div>
       )}
     </div>
