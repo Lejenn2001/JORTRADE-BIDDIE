@@ -313,7 +313,7 @@ const CARDS: CardData[] = [
     ticker: "NVDA", direction: "bull", putCall: "Call", tier: "fast",
     price: "$143.20", priceSource: "live", signalTime: "9:42 AM",
     contract: "Jun 20 $145 Call", premium: "$3.2M",
-    secondary: "Strong", reviewed: true,
+    secondary: "Strong",
     status: "active", trade: "Day", reinforcement: 6, mfe: 48,
     levels: [
       { label: "Area of Interest", value: "$142.50" },
@@ -329,7 +329,6 @@ const CARDS: CardData[] = [
     ticker: "AMD", direction: "bull", putCall: "Call", tier: "medium",
     price: "$176.10", priceSource: "rest", signalTime: "12:18 PM",
     contract: "Jun 27 $182 Call", premium: "$1.1M",
-    reviewed: true,
     status: "watching", trade: "Swing", reinforcement: 3,
     levels: [
       { label: "Area of Interest", value: "$176.00" },
@@ -344,7 +343,6 @@ const CARDS: CardData[] = [
     ticker: "SPY", direction: "bear", putCall: "Put", tier: "slow",
     price: "$583.90", priceSource: "stale", signalTime: "3:31 PM",
     contract: "Jun 27 $575 Put", premium: "$2.1M",
-    reviewed: true,
     status: "watching", trade: "Swing", mfe: 22,
     levels: [
       { label: "Area of Interest", value: "$584.00" },
