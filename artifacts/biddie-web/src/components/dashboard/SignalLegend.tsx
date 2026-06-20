@@ -2,14 +2,36 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, HelpCircle } from "lucide-react";
 
 const terms = [
+  { label: "Area of Interest", desc: "The main thing to watch right now — usually whether price is holding above (or below) a key line." },
+  { label: "Key Level", desc: "The single most important price line for this play — most often the VWAP." },
+  { label: "Range", desc: "The move we're watching for — where price could travel if the play works out." },
+  { label: "Support", desc: "The floor underneath — a level price tends to bounce up from." },
+  { label: "Resistance", desc: "The ceiling overhead — a level price tends to stall or turn down at." },
+  { label: "Call Flow / Put Flow", desc: "Which way the big bets are leaning. Calls = betting the price goes up. Puts = betting it goes down." },
   { label: "S1 / S2", desc: "Support floors — think of these like trampolines for the price. When price falls to these levels, it often bounces back up!" },
   { label: "R1 / R2", desc: "Resistance ceilings — like a ceiling the price keeps bumping its head on. Price often slows down or turns around here." },
   { label: "VWAP", desc: "The \"fair price\" for the day — it's the average price weighted by how much was traded. If price is above VWAP, buyers are winning. Below? Sellers are winning." },
   { label: "Pivot", desc: "The middle point — calculated from yesterday's high, low, and close. Think of it like the center of a seesaw. Price above = bullish, below = bearish." },
-  { label: "Conviction Score", desc: "A score from 0–100 that tells you how strong a signal is. Like a report card for the trade — the higher the grade, the more confident we are!" },
   { label: "Sweep", desc: "When a big trader is in such a hurry they buy from every store at once! It means someone with a LOT of money wants in (or out) RIGHT NOW." },
   { label: "Vol/OI", desc: "Compares today's trading to existing bets. A high number means fresh new bets are being placed — not just old ones closing. New bets = someone knows something!" },
   { label: "ATM", desc: "At-The-Money — the option's strike price is right near where the stock is trading now. These are the most popular and active options." },
+];
+
+const badges = [
+  { label: "Active", desc: "The play is moving right now." },
+  { label: "Watching", desc: "Hasn't triggered yet — waiting for price to confirm." },
+  { label: "Win", desc: "Price reached the target we were watching for." },
+  { label: "Day Trade / Swing Trade", desc: "How long it's expected to last — Day = wrap up the same day, Swing = a few days." },
+  { label: "Reinforcement", desc: "Buyers keep coming back and adding to the same position — repeated interest that stands out." },
+  { label: "Strong", desc: "Especially heavy, repeated buying on this one." },
+  { label: "Move Almost Over", desc: "Most of the expected move has already happened — late to the party." },
+  { label: "Biddie Reviewed", desc: "Biddie's AI took a closer look at this one specifically." },
+];
+
+const dotColors = [
+  { color: "bg-emerald-400 animate-pulse", text: "text-emerald-400", label: "Live", desc: "Price is updating live, second by second." },
+  { color: "bg-amber-400", text: "text-amber-400", label: "Recent", desc: "Price from a recent check — a few seconds old." },
+  { color: "bg-zinc-500", text: "text-zinc-400", label: "Stale", desc: "Couldn't refresh just now — price may be old." },
 ];
 
 const mfeColors = [
@@ -44,6 +66,35 @@ const SignalLegend = () => {
               </div>
             ))}
           </div>
+
+          <div className="border-t border-muted/30 pt-2.5">
+            <p className="text-[11px] font-semibold text-foreground mb-1.5">Badges &amp; Labels</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {badges.map((b) => (
+                <div key={b.label} className="text-[11px] leading-snug">
+                  <span className="font-semibold text-primary">{b.label}</span>
+                  <span className="text-muted-foreground"> — {b.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-muted/30 pt-2.5">
+            <p className="text-[11px] font-semibold text-foreground mb-1.5">Live Price Dot</p>
+            <p className="text-[10px] text-muted-foreground mb-2">The little dot next to each price tells you how fresh that price is.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {dotColors.map((d) => (
+                <div key={d.label} className="flex items-center gap-1.5 text-[10px]">
+                  <span className={`w-2 h-2 rounded-full ${d.color} shrink-0`} />
+                  <span>
+                    <span className={`font-semibold ${d.text}`}>{d.label}</span>
+                    <span className="text-muted-foreground block leading-tight">{d.desc}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="border-t border-muted/30 pt-2.5">
             <p className="text-[11px] font-semibold text-foreground mb-1.5">MFE (Max Favorable Excursion)</p>
             <p className="text-[10px] text-muted-foreground mb-2">After we spot a signal, how far did the price actually move toward the target? Think of it like measuring how close a ball got to the goal.</p>
