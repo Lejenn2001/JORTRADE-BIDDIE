@@ -984,7 +984,19 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
   if (signal.targetZone) {
     const tn = signal.targetNear;
     const tz = signal.targetZone;
-    levelRows.push({ label: "Range", value: tn && tn !== tz ? `${tn} – ${tz}` : tz, tone: "flow" });
+    let rangeVal = tz;
+    if (tn && tn !== tz) {
+      const a = parseFloat((tn.match(/[0-9.]+/) || [])[0] || "");
+      const b = parseFloat((tz.match(/[0-9.]+/) || [])[0] || "");
+      if (!isNaN(a) && !isNaN(b)) {
+        const lo = a <= b ? tn : tz;
+        const hi = a <= b ? tz : tn;
+        rangeVal = isCall ? `${lo} – ${hi}` : `${hi} – ${lo}`;
+      } else {
+        rangeVal = `${tn} – ${tz}`;
+      }
+    }
+    levelRows.push({ label: "Range", value: rangeVal, tone: "flow" });
   }
   if (signal.keyLevel) levelRows.push({ label: "Key Level", value: signal.keyLevel });
   if (signal.srLevel || signal.gammaLevelLabel) levelRows.push({ label: "Support / Resistance", value: signal.srLevel || signal.gammaLevelLabel || "" });
