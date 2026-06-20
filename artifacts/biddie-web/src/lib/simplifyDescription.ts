@@ -7,25 +7,28 @@ interface SignalInfo {
   premium?: string;
   description?: string;
   tags?: string[];
+  entryTrigger?: string;
+  invalidation?: string;
+  keyLevel?: string;
+  srLevel?: string;
+  targetZone?: string;
+  targetNear?: string;
+  gammaLevelLabel?: string;
+  reinforcementCount?: number;
 }
 
-function parsePremiumValue(raw: string): number {
-  const cleaned = raw.replace(/[,$]/g, '');
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return 0;
-  if (/B$/i.test(raw)) return num * 1_000_000_000;
-  if (/M$/i.test(raw)) return num * 1_000_000;
-  if (/K$/i.test(raw)) return num * 1_000;
-  return num;
+function cleanLevel(raw?: string): string | null {
+  if (!raw) return null;
+  const m = raw.match(/[0-9][0-9,]*\.?[0-9]*/);
+  if (!m) return null;
+  return `$${m[0].replace(/,/g, "")}`;
 }
 
-function premiumColor(val: number): string {
-  if (val >= 5_000_000) return "This is a massive bet. This trader means business and is extremely confident";
-  if (val >= 2_000_000) return "That's a huge amount of money. This is a very serious, high-confidence play";
-  if (val >= 1_000_000) return "Over a million dollars. That's a big bet and worth paying close attention to";
-  if (val >= 500_000) return "That's a really significant amount. Someone with deep pockets is making a move";
-  if (val >= 100_000) return "That's a solid bet. Enough money to show real confidence";
-  return "A noteworthy trade worth keeping an eye on";
+function cleanPremium(raw?: string): string | null {
+  if (!raw) return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.startsWith("$") ? t : `$${t}`;
 }
 
 export function isSweep(signal: SignalInfo): boolean {
@@ -72,80 +75,100 @@ export function compactDescription(signal: SignalInfo): string {
 }
 
 export function simplifySignalDescription(signal: SignalInfo): string {
-  const chunks: string[] = [];
-
-  const ticker = signal.ticker || "this stock";
-
   const desc = signal.description || "";
+  const isCall =
+    signal.putCall === "call" ||
+    (signal.putCall !== "put" && signal.type === "bullish");
+  const contract = isCall ? "calls" : "puts";
+  const betClause = isCall ? "a bet it climbs" : "a bet it drifts lower";
+  const strike = signal.strike ? cleanLevel(String(signal.strike)) : null;
+  const strikeRef = strike ? `the ${strike} ${contract}` : `the ${contract}`;
+  const premium = cleanPremium(signal.premium);
+  const sweep = /sweep/i.test(desc);
+  const reinforce =
+    signal.reinforcementCount && signal.reinforcementCount > 1
+      ? signal.reinforcementCount
+      : 0;
 
-  const sweep = isSweep({ description: desc });
-  const sweepCountMatch = desc.match(/(\d+)\s*sweep/i);
-  const premiumMatch = desc.match(/\$?([\d,.]+[KMB]?)\s*(?:premium|total)/i);
-  const aggressionMatch = desc.match(/(\d+)%\s*(?:ask\s*)?aggression/i);
-
+  // --- Paragraph 1: what's happening in the flow ---
+  let lead: string;
   if (sweep) {
-    const countPart = sweepCountMatch
-      ? `${parseInt(sweepCountMatch[1])} rush order${parseInt(sweepCountMatch[1]) > 1 ? 's' : ''}`
-      : "a rush order";
-    chunks.push(`SWEEP — A big trader placed ${countPart} across multiple exchanges at once to get filled fast. Sweeps show urgency — they're willing to pay more just to get in NOW`);
-  } else if (premiumMatch) {
-    chunks.push(`FLOW — A big trader put $${premiumMatch[1]} on the line. Flow is a regular large order (not as urgent as a sweep, but still significant money)`);
+    lead = `A large sweep hit ${strikeRef} — ${betClause}`;
+  } else if (reinforce) {
+    lead = `Demand keeps coming back to ${strikeRef} — ${betClause}`;
   } else {
-    chunks.push(`FLOW — Someone made a notable options trade on ${ticker}. Flow means a large order came through the market`);
+    lead = `Notable flow came through on ${strikeRef} — ${betClause}`;
+  }
+  if (premium) lead += `, with about ${premium} flowing in`;
+  lead += ".";
+
+  let color: string;
+  if (reinforce) {
+    color = `That demand has come back ${reinforce} times now, the kind of repeated interest that tends to stand out.`;
+  } else if (sweep) {
+    color = `That's a fast, urgent push rather than nibbling at the edges.`;
+  } else {
+    color = `It's a single larger order worth keeping an eye on.`;
+  }
+  const p1 = `${lead} ${color}`;
+
+  // --- Paragraph 2: the levels story (ties the card's rows together) ---
+  const area = cleanLevel(signal.entryTrigger);
+  const tn = cleanLevel(signal.targetNear);
+  const tz = cleanLevel(signal.targetZone);
+  const guard =
+    cleanLevel(signal.invalidation) ||
+    cleanLevel(signal.srLevel) ||
+    cleanLevel(signal.keyLevel);
+
+  let rangeText: string | null = null;
+  if (tn && tz && tn !== tz) {
+    const a = parseFloat(tn.slice(1));
+    const b = parseFloat(tz.slice(1));
+    if (!isNaN(a) && !isNaN(b)) {
+      const lo = a <= b ? tn : tz;
+      const hi = a <= b ? tz : tn;
+      rangeText = isCall ? `${lo} to ${hi}` : `${hi} down to ${lo}`;
+    } else {
+      rangeText = tz;
+    }
+  } else if (tz) {
+    rangeText = tz;
   }
 
-  if (signal.putCall === "put") {
-    if (signal.strike) {
-      const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} put. They do well if ${ticker} keeps sliding`);
-    } else {
-      chunks.push(`betting ${ticker} goes lower`);
-    }
-  } else if (signal.putCall === "call") {
-    if (signal.strike) {
-      const cleanStrike = String(signal.strike).replace(/[^$\d.,]/g, '').replace('$', '');
-      chunks.push(`on a $${cleanStrike} call. They do well if ${ticker} keeps climbing`);
-    } else {
-      chunks.push(`betting ${ticker} goes higher`);
+  const sentences: string[] = [];
+  if (area) sentences.push(`Right now the action is centered around ${area}.`);
+
+  if (isCall) {
+    if (rangeText && guard) {
+      sentences.push(
+        `If the bulls stay in control, the move could stretch toward ${rangeText}, while ${guard} is the floor holding it up — as long as it stays above there, the climb stays in focus.`
+      );
+    } else if (rangeText) {
+      sentences.push(
+        `If the bulls stay in control, the move could stretch toward ${rangeText}.`
+      );
+    } else if (guard) {
+      sentences.push(
+        `${guard} is the floor to watch — as long as it stays above there, the upside stays in focus.`
+      );
     }
   } else {
-    const direction = signal.type === "bullish" ? "go UP" : signal.type === "bearish" ? "go DOWN" : "make a move";
-    chunks.push(`expecting ${ticker} to ${direction}`);
-  }
-
-  if (aggressionMatch) {
-    const pct = parseInt(aggressionMatch[1]);
-    if (pct === 100) {
-      chunks.push(`${pct}% ask aggression — They paid full asking price, no negotiating at all. Maximum urgency. This trader wanted in immediately and didn't care about saving a penny`);
-    } else if (pct >= 90) {
-      chunks.push(`${pct}% ask aggression — Almost full asking price. Extremely urgent. They barely tried to get a better deal, which shows high confidence`);
-    } else if (pct >= 80) {
-      chunks.push(`${pct}% ask aggression — Very aggressive. They paid close to the asking price, showing strong confidence but left a tiny bit of room to negotiate`);
-    } else if (pct >= 70) {
-      chunks.push(`${pct}% ask aggression — Fairly aggressive. They leaned toward the asking price, which shows they wanted in quickly but weren't in a total rush`);
-    } else if (pct >= 50) {
-      chunks.push(`${pct}% ask aggression — Moderate. They split the difference between the bid and ask, not in a huge hurry but still leaning in`);
-    } else {
-      chunks.push(`${pct}% ask aggression — Low urgency. They mostly paid closer to the bid (the lower price), meaning they were patient and negotiated for a better deal`);
+    if (rangeText && guard) {
+      sentences.push(
+        `If the bears keep the upper hand, the slide could reach toward ${rangeText}, with ${guard} as the ceiling overhead — as long as it stays below there, the move lower stays in focus.`
+      );
+    } else if (rangeText) {
+      sentences.push(
+        `If the bears keep the upper hand, the slide could reach toward ${rangeText}.`
+      );
+    } else if (guard) {
+      sentences.push(
+        `${guard} is the ceiling to watch — as long as it stays below there, the move lower stays in focus.`
+      );
     }
   }
 
-  if (signal.expiry) {
-    const exp = signal.expiry;
-    if (exp === "0DTE" || exp.includes("0 DTE") || exp.includes("today")) {
-      chunks.push("This bet expires TODAY. Same-day play, high risk");
-    } else {
-      chunks.push(`This bet expires ${exp}`);
-    }
-  }
-
-  const premiumVal = premiumMatch ? parsePremiumValue(premiumMatch[1]) : 0;
-
-  if (premiumMatch && sweep) {
-    chunks.push(`Total money on the line: $${premiumMatch[1]}. ${premiumColor(premiumVal)}`);
-  } else if (premiumMatch && premiumVal > 0) {
-    chunks.push(premiumColor(premiumVal));
-  }
-
-  return chunks.join(", ") + ".";
+  const p2 = sentences.join(" ");
+  return p2 ? `${p1}\n\n${p2}` : p1;
 }
