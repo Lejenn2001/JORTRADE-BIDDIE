@@ -24,6 +24,12 @@ Resolved win% (hit+partial vs miss+near_miss) by dominant anchor:
 - Pivot 70.1% (expired 16.4%)
 - plain $ / "no VWAP data" 72.8% (expired 42%)
 
-**Takeaway:** PDH/PDL are legitimate and perform fine (~77% resolved, basically tied with the field, slightly above), but they are NOT specially predictive and NOT the main anchor — VWAP is both the most common and the best. The low expiration rate of VWAP/PDH/PDL signals mostly reflects that those signals had complete level data (captured during active market hours), a proxy for data availability rather than the level's own magic.
+**CAUTION — the per-anchor win% is mostly a slicing artifact, NOT proof a given level is more accurate.** The "VWAP 86%" slice (VWAP in target/invalidation, n=175) had ~0% expiration — the tell that it's selection bias toward signals that had complete intraday data, not the level's own predictive power. A cleaner split by `entry_trigger` flattens everything out:
+- VWAP confirmed (price already on right side): 70.9% resolved win, 10% expired
+- VWAP needs reclaim/reject: 73.5%, 28% expired
+- whale sweep: 80.3%, 41% expired
+- other: 73.5%, 0% expired
 
-**How to apply:** when mocking or describing the card, anchor Key Level to VWAP, not "prior day high." Don't single out PDH/PDL as if they're the system's basis — they're a ~9% minority candidate. Per conviction/duration audits, resolved win% hides expirations; report both views.
+So resolved win rate sits ~71–80% **regardless of which level is shown** — consistent with the conviction audit's flat ~73% direction accuracy. The level LABEL (VWAP vs pivot vs PDH/PDL) does not meaningfully change accuracy. What presence-of-VWAP really signals is that the signal had live market data when created (so less likely to fizzle/expire), not a higher win probability.
+
+**How to apply:** Don't tell the user a listed VWAP (or any level) means higher accuracy — it doesn't. Anchor Key Level to VWAP for *fidelity* (that's what the code does), but never frame any anchor as more predictive. Per conviction/duration audits, resolved win% hides expirations and is flat across anchors; the real variable is whether the move happens at all (expiration), driven by required-move-% and time-of-day, not the level type.
