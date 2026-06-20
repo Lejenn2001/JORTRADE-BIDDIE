@@ -9,7 +9,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Search, Filter, TrendingUp, TrendingDown, Zap, Clock, Target, ShieldX, Crosshair, MapPin, Gauge, Waves, CheckCircle2, Flame, Check, Plus, XCircle, Radio, Bell, AlertTriangle, ThumbsUp, ThumbsDown, MessageSquare, Send, Sparkles, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import ConvictionScoreRing from "@/components/dashboard/ConvictionScoreRing";
 import SignalLegend from "@/components/dashboard/SignalLegend";
 import SignalErrorBoundary from "@/components/dashboard/SignalErrorBoundary";
 import { compactDescription, simplifySignalDescription } from "@/lib/simplifyDescription";
@@ -922,7 +921,6 @@ const EXECUTION_UNIVERSE = new Set(["SPY", "QQQ", "IWM", "SPX", "SPXW"]);
 
 function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, onReviewChange }: { signal: MarketSignal; getPrice?: (ticker: string) => PriceInfo | null; onSetAlert?: (s: MarketSignal) => void; hasAlert?: boolean; isAdmin?: boolean; userId?: string; onReviewChange?: (signalId: string, status: "correct" | "wrong" | null) => void }) {
   const isCall = signal.putCall ? signal.putCall === "call" : signal.type === "bullish";
-  const score = signal.convictionScore ?? Math.round(signal.confidence * 10);
   const isWhale = signal.category === "whale";
   const isSpread = signal.category === "spread";
 
@@ -1268,7 +1266,6 @@ function SignalCard({ signal, getPrice, onSetAlert, hasAlert, isAdmin, userId, o
                   </span>
                 );
               })()}
-              <ConvictionScoreRing score={score} label={signal.convictionLabel ?? ""} />
             </div>
           </div>
 
